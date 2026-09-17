@@ -1,14 +1,33 @@
-import { createClient } from '@base44/sdk';
-import { appParams } from '@/lib/app-params';
+import { supabaseAuth } from './supabaseAuth';
+import { listLaborLibrary, listLaborCategories, listCompanyLaborUnits, listProductionHistory, saveEstimateLaborSnapshot } from './laborRepository';
 
-const { appId, token, functionsVersion, appBaseUrl } = appParams;
+export const base44 = {
+  auth: supabaseAuth,
+  entities: {
+    LaborItem: {
+      list: async () => listLaborLibrary(),
+      search: async (options) => listLaborLibrary(options),
+      categories: async () => listLaborCategories(),
+    },
+    CompanyLaborUnit: {
+      list: async () => listCompanyLaborUnits(),
+    },
+    LaborProductionHistory: {
+      list: async (laborItemId) => listProductionHistory(laborItemId),
+    },
+    EstimateLaborSnapshot: {
+      create: async (snapshot) => saveEstimateLaborSnapshot(snapshot),
+    },
+  },
+  functions: {
+    invoke: async (name) => {
+      throw new Error(`Supabase function ${name} is not configured yet.`);
+    },
+  },
+  asServiceRole: {
+    entities: {},
+    functions: {},
+  },
+};
 
-//Create a client with authentication required
-export const base44 = createClient({
-  appId,
-  token,
-  functionsVersion,
-  serverUrl: '',
-  requiresAuth: false,
-  appBaseUrl
-});
+export default base44;

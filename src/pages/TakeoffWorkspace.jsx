@@ -1,9 +1,13 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Cable, FileUp, Hand, Image as ImageIcon, Layers3, MousePointer2, Pencil,
   Ruler, Route, ScanSearch, Shapes, Trash2, Undo2, Upload, ZoomIn, ZoomOut
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
+
+GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 const TOOL_DEFS = [
   { key: "select", label: "Select / Edit", icon: MousePointer2, help: "Select existing marks and routes." },
@@ -36,7 +40,7 @@ export default function TakeoffWorkspace() {
     return acc;
   }, {}), [marks]);
 
-  function chooseFile(nextFile) {
+  async function chooseFile(nextFile) {
     if (!nextFile) {
       setStatus("No drawing selected.");
       return;
@@ -47,17 +51,38 @@ export default function TakeoffWorkspace() {
       || /\.(pdf|png|jpe?g|webp)$/i.test(nextFile.name || "");
 
     if (!allowed) {
-      setStatus("Unsupported file. Choose a PDF, PNG, JPG, JPEG, or WEBP drawing.");
+      setDrawingError("Unsupported file. Choose a PDF, PNG, JPG, JPEG, or WEBP drawing.");
+      setStatus("Drawing import failed.");
       return;
     }
 
-    if (fileUrl) URL.revokeObjectURL(fileUrl);
-    const url = URL.createObjectURL(nextFile);
-    setFile(nextFile);
-    setFileUrl(url);
-    setMarks([]);
-    setDraftPoints([]);
-    setStatus(`${nextFile.name} loaded. Choose a takeoff tool and begin.`);
+    setLoadingDrawing(true);
+    setDrawingError("");
+    setStatus(`Importing ${nextFile.name}…`);
+
+    try {
+      const bytes = await nextFile.arrayBuffer();
+      if (!bytes?.byteLength) throw new Error("The selected file is empty or could not be read.");
+
+      if (fileUrl) URL.revokeObjectURL(fileUrl);
+      const url = URL.createObjectURL(nextFile);
+
+      setFile(nextFile);
+      setFileUrl(url);
+      setFileBytes(bytes);
+      setMarks([]);
+      setDraftPoints([]);
+      setZoom(1);
+      setStatus(`${nextFile.name} imported into Estim8r. Drawing is ready for takeoff.`);
+    } catch (error) {
+      console.error("Drawing import failed", error);
+      setFile(null);
+      setFileBytes(null);
+      setDrawingError(error?.message || "Estim8r could not read the selected drawing.");
+      setStatus("Drawing import failed.");
+    } finally {
+      setLoadingDrawing(false);
+    }
   }
 
   function handleInputChange(event) {
@@ -215,7 +240,7 @@ export default function TakeoffWorkspace() {
             <label htmlFor="takeoff-drawing-input" className="cursor-pointer rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-muted">Replace drawing</label>
           </div>
         )}
-        <div className="mt-2 text-xs text-muted-foreground" aria-live="polite">{status}</div>
+        <div className="mt-2 text-xs text-muted-foreground" aria-live="polite">{status}</div>\n        {loadingDrawing && <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full w-2/3 animate-pulse rounded-full bg-blue-600 dark:bg-orange-500" /></div>}\n        {drawingError && <div className="mt-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{drawingError}</div>}
       </section>
 
       {file && (
@@ -261,9 +286,16 @@ export default function TakeoffWorkspace() {
                 className={cn("relative mx-auto overflow-hidden bg-white shadow-lg", tool === "pan" ? "cursor-grab" : tool === "select" ? "cursor-default" : "cursor-crosshair")}
                 style={{ width: `${zoom * 100}%`, minWidth: isPdf ? 720 : undefined }}>
                 {isPdf ? (
-                  <iframe title={file.name} src={fileUrl} className="block h-[760px] w-full border-0 bg-white pointer-events-none" />
+                  <PdfDrawing fileBytes={fileBytes} fileName={file.name} />
                 ) : (
-                  <img src={fileUrl} alt={file.name} draggable={false} className="block h-auto w-full select-none" />
+                  <img
+                    src={fileUrl}
+                    alt={file.name}
+                    draggable={false}
+                    onLoad={() => setStatus(`${file.name} rendered and ready for takeoff.`)}
+                    onError={() => { setDrawingError("The drawing file was imported but could not be rendered."); setStatus("Drawing render failed."); }}
+                    className="block h-auto w-full select-none"
+                  />
                 )}
                 <MarkupOverlay marks={marks} draftPoints={draftPoints} />
               </div>
@@ -312,5 +344,74 @@ function MarkupOverlay({ marks, draftPoints }) {
         <text key={mark.id} x={mark.x} y={mark.y} fontSize="1.8" fontWeight="700" fill="#dc2626">{mark.text}</text>
       ))}
     </svg>
+  );
+}
+
+
+function PdfDrawing({ fileBytes, fileName }) {
+  const canvasRef = useRef(null);
+  const [pageCount, setPageCount] = useState(0);
+  const [pageNumber, setPageNumber] = useState(1);
+  const [error, setError] = useState("");
+  const [rendering, setRendering] = useState(true);
+
+  useEffect(() => {
+    if (!fileBytes || !canvasRef.current) return undefined;
+    let cancelled = false;
+    let renderTask;
+
+    async function renderPdf() {
+      setRendering(true);
+      setError("");
+      try {
+        const loadingTask = getDocument({ data: new Uint8Array(fileBytes.slice(0)) });
+        const pdf = await loadingTask.promise;
+        if (cancelled) return;
+        setPageCount(pdf.numPages);
+        const safePage = Math.min(Math.max(pageNumber, 1), pdf.numPages);
+        if (safePage !== pageNumber) setPageNumber(safePage);
+        const page = await pdf.getPage(safePage);
+        if (cancelled) return;
+        const viewport = page.getViewport({ scale: 1.6 });
+        const canvas = canvasRef.current;
+        const context = canvas.getContext("2d", { alpha: false });
+        const ratio = window.devicePixelRatio || 1;
+        canvas.width = Math.floor(viewport.width * ratio);
+        canvas.height = Math.floor(viewport.height * ratio);
+        canvas.style.width = `${viewport.width}px`;
+        canvas.style.height = `${viewport.height}px`;
+        context.setTransform(ratio, 0, 0, ratio, 0, 0);
+        renderTask = page.render({ canvasContext: context, viewport });
+        await renderTask.promise;
+      } catch (err) {
+        if (!cancelled && err?.name !== "RenderingCancelledException") {
+          console.error("PDF render failed", err);
+          setError(err?.message || "Unable to render this PDF.");
+        }
+      } finally {
+        if (!cancelled) setRendering(false);
+      }
+    }
+
+    renderPdf();
+    return () => {
+      cancelled = true;
+      try { renderTask?.cancel(); } catch {}
+    };
+  }, [fileBytes, pageNumber]);
+
+  return (
+    <div className="relative bg-white">
+      {pageCount > 1 && (
+        <div className="sticky top-0 z-20 flex items-center justify-center gap-2 border-b border-border bg-background/95 p-2 text-xs shadow-sm">
+          <button type="button" disabled={pageNumber <= 1} onClick={(e) => { e.stopPropagation(); setPageNumber((p) => Math.max(1, p - 1)); }} className="rounded border border-border px-2 py-1 disabled:opacity-40">Previous</button>
+          <strong>Sheet {pageNumber} of {pageCount}</strong>
+          <button type="button" disabled={pageNumber >= pageCount} onClick={(e) => { e.stopPropagation(); setPageNumber((p) => Math.min(pageCount, p + 1)); }} className="rounded border border-border px-2 py-1 disabled:opacity-40">Next</button>
+        </div>
+      )}
+      {rendering && <div className="absolute inset-x-0 top-12 z-10 mx-auto w-fit rounded-lg bg-background/90 px-3 py-2 text-xs font-semibold shadow">Rendering {fileName}…</div>}
+      {error && <div className="m-4 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">{error}</div>}
+      <canvas ref={canvasRef} className="block max-w-none bg-white" />
+    </div>
   );
 }

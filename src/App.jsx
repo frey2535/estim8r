@@ -14,13 +14,12 @@ const LaborLibrary = lazy(() => import("@/pages/LaborLibrary"));
 const EstimateBuilder = lazy(() => import("@/pages/EstimateBuilder"));
 const Production = lazy(() => import("@/pages/Production"));
 const Settings = lazy(() => import("@/pages/Settings"));
+const Register = lazy(() => import("@/pages/Register"));
+const ForgotPassword = lazy(() => import("@/pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
 
 function PageLoader() {
-  return (
-    <div className="flex items-center justify-center py-24">
-      <div className="w-8 h-8 border-4 border-slate-200 border-t-blue-600 dark:border-t-orange-500 rounded-full animate-spin" />
-    </div>
-  );
+  return <div className="flex items-center justify-center py-24"><div className="w-8 h-8 border-4 border-slate-200 border-t-blue-600 dark:border-t-orange-500 rounded-full animate-spin" /></div>;
 }
 
 function AppRoutes() {
@@ -28,6 +27,9 @@ function AppRoutes() {
     <Suspense fallback={<PageLoader />}>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
           <Route element={<AppLayout />}>
             <Route path="/" element={<Dashboard />} />
@@ -45,16 +47,5 @@ function AppRoutes() {
 }
 
 export default function App() {
-  return (
-    <AuthProvider>
-      <ThemeProvider>
-        <QueryClientProvider client={queryClientInstance}>
-          <Router>
-            <AppRoutes />
-          </Router>
-          <Toaster />
-        </QueryClientProvider>
-      </ThemeProvider>
-    </AuthProvider>
-  );
+  return <AuthProvider><ThemeProvider><QueryClientProvider client={queryClientInstance}><Router><AppRoutes /></Router><Toaster /></QueryClientProvider></ThemeProvider></AuthProvider>;
 }

@@ -12,7 +12,7 @@ import Login from "@/pages/Login";
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const LaborLibrary = lazy(() => import("@/pages/LaborLibrary"));
 const EstimateBuilder = lazy(() => import("@/pages/EstimateBuilder"));
-const Production = lazy(() => import("@/pages/Production"));
+const Production = lazy(() => import("@/pages/Production"));\nconst TakeoffWorkspace = lazy(() => import("@/pages/TakeoffWorkspace"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const Register = lazy(() => import("@/pages/Register"));
 const ForgotPassword = lazy(() => import("@/pages/ForgotPassword"));
@@ -35,7 +35,7 @@ function AppRoutes() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/estimates/new" element={<EstimateBuilder />} />
             <Route path="/labor" element={<LaborLibrary />} />
-            <Route path="/production" element={<Production />} />
+            <Route path="/production" element={<Production />} />\n            <Route path="/takeoff" element={<TakeoffWorkspace />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/profile" element={<Settings />} />
           </Route>

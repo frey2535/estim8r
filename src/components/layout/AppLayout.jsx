@@ -1,13 +1,13 @@
 import React from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { BookOpen, Calculator, FolderOpen, Moon, Settings, Sun, TrendingUp, UserCircle, Zap } from "lucide-react";
+import { BookOpen, Calculator, FolderOpen, Moon, ScanSearch, Settings, Sun, TrendingUp, UserCircle, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/ThemeContext";
 import AppSwitcher from "@/components/platform/AppSwitcher";
 
 const TABS = [
   { key: "estimates", path: "/", label: "Estimates", icon: FolderOpen },
-  { key: "new", path: "/estimates/new", label: "New Estimate", icon: Calculator },
+  { key: "new", path: "/estimates/new", label: "New Estimate", icon: Calculator },\n  { key: "takeoff", path: "/takeoff", label: "Takeoff", icon: ScanSearch },
   { key: "labor", path: "/labor", label: "Labor", icon: BookOpen },
   { key: "production", path: "/production", label: "Production", icon: TrendingUp },
 ];

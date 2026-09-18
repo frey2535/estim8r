@@ -37,7 +37,20 @@ export default function TakeoffWorkspace() {
   }, {}), [marks]);
 
   function chooseFile(nextFile) {
-    if (!nextFile) return;
+    if (!nextFile) {
+      setStatus("No drawing selected.");
+      return;
+    }
+
+    const allowed = nextFile.type === "application/pdf"
+      || nextFile.type.startsWith("image/")
+      || /\.(pdf|png|jpe?g|webp)$/i.test(nextFile.name || "");
+
+    if (!allowed) {
+      setStatus("Unsupported file. Choose a PDF, PNG, JPG, JPEG, or WEBP drawing.");
+      return;
+    }
+
     if (fileUrl) URL.revokeObjectURL(fileUrl);
     const url = URL.createObjectURL(nextFile);
     setFile(nextFile);
@@ -45,6 +58,24 @@ export default function TakeoffWorkspace() {
     setMarks([]);
     setDraftPoints([]);
     setStatus(`${nextFile.name} loaded. Choose a takeoff tool and begin.`);
+  }
+
+  function handleInputChange(event) {
+    const nextFile = event.target.files?.[0];
+    chooseFile(nextFile);
+    event.target.value = "";
+  }
+
+  function handleDrop(event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const droppedFile = event.dataTransfer?.files?.[0]
+      || [...(event.dataTransfer?.items || [])]
+        .find((item) => item.kind === "file")
+        ?.getAsFile();
+
+    chooseFile(droppedFile);
   }
 
   function drawingPoint(event) {
@@ -144,24 +175,47 @@ export default function TakeoffWorkspace() {
       </section>
 
       <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-        <input ref={inputRef} type="file" accept=".pdf,image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => chooseFile(e.target.files?.[0])} />
+        <input
+          id="takeoff-drawing-input"
+          type="file"
+          accept="application/pdf,image/png,image/jpeg,image/webp,.pdf,.png,.jpg,.jpeg,.webp"
+          className="sr-only"
+          onChange={handleInputChange}
+        />
         {!file ? (
-          <button type="button" onClick={() => inputRef.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); chooseFile(e.dataTransfer.files?.[0]); }}
-            className="flex min-h-52 w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-blue-300 bg-blue-50/50 p-8 text-center transition hover:border-blue-500 hover:bg-blue-50 dark:border-orange-500/30 dark:bg-orange-500/5 dark:hover:border-orange-500">
+          <div
+            onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; }}
+            onDrop={handleDrop}
+            className="flex min-h-52 w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-blue-300 bg-blue-50/50 p-8 text-center transition hover:border-blue-500 hover:bg-blue-50 dark:border-orange-500/30 dark:bg-orange-500/5 dark:hover:border-orange-500"
+          >
             <FileUp className="mb-3 h-10 w-10 text-blue-600 dark:text-orange-500" />
             <span className="text-lg font-bold text-foreground">Upload electrical drawings</span>
-            <span className="mt-1 text-sm text-muted-foreground">PDF, PNG, JPG, or WEBP</span>
-            <span className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white dark:bg-orange-500"><Upload className="h-4 w-4" />Choose drawing</span>
-          </button>
+            <span className="mt-1 text-sm text-muted-foreground">PDF, PNG, JPG, JPEG, or WEBP</span>
+            <label
+              htmlFor="takeoff-drawing-input"
+              className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm active:scale-[0.98] dark:bg-orange-500"
+            >
+              <Upload className="h-4 w-4" />
+              Choose drawing
+            </label>
+            <span className="mt-3 hidden text-xs text-muted-foreground sm:block">Or drag and drop the drawing anywhere inside this box.</span>
+          </div>
         ) : (
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div
+            onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; }}
+            onDrop={handleDrop}
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-border p-2"
+          >
             <div className="flex min-w-0 items-center gap-3">
               <div className="grid h-10 w-10 place-items-center rounded-lg bg-blue-50 text-blue-600 dark:bg-orange-500/10 dark:text-orange-500"><ImageIcon className="h-5 w-5" /></div>
               <div className="min-w-0"><div className="truncate font-bold text-foreground">{file.name}</div><div className="text-xs text-muted-foreground">{isPdf ? "PDF drawing set" : "Drawing image"} • {(file.size / 1024 / 1024).toFixed(2)} MB</div></div>
             </div>
-            <button onClick={() => inputRef.current?.click()} className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-muted">Replace drawing</button>
+            <label htmlFor="takeoff-drawing-input" className="cursor-pointer rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-muted">Replace drawing</label>
           </div>
         )}
+        <div className="mt-2 text-xs text-muted-foreground" aria-live="polite">{status}</div>
       </section>
 
       {file && (

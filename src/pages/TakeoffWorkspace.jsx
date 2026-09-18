@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Cable, FileUp, Hand, Image as ImageIcon, Layers3, MousePointer2, Pencil,
-  Ruler, Route, ScanSearch, Shapes, Trash2, Undo2, Upload, ZoomIn, ZoomOut
+  Ruler, Route, ScanSearch, Shapes, Trash2, Undo2, Upload, X, ZoomIn, ZoomOut
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
@@ -92,6 +92,20 @@ export default function TakeoffWorkspace() {
     const nextFile = event.target.files?.[0];
     chooseFile(nextFile);
     event.target.value = "";
+  }
+
+  function closeDrawing() {
+    if (marks.length && !window.confirm("Close this drawing? Unsaved takeoff marks will be cleared.")) return;
+    if (fileUrl) URL.revokeObjectURL(fileUrl);
+    setFile(null);
+    setFileUrl("");
+    setFileBytes(null);
+    setMarks([]);
+    setDraftPoints([]);
+    setDrawingError("");
+    setLoadingDrawing(false);
+    setZoom(1);
+    setStatus("Drawing closed. Choose another drawing to continue.");
   }
 
   function handleDrop(event) {
@@ -240,7 +254,12 @@ export default function TakeoffWorkspace() {
               <div className="grid h-10 w-10 place-items-center rounded-lg bg-blue-50 text-blue-600 dark:bg-orange-500/10 dark:text-orange-500"><ImageIcon className="h-5 w-5" /></div>
               <div className="min-w-0"><div className="truncate font-bold text-foreground">{file.name}</div><div className="text-xs text-muted-foreground">{isPdf ? "PDF drawing set" : "Drawing image"} • {(file.size / 1024 / 1024).toFixed(2)} MB</div></div>
             </div>
-            <label htmlFor="takeoff-drawing-input" className="cursor-pointer rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-muted">Replace drawing</label>
+            <div className="flex items-center gap-2">
+              <label htmlFor="takeoff-drawing-input" className="cursor-pointer rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-muted">Replace drawing</label>
+              <button type="button" onClick={closeDrawing} className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-muted" aria-label="Close drawing">
+                <X className="h-4 w-4" /> Close
+              </button>
+            </div>
           </div>
         )}
         <div className="mt-2 text-xs text-muted-foreground" aria-live="polite">{status}</div>
@@ -283,7 +302,10 @@ export default function TakeoffWorkspace() {
                 <span className="min-w-14 text-center text-xs font-semibold">{Math.round(zoom * 100)}%</span>
                 <button onClick={() => setZoom((z) => Math.min(2.5, z + .1))} className="rounded-lg p-2 hover:bg-muted" title="Zoom in"><ZoomIn className="h-4 w-4" /></button>
               </div>
-              <button onClick={clearAll} className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" />Clear marks</button>
+              <div className="flex items-center gap-1">
+                <button onClick={clearAll} className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" />Clear marks</button>
+                <button type="button" onClick={closeDrawing} className="flex items-center gap-1 rounded-lg border border-border px-2 py-1.5 text-xs font-semibold hover:bg-muted" title="Close drawing"><X className="h-4 w-4" />Close drawing</button>
+              </div>
             </div>
 
             <div className="overflow-auto bg-muted/40 p-3" style={{ minHeight: 620 }}>

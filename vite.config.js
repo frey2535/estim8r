@@ -13,7 +13,7 @@ const buildSha = [
   process.env.COMMIT_SHA,
 ].find((value) => typeof value === "string" && value.trim())?.trim() || "local";
 const builtAt = buildSha === "local" ? "local" : (process.env.VITE_APP_BUILT_AT || process.env.BUILD_TIME || new Date().toISOString());
-const spaFallbackRoutes = ["login", "estimates/new", "labor", "production", "settings", "profile"];
+const spaFallbackRoutes = ["login", "register", "forgot-password", "reset-password", "estimates/new", "labor", "production", "settings", "profile"];
 
 function buildVersionPlugin() {
   return {

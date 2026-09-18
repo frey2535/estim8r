@@ -1,0 +1,35 @@
+{
+  "id": "/",
+  "name": "Estim8r",
+  "short_name": "Estim8r",
+  "description": "Professional electrical estimating with traceable labor and company production intelligence.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "theme_color": "#1e40af",
+  "background_color": "#1e40af",
+  "categories": ["business", "productivity", "utilities"],
+  "shortcuts": [
+    {
+      "name": "New Estimate",
+      "short_name": "New Estimate",
+      "description": "Create a new electrical estimate",
+      "url": "/estimates/new"
+    },
+    {
+      "name": "Labor Library",
+      "short_name": "Labor",
+      "description": "Open the master labor library",
+      "url": "/labor"
+    },
+    {
+      "name": "Production",
+      "short_name": "Production",
+      "description": "Open production calibration",
+      "url": "/production"
+    }
+  ],
+  "prefer_related_applications": false
+}

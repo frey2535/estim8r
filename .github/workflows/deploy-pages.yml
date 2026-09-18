@@ -30,9 +30,17 @@ jobs:
         run: npm ci
       - name: Lint
         run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Security audit
+        run: npm audit --audit-level=moderate
+      - name: Write build version
+        run: |
+          printf '{"sha":"%s","builtAt":"%s"}\n' "$GITHUB_SHA" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" > public/build-version.json
       - name: Build
         run: npm run build
         env:
+          VITE_APP_BUILD_SHA: ${{ github.sha }}
           VITE_APP_NAME: Estim8r
           VITE_APP_URL: https://estim8r.currentflowconsulting.org
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
@@ -48,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: https://estim8r.currentflowconsulting.org
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Deploy to GitHub Pages
         id: deployment

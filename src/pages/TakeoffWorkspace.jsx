@@ -1,5 +1,16 @@
 import React from "react";
-import { Cable, CheckCircle2, FileSearch, Layers3, Route, ScanSearch, Shapes, Sigma, SplitSquareVertical } from "lucide-react";
+import { Cable, CheckCircle2, FileSearch, Layers3, MousePointer2, Pencil, Ruler, Route, ScanSearch, Shapes, Sigma, SplitSquareVertical } from "lucide-react";
+
+const manualTools = [
+  ["Select / edit", "Select, move, resize, relabel and delete any manual or accepted AI markup", MousePointer2],
+  ["Count", "Click-to-count devices, equipment, fittings, boxes and custom symbols", Shapes],
+  ["Linear", "Straight or segmented linear measurement for conduit, cable, trench and raceway", Ruler],
+  ["Area", "Rectangle/polygon area takeoff for slabs, rooms, grounding grids and custom scopes", Ruler],
+  ["Conduit route", "Draw branch circuit, feeder, home-run and rack paths manually", Route],
+  ["Circuit trace", "Connect panel/circuit sources to devices and assign circuit identity", Cable],
+  ["Markup", "Text, notes, dimensions, symbols, highlights and custom annotations", Pencil],
+  ["Scale calibration", "Printed scale, two-point calibration or known-dimension calibration", Ruler],
+];
 
 const capabilities = [
   ["Drawing ingestion", "PDF drawing sets, sheet indexing, scale and revision metadata", FileSearch],
@@ -31,7 +42,33 @@ export default function TakeoffWorkspace() {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="rounded-2xl border border-border bg-card p-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="font-bold text-foreground">Takeoff mode</h3>
+            <p className="text-sm text-muted-foreground">AI-assisted, fully manual, or hybrid. Manual edits remain first-class takeoff records.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {["AI Assisted", "Manual", "Hybrid"].map((mode) => <span key={mode} className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-semibold">{mode}</span>)}
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-muted-foreground">Manual takeoff toolbox</h3>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {manualTools.map(([title, description, Icon]) => (
+            <div key={title} className="rounded-2xl border border-border bg-card p-4">
+              <div className="mb-3 grid h-9 w-9 place-items-center rounded-xl bg-blue-50 text-blue-600 dark:bg-orange-500/10 dark:text-orange-500"><Icon className="h-5 w-5" /></div>
+              <h4 className="text-sm font-bold">{title}</h4><p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-muted-foreground">Automated intelligence</h3>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {capabilities.map(([title, description, Icon]) => (
           <div key={title} className="rounded-2xl border border-border bg-card p-4">
             <div className="mb-3 grid h-9 w-9 place-items-center rounded-xl bg-blue-50 text-blue-600 dark:bg-orange-500/10 dark:text-orange-500">
@@ -41,6 +78,7 @@ export default function TakeoffWorkspace() {
             <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
           </div>
         ))}
+        </div>
       </div>
 
       <div className="rounded-2xl border border-border bg-card p-5">

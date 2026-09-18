@@ -22,10 +22,15 @@ export const AuthProvider = ({ children }) => {
   const [hasProductAccess, setHasProductAccess] = useState(false);
   const [entitlementChecked, setEntitlementChecked] = useState(false);
 
-  const checkAppState = useCallback(async () => {
-    setAuthError(null);
-    setIsLoadingAuth(true);
-    setEntitlementChecked(false);
+  const checkAppState = useCallback(async (options) => {
+    const silent = Boolean(options?.silent);
+    // A full refresh flips loading flags and ProtectedRoute unmounts /takeoff.
+    // The native file picker blurs the window; a loading remount drops the selected File.
+    if (!silent) {
+      setAuthError(null);
+      setIsLoadingAuth(true);
+      setEntitlementChecked(false);
+    }
     try {
       const current = await withTimeout(base44.auth.me(), AUTH_STARTUP_TIMEOUT_MS, "Authentication took too long. Refresh Estim8r.");
       setUser(current);
@@ -36,22 +41,32 @@ export const AuthProvider = ({ children }) => {
         setHasProductAccess(entitlementGrantsAccess(entitlement) || Boolean(current?.is_platform_admin));
       } catch (entitlementError) {
         // During rollout, missing entitlement RPC must fail closed for normal users.
-        setProductEntitlement(null);
-        setHasProductAccess(Boolean(current?.is_platform_admin));
+        // Silent refresh keeps the current entitlement so a blip does not remount takeoff.
+        if (!silent) {
+          setProductEntitlement(null);
+          setHasProductAccess(Boolean(current?.is_platform_admin));
+        }
         console.error("Estim8r entitlement check failed", entitlementError);
       } finally {
         setEntitlementChecked(true);
       }
     } catch (error) {
+      const signedOut = error?.status === 401;
+      if (silent && !signedOut) {
+        console.error("Estim8r silent auth refresh failed", error);
+        return;
+      }
       setUser(null);
       setIsAuthenticated(false);
       setProductEntitlement(null);
       setHasProductAccess(false);
       setEntitlementChecked(true);
-      if (error?.status !== 401) setAuthError(error);
+      if (!signedOut) setAuthError(error);
     } finally {
-      setIsLoadingAuth(false);
-      setIsLoadingPublicSettings(false);
+      if (!silent) {
+        setIsLoadingAuth(false);
+        setIsLoadingPublicSettings(false);
+      }
       setAuthChecked(true);
     }
   }, []);
@@ -59,14 +74,21 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     checkAppState();
     if (!supabase) return undefined;
-    const { data } = supabase.auth.onAuthStateChange(() => checkAppState());
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "INITIAL_SESSION") return;
+      if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+        checkAppState({ silent: true });
+        return;
+      }
+      checkAppState();
+    });
     return () => data.subscription.unsubscribe();
   }, [checkAppState]);
 
   useEffect(() => {
     const refresh = () => {
       if (document.visibilityState && document.visibilityState !== "visible") return;
-      checkAppState();
+      checkAppState({ silent: true });
     };
     window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", refresh);

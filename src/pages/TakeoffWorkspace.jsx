@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from "react";
 import {
   Cable, FileUp, Hand, Image as ImageIcon, Layers3, MousePointer2, Pencil,
-  Plus, Ruler, Route, ScanSearch, Shapes, Trash2, Undo2, Upload, ZoomIn, ZoomOut
+  Ruler, Route, ScanSearch, Shapes, Trash2, Undo2, Upload, ZoomIn, ZoomOut
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 

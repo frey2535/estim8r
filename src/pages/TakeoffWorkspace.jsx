@@ -26,6 +26,9 @@ export default function TakeoffWorkspace() {
   const viewerRef = useRef(null);
   const [file, setFile] = useState(null);
   const [fileUrl, setFileUrl] = useState("");
+  const [fileBytes, setFileBytes] = useState(null);
+  const [loadingDrawing, setLoadingDrawing] = useState(false);
+  const [drawingError, setDrawingError] = useState("");
   const [mode, setMode] = useState("manual");
   const [tool, setTool] = useState("count");
   const [category, setCategory] = useState("Receptacles");
@@ -240,7 +243,9 @@ export default function TakeoffWorkspace() {
             <label htmlFor="takeoff-drawing-input" className="cursor-pointer rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-muted">Replace drawing</label>
           </div>
         )}
-        <div className="mt-2 text-xs text-muted-foreground" aria-live="polite">{status}</div>\n        {loadingDrawing && <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full w-2/3 animate-pulse rounded-full bg-blue-600 dark:bg-orange-500" /></div>}\n        {drawingError && <div className="mt-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{drawingError}</div>}
+        <div className="mt-2 text-xs text-muted-foreground" aria-live="polite">{status}</div>
+        {loadingDrawing && <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full w-2/3 animate-pulse rounded-full bg-blue-600 dark:bg-orange-500" /></div>}
+        {drawingError && <div className="mt-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{drawingError}</div>}
       </section>
 
       {file && (

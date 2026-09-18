@@ -21,9 +21,13 @@ const TOOL_DEFS = [
 
 const CATEGORIES = ["Receptacles", "Lighting", "HVAC", "Panels / MCC", "Equipment", "Raceway", "Low Voltage", "Access Control"];
 
+// Survives ProtectedRoute remounts if the native file picker still races a refresh.
+let pendingDrawingFile = null;
+
 export default function TakeoffWorkspace() {
   const inputRef = useRef(null);
   const viewerRef = useRef(null);
+  const fileUrlRef = useRef("");
   const [file, setFile] = useState(null);
   const [fileUrl, setFileUrl] = useState("");
   const [fileBytes, setFileBytes] = useState(null);
@@ -54,33 +58,40 @@ export default function TakeoffWorkspace() {
       || /\.(pdf|png|jpe?g|webp)$/i.test(nextFile.name || "");
 
     if (!allowed) {
+      pendingDrawingFile = null;
       setDrawingError("Unsupported file. Choose a PDF, PNG, JPG, JPEG, or WEBP drawing.");
       setStatus("Drawing import failed.");
       return;
     }
 
+    pendingDrawingFile = nextFile;
+    // Commit the File before any await so a remount can restore it and the header updates immediately.
+    setFile(nextFile);
     setLoadingDrawing(true);
     setDrawingError("");
     setStatus(`Importing ${nextFile.name}…`);
+    setMarks([]);
+    setDraftPoints([]);
+    setZoom(1);
 
     try {
       const bytes = await nextFile.arrayBuffer();
       if (!bytes?.byteLength) throw new Error("The selected file is empty or could not be read.");
 
-      if (fileUrl) URL.revokeObjectURL(fileUrl);
+      if (fileUrlRef.current) URL.revokeObjectURL(fileUrlRef.current);
       const url = URL.createObjectURL(nextFile);
+      fileUrlRef.current = url;
 
-      setFile(nextFile);
       setFileUrl(url);
       setFileBytes(bytes);
-      setMarks([]);
-      setDraftPoints([]);
-      setZoom(1);
       setStatus(`${nextFile.name} imported into Estim8r. Drawing is ready for takeoff.`);
     } catch (error) {
       console.error("Drawing import failed", error);
+      pendingDrawingFile = null;
       setFile(null);
+      setFileUrl("");
       setFileBytes(null);
+      fileUrlRef.current = "";
       setDrawingError(error?.message || "Estim8r could not read the selected drawing.");
       setStatus("Drawing import failed.");
     } finally {
@@ -88,15 +99,28 @@ export default function TakeoffWorkspace() {
     }
   }
 
+  useEffect(() => {
+    if (pendingDrawingFile) void chooseFile(pendingDrawingFile);
+  }, []);
+
+  function openDrawingPicker() {
+    const input = inputRef.current;
+    if (!input) return;
+    input.value = "";
+    input.click();
+  }
+
   function handleInputChange(event) {
     const nextFile = event.target.files?.[0];
-    chooseFile(nextFile);
+    void chooseFile(nextFile);
     event.target.value = "";
   }
 
   function closeDrawing() {
     if (marks.length && !window.confirm("Close this drawing? Unsaved takeoff marks will be cleared.")) return;
-    if (fileUrl) URL.revokeObjectURL(fileUrl);
+    pendingDrawingFile = null;
+    if (fileUrlRef.current) URL.revokeObjectURL(fileUrlRef.current);
+    fileUrlRef.current = "";
     setFile(null);
     setFileUrl("");
     setFileBytes(null);
@@ -216,12 +240,14 @@ export default function TakeoffWorkspace() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <section className="relative rounded-2xl border border-border bg-card p-4 shadow-sm">
         <input
           id="takeoff-drawing-input"
+          ref={inputRef}
           type="file"
           accept="application/pdf,image/png,image/jpeg,image/webp,.pdf,.png,.jpg,.jpeg,.webp"
-          className="sr-only"
+          className="pointer-events-none absolute h-px w-px opacity-0"
+          tabIndex={-1}
           onChange={handleInputChange}
         />
         {!file ? (
@@ -234,13 +260,14 @@ export default function TakeoffWorkspace() {
             <FileUp className="mb-3 h-10 w-10 text-blue-600 dark:text-orange-500" />
             <span className="text-lg font-bold text-foreground">Upload electrical drawings</span>
             <span className="mt-1 text-sm text-muted-foreground">PDF, PNG, JPG, JPEG, or WEBP</span>
-            <label
-              htmlFor="takeoff-drawing-input"
+            <button
+              type="button"
+              onClick={openDrawingPicker}
               className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm active:scale-[0.98] dark:bg-orange-500"
             >
               <Upload className="h-4 w-4" />
               Choose drawing
-            </label>
+            </button>
             <span className="mt-3 hidden text-xs text-muted-foreground sm:block">Or drag and drop the drawing anywhere inside this box.</span>
           </div>
         ) : (
@@ -255,7 +282,7 @@ export default function TakeoffWorkspace() {
               <div className="min-w-0"><div className="truncate font-bold text-foreground">{file.name}</div><div className="text-xs text-muted-foreground">{isPdf ? "PDF drawing set" : "Drawing image"} • {(file.size / 1024 / 1024).toFixed(2)} MB</div></div>
             </div>
             <div className="flex items-center gap-2">
-              <label htmlFor="takeoff-drawing-input" className="cursor-pointer rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-muted">Replace drawing</label>
+              <button type="button" onClick={openDrawingPicker} className="cursor-pointer rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-muted">Replace drawing</button>
               <button type="button" onClick={closeDrawing} className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold hover:bg-muted" aria-label="Close drawing">
                 <X className="h-4 w-4" /> Close
               </button>
@@ -313,16 +340,18 @@ export default function TakeoffWorkspace() {
                 className={cn("relative mx-auto overflow-hidden bg-white shadow-lg", tool === "pan" ? "cursor-grab" : tool === "select" ? "cursor-default" : "cursor-crosshair")}
                 style={{ width: `${zoom * 100}%`, minWidth: isPdf ? 720 : undefined }}>
                 {isPdf ? (
-                  <PdfDrawing fileBytes={fileBytes} fileName={file.name} />
-                ) : (
+                  fileBytes ? <PdfDrawing fileBytes={fileBytes} fileName={file.name} /> : <div className="p-8 text-sm text-muted-foreground">Reading PDF…</div>
+                ) : fileUrl ? (
                   <img
                     src={fileUrl}
                     alt={file.name}
                     draggable={false}
-                    onLoad={() => setStatus(`${file.name} rendered and ready for takeoff.`)}
+                    onLoad={() => { setDrawingError(""); setStatus(`${file.name} rendered and ready for takeoff.`); }}
                     onError={() => { setDrawingError("The drawing file was imported but could not be rendered."); setStatus("Drawing render failed."); }}
                     className="block h-auto w-full select-none"
                   />
+                ) : (
+                  <div className="p-8 text-sm text-muted-foreground">Reading drawing…</div>
                 )}
                 <MarkupOverlay marks={marks} draftPoints={draftPoints} />
               </div>

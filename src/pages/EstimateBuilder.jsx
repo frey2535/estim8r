@@ -1,32 +1,328 @@
-import React,{useMemo,useState} from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { Plus, Trash2 } from "lucide-react";
+import { compositeWage, defaultCrew } from "@/domain/labor/employeeClasses";
+import { readActiveEstimate, writeEstimate, writeWageBook } from "@/domain/estimate/estimateStore";
 
-const ITEM_TYPES=['Material','Labor','Equipment','Subcontract','Allowance','Fixture','Device','Conduit','Wire','Gear','Other'];
-const UNITS=['EA','LF','FT','100 LF','1000 LF','HR','DAY','LOT'];
-const blankLine=()=>({id:crypto.randomUUID(),itemType:'Material',category:'',description:'',quantity:1,unit:'EA',materialUnitCost:0,laborMhPerUnit:0,laborRate:0,notes:''});
+const ITEM_TYPES = ["Material", "Labor", "Equipment", "Subcontract", "Allowance", "Fixture", "Device", "Conduit", "Wire", "Gear", "Other"];
+const UNITS = ["EA", "LF", "SF", "FT", "100 LF", "1000 LF", "HR", "DAY", "LOT"];
 
-export default function EstimateBuilder(){
- const [header,setHeader]=useState({projectName:'',projectAddress:'',estimateNumber:'',customerCompany:'',customerName:'',customerPhone:'',customerEmail:'',estimatorName:'',bidDue:'',scopeNotes:''});
- const [lines,setLines]=useState([blankLine()]),[overhead,setOverhead]=useState(10),[profit,setProfit]=useState(10);
- const totals=useMemo(()=>lines.reduce((a,l)=>{const q=Number(l.quantity)||0;a.material+=q*(Number(l.materialUnitCost)||0);a.hours+=q*(Number(l.laborMhPerUnit)||0);a.labor+=q*(Number(l.laborMhPerUnit)||0)*(Number(l.laborRate)||0);return a},{material:0,hours:0,labor:0}),[lines]);
- const direct=totals.material+totals.labor,oh=direct*((Number(overhead)||0)/100),sub=direct+oh,prof=sub*((Number(profit)||0)/100),grand=sub+prof;
- const h=(k,v)=>setHeader(x=>({...x,[k]:v}));
- const line=(id,k,v)=>setLines(x=>x.map(r=>r.id===id?{...r,[k]:v}:r));
- return <div className="space-y-5 py-4">
-  <div><p className="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-orange-500">Estimate Builder</p><h1 className="text-3xl font-black">Electrical Estimate</h1><p className="text-sm text-muted-foreground">Project, customer, scope, material and labor in one estimate.</p></div>
-  <section className="rounded-2xl border border-border bg-card p-5 shadow-sm"><h2 className="mb-4 text-lg font-bold">Project & Customer</h2><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-   <Field label="Project name" value={header.projectName} set={v=>h('projectName',v)}/><Field label="Estimate #" value={header.estimateNumber} set={v=>h('estimateNumber',v)}/><Field label="Customer / company" value={header.customerCompany} set={v=>h('customerCompany',v)}/><Field label="Contact name" value={header.customerName} set={v=>h('customerName',v)}/>
-   <Field label="Phone" type="tel" value={header.customerPhone} set={v=>h('customerPhone',v)}/><Field label="Email" type="email" value={header.customerEmail} set={v=>h('customerEmail',v)}/><Field label="Estimator" value={header.estimatorName} set={v=>h('estimatorName',v)}/><Field label="Bid due" type="datetime-local" value={header.bidDue} set={v=>h('bidDue',v)}/>
-  </div><div className="mt-3 grid gap-3 md:grid-cols-2"><Field label="Project address" value={header.projectAddress} set={v=>h('projectAddress',v)}/><Field label="Scope / bid notes" value={header.scopeNotes} set={v=>h('scopeNotes',v)}/></div></section>
-  <section className="rounded-2xl border border-border bg-card shadow-sm"><div className="flex items-center justify-between border-b border-border p-4"><div><h2 className="text-lg font-bold">Estimate Lines</h2><p className="text-xs text-muted-foreground">Add material, labor, equipment, fixtures, devices, conduit, wire, gear and custom items.</p></div><button onClick={()=>setLines(x=>[...x,blankLine()])} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white dark:bg-orange-500"><Plus className="h-4 w-4"/>Add line</button></div>
-   <div className="overflow-x-auto"><table className="min-w-[1250px] w-full text-sm"><thead className="bg-muted text-left text-xs uppercase text-muted-foreground"><tr><th className="p-3">Type</th><th>Category</th><th>Item / description</th><th>Qty</th><th>Unit</th><th>Material $/unit</th><th>MH/unit</th><th>Labor $/hr</th><th>Material</th><th>Labor</th><th>Notes</th><th></th></tr></thead><tbody>
-    {lines.map(r=>{const q=Number(r.quantity)||0;const mat=q*(Number(r.materialUnitCost)||0);const lab=q*(Number(r.laborMhPerUnit)||0)*(Number(r.laborRate)||0);return <tr key={r.id} className="border-t border-border"><td className="p-2"><Sel value={r.itemType} vals={ITEM_TYPES} set={v=>line(r.id,'itemType',v)}/></td><td className="p-2"><Cell value={r.category} set={v=>line(r.id,'category',v)}/></td><td className="p-2"><Cell value={r.description} set={v=>line(r.id,'description',v)} placeholder="Item description"/></td><td className="p-2"><Cell type="number" value={r.quantity} set={v=>line(r.id,'quantity',v)}/></td><td className="p-2"><Sel value={r.unit} vals={UNITS} set={v=>line(r.id,'unit',v)}/></td><td className="p-2"><Cell type="number" value={r.materialUnitCost} set={v=>line(r.id,'materialUnitCost',v)}/></td><td className="p-2"><Cell type="number" value={r.laborMhPerUnit} set={v=>line(r.id,'laborMhPerUnit',v)}/></td><td className="p-2"><Cell type="number" value={r.laborRate} set={v=>line(r.id,'laborRate',v)}/></td><td className="p-3 font-semibold">{'$'}{mat.toFixed(2)}</td><td className="p-3 font-semibold">{'$'}{lab.toFixed(2)}</td><td className="p-2"><Cell value={r.notes} set={v=>line(r.id,'notes',v)}/></td><td className="p-2"><button onClick={()=>setLines(x=>x.length===1?x:x.filter(z=>z.id!==r.id))} className="p-2 text-destructive"><Trash2 className="h-4 w-4"/></button></td></tr>})}
-   </tbody></table></div>
-  </section>
-  <section className="grid gap-4 lg:grid-cols-[1fr_340px]"><div className="rounded-2xl border border-border bg-card p-4"><h2 className="font-bold">Estimate controls</h2><div className="mt-3 grid grid-cols-2 gap-3"><Field label="Overhead %" type="number" value={overhead} set={setOverhead}/><Field label="Profit %" type="number" value={profit} set={setProfit}/></div></div><div className="rounded-2xl border border-border bg-card p-5 shadow-sm"><Sum label="Material" value={totals.material}/><Sum label={'Labor ('+totals.hours.toFixed(2)+' hrs)'} value={totals.labor}/><Sum label={'Overhead ('+(Number(overhead)||0)+'%)'} value={oh}/><Sum label={'Profit ('+(Number(profit)||0)+'%)'} value={prof}/><div className="mt-3 flex justify-between border-t border-border pt-4 text-xl font-black"><span>Estimate Total</span><span className="text-blue-600 dark:text-orange-500">{'$'}{grand.toFixed(2)}</span></div></div></section>
- </div>
+function blankLine(rate) {
+  return {
+    id: crypto.randomUUID(),
+    takeoffKey: "",
+    source: "manual",
+    itemType: "Material",
+    category: "",
+    description: "",
+    quantity: 1,
+    unit: "EA",
+    materialUnitCost: 0,
+    laborMhPerUnit: 0,
+    laborRate: rate,
+    notes: "",
+    quantityEdited: true,
+    laborRateEdited: false,
+    laborMhEdited: true,
+  };
 }
-function Field({label,value,set,type='text'}){return <label><span className="mb-1 block text-xs font-bold text-muted-foreground">{label}</span><input type={type} value={value} onChange={e=>set(e.target.value)} className="w-full rounded-lg border border-input bg-background px-3 py-2.5"/></label>}
-function Cell({value,set,type='text',placeholder=''}){return <input type={type} step={type==='number'?'0.01':undefined} value={value} placeholder={placeholder} onChange={e=>set(e.target.value)} className="w-full min-w-24 rounded-md border border-input bg-background px-2 py-2"/>}
-function Sel({value,vals,set}){return <select value={value} onChange={e=>set(e.target.value)} className="min-w-28 rounded-md border border-input bg-background px-2 py-2">{vals.map(v=><option key={v}>{v}</option>)}</select>}
-function Sum({label,value}){return <div className="flex justify-between border-b border-border py-2 text-sm"><span className="text-muted-foreground">{label}</span><strong>{'$'}{value.toFixed(2)}</strong></div>}
+
+const emptyHeader = {
+  projectName: "",
+  projectAddress: "",
+  estimateNumber: "",
+  customerCompany: "",
+  customerName: "",
+  customerPhone: "",
+  customerEmail: "",
+  estimatorName: "",
+  bidDue: "",
+  scopeNotes: "",
+};
+
+export default function EstimateBuilder() {
+  const [header, setHeader] = useState(emptyHeader);
+  const [crew, setCrew] = useState(() => defaultCrew());
+  const [lines, setLines] = useState(() => [blankLine(68)]);
+  const [overhead, setOverhead] = useState(10);
+  const [profit, setProfit] = useState(10);
+  const [meta, setMeta] = useState({ fileName: "", fileSize: 0, scopeEdited: false });
+  const [ready, setReady] = useState(false);
+  const wage = compositeWage(crew);
+
+  useEffect(() => {
+    const stored = readActiveEstimate();
+    if (stored) {
+      const nextCrew = stored.crew?.length ? stored.crew : defaultCrew();
+      setHeader({ ...emptyHeader, ...stored.header });
+      setCrew(nextCrew);
+      setLines(stored.lines?.length ? stored.lines : [blankLine(compositeWage(nextCrew).rate)]);
+      setOverhead(stored.overhead ?? 10);
+      setProfit(stored.profit ?? 10);
+      setMeta({ fileName: stored.fileName || "", fileSize: stored.fileSize || 0, scopeEdited: Boolean(stored.scopeEdited) });
+    }
+    setReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    writeWageBook(crew);
+    if (!meta.fileName) return;
+    writeEstimate({
+      version: 1,
+      fileName: meta.fileName,
+      fileSize: meta.fileSize,
+      header,
+      crew,
+      overhead: Number(overhead) || 0,
+      profit: Number(profit) || 0,
+      lines,
+      separateFromTakeoff: true,
+      scopeEdited: meta.scopeEdited,
+    });
+  }, [ready, header, crew, lines, overhead, profit, meta]);
+
+  const totals = useMemo(() => lines.reduce((acc, line) => {
+    const qty = Number(line.quantity) || 0;
+    acc.material += qty * (Number(line.materialUnitCost) || 0);
+    acc.hours += qty * (Number(line.laborMhPerUnit) || 0);
+    acc.labor += qty * (Number(line.laborMhPerUnit) || 0) * (Number(line.laborRate) || 0);
+    return acc;
+  }, { material: 0, hours: 0, labor: 0 }), [lines]);
+
+  const direct = totals.material + totals.labor;
+  const oh = direct * ((Number(overhead) || 0) / 100);
+  const sub = direct + oh;
+  const prof = sub * ((Number(profit) || 0) / 100);
+  const grand = sub + prof;
+
+  function setHeaderField(key, value) {
+    setHeader((current) => ({ ...current, [key]: value }));
+  }
+
+  function applyCrew(next) {
+    const rate = compositeWage(next).rate;
+    setCrew(next);
+    setLines((current) => current.map((line) => (line.laborRateEdited ? line : { ...line, laborRate: rate })));
+  }
+
+  function toggleClass(id) {
+    applyCrew(crew.map((row) => {
+      if (row.id !== id) return row;
+      const selected = !row.selected;
+      return { ...row, selected, headcount: selected ? Math.max(1, Number(row.headcount) || 1) : 0 };
+    }));
+  }
+
+  function patchLine(id, key, value) {
+    setLines((current) => current.map((line) => {
+      if (line.id !== id) return line;
+      const next = { ...line, [key]: value };
+      if (key === "quantity" || key === "unit") next.quantityEdited = true;
+      if (key === "laborMhPerUnit") next.laborMhEdited = true;
+      if (key === "laborRate") next.laborRateEdited = true;
+      return next;
+    }));
+  }
+
+  return (
+    <div className="space-y-5 py-4">
+      <div>
+        <p className="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-orange-500">Estimate Builder</p>
+        <h1 className="text-3xl font-black">Electrical Estimate</h1>
+        <p className="text-sm text-muted-foreground">
+          Line items follow the takeoff quantities. Editing this estimate does not change the takeoff sheet.
+          {meta.fileName ? ` Drawing: ${meta.fileName}.` : ""}
+        </p>
+        <Link to="/takeoff" className="mt-2 inline-block text-sm font-semibold text-blue-600 dark:text-orange-500">Back to takeoff</Link>
+      </div>
+
+      <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <h2 className="mb-4 text-lg font-bold">Project &amp; Customer</h2>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <Field label="Project name" value={header.projectName} set={(v) => setHeaderField("projectName", v)} />
+          <Field label="Estimate #" value={header.estimateNumber} set={(v) => setHeaderField("estimateNumber", v)} />
+          <Field label="Customer / company" value={header.customerCompany} set={(v) => setHeaderField("customerCompany", v)} />
+          <Field label="Contact name" value={header.customerName} set={(v) => setHeaderField("customerName", v)} />
+          <Field label="Phone" type="tel" value={header.customerPhone} set={(v) => setHeaderField("customerPhone", v)} />
+          <Field label="Email" type="email" value={header.customerEmail} set={(v) => setHeaderField("customerEmail", v)} />
+          <Field label="Estimator" value={header.estimatorName} set={(v) => setHeaderField("estimatorName", v)} />
+          <Field label="Bid due" type="datetime-local" value={header.bidDue} set={(v) => setHeaderField("bidDue", v)} />
+        </div>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <Field label="Project address" value={header.projectAddress} set={(v) => setHeaderField("projectAddress", v)} />
+          <label>
+            <span className="mb-1 block text-xs font-bold text-muted-foreground">Scope from the drawing</span>
+            <textarea value={header.scopeNotes} onChange={(e) => { setMeta((current) => ({ ...current, scopeEdited: true })); setHeaderField("scopeNotes", e.target.value); }} rows={4} className="w-full rounded-lg border border-input bg-background px-3 py-2.5" />
+          </label>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold">Employee class &amp; wage</h2>
+            <p className="text-xs text-muted-foreground">Select one or more classes. Default is Journeyman at the Journeyman wage. Wages are dollars per man-hour.</p>
+          </div>
+          <p className="text-sm font-bold">Crew rate ${wage.rate.toFixed(2)}/MH · {wage.label}</p>
+        </div>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead className="text-left text-xs uppercase text-muted-foreground">
+              <tr>
+                <th className="p-2">Use</th>
+                <th>Class</th>
+                <th>Hourly wage $/MH</th>
+                <th>Headcount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {crew.map((row) => (
+                <tr key={row.id} className="border-t border-border">
+                  <td className="p-2">
+                    <input type="checkbox" checked={row.selected} onChange={() => toggleClass(row.id)} aria-label={`Select ${row.label}`} />
+                  </td>
+                  <td className="py-2 font-semibold">{row.label}{row.id === "journeyman" ? " (default)" : ""}</td>
+                  <td className="py-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={row.wage}
+                      aria-label={`${row.label} wage`}
+                      onChange={(e) => applyCrew(crew.map((item) => item.id === row.id ? { ...item, wage: e.target.value } : item))}
+                      className="w-28 rounded-md border border-input bg-background px-2 py-1.5"
+                    />
+                  </td>
+                  <td className="py-2">
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={row.headcount}
+                      aria-label={`${row.label} headcount`}
+                      onChange={(e) => applyCrew(crew.map((item) => {
+                        if (item.id !== row.id) return item;
+                        const headcount = e.target.value;
+                        return { ...item, headcount, selected: Number(headcount) > 0 };
+                      }))}
+                      className="w-20 rounded-md border border-input bg-background px-2 py-1.5"
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-card shadow-sm">
+        <div className="flex items-center justify-between border-b border-border p-4">
+          <div>
+            <h2 className="text-lg font-bold">Estimate Lines</h2>
+            <p className="text-xs text-muted-foreground">Quantities match the takeoff. Man-hours come from the labor library. Labor rate follows the selected classes unless you edit a line.</p>
+          </div>
+          <button type="button" onClick={() => setLines((current) => [...current, blankLine(wage.rate)])} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white dark:bg-orange-500">
+            <Plus className="h-4 w-4" />Add line
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1250px] text-sm">
+            <thead className="bg-muted text-left text-xs uppercase text-muted-foreground">
+              <tr>
+                <th className="p-3">Type</th>
+                <th>Category</th>
+                <th>Item / description</th>
+                <th>Qty</th>
+                <th>Unit</th>
+                <th>Material $/unit</th>
+                <th>MH/unit</th>
+                <th>Labor $/hr</th>
+                <th>Hours</th>
+                <th>Material</th>
+                <th>Labor</th>
+                <th>Notes</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((row) => {
+                const qty = Number(row.quantity) || 0;
+                const mat = qty * (Number(row.materialUnitCost) || 0);
+                const hours = qty * (Number(row.laborMhPerUnit) || 0);
+                const lab = hours * (Number(row.laborRate) || 0);
+                return (
+                  <tr key={row.id} className="border-t border-border">
+                    <td className="p-2"><Sel value={row.itemType} vals={ITEM_TYPES} set={(v) => patchLine(row.id, "itemType", v)} /></td>
+                    <td className="p-2"><Cell value={row.category} set={(v) => patchLine(row.id, "category", v)} /></td>
+                    <td className="p-2"><Cell value={row.description} set={(v) => patchLine(row.id, "description", v)} placeholder="Item description" /></td>
+                    <td className="p-2"><Cell type="number" value={row.quantity} set={(v) => patchLine(row.id, "quantity", v)} /></td>
+                    <td className="p-2"><Sel value={row.unit} vals={UNITS} set={(v) => patchLine(row.id, "unit", v)} /></td>
+                    <td className="p-2"><Cell type="number" value={row.materialUnitCost} set={(v) => patchLine(row.id, "materialUnitCost", v)} /></td>
+                    <td className="p-2"><Cell type="number" value={row.laborMhPerUnit} set={(v) => patchLine(row.id, "laborMhPerUnit", v)} /></td>
+                    <td className="p-2"><Cell type="number" value={row.laborRate} set={(v) => patchLine(row.id, "laborRate", v)} /></td>
+                    <td className="p-3 font-semibold">{hours.toFixed(2)}</td>
+                    <td className="p-3 font-semibold">${mat.toFixed(2)}</td>
+                    <td className="p-3 font-semibold">${lab.toFixed(2)}</td>
+                    <td className="p-2"><Cell value={row.notes} set={(v) => patchLine(row.id, "notes", v)} /></td>
+                    <td className="p-2">
+                      <button type="button" onClick={() => setLines((current) => (current.length === 1 ? current : current.filter((item) => item.id !== row.id)))} className="p-2 text-destructive" aria-label="Delete line">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-[1fr_340px]">
+        <div className="rounded-2xl border border-border bg-card p-4">
+          <h2 className="font-bold">Estimate controls</h2>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <Field label="Overhead %" type="number" value={overhead} set={setOverhead} />
+            <Field label="Profit %" type="number" value={profit} set={setProfit} />
+          </div>
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <Sum label="Material" value={totals.material} />
+          <Sum label={`Labor (${totals.hours.toFixed(2)} hrs @ $${wage.rate.toFixed(2)})`} value={totals.labor} />
+          <Sum label={`Overhead (${Number(overhead) || 0}%)`} value={oh} />
+          <Sum label={`Profit (${Number(profit) || 0}%)`} value={prof} />
+          <div className="mt-3 flex justify-between border-t border-border pt-4 text-xl font-black">
+            <span>Estimate Total</span>
+            <span className="text-blue-600 dark:text-orange-500">${grand.toFixed(2)}</span>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function Field({ label, value, set, type = "text" }) {
+  return (
+    <label>
+      <span className="mb-1 block text-xs font-bold text-muted-foreground">{label}</span>
+      <input type={type} value={value} onChange={(e) => set(e.target.value)} className="w-full rounded-lg border border-input bg-background px-3 py-2.5" />
+    </label>
+  );
+}
+
+function Cell({ value, set, type = "text", placeholder = "" }) {
+  return <input type={type} step={type === "number" ? "0.01" : undefined} value={value} placeholder={placeholder} onChange={(e) => set(e.target.value)} className="w-full min-w-24 rounded-md border border-input bg-background px-2 py-2" />;
+}
+
+function Sel({ value, vals, set }) {
+  const options = vals.includes(value) || !value ? vals : [value, ...vals];
+  return (
+    <select value={value} onChange={(e) => set(e.target.value)} className="min-w-28 rounded-md border border-input bg-background px-2 py-2">
+      {options.map((option) => <option key={option}>{option}</option>)}
+    </select>
+  );
+}
+
+function Sum({ label, value }) {
+  return <div className="flex justify-between border-b border-border py-2 text-sm"><span className="text-muted-foreground">{label}</span><strong>${value.toFixed(2)}</strong></div>;
+}

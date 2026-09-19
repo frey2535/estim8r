@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Cable, Cloud, FileUp, Hand, Image as ImageIcon, Layers3, MousePointer2,
   Pencil, Redo2, Route, Ruler, ScanSearch, Spline, Square, StickyNote,
@@ -20,6 +21,7 @@ import { drawingSymbolsFromDocs, readDrawingDocuments } from "@/domain/takeoff/d
 import SheetThumbnailPanel, { readThumbsOpen, writeThumbsOpen } from "@/components/takeoff/SheetThumbnailPanel";
 import DevicePicker from "@/components/takeoff/DevicePicker";
 import { getPdfDocument } from "@/lib/pdf-document";
+import { syncStoredEstimate } from "@/domain/estimate/estimateStore";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -125,6 +127,21 @@ export default function TakeoffWorkspace() {
     [marks, calibration, aspect],
   );
   const conduitTotal = projectConduitTotal(runs);
+
+  useEffect(() => {
+    if (!file) return;
+    try {
+      syncStoredEstimate({
+        fileName: file.name,
+        fileSize: file.size,
+        drawingDocs,
+        rollup,
+        pageCount: sheetMeta.pageCount,
+      });
+    } catch {
+      /* estimate copy failed; takeoff sheet is unchanged */
+    }
+  }, [file, drawingDocs, rollup, sheetMeta.pageCount]);
   const draftPreview = hoverPoint && draftPoints.length ? [...draftPoints, hoverPoint] : draftPoints;
   const draftFeet = feetFromPercent(polylineLength(draftPreview, aspect), calibration);
   const imageDisplay = fitSheetSize(
@@ -696,6 +713,7 @@ export default function TakeoffWorkspace() {
           <button type="button" onClick={() => saveTakeoff()} className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 dark:bg-orange-500">
             <Save className="h-4 w-4" /> Save
           </button>
+          <Link to="/estimates/new" className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Estimate</Link>
           <button type="button" onClick={downloadTakeoff} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Export JSON</button>
           <button type="button" onClick={openDrawingPicker} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Replace</button>
           <button type="button" onClick={closeDrawing} className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted"><X className="h-4 w-4" /> Close</button>

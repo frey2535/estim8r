@@ -2,21 +2,23 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Cable, Cloud, FileUp, Hand, Image as ImageIcon, Layers3, MousePointer2,
   Pencil, Redo2, Route, Ruler, ScanSearch, Spline, Square, StickyNote,
-  Trash2, Undo2, Upload, X, ZoomIn, ZoomOut, Crosshair, Gauge, Lightbulb
+  Trash2, Undo2, Upload, X, ZoomIn, ZoomOut, Crosshair, Gauge, Lightbulb, Save
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
 import {
-  CATEGORIES, DEFAULT_DROP_FEET, DEVICE_SYMBOLS, TAKEOFF_TOOLS, TOOL_GROUPS,
-  symbolsForCategory, toolByKey,
+  CATEGORIES, DEFAULT_DROP_FEET, DRAWING_CATEGORY, TAKEOFF_TOOLS, TOOL_GROUPS,
+  findSymbol, symbolsForCategory, toolByKey,
 } from "@/domain/takeoff/catalog";
 import {
   calibrationFromPoints, feetFromPercent, formatArea, formatFeet,
   hitTestMark, polylineLength, sheetAspect, widthPercentDistance,
 } from "@/domain/takeoff/geometry";
-import { quantitiesToCsv, rollupTakeoff } from "@/domain/takeoff/quantities";
+import { conduitRuns, nextConduitRunNumber, projectConduitTotal, quantitiesToCsv, rollupTakeoff } from "@/domain/takeoff/quantities";
+import { drawingSymbolsFromDocs, readDrawingDocuments } from "@/domain/takeoff/drawing-docs";
 import SheetThumbnailPanel, { readThumbsOpen, writeThumbsOpen } from "@/components/takeoff/SheetThumbnailPanel";
+import DevicePicker from "@/components/takeoff/DevicePicker";
 import { getPdfDocument } from "@/lib/pdf-document";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -90,13 +92,22 @@ export default function TakeoffWorkspace() {
   const [selectedId, setSelectedId] = useState(null);
   const [measureLabel, setMeasureLabel] = useState("");
   const [thumbsOpen, setThumbsOpen] = useState(readThumbsOpen);
+  const [savedAt, setSavedAt] = useState("");
+  const [symbolQuery, setSymbolQuery] = useState("");
+  const [drawingDocs, setDrawingDocs] = useState(null);
+  const [hoverPoint, setHoverPoint] = useState(null);
   const [wideLayout, setWideLayout] = useState(() => (
     typeof window !== "undefined" ? window.matchMedia("(min-width: 1024px)").matches : true
   ));
 
   const isPdf = file?.type === "application/pdf" || file?.name?.toLowerCase().endsWith(".pdf");
-  const symbols = useMemo(() => symbolsForCategory(category), [category]);
-  const symbol = DEVICE_SYMBOLS.find((item) => item.id === symbolId) || symbols[0];
+  const drawingSymbols = useMemo(() => drawingSymbolsFromDocs(drawingDocs), [drawingDocs]);
+  const categories = useMemo(
+    () => (drawingSymbols.length ? [DRAWING_CATEGORY, ...CATEGORIES] : CATEGORIES),
+    [drawingSymbols.length],
+  );
+  const symbols = useMemo(() => symbolsForCategory(category, drawingSymbols), [category, drawingSymbols]);
+  const symbol = findSymbol(symbolId, drawingSymbols);
   const activeTool = toolByKey(tool);
   const sheetMarks = useMemo(
     () => marks.filter((mark) => (mark.sheet || 1) === (sheetMeta.page || 1)),
@@ -109,6 +120,13 @@ export default function TakeoffWorkspace() {
     () => rollupTakeoff(marks, calibration, aspect),
     [marks, calibration, aspect],
   );
+  const runs = useMemo(
+    () => conduitRuns(marks, calibration, aspect),
+    [marks, calibration, aspect],
+  );
+  const conduitTotal = projectConduitTotal(runs);
+  const draftPreview = hoverPoint && draftPoints.length ? [...draftPoints, hoverPoint] : draftPoints;
+  const draftFeet = feetFromPercent(polylineLength(draftPreview, aspect), calibration);
   const imageDisplay = fitSheetSize(
     imageSize.width,
     imageSize.height,
@@ -153,8 +171,10 @@ export default function TakeoffWorkspace() {
     const saved = loadSession(nextFile);
     setMarks(Array.isArray(saved?.marks) ? saved.marks : []);
     setCalibration(saved?.calibration || null);
+    setSavedAt(saved?.savedAt || "");
     if (saved?.symbolId) setSymbolId(saved.symbolId);
     if (saved?.category) setCategory(saved.category);
+    if (saved?.sheet) setSheetMeta((current) => ({ ...current, page: saved.sheet }));
 
     try {
       const bytes = await nextFile.arrayBuffer();
@@ -191,14 +211,77 @@ export default function TakeoffWorkspace() {
     return () => media.removeEventListener("change", sync);
   }, []);
 
+  function sessionPayload() {
+    return {
+      version: 2,
+      savedAt: new Date().toISOString(),
+      fileName: file?.name,
+      fileSize: file?.size,
+      marks,
+      calibration,
+      symbolId,
+      category,
+      sheet: sheetMeta.page,
+    };
+  }
+
+  function saveTakeoff(silent = false) {
+    if (!file) return;
+    const payload = sessionPayload();
+    try {
+      localStorage.setItem(storageKey(file), JSON.stringify(payload));
+      setSavedAt(payload.savedAt);
+      if (!silent) setStatus(`Takeoff saved${file.name ? ` for ${file.name}` : ""}.`);
+    } catch {
+      setStatus("Could not save takeoff in this browser.");
+    }
+  }
+
+  function downloadTakeoff() {
+    if (!file) return;
+    const payload = sessionPayload();
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `estim8r-takeoff-${(file.name || "drawing").replace(/\.[^.]+$/, "")}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setStatus("Takeoff JSON downloaded.");
+  }
+
   useEffect(() => {
     if (!file) return;
     try {
-      localStorage.setItem(storageKey(file), JSON.stringify({ marks, calibration, symbolId, category }));
+      localStorage.setItem(storageKey(file), JSON.stringify({ ...sessionPayload(), savedAt: savedAt || undefined }));
     } catch {
       /* private mode */
     }
-  }, [file, marks, calibration, symbolId, category]);
+  }, [file, marks, calibration, symbolId, category, sheetMeta.page]);
+
+  useEffect(() => {
+    if (!isPdf || !fileBytes) {
+      setDrawingDocs(null);
+      return undefined;
+    }
+    let cancelled = false;
+    readDrawingDocuments(fileBytes).then((docs) => {
+      if (cancelled) return;
+      setDrawingDocs(docs);
+      const found = (docs.symbols?.length || 0) + (docs.scheduleItems?.length || 0);
+      if (found) {
+        setStatus(`Read ${docs.symbols.length} legend symbols and ${docs.scheduleItems.length} schedule / spec types from the drawing.`);
+        setCategory(DRAWING_CATEGORY);
+        const first = drawingSymbolsFromDocs(docs)[0];
+        if (first) setSymbolId(first.id);
+      } else if (docs.notes?.length) {
+        setStatus(docs.notes[0]);
+      }
+    }).catch((error) => {
+      if (!cancelled) setStatus(error?.message || "Could not read legend or schedules from this PDF.");
+    });
+    return () => { cancelled = true; };
+  }, [fileBytes, isPdf]);
 
   useEffect(() => {
     const el = viewportRef.current;
@@ -290,13 +373,15 @@ export default function TakeoffWorkspace() {
   }
 
   function addMark(partial, message) {
+    const raceway = (partial.tool || tool) === "conduit";
+    const device = raceway && symbol?.category !== "Raceway" ? findSymbol("emt") : symbol;
     const mark = {
       id: crypto.randomUUID(),
       sheet: sheetMeta.page || 1,
-      category: symbol?.category || category,
-      symbol: symbol?.id,
-      symbolLabel: symbol?.label,
-      abbr: symbol?.abbr,
+      category: device?.takeoffCategory || device?.category || category,
+      symbol: device?.id,
+      symbolLabel: device?.label,
+      abbr: device?.abbr,
       ...partial,
     };
     commitMarks([...marks, mark], message);
@@ -396,8 +481,15 @@ export default function TakeoffWorkspace() {
     }
 
     if (["polyline", "area", "conduit", "circuit"].includes(tool)) {
-      setDraftPoints((current) => [...current, point]);
-      setStatus(`${activeTool.label} in progress. Double-click to finish.`);
+      const next = [...draftPoints, point];
+      setDraftPoints(next);
+      if (tool === "conduit") {
+        const feet = feetFromPercent(polylineLength(next, sheetAspectRatio), calibration);
+        setMeasureLabel(feet == null ? "Conduit run in progress. Calibrate to read LF." : `Run in progress: ${formatFeet(feet)}`);
+        setStatus(feet == null ? "Conduit vertex added. Double-click to finish the run." : `Conduit run ${formatFeet(feet)}. Double-click to finish.`);
+      } else {
+        setStatus(`${activeTool.label} in progress. Double-click to finish.`);
+      }
     }
   }
 
@@ -411,10 +503,16 @@ export default function TakeoffWorkspace() {
       addMark({ type: "area", points: draftPoints }, calibration ? `Area ${formatArea(sf)}.` : "Area added. Calibrate scale to read SF.");
     } else {
       const feet = feetFromPercent(polylineLength(draftPoints, sheetAspectRatio), calibration);
+      const runNumber = tool === "conduit" ? nextConduitRunNumber(marks) : undefined;
       addMark(
-        { type: "route", tool, points: draftPoints },
-        feet == null ? `${activeTool.label} added. Calibrate scale to read LF.` : `${activeTool.label} ${formatFeet(feet)}.`,
+        { type: "route", tool, points: draftPoints, runNumber, storedFeet: feet },
+        tool === "conduit"
+          ? (feet == null ? `Conduit run ${runNumber} added. Calibrate scale to read LF.` : `Conduit run ${runNumber}: ${formatFeet(feet)}.`)
+          : (feet == null ? `${activeTool.label} added. Calibrate scale to read LF.` : `${activeTool.label} ${formatFeet(feet)}.`),
       );
+      if (tool === "conduit") {
+        setMeasureLabel(feet == null ? `Run ${runNumber} stored. Calibrate to total LF.` : `Run ${runNumber}: ${formatFeet(feet)}`);
+      }
     }
     setDraftPoints([]);
   }
@@ -463,6 +561,10 @@ export default function TakeoffWorkspace() {
         event.preventDefault();
         if (event.shiftKey) redo();
         else undo();
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key === "s") {
+        event.preventDefault();
+        saveTakeoff();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -515,7 +617,7 @@ export default function TakeoffWorkspace() {
   }
 
   async function copyQuantities() {
-    const csv = quantitiesToCsv(rollup);
+    const csv = quantitiesToCsv(rollup, runs);
     try {
       await navigator.clipboard.writeText(csv);
       setStatus("Quantity schedule copied as CSV.");
@@ -583,6 +685,7 @@ export default function TakeoffWorkspace() {
               {isPdf ? `PDF • ${sheetMeta.pageCount} sheet${sheetMeta.pageCount === 1 ? "" : "s"}` : "Drawing image"}
               {calibration ? ` • scale ${calibration.feet} ft` : " • scale not set"}
               {zoom === 1 ? " • fitted to window" : ` • ${Math.round(zoom * 100)}%`}
+              {savedAt ? ` • saved ${new Date(savedAt).toLocaleTimeString()}` : " • not saved yet"}
             </div>
           </div>
         </div>
@@ -590,6 +693,10 @@ export default function TakeoffWorkspace() {
           {[["manual", "Manual"], ["hybrid", "Hybrid"], ["ai", "AI assist"]].map(([value, label]) => (
             <button key={value} type="button" onClick={() => setMode(value)} className={cn("rounded-lg border px-3 py-1.5 text-xs font-semibold", mode === value ? "border-blue-600 bg-blue-600 text-white dark:border-orange-500 dark:bg-orange-500" : "border-border bg-background")}>{label}</button>
           ))}
+          <button type="button" onClick={() => saveTakeoff()} className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 dark:bg-orange-500">
+            <Save className="h-4 w-4" /> Save
+          </button>
+          <button type="button" onClick={downloadTakeoff} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Export JSON</button>
           <button type="button" onClick={openDrawingPicker} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Replace</button>
           <button type="button" onClick={closeDrawing} className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted"><X className="h-4 w-4" /> Close</button>
         </div>
@@ -616,14 +723,16 @@ export default function TakeoffWorkspace() {
             </div>
           ))}
           <div className="border-t border-border pt-3">
-            <label className="mb-1 block text-xs font-bold text-muted-foreground">Category</label>
-            <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full rounded-lg border border-input bg-background px-2 py-2 text-sm">
-              {CATEGORIES.map((item) => <option key={item}>{item}</option>)}
-            </select>
-            <label className="mb-1 mt-2 block text-xs font-bold text-muted-foreground">Device / symbol</label>
-            <select value={symbolId} onChange={(e) => setSymbolId(e.target.value)} className="w-full rounded-lg border border-input bg-background px-2 py-2 text-sm">
-              {symbols.map((item) => <option key={item.id} value={item.id}>{item.abbr} — {item.label}</option>)}
-            </select>
+            <DevicePicker
+              categories={categories}
+              category={category}
+              onCategory={(value) => { setCategory(value); setSymbolQuery(""); }}
+              symbols={symbols}
+              symbolId={symbolId}
+              onSymbol={setSymbolId}
+              query={symbolQuery}
+              onQuery={setSymbolQuery}
+            />
           </div>
           <div className="mt-3 rounded-lg bg-muted p-3 text-xs leading-5 text-muted-foreground">
             <strong className="block text-foreground">{activeTool.label}</strong>{activeTool.help}
@@ -662,6 +771,13 @@ export default function TakeoffWorkspace() {
               <span className="min-w-12 text-center text-xs font-semibold">{Math.round(zoom * 100)}%</span>
               <button type="button" onClick={() => setZoom((z) => Math.min(4, Number((z + 0.25).toFixed(2))))} className="rounded-lg p-2 hover:bg-muted" title="Zoom in"><ZoomIn className="h-4 w-4" /></button>
               <button type="button" onClick={() => setZoom(1)} className="rounded-lg border border-border px-2 py-1 text-xs font-semibold hover:bg-muted">Fit sheet</button>
+              {sheetMeta.pageCount > 1 && (
+                <div className="ml-2 flex items-center gap-1 rounded-lg border border-border bg-background px-1.5 py-0.5">
+                  <button type="button" disabled={sheetMeta.page <= 1} onClick={() => selectSheet(sheetMeta.page - 1)} className="rounded border border-border px-2 py-1 text-xs font-semibold disabled:opacity-40">Previous</button>
+                  <strong className="min-w-24 px-1 text-center text-xs">Sheet {sheetMeta.page} of {sheetMeta.pageCount}</strong>
+                  <button type="button" disabled={sheetMeta.page >= sheetMeta.pageCount} onClick={() => selectSheet(sheetMeta.page + 1)} className="rounded border border-border px-2 py-1 text-xs font-semibold disabled:opacity-40">Next</button>
+                </div>
+              )}
               {selectedId && <button type="button" onClick={deleteSelected} className="rounded-lg px-2 py-1 text-xs font-semibold text-destructive hover:bg-destructive/10">Delete</button>}
             </div>
             <div className="flex items-center gap-1">
@@ -675,6 +791,11 @@ export default function TakeoffWorkspace() {
                 onClick={onDrawingClick}
                 onDoubleClick={finishPath}
                 onPointerDown={onViewerPointerDown}
+                onPointerMove={(event) => {
+                  if (!["conduit", "polyline", "linear", "measure", "homerun"].includes(tool)) return;
+                  setHoverPoint(drawingPoint(event));
+                }}
+                onPointerLeave={() => setHoverPoint(null)}
                 className={cn("relative bg-white shadow-xl", tool === "pan" ? "cursor-grab" : tool === "select" ? "cursor-default" : "cursor-crosshair")}
               >
                 {isPdf ? (
@@ -716,7 +837,13 @@ export default function TakeoffWorkspace() {
                 ) : (
                   <div className="p-8 text-sm text-muted-foreground">Reading drawing…</div>
                 )}
-                <MarkupOverlay marks={sheetMarks} draftPoints={draftPoints} selectedId={selectedId} tool={tool} />
+                <MarkupOverlay
+                  marks={sheetMarks}
+                  draftPoints={draftPreview}
+                  draftFeet={["conduit", "polyline", "linear", "homerun"].includes(tool) ? draftFeet : null}
+                  selectedId={selectedId}
+                  tool={tool}
+                />
               </div>
             </div>
           </div>
@@ -743,11 +870,39 @@ export default function TakeoffWorkspace() {
               </div>
             ))}
           </div>
+          <div className="mt-3 border-t border-border pt-3">
+            <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Conduit runs</div>
+            {runs.length === 0 && <p className="text-[11px] text-muted-foreground">Trace conduit to store each run.</p>}
+            <div className="space-y-1.5">
+              {runs.map((run) => (
+                <div key={run.id} className="flex items-center justify-between rounded-lg border border-border px-2 py-1 text-[11px]">
+                  <span className="font-semibold">Run {run.runNumber} · sh {run.sheet} · {run.type}</span>
+                  <span>{run.calibrated ? formatFeet(run.lf) : "calibrate"}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-2 flex justify-between text-sm">
+              <span className="font-bold">Project conduit</span>
+              <strong>{rollup.calibrated ? formatFeet(conduitTotal) : "calibrate"}</strong>
+            </div>
+          </div>
           <div className="mt-3 border-t border-border pt-3 text-sm">
             <div className="flex justify-between"><span className="font-bold">Devices</span><strong>{rollup.totals.count}</strong></div>
             <div className="flex justify-between text-xs text-muted-foreground"><span>Linear</span><span>{rollup.calibrated ? formatFeet(rollup.totals.lf) : "calibrate"}</span></div>
             <div className="flex justify-between text-xs text-muted-foreground"><span>Area</span><span>{rollup.calibrated ? formatArea(rollup.totals.sf) : "calibrate"}</span></div>
           </div>
+          {drawingDocs && (
+            <div className="mt-3 rounded-lg border border-border p-2 text-[11px] leading-4 text-muted-foreground">
+              <div className="font-bold text-foreground">Legend / schedules</div>
+              <p>{drawingDocs.symbols.length} legend symbols · {drawingDocs.scheduleItems.length} schedule types</p>
+              {drawingDocs.pages.filter((page) => page.kind !== "drawing").slice(0, 6).map((page) => (
+                <button key={page.page} type="button" onClick={() => selectSheet(page.page)} className="mt-1 block text-left text-blue-700 hover:underline dark:text-orange-300">
+                  Sheet {page.page}: {page.kind.replace("-", " ")}
+                </button>
+              ))}
+              {drawingDocs.notes[0] && <p className="mt-1 text-amber-800 dark:text-amber-200">{drawingDocs.notes[0]}</p>}
+            </div>
+          )}
           <button type="button" onClick={copyQuantities} className="mt-3 w-full rounded-lg border border-border px-2 py-2 text-xs font-semibold hover:bg-muted">Copy schedule CSV</button>
           {(mode === "ai" || mode === "hybrid") && (
             <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3 dark:border-orange-500/30 dark:bg-orange-500/5">
@@ -761,19 +916,33 @@ export default function TakeoffWorkspace() {
   );
 }
 
-function MarkupOverlay({ marks, draftPoints, selectedId, tool }) {
+function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool }) {
   const routes = marks.filter((m) => m.points?.length);
+  const draftEnd = draftPoints[draftPoints.length - 1];
   return (
     <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
       {routes.map((mark) => {
         const points = mark.points.map((p) => `${p.x},${p.y}`).join(" ");
         const selected = mark.id === selectedId;
+        const end = mark.points[mark.points.length - 1];
         if (mark.type === "area" || mark.type === "cloud") {
           return <polygon key={mark.id} points={points} fill={mark.type === "cloud" ? "none" : "rgba(37,99,235,0.12)"} stroke={selected ? "#ea580c" : mark.type === "cloud" ? "#dc2626" : "#2563eb"} strokeWidth={selected ? ".7" : ".4"} strokeDasharray={mark.type === "cloud" ? "1.2 0.8" : undefined} vectorEffect="non-scaling-stroke" />;
         }
-        return <polyline key={mark.id} points={points} fill="none" stroke={selected ? "#ea580c" : mark.tool === "circuit" ? "#7c3aed" : mark.type === "homerun" ? "#0f766e" : "#2563eb"} strokeWidth={selected ? ".7" : ".45"} vectorEffect="non-scaling-stroke" />;
+        return (
+          <g key={mark.id}>
+            <polyline points={points} fill="none" stroke={selected ? "#ea580c" : mark.tool === "circuit" ? "#7c3aed" : mark.type === "homerun" ? "#0f766e" : "#2563eb"} strokeWidth={selected ? ".7" : ".45"} vectorEffect="non-scaling-stroke" />
+            {mark.tool === "conduit" && end && (
+              <text x={end.x} y={Math.max(2, end.y - 1.6)} fontSize="2.1" fontWeight="700" fill={selected ? "#ea580c" : "#1d4ed8"}>
+                {`R${mark.runNumber || ""} ${mark.storedFeet != null ? `${Number(mark.storedFeet).toFixed(1)} LF` : ""}`}
+              </text>
+            )}
+          </g>
+        );
       })}
       {draftPoints.length > 1 && <polyline points={draftPoints.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#f97316" strokeWidth=".45" strokeDasharray="1 1" vectorEffect="non-scaling-stroke" />}
+      {draftEnd && draftFeet != null && (
+        <text x={draftEnd.x} y={Math.max(2, draftEnd.y - 1.8)} fontSize="2.3" fontWeight="700" fill="#ea580c">{formatFeet(draftFeet)}</text>
+      )}
       {marks.filter((m) => m.type === "count" || m.type === "drop").map((mark, index) => (
         <g key={mark.id}>
           <circle cx={mark.x} cy={mark.y} r="1.5" fill={mark.id === selectedId ? "#ea580c" : "#2563eb"} stroke="white" strokeWidth=".3" vectorEffect="non-scaling-stroke" />
@@ -796,7 +965,6 @@ function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber, viewp
   const onPageNumberRef = useRef(onPageNumber);
   onPageInfoRef.current = onPageInfo;
   onPageNumberRef.current = onPageNumber;
-  const [pageCount, setPageCount] = useState(0);
   const [error, setError] = useState("");
   const [rendering, setRendering] = useState(true);
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 });
@@ -822,7 +990,6 @@ function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber, viewp
         }
         const pdf = pdfRef.current;
         if (cancelled) return;
-        setPageCount(pdf.numPages);
         const safePage = Math.min(Math.max(pageNumber || 1, 1), pdf.numPages);
         if (safePage !== pageNumber) {
           onPageNumberRef.current?.(safePage);
@@ -865,14 +1032,7 @@ function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber, viewp
 
   return (
     <div className="relative bg-white" style={displaySize.width ? { width: displaySize.width, height: displaySize.height } : undefined}>
-      {pageCount > 1 && (
-        <div className="absolute left-1/2 top-2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-border bg-background/95 px-2 py-1 text-xs shadow-sm">
-          <button type="button" disabled={pageNumber <= 1} onClick={(e) => { e.stopPropagation(); onPageNumberRef.current?.(pageNumber - 1); }} className="rounded border border-border px-2 py-1 disabled:opacity-40">Previous</button>
-          <strong>Sheet {pageNumber} of {pageCount}</strong>
-          <button type="button" disabled={pageNumber >= pageCount} onClick={(e) => { e.stopPropagation(); onPageNumberRef.current?.(pageNumber + 1); }} className="rounded border border-border px-2 py-1 disabled:opacity-40">Next</button>
-        </div>
-      )}
-      {rendering && <div className="absolute inset-x-0 top-12 z-10 mx-auto w-fit rounded-lg bg-background/90 px-3 py-2 text-xs font-semibold shadow">Rendering {fileName}…</div>}
+      {rendering && <div className="absolute inset-x-0 top-2 z-10 mx-auto w-fit rounded-lg bg-background/90 px-3 py-2 text-xs font-semibold shadow">Rendering {fileName}…</div>}
       {error && <div className="absolute inset-x-4 top-16 z-10 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">{error}</div>}
       <canvas ref={canvasRef} className="block bg-white" />
     </div>

@@ -70,7 +70,34 @@ export function rollupTakeoff(marks, calibration, aspect = 1, sheet = null) {
   return { rows: list, totals, calibrated: Boolean(calibration?.feet) };
 }
 
-export function quantitiesToCsv(rollup) {
+export function nextConduitRunNumber(marks) {
+  const nums = (marks || []).filter(isConduitMark).map((mark) => Number(mark.runNumber) || 0);
+  return (nums.length ? Math.max(...nums) : 0) + 1;
+}
+
+export function isConduitMark(mark) {
+  return mark?.tool === "conduit" || (mark?.type === "route" && mark?.tool === "conduit");
+}
+
+export function conduitRuns(marks, calibration, aspect = 1) {
+  return (marks || []).filter(isConduitMark).map((mark, index) => {
+    const lf = markLengthFeet(mark, calibration, aspect);
+    return {
+      id: mark.id,
+      runNumber: mark.runNumber || index + 1,
+      sheet: mark.sheet || 1,
+      type: mark.symbolLabel || mark.symbol || "Conduit",
+      lf: lf == null ? 0 : lf,
+      calibrated: lf != null,
+    };
+  });
+}
+
+export function projectConduitTotal(runs) {
+  return (runs || []).reduce((sum, run) => sum + (Number(run.lf) || 0), 0);
+}
+
+export function quantitiesToCsv(rollup, runs = []) {
   const header = "Category,Symbol,Count,LF,SF";
   const lines = rollup.rows.map((row) => [
     csv(row.category),
@@ -80,6 +107,14 @@ export function quantitiesToCsv(rollup) {
     row.hasArea ? row.sf.toFixed(2) : "",
   ].join(","));
   lines.push(["TOTAL", "", rollup.totals.count, rollup.totals.lf.toFixed(2), rollup.totals.sf.toFixed(2)].join(","));
+  if (runs.length) {
+    lines.push("");
+    lines.push("Conduit run,Sheet,Type,LF");
+    for (const run of runs) {
+      lines.push([`Run ${run.runNumber}`, run.sheet, csv(run.type), run.lf.toFixed(2)].join(","));
+    }
+    lines.push(["PROJECT CONDUIT TOTAL", "", "", projectConduitTotal(runs).toFixed(2)].join(","));
+  }
   return [header, ...lines].join("\n");
 }
 

@@ -1,7 +1,10 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from '@/App.jsx'
+import { startUpdateChecks } from '@/lib/update-check'
 import '@/index.css'
+
+startUpdateChecks()
 
 try {
   const redirect = window.sessionStorage.getItem('estim8r_redirect');

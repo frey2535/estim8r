@@ -1,25 +1,29 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  Cable, Cloud, FileUp, Hand, Image as ImageIcon, Layers3, MousePointer2,
-  Pencil, Redo2, Route, Ruler, ScanSearch, Spline, Square, StickyNote,
+  Cable, Cloud, FileUp, Hand, Image as ImageIcon, MousePointer2,
+  Pencil, Redo2, Route, Ruler, Spline, Square, StickyNote,
   Trash2, Undo2, Upload, X, ZoomIn, ZoomOut, Crosshair, Gauge, Lightbulb, Save
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
 import {
-  CATEGORIES, DEFAULT_DROP_FEET, DRAWING_CATEGORY, TAKEOFF_TOOLS, TOOL_GROUPS,
-  findSymbol, symbolsForCategory, toolByKey,
+  DEFAULT_DROP_FEET, DRAWING_CATEGORY, TAKEOFF_TOOLS, TOOL_GROUPS,
+  toolByKey,
 } from "@/domain/takeoff/catalog";
 import {
   calibrationFromPoints, feetFromPercent, formatArea, formatFeet,
   hitTestMark, polylineLength, sheetAspect, widthPercentDistance,
 } from "@/domain/takeoff/geometry";
-import { conduitRuns, nextConduitRunNumber, projectConduitTotal, quantitiesToCsv, rollupTakeoff } from "@/domain/takeoff/quantities";
+import { conduitRuns, nextConduitRunNumber, quantitiesToCsv, rollupTakeoff, applyScheduleEdits, markLengthFeet } from "@/domain/takeoff/quantities";
 import { drawingSymbolsFromDocs, readDrawingDocuments } from "@/domain/takeoff/drawing-docs";
+import { paletteForTrade, tradeById, conduitOptionsForTrade, findConduitOption, TRADES, DEFAULT_CONDUIT_ID } from "@/domain/takeoff/trades";
+import { buildAiMarks } from "@/domain/takeoff/aiTakeoff";
+import { readAiPages } from "@/domain/takeoff/aiPages";
 import SheetThumbnailPanel, { readThumbsOpen, writeThumbsOpen } from "@/components/takeoff/SheetThumbnailPanel";
 import DevicePicker from "@/components/takeoff/DevicePicker";
+import TakeoffInspector from "@/components/takeoff/TakeoffInspector";
 import { getPdfDocument } from "@/lib/pdf-document";
 import { syncStoredEstimate } from "@/domain/estimate/estimateStore";
 
@@ -80,6 +84,14 @@ export default function TakeoffWorkspace() {
   const [loadingDrawing, setLoadingDrawing] = useState(false);
   const [drawingError, setDrawingError] = useState("");
   const [mode, setMode] = useState("manual");
+  const [trade, setTrade] = useState("electrical");
+  const [conduitId, setConduitId] = useState(DEFAULT_CONDUIT_ID);
+  const [penColor, setPenColor] = useState("#2563eb");
+  const [penThickness, setPenThickness] = useState(2);
+  const [penSize, setPenSize] = useState(1.6);
+  const [maxHomeruns, setMaxHomeruns] = useState(3);
+  const [scheduleEdits, setScheduleEdits] = useState({});
+  const [aiBusy, setAiBusy] = useState(false);
   const [tool, setTool] = useState("count");
   const [category, setCategory] = useState("Receptacles");
   const [symbolId, setSymbolId] = useState("duplex");
@@ -104,12 +116,34 @@ export default function TakeoffWorkspace() {
 
   const isPdf = file?.type === "application/pdf" || file?.name?.toLowerCase().endsWith(".pdf");
   const drawingSymbols = useMemo(() => drawingSymbolsFromDocs(drawingDocs), [drawingDocs]);
-  const categories = useMemo(
-    () => (drawingSymbols.length ? [DRAWING_CATEGORY, ...CATEGORIES] : CATEGORIES),
-    [drawingSymbols.length],
+  const palette = useMemo(() => paletteForTrade(trade, drawingSymbols), [trade, drawingSymbols]);
+  const categories = palette.categories;
+  const symbols = useMemo(
+    () => (category === DRAWING_CATEGORY ? palette.fromDrawing : palette.symbols.filter((item) => item.category === category)),
+    [category, palette],
   );
-  const symbols = useMemo(() => symbolsForCategory(category, drawingSymbols), [category, drawingSymbols]);
-  const symbol = findSymbol(symbolId, drawingSymbols);
+  const conduitChoices = useMemo(() => conduitOptionsForTrade(trade), [trade]);
+  const conduitChoice = findConduitOption(conduitId, trade);
+  const symbol = palette.symbols.find((item) => item.id === symbolId)
+    || palette.fromDrawing.find((item) => item.id === symbolId)
+    || palette.symbols[0];
+
+  useEffect(() => {
+    if (categories.length && !categories.includes(category)) setCategory(categories[0]);
+  }, [trade, categories, category]);
+
+  useEffect(() => {
+    if (conduitChoices.length && !conduitChoices.some((item) => item.id === conduitId)) {
+      setConduitId(conduitChoices[0].id);
+    }
+  }, [trade, conduitChoices, conduitId]);
+
+  useEffect(() => {
+    if (mode !== "ai" && mode !== "hybrid") return undefined;
+    if (!fileBytes || !isPdf) return undefined;
+    const timer = setTimeout(() => { void runAiTakeoff(); }, 0);
+    return () => clearTimeout(timer);
+  }, [mode, trade, maxHomeruns, fileBytes]);
   const activeTool = toolByKey(tool);
   const sheetMarks = useMemo(
     () => marks.filter((mark) => (mark.sheet || 1) === (sheetMeta.page || 1)),
@@ -122,11 +156,11 @@ export default function TakeoffWorkspace() {
     () => rollupTakeoff(marks, calibration, aspect),
     [marks, calibration, aspect],
   );
+  const editedRollup = useMemo(() => applyScheduleEdits(rollup, scheduleEdits), [rollup, scheduleEdits]);
   const runs = useMemo(
     () => conduitRuns(marks, calibration, aspect),
     [marks, calibration, aspect],
   );
-  const conduitTotal = projectConduitTotal(runs);
 
   useEffect(() => {
     if (!file) return;
@@ -135,13 +169,13 @@ export default function TakeoffWorkspace() {
         fileName: file.name,
         fileSize: file.size,
         drawingDocs,
-        rollup,
+        rollup: editedRollup,
         pageCount: sheetMeta.pageCount,
       });
     } catch {
       /* estimate copy failed; takeoff sheet is unchanged */
     }
-  }, [file, drawingDocs, rollup, sheetMeta.pageCount]);
+  }, [file, drawingDocs, editedRollup, sheetMeta.pageCount]);
   const draftPreview = hoverPoint && draftPoints.length ? [...draftPoints, hoverPoint] : draftPoints;
   const draftFeet = feetFromPercent(polylineLength(draftPreview, aspect), calibration);
   const imageDisplay = fitSheetSize(
@@ -191,6 +225,12 @@ export default function TakeoffWorkspace() {
     setSavedAt(saved?.savedAt || "");
     if (saved?.symbolId) setSymbolId(saved.symbolId);
     if (saved?.category) setCategory(saved.category);
+    if (saved?.trade) setTrade(saved.trade);
+    if (saved?.conduitId) setConduitId(saved.conduitId);
+    if (saved?.maxHomeruns) setMaxHomeruns(saved.maxHomeruns);
+    if (saved?.penColor) setPenColor(saved.penColor);
+    if (saved?.penThickness) setPenThickness(saved.penThickness);
+    if (saved?.scheduleEdits) setScheduleEdits(saved.scheduleEdits);
     if (saved?.sheet) setSheetMeta((current) => ({ ...current, page: saved.sheet }));
 
     try {
@@ -238,6 +278,12 @@ export default function TakeoffWorkspace() {
       calibration,
       symbolId,
       category,
+      trade,
+      conduitId,
+      maxHomeruns,
+      penColor,
+      penThickness,
+      scheduleEdits,
       sheet: sheetMeta.page,
     };
   }
@@ -390,19 +436,88 @@ export default function TakeoffWorkspace() {
   }
 
   function addMark(partial, message) {
-    const raceway = (partial.tool || tool) === "conduit";
-    const device = raceway && symbol?.category !== "Raceway" ? findSymbol("emt") : symbol;
+    const isConduit = (partial.tool || tool) === "conduit";
+    const device = isConduit ? null : symbol;
     const mark = {
       id: crypto.randomUUID(),
       sheet: sheetMeta.page || 1,
-      category: device?.takeoffCategory || device?.category || category,
-      symbol: device?.id,
-      symbolLabel: device?.label,
-      abbr: device?.abbr,
+      trade,
+      source: "manual",
+      color: penColor,
+      thickness: Number(penThickness) || 2,
+      markerSize: Number(penSize) || 1.6,
+      category: isConduit ? "Raceway" : (device?.takeoffCategory || device?.category || category),
+      symbol: isConduit ? conduitChoice.id : device?.id,
+      symbolLabel: isConduit ? conduitChoice.label : device?.label,
+      abbr: isConduit ? conduitChoice.size : device?.abbr,
+      conduitSize: isConduit ? conduitChoice.size : undefined,
+      conduitMaterial: isConduit ? conduitChoice.material : undefined,
       ...partial,
     };
     commitMarks([...marks, mark], message);
     return mark;
+  }
+
+  function updateMark(id, patch) {
+    setMarks((current) => current.map((mark) => (mark.id === id ? { ...mark, ...patch } : mark)));
+  }
+
+  function editScheduleRow(row, patch) {
+    const key = `${row.category}|${row.symbol}`;
+    setScheduleEdits((current) => ({ ...current, [key]: { ...current[key], ...patch } }));
+  }
+
+  function renameScheduleRow(row, patch) {
+    const nextSymbol = patch.symbol || row.symbol;
+    const nextCategory = patch.category || row.category;
+    if (nextSymbol === row.symbol && nextCategory === row.category) return;
+    setMarks((current) => current.map((mark) => {
+      const label = mark.symbolLabel || mark.symbol || "";
+      if ((mark.category || "") !== row.category || label !== row.symbol) return mark;
+      return { ...mark, symbolLabel: nextSymbol, category: nextCategory };
+    }));
+    setScheduleEdits((current) => {
+      const key = `${row.category}|${row.symbol}`;
+      const nextKey = `${nextCategory}|${nextSymbol}`;
+      const prev = current[key] || {};
+      const next = { ...current };
+      delete next[key];
+      if (prev.count != null || prev.lf != null || prev.sf != null) {
+        next[nextKey] = { count: prev.count, lf: prev.lf, sf: prev.sf };
+      }
+      return next;
+    });
+  }
+
+  async function runAiTakeoff() {
+    if (!isPdf || !fileBytes) {
+      setStatus("AI takeoff needs a PDF with a text layer. Image drawings stay manual for the selected trade.");
+      return;
+    }
+    setAiBusy(true);
+    const tradeLabel = tradeById(trade).label;
+    setStatus(`AI is taking off ${tradeLabel} only…`);
+    try {
+      const pages = await readAiPages(fileBytes);
+      const planned = buildAiMarks({
+        pages,
+        trade,
+        symbols: palette.symbols,
+        maxHomeruns,
+        conduit: conduitChoice,
+        color: penColor,
+        thickness: Number(penThickness) || 2,
+      });
+      setMarks((current) => [
+        ...current.filter((mark) => !(mark.source === "ai" && mark.trade === trade)),
+        ...planned.marks,
+      ]);
+      setStatus(planned.summary);
+    } catch (error) {
+      setStatus(error?.message || "AI takeoff could not read this drawing.");
+    } finally {
+      setAiBusy(false);
+    }
   }
 
   function onDrawingClick(event) {
@@ -634,7 +749,7 @@ export default function TakeoffWorkspace() {
   }
 
   async function copyQuantities() {
-    const csv = quantitiesToCsv(rollup, runs);
+    const csv = quantitiesToCsv(editedRollup, runs);
     try {
       await navigator.clipboard.writeText(csv);
       setStatus("Quantity schedule copied as CSV.");
@@ -721,7 +836,7 @@ export default function TakeoffWorkspace() {
       </div>
       {drawingError && <div className="border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{drawingError}</div>}
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)_260px]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)_300px]">
         <aside className="hidden min-h-0 overflow-auto border-r border-border bg-card p-3 lg:block">
           {TOOL_GROUPS.map((group) => (
             <div key={group.key} className="mb-3">
@@ -740,7 +855,29 @@ export default function TakeoffWorkspace() {
               </div>
             </div>
           ))}
-          <div className="border-t border-border pt-3">
+          <div className="border-t border-border pt-3 space-y-2">
+            <label className="block text-xs font-bold text-muted-foreground">Trade
+              <select value={trade} onChange={(event) => setTrade(event.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-2 py-2 text-sm font-semibold text-foreground">
+                {TRADES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+              </select>
+            </label>
+            <label className="block text-xs font-bold text-muted-foreground">Conduit size
+              <select value={conduitChoice.id} onChange={(event) => setConduitId(event.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-2 py-2 text-sm font-semibold text-foreground">
+                {conduitChoices.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+              </select>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-xs font-bold text-muted-foreground">Color
+                <input type="color" value={penColor} onChange={(event) => setPenColor(event.target.value)} className="mt-1 h-8 w-full" />
+              </label>
+              <label className="text-xs font-bold text-muted-foreground">Line thickness
+                <input type="number" min="0.5" step="0.1" value={penThickness} onChange={(event) => setPenThickness(Number(event.target.value))} className="mt-1 w-full rounded-lg border border-input bg-background px-2 py-1 text-sm" />
+              </label>
+            </div>
+            <label className="block text-xs font-bold text-muted-foreground">Homeruns per conduit
+              <input type="number" min="1" max="12" value={maxHomeruns} onChange={(event) => setMaxHomeruns(Math.max(1, Number(event.target.value) || 1))} className="mt-1 w-full rounded-lg border border-input bg-background px-2 py-1 text-sm" />
+            </label>
+            <p className="text-[11px] leading-4 text-muted-foreground">Default is 3. AI will not put more homeruns in one conduit unless you raise this.</p>
             <DevicePicker
               categories={categories}
               category={category}
@@ -755,6 +892,9 @@ export default function TakeoffWorkspace() {
           <div className="mt-3 rounded-lg bg-muted p-3 text-xs leading-5 text-muted-foreground">
             <strong className="block text-foreground">{activeTool.label}</strong>{activeTool.help}
             {measureLabel && <div className="mt-2 font-bold text-foreground">{measureLabel}</div>}
+            {(mode === "ai" || mode === "hybrid") && (
+              <div className="mt-2 text-foreground">{aiBusy ? `Taking off ${tradeById(trade).label}…` : `AI takeoff runs for ${tradeById(trade).label} only. Other trades stay out until you select them.`}</div>
+            )}
           </div>
         </aside>
 
@@ -861,6 +1001,7 @@ export default function TakeoffWorkspace() {
                   draftFeet={["conduit", "polyline", "linear", "homerun"].includes(tool) ? draftFeet : null}
                   selectedId={selectedId}
                   tool={tool}
+                  lengthFor={(mark) => markLengthFeet(mark, calibration, aspect)}
                 />
               </div>
             </div>
@@ -869,72 +1010,27 @@ export default function TakeoffWorkspace() {
           </div>
         </section>
 
-        <aside className="hidden min-h-0 overflow-auto border-l border-border bg-card p-3 lg:block">
-          <div className="mb-2 flex items-center gap-2"><Layers3 className="h-4 w-4 text-blue-600 dark:text-orange-500" /><h3 className="font-bold">Quantity schedule</h3></div>
-          {!rollup.calibrated && (
-            <p className="mb-2 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] leading-4 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">Calibrate scale before trusting LF / SF. Counts still work.</p>
-          )}
-          <div className="space-y-2 text-sm">
-            {rollup.rows.length === 0 && <p className="text-xs text-muted-foreground">No takeoff items yet.</p>}
-            {rollup.rows.map((row) => (
-              <div key={`${row.category}-${row.symbol}`} className="rounded-lg border border-border px-2 py-1.5">
-                <div className="text-xs font-bold">{row.symbol || row.category}</div>
-                <div className="text-[11px] text-muted-foreground">{row.category}</div>
-                <div className="mt-1 flex justify-between text-xs">
-                  <span>{row.count} ea</span>
-                  <span>{row.hasLength ? formatFeet(row.lf) : "—"}</span>
-                  <span>{row.hasArea ? formatArea(row.sf) : "—"}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 border-t border-border pt-3">
-            <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Conduit runs</div>
-            {runs.length === 0 && <p className="text-[11px] text-muted-foreground">Trace conduit to store each run.</p>}
-            <div className="space-y-1.5">
-              {runs.map((run) => (
-                <div key={run.id} className="flex items-center justify-between rounded-lg border border-border px-2 py-1 text-[11px]">
-                  <span className="font-semibold">Run {run.runNumber} · sh {run.sheet} · {run.type}</span>
-                  <span>{run.calibrated ? formatFeet(run.lf) : "calibrate"}</span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-2 flex justify-between text-sm">
-              <span className="font-bold">Project conduit</span>
-              <strong>{rollup.calibrated ? formatFeet(conduitTotal) : "calibrate"}</strong>
-            </div>
-          </div>
-          <div className="mt-3 border-t border-border pt-3 text-sm">
-            <div className="flex justify-between"><span className="font-bold">Devices</span><strong>{rollup.totals.count}</strong></div>
-            <div className="flex justify-between text-xs text-muted-foreground"><span>Linear</span><span>{rollup.calibrated ? formatFeet(rollup.totals.lf) : "calibrate"}</span></div>
-            <div className="flex justify-between text-xs text-muted-foreground"><span>Area</span><span>{rollup.calibrated ? formatArea(rollup.totals.sf) : "calibrate"}</span></div>
-          </div>
-          {drawingDocs && (
-            <div className="mt-3 rounded-lg border border-border p-2 text-[11px] leading-4 text-muted-foreground">
-              <div className="font-bold text-foreground">Legend / schedules</div>
-              <p>{drawingDocs.symbols.length} legend symbols · {drawingDocs.scheduleItems.length} schedule types</p>
-              {drawingDocs.pages.filter((page) => page.kind !== "drawing").slice(0, 6).map((page) => (
-                <button key={page.page} type="button" onClick={() => selectSheet(page.page)} className="mt-1 block text-left text-blue-700 hover:underline dark:text-orange-300">
-                  Sheet {page.page}: {page.kind.replace("-", " ")}
-                </button>
-              ))}
-              {drawingDocs.notes[0] && <p className="mt-1 text-amber-800 dark:text-amber-200">{drawingDocs.notes[0]}</p>}
-            </div>
-          )}
-          <button type="button" onClick={copyQuantities} className="mt-3 w-full rounded-lg border border-border px-2 py-2 text-xs font-semibold hover:bg-muted">Copy schedule CSV</button>
-          {(mode === "ai" || mode === "hybrid") && (
-            <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3 dark:border-orange-500/30 dark:bg-orange-500/5">
-              <div className="flex items-center gap-2 text-sm font-bold"><ScanSearch className="h-4 w-4 text-blue-600 dark:text-orange-500" />AI assist</div>
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">Manual takeoff is live. Automatic symbol detection will add review candidates here when the analysis worker is connected — it will not silently zero a sheet.</p>
-            </div>
-          )}
-        </aside>
+        <TakeoffInspector
+          rollup={rollup}
+          totals={editedRollup.totals}
+          runs={runs}
+          drawingDocs={drawingDocs}
+          selected={marks.find((mark) => mark.id === selectedId) || null}
+          conduitOptions={conduitChoices}
+          scheduleEdits={scheduleEdits}
+          onSelectRun={(id) => { setSelectedId(id); setTool("select"); }}
+          onUpdateMark={updateMark}
+          onEditRow={editScheduleRow}
+          onRenameRow={renameScheduleRow}
+          onSelectSheet={selectSheet}
+          onCopy={copyQuantities}
+        />
       </div>
     </div>
   );
 }
 
-function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool }) {
+function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, lengthFor }) {
   const routes = marks.filter((m) => m.points?.length);
   const draftEnd = draftPoints[draftPoints.length - 1];
   return (
@@ -943,15 +1039,19 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool }) {
         const points = mark.points.map((p) => `${p.x},${p.y}`).join(" ");
         const selected = mark.id === selectedId;
         const end = mark.points[mark.points.length - 1];
+        const color = mark.color || (mark.type === "cloud" ? "#dc2626" : mark.tool === "circuit" ? "#7c3aed" : mark.type === "homerun" ? "#0f766e" : "#2563eb");
+        const width = mark.thickness || (selected ? 2.4 : 1.75);
         if (mark.type === "area" || mark.type === "cloud") {
-          return <polygon key={mark.id} points={points} fill={mark.type === "cloud" ? "none" : "rgba(37,99,235,0.12)"} stroke={selected ? "#ea580c" : mark.type === "cloud" ? "#dc2626" : "#2563eb"} strokeWidth={selected ? ".7" : ".4"} strokeDasharray={mark.type === "cloud" ? "1.2 0.8" : undefined} vectorEffect="non-scaling-stroke" />;
+          return <polygon key={mark.id} points={points} fill={mark.type === "cloud" ? "none" : "rgba(37,99,235,0.12)"} stroke={color} strokeWidth={width} strokeDasharray={mark.type === "cloud" ? "1.2 0.8" : undefined} vectorEffect="non-scaling-stroke" />;
         }
+        const length = selected ? lengthFor?.(mark) : null;
         return (
           <g key={mark.id}>
-            <polyline points={points} fill="none" stroke={selected ? "#ea580c" : mark.tool === "circuit" ? "#7c3aed" : mark.type === "homerun" ? "#0f766e" : "#2563eb"} strokeWidth={selected ? ".7" : ".45"} vectorEffect="non-scaling-stroke" />
-            {mark.tool === "conduit" && end && (
-              <text x={end.x} y={Math.max(2, end.y - 1.6)} fontSize="2.1" fontWeight="700" fill={selected ? "#ea580c" : "#1d4ed8"}>
-                {`R${mark.runNumber || ""} ${mark.storedFeet != null ? `${Number(mark.storedFeet).toFixed(1)} LF` : ""}`}
+            {selected && <polyline points={points} fill="none" stroke="#ffffff" strokeWidth={width + 2.5} vectorEffect="non-scaling-stroke" />}
+            <polyline points={points} fill="none" stroke={color} strokeWidth={width} vectorEffect="non-scaling-stroke" />
+            {mark.tool === "conduit" && selected && end && (
+              <text x={end.x} y={Math.max(2, end.y - 1.6)} fontSize="2.1" fontWeight="700" fill={color}>
+                {`R${mark.runNumber || ""} ${length != null ? formatFeet(length) : ""}`}
               </text>
             )}
           </g>
@@ -963,12 +1063,12 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool }) {
       )}
       {marks.filter((m) => m.type === "count" || m.type === "drop").map((mark, index) => (
         <g key={mark.id}>
-          <circle cx={mark.x} cy={mark.y} r="1.5" fill={mark.id === selectedId ? "#ea580c" : "#2563eb"} stroke="white" strokeWidth=".3" vectorEffect="non-scaling-stroke" />
+          <circle cx={mark.x} cy={mark.y} r={mark.markerSize || 1.6} fill={mark.color || "#2563eb"} stroke={mark.id === selectedId ? "#ea580c" : "white"} strokeWidth={mark.id === selectedId ? ".55" : ".3"} vectorEffect="non-scaling-stroke" />
           <text x={mark.x} y={mark.y + .45} textAnchor="middle" fontSize="1.2" fontWeight="700" fill="white">{mark.abbr || index + 1}</text>
         </g>
       ))}
       {marks.filter((m) => m.type === "note").map((mark) => (
-        <text key={mark.id} x={mark.x} y={mark.y} fontSize="1.8" fontWeight="700" fill={mark.id === selectedId ? "#ea580c" : "#dc2626"}>{mark.text}</text>
+        <text key={mark.id} x={mark.x} y={mark.y} fontSize="1.8" fontWeight="700" fill={mark.color || (mark.id === selectedId ? "#ea580c" : "#dc2626")}>{mark.text}</text>
       ))}
       {tool === "scale" && <text x="2" y="6" fontSize="2.2" fontWeight="700" fill="#b45309">Click a known dimension</text>}
     </svg>

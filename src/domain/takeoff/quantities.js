@@ -4,6 +4,7 @@ import { areaFromPercent, feetFromPercent, polygonArea, polylineLength } from ".
 const LENGTH_TYPES = new Set(["line", "route", "homerun", "measure"]);
 
 export function markLengthFeet(mark, calibration, aspect) {
+  if (mark?.lengthEdited && mark.storedFeet != null && mark.storedFeet !== "") return Number(mark.storedFeet);
   if (!LENGTH_TYPES.has(mark.type) && mark.type !== "drop") return null;
   if (mark.type === "drop") {
     if (mark.feet != null) return Number(mark.feet);
@@ -70,6 +71,35 @@ export function rollupTakeoff(marks, calibration, aspect = 1, sheet = null) {
   return { rows: list, totals, calibrated: Boolean(calibration?.feet) };
 }
 
+export function applyScheduleEdits(rollup, edits = {}) {
+  const keys = Object.keys(edits || {});
+  if (!keys.length) return rollup;
+  const rows = rollup.rows.map((row) => {
+    const edit = edits[`${row.category}|${row.symbol}`];
+    if (!edit) return row;
+    const count = edit.count != null && edit.count !== "" ? Number(edit.count) : row.count;
+    const lf = edit.lf != null && edit.lf !== "" ? Number(edit.lf) : row.lf;
+    const sf = edit.sf != null && edit.sf !== "" ? Number(edit.sf) : row.sf;
+    return {
+      ...row,
+      symbol: edit.symbol || row.symbol,
+      category: edit.category || row.category,
+      count,
+      lf,
+      sf,
+      hasLength: edit.lf != null && edit.lf !== "" ? true : row.hasLength,
+      hasArea: edit.sf != null && edit.sf !== "" ? true : row.hasArea,
+    };
+  });
+  const totals = rows.reduce((acc, row) => {
+    acc.count += Number(row.count) || 0;
+    acc.lf += Number(row.lf) || 0;
+    acc.sf += Number(row.sf) || 0;
+    return acc;
+  }, { count: 0, lf: 0, sf: 0 });
+  return { ...rollup, rows, totals };
+}
+
 export function nextConduitRunNumber(marks) {
   const nums = (marks || []).filter(isConduitMark).map((mark) => Number(mark.runNumber) || 0);
   return (nums.length ? Math.max(...nums) : 0) + 1;
@@ -87,6 +117,10 @@ export function conduitRuns(marks, calibration, aspect = 1) {
       runNumber: mark.runNumber || index + 1,
       sheet: mark.sheet || 1,
       type: mark.symbolLabel || mark.symbol || "Conduit",
+      size: mark.conduitSize || "",
+      material: mark.conduitMaterial || "",
+      color: mark.color || "#2563eb",
+      thickness: mark.thickness || 2,
       lf: lf == null ? 0 : lf,
       calibrated: lf != null,
     };

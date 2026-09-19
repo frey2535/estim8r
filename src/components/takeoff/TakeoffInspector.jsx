@@ -1,0 +1,163 @@
+import React from "react";
+import { Layers3 } from "lucide-react";
+import { formatArea, formatFeet } from "@/domain/takeoff/geometry";
+
+function Field({ label, children }) {
+  return (
+    <label className="block text-[11px]">
+      <span className="mb-0.5 block font-bold text-muted-foreground">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+const inputClass = "w-full rounded-md border border-input bg-background px-1.5 py-1 text-xs";
+
+export default function TakeoffInspector({
+  rollup,
+  runs,
+  drawingDocs,
+  selected,
+  conduitOptions,
+  onSelectRun,
+  onUpdateMark,
+  onEditRow,
+  onSelectSheet,
+  onCopy,
+  scheduleEdits,
+  totals,
+}) {
+  return (
+    <aside className="hidden min-h-0 overflow-auto border-l border-border bg-card p-3 lg:block">
+      {selected && (
+        <div className="mb-3 space-y-2 rounded-lg border border-border p-2">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Selected item</div>
+          <Field label="Name">
+            <input className={inputClass} value={selected.symbolLabel || ""} onChange={(e) => onUpdateMark(selected.id, { symbolLabel: e.target.value })} />
+          </Field>
+          <Field label="Category">
+            <input className={inputClass} value={selected.category || ""} onChange={(e) => onUpdateMark(selected.id, { category: e.target.value })} />
+          </Field>
+          <Field label="Marker text">
+            <input className={inputClass} value={selected.abbr || ""} onChange={(e) => onUpdateMark(selected.id, { abbr: e.target.value })} />
+          </Field>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Color">
+              <input type="color" className="h-8 w-full" value={selected.color || "#2563eb"} onChange={(e) => onUpdateMark(selected.id, { color: e.target.value })} />
+            </Field>
+            <Field label={selected.tool === "conduit" || selected.type === "route" ? "Thickness" : "Marker size"}>
+              <input
+                type="number"
+                min="0.5"
+                step="0.1"
+                className={inputClass}
+                value={selected.tool === "conduit" || selected.type === "route" ? (selected.thickness || 2) : (selected.markerSize || 1.6)}
+                onChange={(e) => onUpdateMark(selected.id, selected.tool === "conduit" || selected.type === "route" ? { thickness: Number(e.target.value) } : { markerSize: Number(e.target.value) })}
+              />
+            </Field>
+          </div>
+          {(selected.tool === "conduit" || selected.type === "route") && (
+            <Field label="Conduit type / size">
+              <select
+                className={inputClass}
+                value={conduitOptions.find((item) => item.label === selected.symbolLabel)?.id || ""}
+                onChange={(e) => {
+                  const option = conduitOptions.find((item) => item.id === e.target.value);
+                  if (!option) return;
+                  onUpdateMark(selected.id, {
+                    symbol: option.id,
+                    symbolLabel: option.label,
+                    abbr: option.size,
+                    conduitSize: option.size,
+                    conduitMaterial: option.material,
+                    category: "Raceway",
+                  });
+                }}
+              >
+                {!conduitOptions.some((item) => item.label === selected.symbolLabel) && <option value="">{selected.symbolLabel || "Custom"}</option>}
+                {conduitOptions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+              </select>
+            </Field>
+          )}
+          {selected.type === "note" && (
+            <Field label="Note">
+              <input className={inputClass} value={selected.text || ""} onChange={(e) => onUpdateMark(selected.id, { text: e.target.value })} />
+            </Field>
+          )}
+        </div>
+      )}
+
+      <div className="mb-2 flex items-center gap-2"><Layers3 className="h-4 w-4 text-blue-600 dark:text-orange-500" /><h3 className="font-bold">Quantity schedule</h3></div>
+      {!rollup.calibrated && (
+        <p className="mb-2 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] leading-4 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">Calibrate scale before trusting LF / SF. Counts still work.</p>
+      )}
+      <div className="space-y-2 text-sm">
+        {rollup.rows.length === 0 && <p className="text-xs text-muted-foreground">No takeoff items yet.</p>}
+        {rollup.rows.map((row) => {
+          const key = `${row.category}|${row.symbol}`;
+          const edit = scheduleEdits[key] || {};
+          const symbol = edit.symbol ?? row.symbol;
+          const category = edit.category ?? row.category;
+          const count = edit.count ?? row.count;
+          const lf = edit.lf ?? (row.hasLength ? row.lf : "");
+          const sf = edit.sf ?? (row.hasArea ? row.sf : "");
+          return (
+            <div key={key} className="space-y-1 rounded-lg border border-border px-2 py-1.5">
+              <input className={inputClass} aria-label="Item name" value={symbol} onChange={(e) => onEditRow(row, { symbol: e.target.value })} onBlur={() => onRenameRow?.(row, { symbol, category })} />
+              <input className={inputClass} aria-label="Item category" value={category} onChange={(e) => onEditRow(row, { category: e.target.value })} onBlur={() => onRenameRow?.(row, { symbol, category })} />
+              <div className="grid grid-cols-3 gap-1">
+                <input className={inputClass} aria-label="Count" type="number" value={count} onChange={(e) => onEditRow(row, { count: e.target.value })} />
+                <input className={inputClass} aria-label="Length" type="number" value={lf} onChange={(e) => onEditRow(row, { lf: e.target.value })} />
+                <input className={inputClass} aria-label="Area" type="number" value={sf} onChange={(e) => onEditRow(row, { sf: e.target.value })} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-3 border-t border-border pt-3">
+        <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Conduit runs</div>
+        {runs.length === 0 && <p className="text-[11px] text-muted-foreground">Trace conduit to store each run.</p>}
+        <div className="space-y-2">
+          {runs.map((run) => (
+            <div key={run.id} className="space-y-1 rounded-lg border border-border px-2 py-1.5">
+              <button type="button" onClick={() => onSelectRun(run.id)} className="text-left text-[11px] font-semibold">Run {run.runNumber} · sheet {run.sheet}</button>
+              <select
+                className={inputClass}
+                value={conduitOptions.find((item) => item.label === run.type)?.id || ""}
+                onChange={(e) => {
+                  const option = conduitOptions.find((item) => item.id === e.target.value);
+                  if (!option) return;
+                  onUpdateMark(run.id, { symbol: option.id, symbolLabel: option.label, abbr: option.size, conduitSize: option.size, conduitMaterial: option.material });
+                }}
+              >
+                {!conduitOptions.some((item) => item.label === run.type) && <option value="">{run.type}</option>}
+                {conduitOptions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+              </select>
+              <div className="grid grid-cols-3 gap-1">
+                <input type="color" aria-label="Run color" className="h-8 w-full" value={run.color || "#2563eb"} onChange={(e) => onUpdateMark(run.id, { color: e.target.value })} />
+                <input type="number" aria-label="Run thickness" min="0.5" step="0.1" className={inputClass} value={run.thickness || 2} onChange={(e) => onUpdateMark(run.id, { thickness: Number(e.target.value) })} />
+                <input type="number" aria-label="Run length" step="0.1" className={inputClass} value={run.lf || ""} onChange={(e) => onUpdateMark(run.id, { storedFeet: Number(e.target.value), lengthEdited: true })} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {drawingDocs && (
+        <div className="mt-3 rounded-lg border border-border p-2 text-[11px] leading-4 text-muted-foreground">
+          <div className="font-bold text-foreground">Legend / schedules</div>
+          <p>{drawingDocs.symbols.length} legend symbols · {drawingDocs.scheduleItems.length} schedule types</p>
+          {drawingDocs.pages.filter((page) => page.kind !== "drawing").slice(0, 6).map((page) => (
+            <button key={page.page} type="button" onClick={() => onSelectSheet(page.page)} className="mt-1 block text-left text-blue-700 hover:underline dark:text-orange-300">
+              Sheet {page.page}: {page.kind.replace("-", " ")}
+            </button>
+          ))}
+          {drawingDocs.notes[0] && <p className="mt-1 text-amber-800 dark:text-amber-200">{drawingDocs.notes[0]}</p>}
+        </div>
+      )}
+      <button type="button" onClick={onCopy} className="mt-3 w-full rounded-lg border border-border px-2 py-2 text-xs font-semibold hover:bg-muted">Copy schedule CSV</button>
+      <p className="mt-2 text-[10px] text-muted-foreground">Totals {totals.count} devices · {rollup.calibrated ? formatFeet(totals.lf) : "LF needs scale"} · {rollup.calibrated ? formatArea(totals.sf) : "SF needs scale"}</p>
+    </aside>
+  );
+}

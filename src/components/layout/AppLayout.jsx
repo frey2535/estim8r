@@ -17,9 +17,10 @@ export default function AppLayout() {
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
   const active = (tab) => tab.path === "/" ? location.pathname === "/" : location.pathname.startsWith(tab.path);
+  const takeoff = location.pathname.startsWith("/takeoff");
 
   return (
-    <div className="min-h-dvh bg-background flex flex-col">
+    <div className={cn("min-h-dvh bg-background flex flex-col", takeoff && "h-dvh overflow-hidden")}>
       <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-xl shadow-sm" style={{ paddingTop: "env(safe-area-inset-top)" }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14">
@@ -69,7 +70,12 @@ export default function AppLayout() {
         </div>
       </header>
 
-      <main className="flex-1 max-w-7xl mx-auto w-full px-3 sm:px-6 lg:px-8 py-4 pb-24 lg:pb-8">
+      <main className={cn(
+        "flex-1 w-full min-h-0",
+        takeoff
+          ? "flex max-w-none flex-col overflow-hidden px-0 py-0 pb-16 lg:pb-0"
+          : "max-w-7xl mx-auto px-3 py-4 pb-24 sm:px-6 lg:px-8 lg:pb-8"
+      )}>
         <Outlet />
       </main>
 

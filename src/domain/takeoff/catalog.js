@@ -9,7 +9,7 @@ export const TOOL_GROUPS = [
 
 export const TAKEOFF_TOOLS = [
   { key: "select", group: "edit", label: "Select", help: "Click a mark to select it. Drag to move. Delete removes it." },
-  { key: "pan", group: "edit", label: "Pan", help: "Drag the sheet to move around after zooming in." },
+  { key: "pan", group: "edit", label: "Pan", help: "Drag the sheet up, down, left, or right. Works at any zoom. Fit sheet recenters it." },
   { key: "scale", group: "setup", label: "Calibrate", help: "Click two points on a known dimension, then enter the real length in feet." },
   { key: "measure", group: "setup", label: "Measure", help: "Click two points for a temporary length. Calibrate first to read feet." },
   { key: "count", group: "count", label: "Count", help: "Click each device. Uses the selected symbol and category." },

@@ -1,46 +1,48 @@
 import { listBundledLaborCategories, listBundledLaborLibrary } from '../domain/labor/auditedLibrary';
 import { isSupabaseConfigured, requireSupabase } from './supabaseClient';
 
-export async function listLaborLibrary({ search = '', category = '', limit = 250 } = {}) {
-  if (isSupabaseConfigured) {
-    try {
-      const client = requireSupabase();
-      let query = client
-        .from('labor_items')
-        .select('*, labor_units(*)')
-        .eq('active', true)
-        .order('category')
-        .order('item_name')
-        .limit(limit);
+export async function listLaborLibrary({ search = '', category = '', limit = 2500 } = {}) {
+  const bundled = listBundledLaborLibrary({ search, category, limit });
+  if (!isSupabaseConfigured) return bundled;
 
-      if (category) query = query.eq('category', category);
-      if (search.trim()) {
-        const q = search.trim().replaceAll(',', ' ');
-        query = query.or(`item_name.ilike.%${q}%,description.ilike.%${q}%,subcategory.ilike.%${q}%,material_type.ilike.%${q}%,size.ilike.%${q}%`);
-      }
+  try {
+    const client = requireSupabase();
+    let query = client
+      .from('labor_items')
+      .select('*, labor_units(*)')
+      .eq('active', true)
+      .order('category')
+      .order('item_name')
+      .limit(limit);
 
-      const { data, error } = await query;
-      if (error) throw error;
-      if (data?.length) return data;
-    } catch {
-      // Fall through to the bundled audited library when the master table is empty or unreachable.
+    if (category) query = query.eq('category', category);
+    if (search.trim()) {
+      const q = search.trim().replaceAll(',', ' ');
+      query = query.or(`item_name.ilike.%${q}%,description.ilike.%${q}%,subcategory.ilike.%${q}%,material_type.ilike.%${q}%,size.ilike.%${q}%`);
     }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    if ((data?.length || 0) >= bundled.length) return data;
+  } catch {
+    // Keep the bundled 1,921-row workbook table when Supabase is empty or only partially seeded.
   }
-  return listBundledLaborLibrary({ search, category, limit });
+  return bundled;
 }
 
 export async function listLaborCategories() {
-  if (isSupabaseConfigured) {
-    try {
-      const client = requireSupabase();
-      const { data, error } = await client.from('labor_items').select('category').eq('active', true);
-      if (error) throw error;
-      if (data?.length) return [...new Set(data.map((row) => row.category))].sort();
-    } catch {
-      // Fall through to the bundled audited library.
-    }
+  const bundled = listBundledLaborCategories();
+  if (!isSupabaseConfigured) return bundled;
+  try {
+    const client = requireSupabase();
+    const { data, error } = await client.from('labor_items').select('category').eq('active', true);
+    if (error) throw error;
+    const remote = [...new Set((data ?? []).map((row) => row.category))].sort();
+    if (remote.length >= bundled.length) return remote;
+  } catch {
+    // Keep workbook categories when Supabase is only partially seeded.
   }
-  return listBundledLaborCategories();
+  return bundled;
 }
 
 export async function listCompanyLaborUnits() {

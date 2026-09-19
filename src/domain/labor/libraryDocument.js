@@ -1,3 +1,5 @@
+import { matchAuditedLaborHours } from "./auditedLibrary.js";
+
 /**
  * Bundled electrical labor library used when the master library has no match.
  * Devices are man-hours each. Raceway is man-hours per 100 LF. Normal conditions.
@@ -77,6 +79,9 @@ function scoreItem(item, text, category) {
 }
 
 export function assignLaborHours({ category, symbol, unit }) {
+  const audited = matchAuditedLaborHours({ category, symbol, unit });
+  if (audited) return audited;
+
   const text = textOf(category, symbol);
   let best = null;
   let bestScore = 0;

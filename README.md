@@ -1,39 +1,30 @@
-**Welcome to your Base44 project** 
+# Estim8r
 
-**About**
+Electrical estimating for Current Flow. Take off drawings, build a labor-backed estimate, and keep project documents together under the project name.
 
-View and Edit  your app on [Base44.com](http://Base44.com) 
+## Local development
 
-This project contains everything you need to run your app locally.
-
-**Edit the code in your local development environment**
-
-Any change pushed to the repo will also be reflected in the Base44 Builder.
-
-**Prerequisites:** 
-
-1. Clone the repository using the project's Git URL 
-2. Navigate to the project directory
-3. Install dependencies: `npm install`
-4. Create an `.env.local` file and set the right environment variables
-
-```
-VITE_BASE44_APP_ID=your_app_id
-VITE_BASE44_APP_BASE_URL=your_backend_url
-
-e.g.
-VITE_BASE44_APP_ID=cbef744a8545c389ef439ea6
-VITE_BASE44_APP_BASE_URL=https://my-to-do-list-81bfaad7.base44.app
+```bash
+npm install
+cp .env.example .env.local   # if present
+npm run dev
 ```
 
-Run the app: `npm run dev`
+The Vite app defaults to http://localhost:5177.
 
-**Publish your changes**
+To save documents into Buildr, set:
 
-Open [Base44.com](http://Base44.com) and click on Publish.
+```
+VITE_BUILDR_URL=http://localhost:5173
+VITE_BUILDR_API_URL=http://localhost:3001
+```
 
-**Docs & Support**
+Use the same email on both apps.
 
-Documentation: [https://docs.base44.com/Integrations/Using-GitHub](https://docs.base44.com/Integrations/Using-GitHub)
+## Project documents
 
-Support: [https://app.base44.com/support](https://app.base44.com/support)
+When drawings have been uploaded and an estimate exists:
+
+1. **Buildr project already exists** — drawings, estimate, and markup pages are saved on that project’s Estimate tab.
+2. **Buildr account, no matching project** — Estim8r asks whether to create the project. If yes, Estim8r and Buildr create it and save the documents there.
+3. **No Buildr account** — documents stay in Estim8r’s Estimates folder, listed by project name with the project address underneath.

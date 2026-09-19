@@ -27,6 +27,7 @@ import TakeoffInspector from "@/components/takeoff/TakeoffInspector";
 import TakeoffSizeControl from "@/components/takeoff/TakeoffSizeControl";
 import { getPdfDocument } from "@/lib/pdf-document";
 import { syncStoredEstimate } from "@/domain/estimate/estimateStore";
+import { putDrawingFile } from "@/domain/estimate/projectDocuments";
 import {
   DEFAULT_LINE_SIZE,
   DEFAULT_MARKER_SIZE,
@@ -218,6 +219,7 @@ export default function TakeoffWorkspace() {
     }
 
     pendingDrawingFile = nextFile;
+    void putDrawingFile(nextFile);
     setFile(nextFile);
     setLoadingDrawing(true);
     setDrawingError("");
@@ -298,6 +300,7 @@ export default function TakeoffWorkspace() {
       penSize,
       scheduleEdits,
       sheet: sheetMeta.page,
+      pageCount: sheetMeta.pageCount,
     };
   }
 

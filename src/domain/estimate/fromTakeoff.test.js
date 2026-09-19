@@ -37,12 +37,17 @@ assert(lines[0].laborRate === 68, "journeyman rate on the line");
 assert(lines[1].unit === "LF" && lines[1].quantity === 200, "conduit lf");
 assert(Math.abs(lines[1].laborMhPerUnit - 0.05) < 0.0001, `emt mh/lf ${lines[1].laborMhPerUnit}`);
 assert(lines[1].laborItemId === "EL-00050", "audited 3/4 EMT labor item");
-assert(lines[1].laborSource.includes("NECA MLU public sample"), `audited source ${lines[1].laborSource}`);
+assert(lines[1].laborSource.includes("experimental"), `experimental source ${lines[1].laborSource}`);
+assert(lines[1].laborSelection?.selectedSource === "experimental", "new lines carry an experimental selection");
+assert(lines[1].laborSelection?.verificationStatus === "unverified", "new lines are unverified");
 const laborCost = lines.reduce((sum, line) => sum + line.quantity * line.laborMhPerUnit * line.laborRate, 0);
 assert(Math.abs(laborCost - (12 * 0.22 * 68 + 200 * 0.05 * 68)) < 0.01, `estimate labor from installed qty ${laborCost}`);
 
-const edited = mergeEstimate({ lines: [{ ...lines[0], quantity: 99, quantityEdited: true }] }, lines);
+const prior = { ...lines[0], quantity: 99, quantityEdited: true, laborMhPerUnit: 9.99, laborMhEdited: true, laborSelection: undefined, notes: "kept" };
+const edited = mergeEstimate({ lines: [prior] }, lines);
 assert(edited[0].quantity === 99, "edited estimate quantity is kept");
+assert(edited[0].laborMhPerUnit === 9.99, "existing estimate man-hours are not overwritten");
+assert(edited[0].laborSelection === undefined, "legacy estimate lines keep their stored labor basis");
 assert(edited[1].quantity === 200, "new takeoff line is added");
 
 const draft = syncEstimateDraft(null, {

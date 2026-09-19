@@ -133,7 +133,7 @@ export default function Dashboard() {
           <ShieldCheck className="h-7 w-7 text-emerald-500" />
           <div>
             <h2 className="font-bold text-foreground">Production Safety Gate</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Published/master labor is only production-ready when it is verified and explicitly approved. Unverified research baselines remain visible for review but cannot silently become bid labor.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Published/master labor is only production-ready when it is verified and explicitly approved. The imported 1,921-row table is experimental / unverified. NECA hours are not populated. Unverified baselines stay visible but cannot silently become bid labor.</p>
           </div>
         </div>
       </div>

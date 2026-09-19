@@ -3,7 +3,7 @@ import {
   LaborCondition,
   LaborUnitSchema,
   ProductionHistorySchema,
-} from './types';
+} from './types.js';
 
 const conditionField = {
   normal: 'normalMh',

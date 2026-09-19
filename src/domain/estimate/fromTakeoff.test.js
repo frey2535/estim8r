@@ -32,12 +32,14 @@ const rollup = {
 const lines = linesFromRollup(rollup, 68);
 assert(lines.length === 2, "one line per takeoff quantity");
 assert(lines[0].quantity === 12 && lines[0].unit === "EA", "receptacle quantity");
-assert(lines[0].laborMhPerUnit === 0.55, `duplex mh ${lines[0].laborMhPerUnit}`);
+assert(lines[0].laborItemId === "EL-01500" && lines[0].laborMhPerUnit === 0.22, `duplex mh ${lines[0].laborMhPerUnit}`);
 assert(lines[0].laborRate === 68, "journeyman rate on the line");
 assert(lines[1].unit === "LF" && lines[1].quantity === 200, "conduit lf");
 assert(Math.abs(lines[1].laborMhPerUnit - 0.05) < 0.0001, `emt mh/lf ${lines[1].laborMhPerUnit}`);
 assert(lines[1].laborItemId === "EL-00050", "audited 3/4 EMT labor item");
 assert(lines[1].laborSource.includes("NECA MLU public sample"), `audited source ${lines[1].laborSource}`);
+const laborCost = lines.reduce((sum, line) => sum + line.quantity * line.laborMhPerUnit * line.laborRate, 0);
+assert(Math.abs(laborCost - (12 * 0.22 * 68 + 200 * 0.05 * 68)) < 0.01, `estimate labor from installed qty ${laborCost}`);
 
 const edited = mergeEstimate({ lines: [{ ...lines[0], quantity: 99, quantityEdited: true }] }, lines);
 assert(edited[0].quantity === 99, "edited estimate quantity is kept");
@@ -53,6 +55,6 @@ const draft = syncEstimateDraft(null, {
 assert(draft.separateFromTakeoff === true, "estimate is marked separate from takeoff");
 assert(draft.header.projectName === "level-1", "project name from drawing");
 assert(draft.lines.every((line) => line.source === "takeoff"), "takeoff quantities win over blank legend lines");
-assert(assignLaborHours({ category: "Lighting", symbol: "2x4 troffer", unit: "EA" }).mhPerUnit === 1.1, "library match");
+assert(assignLaborHours({ category: "Lighting", symbol: "2x4 troffer", unit: "EA" }).mhPerUnit === 0.75, "workbook troffer match");
 
 if (!process.exitCode) console.log("estimate labor checks passed");

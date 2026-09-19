@@ -1,128 +1,42 @@
-/**
- * Production-ready rows from Estim8r_Source_Audited_Electrical_Labor_Database.xlsx
- * (Production Import / Labor Database Production Ready = YES).
- * Shape matches labor_items + labor_units as the Labor Library page reads them.
- */
+import { AUDITED_LABOR_ITEMS } from "./auditedLibraryData.js";
+
+export { AUDITED_LABOR_ITEMS };
+
 export const AUDITED_LABOR_SOURCE = {
   workbook: "Estim8r_Source_Audited_Electrical_Labor_Database.xlsx",
-  sheet: "Production Import",
-  name: "NECA MLU public sample",
-  edition: "2021-2022",
+  sheet: "Labor Database",
+  name: "Estim8r electrical labor library",
+  edition: "source-audited",
 };
 
-const SAMPLE_URL =
-  "https://www.necanet.org/docs/default-source/education/publications/4090-21_2021-2022mlu_page202revised.pdf?sfvrsn=52e712c0_3";
+const STOP_WORDS = new Set(["install", "terminate", "and", "the", "a", "an", "of", "for", "with", "to", "per", "from"]);
 
-function unitRecord(itemId, values) {
-  return {
-    id: `${itemId}-neca-mlu-public-sample`,
-    labor_item_id: itemId,
-    source_type: "published_reference",
-    source_name: AUDITED_LABOR_SOURCE.name,
-    source_year: AUDITED_LABOR_SOURCE.edition,
-    source_reference: SAMPLE_URL,
-    normal_mh: values.normal,
-    difficult_mh: values.difficult,
-    very_difficult_mh: values.veryDifficult,
-    verification_status: "verified",
-    production_allowed: true,
-    notes: values.notes,
-  };
+const CATEGORY_ALIASES = {
+  receptacles: ["devices", "residential"],
+  switches: ["devices"],
+  lighting: ["lighting", "site lighting & signs"],
+  hvac: ["equipment connections", "motors", "motor control"],
+  "panels / mcc": ["distribution"],
+  equipment: ["equipment connections", "distribution", "motors"],
+  raceway: ["raceways"],
+  "low voltage": ["communications", "automation", "security", "fiber optics"],
+  "fire alarm": ["life safety"],
+  "access control": ["security"],
+};
+
+function normalizeCategory(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/s$/, "")
+    .trim();
 }
 
-function item(row) {
-  return {
-    id: row.id,
-    trade: "Electrical",
-    category: row.category,
-    subcategory: row.subcategory,
-    item_name: row.itemName,
-    description: row.notes,
-    material_type: row.material,
-    size: row.size,
-    unit: row.unit,
-    default_crew: "",
-    active: true,
-    labor_units: [
-      unitRecord(row.id, {
-        normal: row.normal,
-        difficult: row.difficult,
-        veryDifficult: row.veryDifficult,
-        notes: row.notes,
-      }),
-    ],
-  };
+function tokens(value) {
+  return String(value || "")
+    .toLowerCase()
+    .split(/[^a-z0-9/+-]+/)
+    .filter((word) => word.length > 1 && !STOP_WORDS.has(word));
 }
-
-export const AUDITED_LABOR_ITEMS = [
-  item({
-    id: "EL-00050",
-    category: "Raceways",
-    subcategory: "Conduit Installation",
-    itemName: "Install EMT",
-    size: "3/4 in",
-    material: "EMT",
-    unit: "LF",
-    normal: 0.05,
-    difficult: 0.062,
-    veryDifficult: 0.075,
-    notes: "NECA sample lists 5.00/6.20/7.50 per C; normalized here to MH per LF for Estim8r.",
-  }),
-  item({
-    id: "EL-00051",
-    category: "Raceways",
-    subcategory: "Fittings",
-    itemName: "Install EMT Connector",
-    size: "3/4 in",
-    material: "EMT",
-    unit: "EA",
-    normal: 0.1,
-    difficult: 0.12,
-    veryDifficult: 0.15,
-    notes: "Official NECA public sample: EMT set-screw box connector, each.",
-  }),
-  item({
-    id: "EL-00052",
-    category: "Raceways",
-    subcategory: "Fittings",
-    itemName: "Install EMT Coupling",
-    size: "3/4 in",
-    material: "EMT",
-    unit: "EA",
-    normal: 0.05,
-    difficult: 0.06,
-    veryDifficult: 0.07,
-    notes: "Official NECA public sample: EMT set-screw coupling, each.",
-  }),
-  item({
-    id: "EL-00053",
-    category: "Raceways",
-    subcategory: "Fittings",
-    itemName: "Install EMT Factory elbow",
-    size: "3/4 in",
-    material: "EMT",
-    unit: "EA",
-    normal: 0.22,
-    difficult: 0.27,
-    veryDifficult: 0.33,
-    notes: "Official NECA public sample: EMT factory elbow, each.",
-  }),
-  item({
-    id: "EL-00061",
-    category: "Raceways",
-    subcategory: "Conduit Installation",
-    itemName: "Install EMT",
-    size: "1 in",
-    material: "EMT",
-    unit: "LF",
-    normal: 0.055,
-    difficult: 0.068,
-    veryDifficult: 0.082,
-    notes: "NECA sample lists 5.50/6.80/8.20 per C; normalized here to MH per LF for Estim8r.",
-  }),
-];
-
-const QUALIFIERS = ["connector", "coupling", "elbow", "factory"];
 
 function normalizeSize(value) {
   return String(value || "")
@@ -138,9 +52,7 @@ export function textHasSize(text, size) {
   const token = normalizeSize(size);
   if (!token) return true;
   const haystack = normalizeSize(text);
-  if (token === "1") {
-    return /(?<![0-9/-])1(?![0-9/-])/.test(haystack);
-  }
+  if (token === "1") return /(?<![0-9/-])1(?![0-9/-])/.test(haystack);
   return haystack.includes(token);
 }
 
@@ -153,14 +65,11 @@ function unitsCompatible(itemUnit, takeoffUnit) {
 function categoriesCompatible(itemCategory, takeoffCategory) {
   if (!itemCategory || !takeoffCategory) return true;
   if (takeoffCategory === "From drawing" || takeoffCategory === "Uncategorized") return true;
-  const left = itemCategory.toLowerCase().replace(/s$/, "");
-  const right = takeoffCategory.toLowerCase().replace(/s$/, "");
-  return left === right || left.includes(right) || right.includes(left);
-}
-
-function qualifierMismatch(itemName, text) {
-  const name = itemName.toLowerCase();
-  return QUALIFIERS.some((word) => name.includes(word) !== text.includes(word));
+  const item = normalizeCategory(itemCategory);
+  const takeoff = normalizeCategory(takeoffCategory);
+  if (item === takeoff || item.includes(takeoff) || takeoff.includes(item)) return true;
+  const aliases = CATEGORY_ALIASES[takeoffCategory.toLowerCase()] || [];
+  return aliases.some((alias) => normalizeCategory(alias) === item);
 }
 
 function searchBlob(row) {
@@ -170,7 +79,7 @@ function searchBlob(row) {
     .toLowerCase();
 }
 
-export function listBundledLaborLibrary({ search = "", category = "", limit = 250 } = {}) {
+export function listBundledLaborLibrary({ search = "", category = "", limit = 2500 } = {}) {
   const q = search.trim().toLowerCase();
   const rows = AUDITED_LABOR_ITEMS.filter((row) => {
     if (!row.active) return false;
@@ -185,25 +94,33 @@ export function listBundledLaborCategories() {
   return [...new Set(AUDITED_LABOR_ITEMS.filter((row) => row.active).map((row) => row.category))].sort();
 }
 
-function productionUnit(row) {
-  return (row.labor_units || []).find((unit) => unit.verification_status === "verified" && unit.production_allowed);
+function primaryUnit(row) {
+  return (row.labor_units || []).find((unit) => unit.normal_mh != null) || row.labor_units?.[0] || null;
 }
 
-function scoreAuditedItem(row, text, category, unit) {
+function scoreLibraryItem(row, text, category, unit) {
   if (!categoriesCompatible(row.category, category)) return 0;
   if (!unitsCompatible(row.unit, unit)) return 0;
-  if (qualifierMismatch(row.item_name, text)) return 0;
   if (row.size && !textHasSize(text, row.size)) return 0;
 
-  let score = 0;
-  const material = String(row.material_type || "").toLowerCase();
-  if (material && text.includes(material.toLowerCase())) score += 10;
-  for (const word of String(row.item_name).toLowerCase().split(/\s+/)) {
-    if (word.length > 2 && text.includes(word)) score += word.length + 2;
+  const nameTokens = tokens(`${row.item_name} ${row.material_type}`);
+  const textTokens = new Set(tokens(text));
+  let shared = 0;
+  let extra = 0;
+  for (const word of nameTokens) {
+    if (text.includes(word) || textTokens.has(word)) shared += word.length + 2;
+    else extra += 6;
   }
-  if (row.size && textHasSize(text, row.size)) score += 8;
-  if (!score) return 0;
-  return score;
+  if (!shared) return 0;
+
+  let score = shared - extra;
+  const material = String(row.material_type || "").toLowerCase();
+  if (material && text.includes(material)) score += 10;
+  if (row.size && textHasSize(text, row.size)) score += 12;
+  if (categoriesCompatible(row.category, category)) score += 3;
+  const laborUnit = primaryUnit(row);
+  if (laborUnit?.production_allowed && laborUnit.verification_status === "verified") score += 5;
+  return score > 0 ? score : 0;
 }
 
 function mhForDisplayUnit(itemUnit, takeoffUnit, mh) {
@@ -217,9 +134,9 @@ export function matchAuditedLaborHours({ category, symbol, unit }) {
   let best = null;
   let bestScore = 0;
   for (const row of AUDITED_LABOR_ITEMS) {
-    const laborUnit = productionUnit(row);
-    if (!laborUnit) continue;
-    const score = scoreAuditedItem(row, text, category, unit);
+    const laborUnit = primaryUnit(row);
+    if (!laborUnit || laborUnit.normal_mh == null) continue;
+    const score = scoreLibraryItem(row, text, category, unit);
     if (score > bestScore) {
       best = { row, laborUnit };
       bestScore = score;
@@ -229,10 +146,13 @@ export function matchAuditedLaborHours({ category, symbol, unit }) {
 
   const mh = mhForDisplayUnit(best.row.unit, unit, best.laborUnit.normal_mh);
   const basis = best.row.unit === "LF" ? `${best.laborUnit.normal_mh} MH / LF` : `${best.laborUnit.normal_mh} MH each`;
+  const verified = best.laborUnit.verification_status === "verified" && best.laborUnit.production_allowed;
   return {
     laborItemId: best.row.id,
     mhPerUnit: Math.round(mh * 10000) / 10000,
-    sourceName: `${best.laborUnit.source_name} (${best.laborUnit.source_year})`,
-    note: `${basis}, normal. Verified production labor. ${best.laborUnit.notes}`,
+    sourceName: `${best.laborUnit.source_name} (${best.laborUnit.source_year || AUDITED_LABOR_SOURCE.edition})`,
+    note: verified
+      ? `${basis}, normal. Verified production labor. ${best.laborUnit.notes}`
+      : `${basis}, normal. ${best.laborUnit.source_name} — not a verified production rate.`,
   };
 }

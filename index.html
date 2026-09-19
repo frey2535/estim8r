@@ -27,18 +27,34 @@
         }
         var currentSha = "%ESTIM8R_BUILD_SHA%";
         window.__ESTIM8R_BUILD_SHA__ = currentSha;
+        function showUpdatePopup(nextSha) {
+          var existing = document.getElementById("estim8r-update-popup");
+          if (existing) existing.remove();
+          var overlay = document.createElement("div");
+          overlay.id = "estim8r-update-popup";
+          overlay.setAttribute("role", "dialog");
+          overlay.setAttribute("aria-modal", "true");
+          overlay.setAttribute("aria-labelledby", "estim8r-boot-update-title");
+          overlay.style.cssText = "position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(15,23,42,.5);font-family:ui-sans-serif,system-ui,sans-serif;";
+          overlay.innerHTML = '<div style="width:100%;max-width:28rem;border-radius:16px;background:#fff;box-shadow:0 25px 50px rgba(0,0,0,.25);padding:20px;color:#0f172a;">'
+            + '<p id="estim8r-boot-update-title" style="margin:0;font-size:16px;font-weight:700;">Update available</p>'
+            + '<p style="margin:8px 0 0;font-size:14px;color:#475569;">A newer version of Estim8r is ready. Update now to load the latest takeoff tools and fixes.</p>'
+            + '<button type="button" id="estim8r-boot-update-btn" style="margin-top:16px;width:100%;border:0;border-radius:8px;background:#2563eb;color:#fff;font-size:14px;font-weight:700;padding:10px 12px;cursor:pointer;">Update now</button>'
+            + '</div>';
+          document.body.appendChild(overlay);
+          document.getElementById("estim8r-boot-update-btn").onclick = function () {
+            var url = new URL(window.location.href);
+            url.searchParams.set("t", String(Date.now()));
+            if (nextSha) url.searchParams.set("build", nextSha);
+            window.location.replace(url.toString());
+          };
+        }
         if (!currentSha || currentSha === "local" || currentSha.indexOf("%ESTIM8R") === 0) return;
-        var reloadKey = "estim8r_boot_reload_" + currentSha;
         fetch("/build-version.json?t=" + Date.now(), { cache: "no-store" })
           .then(function (response) { return response.ok ? response.json() : null; })
           .then(function (next) {
             if (!next || !next.sha || next.sha === currentSha) return;
-            if (sessionStorage.getItem(reloadKey) === next.sha) return;
-            sessionStorage.setItem(reloadKey, next.sha);
-            var url = new URL(window.location.href);
-            url.searchParams.set("t", String(Date.now()));
-            url.searchParams.set("build", next.sha);
-            window.location.replace(url.toString());
+            showUpdatePopup(next.sha);
           })
           .catch(function () {});
       })();

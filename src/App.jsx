@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/lib/ThemeContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AppLayout from "@/components/layout/AppLayout";
 import Login from "@/pages/Login";
+import UpdateAvailablePrompt from "@/components/UpdateAvailablePrompt";
 
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const LaborLibrary = lazy(() => import("@/pages/LaborLibrary"));
@@ -36,7 +37,8 @@ function AppRoutes() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/estimates/new" element={<EstimateBuilder />} />
             <Route path="/labor" element={<LaborLibrary />} />
-            <Route path="/production" element={<Production />} />\n            <Route path="/takeoff" element={<TakeoffWorkspace />} />
+            <Route path="/production" element={<Production />} />
+            <Route path="/takeoff" element={<TakeoffWorkspace />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/profile" element={<Settings />} />
           </Route>
@@ -48,5 +50,17 @@ function AppRoutes() {
 }
 
 export default function App() {
-  return <AuthProvider><ThemeProvider><QueryClientProvider client={queryClientInstance}><Router><AppRoutes /></Router><Toaster /></QueryClientProvider></ThemeProvider></AuthProvider>;
+  return (
+    <AuthProvider>
+      <ThemeProvider>
+        <QueryClientProvider client={queryClientInstance}>
+          <Router>
+            <AppRoutes />
+          </Router>
+          <UpdateAvailablePrompt />
+          <Toaster />
+        </QueryClientProvider>
+      </ThemeProvider>
+    </AuthProvider>
+  );
 }

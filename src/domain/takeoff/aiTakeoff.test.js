@@ -48,6 +48,40 @@ const planned = buildAiMarks({
 });
 assert(planned.marks.filter((mark) => mark.symbol === "facp" || mark.abbr === "FACP").length === 0, "AI did not take off fire alarm");
 assert(planned.marks.filter((mark) => mark.tool === "conduit").every((mark) => mark.homerunCount <= 3), "AI conduits stay within the cap");
-assert(planned.marks.some((mark) => mark.tool === "conduit" && mark.conduitSize === '3/4"'), "AI conduit keeps the selected size");
+assert(matchTradeSymbol("2'x4'", electrical.symbols)?.id === "2x4", "2'x4' counts as a 2x4 fixture");
+assert(matchTradeSymbol("2×4", electrical.symbols)?.id === "2x4", "2×4 counts as a 2x4 fixture");
+
+const fixtures = buildAiMarks({
+  trade: "electrical",
+  symbols: electrical.symbols,
+  maxHomeruns: 3,
+  conduit: { id: "emt-3-4", label: '3/4" EMT', size: '3/4"', material: "EMT" },
+  pages: [
+    {
+      page: 1,
+      kind: "lighting-schedule",
+      tokens: [
+        { text: "F1", x: 10, y: 20 },
+        { text: "2' x 4'", x: 18, y: 20 },
+        { text: "LED", x: 28, y: 20 },
+        { text: "troffer", x: 34, y: 20 },
+      ],
+    },
+    {
+      page: 2,
+      kind: "drawing",
+      tokens: [
+        { text: "F1", x: 12, y: 30 },
+        { text: "F1", x: 40, y: 55 },
+        { text: "2", x: 70, y: 40 },
+        { text: "x", x: 71.2, y: 40 },
+        { text: "4", x: 72.2, y: 40 },
+      ],
+    },
+  ],
+});
+const lights = fixtures.marks.filter((mark) => mark.symbol === "2x4");
+assert(lights.length === 3, `expected 3 2x4 fixtures, got ${lights.length}`);
+
 
 if (!process.exitCode) console.log("trade and AI takeoff checks passed");

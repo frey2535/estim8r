@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Plus, Trash2 } from "lucide-react";
 import { compositeWage, defaultCrew } from "@/domain/labor/employeeClasses";
 import { readActiveEstimate, writeEstimate, writeWageBook } from "@/domain/estimate/estimateStore";
+import SaveProjectDocuments from "@/components/estimate/SaveProjectDocuments";
 
 const ITEM_TYPES = ["Material", "Labor", "Equipment", "Subcontract", "Allowance", "Fixture", "Device", "Conduit", "Wire", "Gear", "Other"];
 const UNITS = ["EA", "LF", "SF", "FT", "100 LF", "1000 LF", "HR", "DAY", "LOT"];
@@ -135,6 +136,20 @@ export default function EstimateBuilder() {
           {meta.fileName ? ` Drawing: ${meta.fileName}.` : ""}
         </p>
         <Link to="/takeoff" className="mt-2 inline-block text-sm font-semibold text-blue-600 dark:text-orange-500">Back to takeoff</Link>
+        <div className="mt-3">
+          {ready && <SaveProjectDocuments estimate={{
+            version: 1,
+            fileName: meta.fileName,
+            fileSize: meta.fileSize,
+            header,
+            crew,
+            overhead: Number(overhead) || 0,
+            profit: Number(profit) || 0,
+            lines,
+            separateFromTakeoff: true,
+            scopeEdited: meta.scopeEdited,
+          }} />}
+        </div>
       </div>
 
       <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">

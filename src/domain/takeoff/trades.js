@@ -157,7 +157,7 @@ export function paletteForTrade(tradeId, drawingSymbols = []) {
 }
 
 export const ANCHOR_SYMBOL_IDS = {
-  electrical: ["panel", "lighting-panel", "power-panel", "receptacle-panel", "switchboard", "switchgear", "mcc", "main-sw"],
+  electrical: ["panel", "lighting-panel", "power-panel", "receptacle-panel", "switchboard", "switchgear", "mcc", "main-sw", "transformer", "dry-tx", "pad-tx", "generator", "ats"],
   hvac: ["ahu", "cu"],
   "fire-alarm": ["facp"],
   controls: ["panel-ac", "ddc"],

@@ -533,6 +533,7 @@ export default function TakeoffWorkspace() {
         pages,
         trade,
         symbols: palette.symbols,
+        drawingSymbols: palette.fromDrawing,
         maxHomeruns,
         conduit: conduitChoice,
         color: penColor,

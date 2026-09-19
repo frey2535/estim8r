@@ -96,6 +96,9 @@ export default function TakeoffWorkspace() {
   const [category, setCategory] = useState("Receptacles");
   const [symbolId, setSymbolId] = useState("duplex");
   const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const panRef = useRef(pan);
+  panRef.current = pan;
   const [marks, setMarks] = useState([]);
   const [draftPoints, setDraftPoints] = useState([]);
   const [status, setStatus] = useState("Upload a drawing to begin.");
@@ -214,6 +217,7 @@ export default function TakeoffWorkspace() {
     setStatus(`Importing ${nextFile.name}…`);
     setDraftPoints([]);
     setZoom(1);
+    setPan({ x: 0, y: 0 });
     setImageSize({ width: 0, height: 0 });
     setSheetMeta({ page: 1, pageCount: 1 });
     setSelectedId(null);
@@ -392,6 +396,7 @@ export default function TakeoffWorkspace() {
     setDrawingError("");
     setLoadingDrawing(false);
     setZoom(1);
+    setPan({ x: 0, y: 0 });
     setImageSize({ width: 0, height: 0 });
     setSheetMeta({ page: 1, pageCount: 1 });
     setSelectedId(null);
@@ -410,6 +415,7 @@ export default function TakeoffWorkspace() {
     setSheetMeta((current) => (current.page === nextPage ? current : { ...current, page: nextPage }));
     setDraftPoints([]);
     setSelectedId(null);
+    setPan({ x: 0, y: 0 });
     setStatus(`Sheet ${nextPage} of ${sheetMeta.pageCount || nextPage}.`);
   }
 
@@ -703,8 +709,36 @@ export default function TakeoffWorkspace() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  function onPanPointerDown(event) {
+    if (tool !== "pan" || event.button > 0) return;
+    event.preventDefault();
+    const pointerId = event.pointerId;
+    const originX = event.clientX;
+    const originY = event.clientY;
+    const startX = panRef.current.x;
+    const startY = panRef.current.y;
+    const target = event.currentTarget;
+    target.setPointerCapture(pointerId);
+    const move = (moveEvent) => {
+      if (moveEvent.pointerId !== pointerId) return;
+      setPan({
+        x: startX + (moveEvent.clientX - originX),
+        y: startY + (moveEvent.clientY - originY),
+      });
+    };
+    const up = (upEvent) => {
+      if (upEvent.pointerId !== pointerId) return;
+      target.removeEventListener("pointermove", move);
+      target.removeEventListener("pointerup", up);
+      target.removeEventListener("pointercancel", up);
+    };
+    target.addEventListener("pointermove", move);
+    target.addEventListener("pointerup", up);
+    target.addEventListener("pointercancel", up);
+  }
+
   function onViewerPointerDown(event) {
-    if (tool !== "pan" && !(tool === "select" && selectedId)) return;
+    if (tool === "pan" || (tool !== "select" || !selectedId)) return;
     const point = drawingPoint(event);
     if (tool === "select" && selectedId) {
       const mark = marks.find((item) => item.id === selectedId);
@@ -728,24 +762,7 @@ export default function TakeoffWorkspace() {
       };
       window.addEventListener("pointermove", move);
       window.addEventListener("pointerup", up);
-      return;
     }
-    const scroller = viewportRef.current;
-    if (!scroller) return;
-    const originX = event.clientX;
-    const originY = event.clientY;
-    const startLeft = scroller.scrollLeft;
-    const startTop = scroller.scrollTop;
-    const move = (moveEvent) => {
-      scroller.scrollLeft = startLeft - (moveEvent.clientX - originX);
-      scroller.scrollTop = startTop - (moveEvent.clientY - originY);
-    };
-    const up = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
   }
 
   async function copyQuantities() {
@@ -928,7 +945,7 @@ export default function TakeoffWorkspace() {
               <button type="button" onClick={() => setZoom((z) => Math.max(0.25, Number((z - 0.25).toFixed(2))))} className="rounded-lg p-2 hover:bg-muted" title="Zoom out"><ZoomOut className="h-4 w-4" /></button>
               <span className="min-w-12 text-center text-xs font-semibold">{Math.round(zoom * 100)}%</span>
               <button type="button" onClick={() => setZoom((z) => Math.min(4, Number((z + 0.25).toFixed(2))))} className="rounded-lg p-2 hover:bg-muted" title="Zoom in"><ZoomIn className="h-4 w-4" /></button>
-              <button type="button" onClick={() => setZoom(1)} className="rounded-lg border border-border px-2 py-1 text-xs font-semibold hover:bg-muted">Fit sheet</button>
+              <button type="button" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} className="rounded-lg border border-border px-2 py-1 text-xs font-semibold hover:bg-muted">Fit sheet</button>
               {sheetMeta.pageCount > 1 && (
                 <div className="ml-2 flex items-center gap-1 rounded-lg border border-border bg-background px-1.5 py-0.5">
                   <button type="button" disabled={sheetMeta.page <= 1} onClick={() => selectSheet(sheetMeta.page - 1)} className="rounded border border-border px-2 py-1 text-xs font-semibold disabled:opacity-40">Previous</button>
@@ -942,13 +959,18 @@ export default function TakeoffWorkspace() {
               <button type="button" onClick={clearAll} className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" />Clear</button>
             </div>
           </div>
-          <div ref={viewportRef} className="min-h-0 min-w-0 flex-1 overflow-auto bg-neutral-400/40 dark:bg-neutral-950">
-            <div className="flex min-h-full min-w-full items-center justify-center p-2">
+          <div
+            ref={viewportRef}
+            onPointerDown={onPanPointerDown}
+            className={cn("min-h-0 min-w-0 flex-1 overflow-hidden bg-neutral-400/40 dark:bg-neutral-950", tool === "pan" && "cursor-grab touch-none")}
+          >
+            <div className="flex h-full w-full items-center justify-center p-2">
               <div
                 ref={viewerRef}
                 onClick={onDrawingClick}
                 onDoubleClick={finishPath}
                 onPointerDown={onViewerPointerDown}
+                style={{ transform: `translate(${pan.x}px, ${pan.y}px)` }}
                 onPointerMove={(event) => {
                   if (!["conduit", "polyline", "linear", "measure", "homerun"].includes(tool)) return;
                   setHoverPoint(drawingPoint(event));

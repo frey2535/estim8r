@@ -11,24 +11,47 @@
   "theme_color": "#1e40af",
   "background_color": "#1e40af",
   "categories": ["business", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
   "shortcuts": [
     {
       "name": "New Estimate",
       "short_name": "New Estimate",
       "description": "Create a new electrical estimate",
-      "url": "/estimates/new"
+      "url": "/estimates/new",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Labor Library",
       "short_name": "Labor",
       "description": "Open the master labor library",
-      "url": "/labor"
+      "url": "/labor",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Production",
       "short_name": "Production",
       "description": "Open production calibration",
-      "url": "/production"
+      "url": "/production",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ],
   "prefer_related_applications": false

@@ -1,7 +1,8 @@
 import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { BarChart3, BookOpen, Calculator, LogOut, Settings, TrendingUp, Zap } from 'lucide-react';
+import { BarChart3, BookOpen, Calculator, LogOut, Settings, TrendingUp } from 'lucide-react';
 import { useAuth } from '@/lib/SupabaseAuthContext';
+import AppLogo from '@/components/branding/AppLogo';
 
 const links = [
   ['/', 'Dashboard', BarChart3],
@@ -17,7 +18,7 @@ export default function AppShell() {
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <aside className="fixed inset-y-0 left-0 w-64 border-r border-slate-800 bg-slate-950 p-5">
         <div className="mb-8 flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-xl bg-amber-400 text-slate-950"><Zap className="h-6 w-6" /></div>
+          <AppLogo className="h-11 w-11 rounded-xl" />
           <div><div className="text-xl font-black tracking-tight">Estim8r</div><div className="text-xs text-slate-400">Electrical Estimating</div></div>
         </div>
         <nav className="space-y-1">

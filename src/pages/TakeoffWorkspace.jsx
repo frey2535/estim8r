@@ -5,7 +5,7 @@ import {
   Trash2, Undo2, Upload, X, ZoomIn, ZoomOut, Crosshair, Gauge, Lightbulb
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
+import { GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
 import {
   CATEGORIES, DEFAULT_DROP_FEET, DEVICE_SYMBOLS, TAKEOFF_TOOLS, TOOL_GROUPS,
@@ -16,6 +16,8 @@ import {
   hitTestMark, polylineLength, sheetAspect, widthPercentDistance,
 } from "@/domain/takeoff/geometry";
 import { quantitiesToCsv, rollupTakeoff } from "@/domain/takeoff/quantities";
+import SheetThumbnailPanel, { readThumbsOpen, writeThumbsOpen } from "@/components/takeoff/SheetThumbnailPanel";
+import { getPdfDocument } from "@/lib/pdf-document";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -87,6 +89,10 @@ export default function TakeoffWorkspace() {
   const [calibration, setCalibration] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [measureLabel, setMeasureLabel] = useState("");
+  const [thumbsOpen, setThumbsOpen] = useState(readThumbsOpen);
+  const [wideLayout, setWideLayout] = useState(() => (
+    typeof window !== "undefined" ? window.matchMedia("(min-width: 1024px)").matches : true
+  ));
 
   const isPdf = file?.type === "application/pdf" || file?.name?.toLowerCase().endsWith(".pdf");
   const symbols = useMemo(() => symbolsForCategory(category), [category]);
@@ -178,6 +184,14 @@ export default function TakeoffWorkspace() {
   }, []);
 
   useEffect(() => {
+    const media = window.matchMedia("(min-width: 1024px)");
+    const sync = () => setWideLayout(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
     if (!file) return;
     try {
       localStorage.setItem(storageKey(file), JSON.stringify({ marks, calibration, symbolId, category }));
@@ -236,6 +250,21 @@ export default function TakeoffWorkspace() {
     setSheetMeta({ page: 1, pageCount: 1 });
     setSelectedId(null);
     setStatus("Drawing closed. Choose another drawing to continue.");
+  }
+
+  function toggleThumbs() {
+    setThumbsOpen((current) => {
+      const next = !current;
+      writeThumbsOpen(next);
+      return next;
+    });
+  }
+
+  function selectSheet(nextPage) {
+    setSheetMeta((current) => (current.page === nextPage ? current : { ...current, page: nextPage }));
+    setDraftPoints([]);
+    setSelectedId(null);
+    setStatus(`Sheet ${nextPage} of ${sheetMeta.pageCount || nextPage}.`);
   }
 
   function handleDrop(event) {
@@ -602,7 +631,21 @@ export default function TakeoffWorkspace() {
           </div>
         </aside>
 
-        <section className="flex min-h-0 min-w-0 flex-col bg-card">
+        <section className="flex min-h-0 min-w-0 flex-col bg-card lg:flex-row">
+          <SheetThumbnailPanel
+            layout={wideLayout ? "side" : "strip"}
+            fileBytes={fileBytes}
+            fileUrl={fileUrl}
+            isPdf={isPdf}
+            fileName={file.name}
+            page={sheetMeta.page}
+            pageCount={sheetMeta.pageCount}
+            marks={marks}
+            open={thumbsOpen}
+            onToggle={toggleThumbs}
+            onSelectPage={selectSheet}
+          />
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="flex shrink-0 gap-1 overflow-auto border-b border-border p-1 lg:hidden">
             {TAKEOFF_TOOLS.map((item) => {
               const Icon = TOOL_ICONS[item.key] || Pencil;
@@ -678,6 +721,7 @@ export default function TakeoffWorkspace() {
             </div>
           </div>
           <div className="shrink-0 border-t border-border bg-background px-3 py-1.5 text-xs text-muted-foreground">{status}</div>
+          </div>
         </section>
 
         <aside className="hidden min-h-0 overflow-auto border-l border-border bg-card p-3 lg:block">
@@ -774,8 +818,7 @@ function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber, viewp
       setError("");
       try {
         if (!pdfRef.current) {
-          const loadingTask = getDocument({ data: new Uint8Array(fileBytes.slice(0)), disableAutoFetch: true, disableStream: true });
-          pdfRef.current = await loadingTask.promise;
+          pdfRef.current = await getPdfDocument(fileBytes);
         }
         const pdf = pdfRef.current;
         if (cancelled) return;

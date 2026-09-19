@@ -1,31 +1,46 @@
-import { requireSupabase } from './supabaseClient';
+import { listBundledLaborCategories, listBundledLaborLibrary } from '../domain/labor/auditedLibrary';
+import { isSupabaseConfigured, requireSupabase } from './supabaseClient';
 
 export async function listLaborLibrary({ search = '', category = '', limit = 250 } = {}) {
-  const client = requireSupabase();
-  let query = client
-    .from('labor_items')
-    .select('*, labor_units(*)')
-    .eq('active', true)
-    .order('category')
-    .order('item_name')
-    .limit(limit);
+  if (isSupabaseConfigured) {
+    try {
+      const client = requireSupabase();
+      let query = client
+        .from('labor_items')
+        .select('*, labor_units(*)')
+        .eq('active', true)
+        .order('category')
+        .order('item_name')
+        .limit(limit);
 
-  if (category) query = query.eq('category', category);
-  if (search.trim()) {
-    const q = search.trim().replaceAll(',', ' ');
-    query = query.or(`item_name.ilike.%${q}%,description.ilike.%${q}%,subcategory.ilike.%${q}%,material_type.ilike.%${q}%,size.ilike.%${q}%`);
+      if (category) query = query.eq('category', category);
+      if (search.trim()) {
+        const q = search.trim().replaceAll(',', ' ');
+        query = query.or(`item_name.ilike.%${q}%,description.ilike.%${q}%,subcategory.ilike.%${q}%,material_type.ilike.%${q}%,size.ilike.%${q}%`);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      if (data?.length) return data;
+    } catch {
+      // Fall through to the bundled audited library when the master table is empty or unreachable.
+    }
   }
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return data ?? [];
+  return listBundledLaborLibrary({ search, category, limit });
 }
 
 export async function listLaborCategories() {
-  const client = requireSupabase();
-  const { data, error } = await client.from('labor_items').select('category').eq('active', true);
-  if (error) throw error;
-  return [...new Set((data ?? []).map((row) => row.category))].sort();
+  if (isSupabaseConfigured) {
+    try {
+      const client = requireSupabase();
+      const { data, error } = await client.from('labor_items').select('category').eq('active', true);
+      if (error) throw error;
+      if (data?.length) return [...new Set(data.map((row) => row.category))].sort();
+    } catch {
+      // Fall through to the bundled audited library.
+    }
+  }
+  return listBundledLaborCategories();
 }
 
 export async function listCompanyLaborUnits() {

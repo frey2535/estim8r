@@ -35,7 +35,9 @@ assert(lines[0].quantity === 12 && lines[0].unit === "EA", "receptacle quantity"
 assert(lines[0].laborMhPerUnit === 0.55, `duplex mh ${lines[0].laborMhPerUnit}`);
 assert(lines[0].laborRate === 68, "journeyman rate on the line");
 assert(lines[1].unit === "LF" && lines[1].quantity === 200, "conduit lf");
-assert(Math.abs(lines[1].laborMhPerUnit - 0.072) < 0.0001, `emt mh/lf ${lines[1].laborMhPerUnit}`);
+assert(Math.abs(lines[1].laborMhPerUnit - 0.05) < 0.0001, `emt mh/lf ${lines[1].laborMhPerUnit}`);
+assert(lines[1].laborItemId === "EL-00050", "audited 3/4 EMT labor item");
+assert(lines[1].laborSource.includes("NECA MLU public sample"), `audited source ${lines[1].laborSource}`);
 
 const edited = mergeEstimate({ lines: [{ ...lines[0], quantity: 99, quantityEdited: true }] }, lines);
 assert(edited[0].quantity === 99, "edited estimate quantity is kept");

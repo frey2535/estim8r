@@ -56,4 +56,6 @@ Existing estimates keep their stored man-hours. Takeoff, drawings, auth, and Sup
 node src/domain/labor/auditedLibrary.test.js
 node src/domain/labor/architecture.test.js
 node src/domain/estimate/fromTakeoff.test.js
+node src/domain/takeoff/aiTakeoff.test.js
+node src/domain/takeoff/sizes.test.js
 ```

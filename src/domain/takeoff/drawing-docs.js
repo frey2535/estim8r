@@ -1,12 +1,10 @@
-import { getPdfDocument } from "@/lib/pdf-document";
-
 const LEGEND_RE = /electrical\s+legend|lighting\s+legend|symbol\s+legend|\blegend\b|abbreviation/i;
 const LIGHTING_SCHED_RE = /lighting\s+fixture\s+schedule|fixture\s+schedule|luminaire\s+schedule|lighting\s+schedule/i;
 const DEVICE_SCHED_RE = /device\s+schedule|receptacle\s+schedule|switch\s+schedule/i;
 const EQUIP_SCHED_RE = /equipment\s+schedule|mechanical\s+equipment|panel\s+schedule/i;
 const SPEC_RE = /specification|general\s+notes|electrical\s+notes|abbreviations/i;
 const SKIP = /^(symbol|symbols|description|type|manufacturer|model|remarks|notes|qty|quantity|mounting|voltage|watts|lamp|catalog)$/i;
-const TYPE_RE = /^(?:type\s*)?([a-z]{0,2}\d{1,3}[a-z]{0,3})$/i;
+const TYPE_RE = /^(?:type\s*)?([a-z]{1,3}\d{0,3}[a-z]{0,2}|\d{1,3}[a-z]{0,3})$/i;
 
 export function classifyPageText(text) {
   const blob = String(text || "");
@@ -107,6 +105,7 @@ export async function extractPdfPageItems(pdf, pageNumber) {
 export async function readDrawingDocuments(fileBytes) {
   const empty = { pages: [], symbols: [], scheduleItems: [], notes: [] };
   if (!fileBytes) return empty;
+  const { getPdfDocument } = await import("@/lib/pdf-document");
   const pdf = await getPdfDocument(fileBytes);
   const pages = [];
   const symbols = [];

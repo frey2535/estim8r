@@ -212,6 +212,7 @@ export const DEVICE_SYMBOLS = [
     ["sign", "Sign connection", "SGN"],
     ["kitchen", "Kitchen equipment", "KIT"],
     ["medical", "Medical equipment", "MED"],
+    ["ground-rod", "Ground rod / grounding electrode", "GRD"],
   ]),
   ...racewayFamily("emt", "EMT"),
   ...racewayFamily("imc", "IMC"),

@@ -1,8 +1,9 @@
 import React from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { BookOpen, Calculator, FolderOpen, Moon, ScanSearch, Settings, Sun, TrendingUp, UserCircle, Zap } from "lucide-react";
+import { BookOpen, Calculator, FolderOpen, Moon, ScanSearch, Settings, Sun, TrendingUp, UserCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/ThemeContext";
+import AppLogo from "@/components/branding/AppLogo";
 import AppSwitcher from "@/components/platform/AppSwitcher";
 
 const TABS = [
@@ -25,9 +26,7 @@ export default function AppLayout() {
         <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14">
             <Link to="/" className="flex items-center gap-2.5 min-w-0">
-              <div className="grid w-8 h-8 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-md shadow-blue-950/20 dark:bg-orange-500">
-                <Zap className="w-5 h-5" />
-              </div>
+              <AppLogo className="w-8 h-8 shrink-0 rounded-xl" />
               <div className="min-w-0">
                 <h1 className="text-sm font-bold tracking-tight leading-none text-foreground">Estim8r</h1>
                 <p className="hidden xs:block text-[9px] font-semibold text-muted-foreground tracking-widest uppercase">Electrical Estimating</p>

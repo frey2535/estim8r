@@ -1,7 +1,8 @@
 import React from "react";
-import { LockKeyhole, LogOut, ShoppingBag, Zap } from "lucide-react";
+import { LockKeyhole, LogOut, ShoppingBag } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
+import AppLogo from "@/components/branding/AppLogo";
 
 export default function ProductAccessRequired() {
   const { user, logout } = useAuth();
@@ -10,7 +11,7 @@ export default function ProductAccessRequired() {
   return (
     <div className="grid min-h-dvh place-items-center bg-background p-6">
       <div className="w-full max-w-lg rounded-3xl border border-border bg-card p-8 text-center shadow-xl">
-        <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-blue-600 text-white dark:bg-orange-500"><Zap className="h-7 w-7" /></div>
+        <AppLogo className="mx-auto mb-5 h-14 w-14 rounded-2xl" />
         <div className="mb-2 flex items-center justify-center gap-2 text-sm font-bold uppercase tracking-wider text-muted-foreground"><LockKeyhole className="h-4 w-4" /> Estim8r Access</div>
         <h1 className="text-3xl font-black text-foreground">Estim8r is not on this account yet</h1>
         <p className="mt-3 text-muted-foreground">You are signed in as <span className="font-semibold text-foreground">{user?.email}</span>. Your Current Flow account is valid, but Estim8r requires its own purchase, subscription, trial, or bundle entitlement.</p>

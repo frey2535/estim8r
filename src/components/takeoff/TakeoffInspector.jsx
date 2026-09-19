@@ -1,6 +1,16 @@
 import React from "react";
 import { Layers3 } from "lucide-react";
 import { formatArea, formatFeet } from "@/domain/takeoff/geometry";
+import {
+  DEFAULT_LINE_SIZE,
+  DEFAULT_MARKER_SIZE,
+  isLineMark,
+  isMarkerMark,
+  lineSizePatch,
+  markerSizePatch,
+  resolvedLineSize,
+  resolvedMarkerSize,
+} from "@/domain/takeoff/sizes";
 
 function Field({ label, children }) {
   return (
@@ -22,11 +32,16 @@ export default function TakeoffInspector({
   onSelectRun,
   onUpdateMark,
   onEditRow,
+  onRenameRow,
   onSelectSheet,
   onCopy,
   scheduleEdits,
   totals,
+  globalMarkerSize = DEFAULT_MARKER_SIZE,
+  globalLineSize = DEFAULT_LINE_SIZE,
 }) {
+  const selectedIsLine = isLineMark(selected);
+  const selectedIsMarker = isMarkerMark(selected);
   return (
     <aside className="hidden min-h-0 overflow-auto border-l border-border bg-card p-3 lg:block">
       {selected && (
@@ -45,16 +60,32 @@ export default function TakeoffInspector({
             <Field label="Color">
               <input type="color" className="h-8 w-full" value={selected.color || "#2563eb"} onChange={(e) => onUpdateMark(selected.id, { color: e.target.value })} />
             </Field>
-            <Field label={selected.tool === "conduit" || selected.type === "route" ? "Thickness" : "Marker size"}>
-              <input
-                type="number"
-                min="0.5"
-                step="0.1"
-                className={inputClass}
-                value={selected.tool === "conduit" || selected.type === "route" ? (selected.thickness || 2) : (selected.markerSize || 1.6)}
-                onChange={(e) => onUpdateMark(selected.id, selected.tool === "conduit" || selected.type === "route" ? { thickness: Number(e.target.value) } : { markerSize: Number(e.target.value) })}
-              />
-            </Field>
+            {selectedIsLine && (
+              <Field label="Line size">
+                <input
+                  type="number"
+                  min="0.5"
+                  step="0.1"
+                  className={inputClass}
+                  aria-label="This line size"
+                  value={resolvedLineSize(selected, globalLineSize)}
+                  onChange={(e) => onUpdateMark(selected.id, lineSizePatch(e.target.value))}
+                />
+              </Field>
+            )}
+            {selectedIsMarker && (
+              <Field label="Marker size">
+                <input
+                  type="number"
+                  min="0.5"
+                  step="0.1"
+                  className={inputClass}
+                  aria-label="This marker size"
+                  value={resolvedMarkerSize(selected, globalMarkerSize)}
+                  onChange={(e) => onUpdateMark(selected.id, markerSizePatch(e.target.value))}
+                />
+              </Field>
+            )}
           </div>
           {(selected.tool === "conduit" || selected.type === "route") && (
             <Field label="Conduit type / size">
@@ -136,7 +167,7 @@ export default function TakeoffInspector({
               </select>
               <div className="grid grid-cols-3 gap-1">
                 <input type="color" aria-label="Run color" className="h-8 w-full" value={run.color || "#2563eb"} onChange={(e) => onUpdateMark(run.id, { color: e.target.value })} />
-                <input type="number" aria-label="Run thickness" min="0.5" step="0.1" className={inputClass} value={run.thickness || 2} onChange={(e) => onUpdateMark(run.id, { thickness: Number(e.target.value) })} />
+                <input type="number" aria-label="This line size" min="0.5" step="0.1" className={inputClass} value={run.thickness} onChange={(e) => onUpdateMark(run.id, lineSizePatch(e.target.value))} />
                 <input type="number" aria-label="Run length" step="0.1" className={inputClass} value={run.lf || ""} onChange={(e) => onUpdateMark(run.id, { storedFeet: Number(e.target.value), lengthEdited: true })} />
               </div>
             </div>

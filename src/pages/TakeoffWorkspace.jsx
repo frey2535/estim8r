@@ -24,8 +24,15 @@ import { readAiPages } from "@/domain/takeoff/aiPages";
 import SheetThumbnailPanel, { readThumbsOpen, writeThumbsOpen } from "@/components/takeoff/SheetThumbnailPanel";
 import DevicePicker from "@/components/takeoff/DevicePicker";
 import TakeoffInspector from "@/components/takeoff/TakeoffInspector";
+import TakeoffSizeControl from "@/components/takeoff/TakeoffSizeControl";
 import { getPdfDocument } from "@/lib/pdf-document";
 import { syncStoredEstimate } from "@/domain/estimate/estimateStore";
+import {
+  DEFAULT_LINE_SIZE,
+  DEFAULT_MARKER_SIZE,
+  resolvedLineSize,
+  resolvedMarkerSize,
+} from "@/domain/takeoff/sizes";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -87,8 +94,8 @@ export default function TakeoffWorkspace() {
   const [trade, setTrade] = useState("electrical");
   const [conduitId, setConduitId] = useState(DEFAULT_CONDUIT_ID);
   const [penColor, setPenColor] = useState("#2563eb");
-  const [penThickness, setPenThickness] = useState(2);
-  const [penSize, setPenSize] = useState(1.6);
+  const [penThickness, setPenThickness] = useState(DEFAULT_LINE_SIZE);
+  const [penSize, setPenSize] = useState(DEFAULT_MARKER_SIZE);
   const [maxHomeruns, setMaxHomeruns] = useState(3);
   const [scheduleEdits, setScheduleEdits] = useState({});
   const [aiBusy, setAiBusy] = useState(false);
@@ -161,8 +168,8 @@ export default function TakeoffWorkspace() {
   );
   const editedRollup = useMemo(() => applyScheduleEdits(rollup, scheduleEdits), [rollup, scheduleEdits]);
   const runs = useMemo(
-    () => conduitRuns(marks, calibration, aspect),
-    [marks, calibration, aspect],
+    () => conduitRuns(marks, calibration, aspect, penThickness),
+    [marks, calibration, aspect, penThickness],
   );
 
   useEffect(() => {
@@ -234,6 +241,7 @@ export default function TakeoffWorkspace() {
     if (saved?.maxHomeruns) setMaxHomeruns(saved.maxHomeruns);
     if (saved?.penColor) setPenColor(saved.penColor);
     if (saved?.penThickness) setPenThickness(saved.penThickness);
+    if (saved?.penSize) setPenSize(saved.penSize);
     if (saved?.scheduleEdits) setScheduleEdits(saved.scheduleEdits);
     if (saved?.sheet) setSheetMeta((current) => ({ ...current, page: saved.sheet }));
 
@@ -287,6 +295,7 @@ export default function TakeoffWorkspace() {
       maxHomeruns,
       penColor,
       penThickness,
+      penSize,
       scheduleEdits,
       sheet: sheetMeta.page,
     };
@@ -441,6 +450,20 @@ export default function TakeoffWorkspace() {
     return sheetAspect(el?.clientWidth, el?.clientHeight);
   }
 
+  function sizedMark(mark) {
+    return {
+      ...mark,
+      markerSize: resolvedMarkerSize(mark, penSize),
+      thickness: resolvedLineSize(mark, penThickness),
+    };
+  }
+
+  function markHitThreshold(mark, base = 2.2) {
+    const sized = sizedMark(mark);
+    if (sized.points?.length) return Math.max(base, sized.thickness);
+    return Math.max(base, sized.markerSize);
+  }
+
   function addMark(partial, message) {
     const isConduit = (partial.tool || tool) === "conduit";
     const device = isConduit ? null : symbol;
@@ -450,8 +473,6 @@ export default function TakeoffWorkspace() {
       trade,
       source: "manual",
       color: penColor,
-      thickness: Number(penThickness) || 2,
-      markerSize: Number(penSize) || 1.6,
       category: isConduit ? "Raceway" : (device?.takeoffCategory || device?.category || category),
       symbol: isConduit ? conduitChoice.id : device?.id,
       symbolLabel: isConduit ? conduitChoice.label : device?.label,
@@ -512,7 +533,6 @@ export default function TakeoffWorkspace() {
         maxHomeruns,
         conduit: conduitChoice,
         color: penColor,
-        thickness: Number(penThickness) || 2,
       });
       setMarks((current) => [
         ...current.filter((mark) => !(mark.source === "ai" && mark.trade === trade)),
@@ -533,7 +553,7 @@ export default function TakeoffWorkspace() {
     const sheetAspectRatio = currentAspect();
 
     if (tool === "select") {
-      const hit = [...sheetMarks].reverse().find((mark) => hitTestMark(mark, point, sheetAspectRatio));
+      const hit = [...sheetMarks].reverse().find((mark) => hitTestMark(sizedMark(mark), point, sheetAspectRatio, markHitThreshold(mark)));
       setSelectedId(hit?.id || null);
       setStatus(hit ? `Selected ${hit.symbolLabel || hit.type}.` : "Nothing selected.");
       return;
@@ -742,7 +762,7 @@ export default function TakeoffWorkspace() {
     const point = drawingPoint(event);
     if (tool === "select" && selectedId) {
       const mark = marks.find((item) => item.id === selectedId);
-      if (!mark || !hitTestMark(mark, point, currentAspect(), 3.2)) return;
+      if (!mark || !hitTestMark(sizedMark(mark), point, currentAspect(), markHitThreshold(mark, 3.2))) return;
       const start = point;
       const origin = mark.points ? mark.points.map((item) => ({ ...item })) : { x: mark.x, y: mark.y };
       const move = (moveEvent) => {
@@ -883,14 +903,15 @@ export default function TakeoffWorkspace() {
                 {conduitChoices.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
               </select>
             </label>
-            <div className="grid grid-cols-2 gap-2">
-              <label className="text-xs font-bold text-muted-foreground">Color
-                <input type="color" value={penColor} onChange={(event) => setPenColor(event.target.value)} className="mt-1 h-8 w-full" />
-              </label>
-              <label className="text-xs font-bold text-muted-foreground">Line thickness
-                <input type="number" min="0.5" step="0.1" value={penThickness} onChange={(event) => setPenThickness(Number(event.target.value))} className="mt-1 w-full rounded-lg border border-input bg-background px-2 py-1 text-sm" />
-              </label>
-            </div>
+            <label className="text-xs font-bold text-muted-foreground">Color
+              <input type="color" value={penColor} onChange={(event) => setPenColor(event.target.value)} className="mt-1 h-8 w-full" />
+            </label>
+            <TakeoffSizeControl
+              markerSize={penSize}
+              lineSize={penThickness}
+              onMarkerSize={setPenSize}
+              onLineSize={setPenThickness}
+            />
             <label className="block text-xs font-bold text-muted-foreground">Homeruns per conduit
               <input type="number" min="1" max="12" value={maxHomeruns} onChange={(event) => setMaxHomeruns(Math.max(1, Number(event.target.value) || 1))} className="mt-1 w-full rounded-lg border border-input bg-background px-2 py-1 text-sm" />
             </label>
@@ -939,7 +960,16 @@ export default function TakeoffWorkspace() {
             })}
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-2 py-1.5">
-            <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center gap-1">
+              <div className="lg:hidden">
+                <TakeoffSizeControl
+                  compact
+                  markerSize={penSize}
+                  lineSize={penThickness}
+                  onMarkerSize={setPenSize}
+                  onLineSize={setPenThickness}
+                />
+              </div>
               <button type="button" onClick={undo} className="rounded-lg p-2 hover:bg-muted" title="Undo"><Undo2 className="h-4 w-4" /></button>
               <button type="button" onClick={redo} className="rounded-lg p-2 hover:bg-muted" title="Redo"><Redo2 className="h-4 w-4" /></button>
               <button type="button" onClick={() => setZoom((z) => Math.max(0.25, Number((z - 0.25).toFixed(2))))} className="rounded-lg p-2 hover:bg-muted" title="Zoom out"><ZoomOut className="h-4 w-4" /></button>
@@ -1023,6 +1053,8 @@ export default function TakeoffWorkspace() {
                   draftFeet={["conduit", "polyline", "linear", "homerun"].includes(tool) ? draftFeet : null}
                   selectedId={selectedId}
                   tool={tool}
+                  markerSize={penSize}
+                  lineSize={penThickness}
                   lengthFor={(mark) => markLengthFeet(mark, calibration, aspect)}
                 />
               </div>
@@ -1046,13 +1078,15 @@ export default function TakeoffWorkspace() {
           onRenameRow={renameScheduleRow}
           onSelectSheet={selectSheet}
           onCopy={copyQuantities}
+          globalMarkerSize={penSize}
+          globalLineSize={penThickness}
         />
       </div>
     </div>
   );
 }
 
-function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, lengthFor }) {
+function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, lengthFor, markerSize = DEFAULT_MARKER_SIZE, lineSize = DEFAULT_LINE_SIZE }) {
   const routes = marks.filter((m) => m.points?.length);
   const draftEnd = draftPoints[draftPoints.length - 1];
   return (
@@ -1062,7 +1096,7 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
         const selected = mark.id === selectedId;
         const end = mark.points[mark.points.length - 1];
         const color = mark.color || (mark.type === "cloud" ? "#dc2626" : mark.tool === "circuit" ? "#7c3aed" : mark.type === "homerun" ? "#0f766e" : "#2563eb");
-        const width = mark.thickness || (selected ? 2.4 : 1.75);
+        const width = resolvedLineSize(mark, lineSize);
         if (mark.type === "area" || mark.type === "cloud") {
           return <polygon key={mark.id} points={points} fill={mark.type === "cloud" ? "none" : "rgba(37,99,235,0.12)"} stroke={color} strokeWidth={width} strokeDasharray={mark.type === "cloud" ? "1.2 0.8" : undefined} vectorEffect="non-scaling-stroke" />;
         }
@@ -1083,12 +1117,15 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
       {draftEnd && draftFeet != null && (
         <text x={draftEnd.x} y={Math.max(2, draftEnd.y - 1.8)} fontSize="2.3" fontWeight="700" fill="#ea580c">{formatFeet(draftFeet)}</text>
       )}
-      {marks.filter((m) => m.type === "count" || m.type === "drop").map((mark, index) => (
+      {marks.filter((m) => m.type === "count" || m.type === "drop").map((mark, index) => {
+        const radius = resolvedMarkerSize(mark, markerSize);
+        return (
         <g key={mark.id}>
-          <circle cx={mark.x} cy={mark.y} r={mark.markerSize || 1.6} fill={mark.color || "#2563eb"} stroke={mark.id === selectedId ? "#ea580c" : "white"} strokeWidth={mark.id === selectedId ? ".55" : ".3"} vectorEffect="non-scaling-stroke" />
-          <text x={mark.x} y={mark.y + .45} textAnchor="middle" fontSize="1.2" fontWeight="700" fill="white">{mark.abbr || index + 1}</text>
+          <circle cx={mark.x} cy={mark.y} r={radius} fill={mark.color || "#2563eb"} stroke={mark.id === selectedId ? "#ea580c" : "white"} strokeWidth={mark.id === selectedId ? ".55" : ".3"} vectorEffect="non-scaling-stroke" />
+          <text x={mark.x} y={mark.y + radius * 0.28} textAnchor="middle" fontSize={Math.max(0.8, radius * 0.75)} fontWeight="700" fill="white">{mark.abbr || index + 1}</text>
         </g>
-      ))}
+        );
+      })}
       {marks.filter((m) => m.type === "note").map((mark) => (
         <text key={mark.id} x={mark.x} y={mark.y} fontSize="1.8" fontWeight="700" fill={mark.color || (mark.id === selectedId ? "#ea580c" : "#dc2626")}>{mark.text}</text>
       ))}

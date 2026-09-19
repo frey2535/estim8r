@@ -126,7 +126,7 @@ export default function EstimateBuilder() {
   }
 
   return (
-    <div className="space-y-5 py-4">
+    <div className="w-full min-w-0 space-y-5 py-2">
       <div>
         <p className="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-orange-500">Estimate Builder</p>
         <h1 className="text-3xl font-black">Electrical Estimate</h1>
@@ -139,7 +139,7 @@ export default function EstimateBuilder() {
 
       <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
         <h2 className="mb-4 text-lg font-bold">Project &amp; Customer</h2>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           <Field label="Project name" value={header.projectName} set={(v) => setHeaderField("projectName", v)} />
           <Field label="Estimate #" value={header.estimateNumber} set={(v) => setHeaderField("estimateNumber", v)} />
           <Field label="Customer / company" value={header.customerCompany} set={(v) => setHeaderField("customerCompany", v)} />
@@ -149,11 +149,11 @@ export default function EstimateBuilder() {
           <Field label="Estimator" value={header.estimatorName} set={(v) => setHeaderField("estimatorName", v)} />
           <Field label="Bid due" type="datetime-local" value={header.bidDue} set={(v) => setHeaderField("bidDue", v)} />
         </div>
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
           <Field label="Project address" value={header.projectAddress} set={(v) => setHeaderField("projectAddress", v)} />
-          <label>
+          <label className="min-w-0">
             <span className="mb-1 block text-xs font-bold text-muted-foreground">Scope from the drawing</span>
-            <textarea value={header.scopeNotes} onChange={(e) => { setMeta((current) => ({ ...current, scopeEdited: true })); setHeaderField("scopeNotes", e.target.value); }} rows={4} className="w-full rounded-lg border border-input bg-background px-3 py-2.5" />
+            <textarea value={header.scopeNotes} onChange={(e) => { setMeta((current) => ({ ...current, scopeEdited: true })); setHeaderField("scopeNotes", e.target.value); }} rows={4} className="w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2.5" />
           </label>
         </div>
       </section>
@@ -166,14 +166,14 @@ export default function EstimateBuilder() {
           </div>
           <p className="text-sm font-bold">Crew rate ${wage.rate.toFixed(2)}/MH · {wage.label}</p>
         </div>
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
+        <div className="mt-4">
+          <table className="w-full table-auto text-sm">
             <thead className="text-left text-xs uppercase text-muted-foreground">
               <tr>
                 <th className="p-2">Use</th>
-                <th>Class</th>
-                <th>Hourly wage $/MH</th>
-                <th>Headcount</th>
+                <th className="p-2">Class</th>
+                <th className="p-2">Hourly wage $/MH</th>
+                <th className="p-2">Headcount</th>
               </tr>
             </thead>
             <tbody>
@@ -182,8 +182,8 @@ export default function EstimateBuilder() {
                   <td className="p-2">
                     <input type="checkbox" checked={row.selected} onChange={() => toggleClass(row.id)} aria-label={`Select ${row.label}`} />
                   </td>
-                  <td className="py-2 font-semibold">{row.label}{row.id === "journeyman" ? " (default)" : ""}</td>
-                  <td className="py-2">
+                  <td className="p-2 font-semibold">{row.label}{row.id === "journeyman" ? " (default)" : ""}</td>
+                  <td className="p-2">
                     <input
                       type="number"
                       step="0.01"
@@ -191,10 +191,10 @@ export default function EstimateBuilder() {
                       value={row.wage}
                       aria-label={`${row.label} wage`}
                       onChange={(e) => applyCrew(crew.map((item) => item.id === row.id ? { ...item, wage: e.target.value } : item))}
-                      className="w-28 rounded-md border border-input bg-background px-2 py-1.5"
+                      className="w-full min-w-0 max-w-40 rounded-md border border-input bg-background px-2 py-1.5"
                     />
                   </td>
-                  <td className="py-2">
+                  <td className="p-2">
                     <input
                       type="number"
                       min="0"
@@ -206,7 +206,7 @@ export default function EstimateBuilder() {
                         const headcount = e.target.value;
                         return { ...item, headcount, selected: Number(headcount) > 0 };
                       }))}
-                      className="w-20 rounded-md border border-input bg-background px-2 py-1.5"
+                      className="w-full min-w-0 max-w-28 rounded-md border border-input bg-background px-2 py-1.5"
                     />
                   </td>
                 </tr>
@@ -217,8 +217,8 @@ export default function EstimateBuilder() {
       </section>
 
       <section className="rounded-2xl border border-border bg-card shadow-sm">
-        <div className="flex items-center justify-between border-b border-border p-4">
-          <div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
+          <div className="min-w-0">
             <h2 className="text-lg font-bold">Estimate Lines</h2>
             <p className="text-xs text-muted-foreground">Quantities match the takeoff. Man-hours come from the labor library. Labor rate follows the selected classes unless you edit a line.</p>
           </div>
@@ -226,62 +226,50 @@ export default function EstimateBuilder() {
             <Plus className="h-4 w-4" />Add line
           </button>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1250px] text-sm">
-            <thead className="bg-muted text-left text-xs uppercase text-muted-foreground">
-              <tr>
-                <th className="p-3">Type</th>
-                <th>Category</th>
-                <th>Item / description</th>
-                <th>Qty</th>
-                <th>Unit</th>
-                <th>Material $/unit</th>
-                <th>MH/unit</th>
-                <th>Labor $/hr</th>
-                <th>Hours</th>
-                <th>Material</th>
-                <th>Labor</th>
-                <th>Notes</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((row) => {
-                const qty = Number(row.quantity) || 0;
-                const mat = qty * (Number(row.materialUnitCost) || 0);
-                const hours = qty * (Number(row.laborMhPerUnit) || 0);
-                const lab = hours * (Number(row.laborRate) || 0);
-                return (
-                  <tr key={row.id} className="border-t border-border">
-                    <td className="p-2"><Sel value={row.itemType} vals={ITEM_TYPES} set={(v) => patchLine(row.id, "itemType", v)} /></td>
-                    <td className="p-2"><Cell value={row.category} set={(v) => patchLine(row.id, "category", v)} /></td>
-                    <td className="p-2"><Cell value={row.description} set={(v) => patchLine(row.id, "description", v)} placeholder="Item description" /></td>
-                    <td className="p-2"><Cell type="number" value={row.quantity} set={(v) => patchLine(row.id, "quantity", v)} /></td>
-                    <td className="p-2"><Sel value={row.unit} vals={UNITS} set={(v) => patchLine(row.id, "unit", v)} /></td>
-                    <td className="p-2"><Cell type="number" value={row.materialUnitCost} set={(v) => patchLine(row.id, "materialUnitCost", v)} /></td>
-                    <td className="p-2"><Cell type="number" value={row.laborMhPerUnit} set={(v) => patchLine(row.id, "laborMhPerUnit", v)} /></td>
-                    <td className="p-2"><Cell type="number" value={row.laborRate} set={(v) => patchLine(row.id, "laborRate", v)} /></td>
-                    <td className="p-3 font-semibold">{hours.toFixed(2)}</td>
-                    <td className="p-3 font-semibold">${mat.toFixed(2)}</td>
-                    <td className="p-3 font-semibold">${lab.toFixed(2)}</td>
-                    <td className="p-2"><Cell value={row.notes} set={(v) => patchLine(row.id, "notes", v)} /></td>
-                    <td className="p-2">
-                      <button type="button" onClick={() => setLines((current) => (current.length === 1 ? current : current.filter((item) => item.id !== row.id)))} className="p-2 text-destructive" aria-label="Delete line">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="divide-y divide-border">
+          {lines.map((row) => {
+            const qty = Number(row.quantity) || 0;
+            const mat = qty * (Number(row.materialUnitCost) || 0);
+            const hours = qty * (Number(row.laborMhPerUnit) || 0);
+            const lab = hours * (Number(row.laborRate) || 0);
+            return (
+              <div key={row.id} className="grid grid-cols-1 gap-2 p-3 min-[520px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+                <Field label="Type"><Sel value={row.itemType} vals={ITEM_TYPES} set={(v) => patchLine(row.id, "itemType", v)} /></Field>
+                <Field label="Category"><Cell value={row.category} set={(v) => patchLine(row.id, "category", v)} /></Field>
+                <Field label="Item / description" className="min-[520px]:col-span-2"><Cell value={row.description} set={(v) => patchLine(row.id, "description", v)} placeholder="Item description" /></Field>
+                <Field label="Qty"><Cell type="number" value={row.quantity} set={(v) => patchLine(row.id, "quantity", v)} /></Field>
+                <Field label="Unit"><Sel value={row.unit} vals={UNITS} set={(v) => patchLine(row.id, "unit", v)} /></Field>
+                <Field label="Material $/unit"><Cell type="number" value={row.materialUnitCost} set={(v) => patchLine(row.id, "materialUnitCost", v)} /></Field>
+                <Field label="MH/unit"><Cell type="number" value={row.laborMhPerUnit} set={(v) => patchLine(row.id, "laborMhPerUnit", v)} /></Field>
+                <Field label="Labor $/hr"><Cell type="number" value={row.laborRate} set={(v) => patchLine(row.id, "laborRate", v)} /></Field>
+                <label className="min-w-0">
+                  <span className="mb-1 block text-xs font-bold text-muted-foreground">Hours</span>
+                  <div className="rounded-lg border border-transparent px-3 py-2.5 font-semibold">{hours.toFixed(2)}</div>
+                </label>
+                <label className="min-w-0">
+                  <span className="mb-1 block text-xs font-bold text-muted-foreground">Material</span>
+                  <div className="rounded-lg border border-transparent px-3 py-2.5 font-semibold">${mat.toFixed(2)}</div>
+                </label>
+                <label className="min-w-0">
+                  <span className="mb-1 block text-xs font-bold text-muted-foreground">Labor</span>
+                  <div className="rounded-lg border border-transparent px-3 py-2.5 font-semibold">${lab.toFixed(2)}</div>
+                </label>
+                <Field label="Notes" className="min-[520px]:col-span-2"><Cell value={row.notes} set={(v) => patchLine(row.id, "notes", v)} /></Field>
+                <div className="flex items-end">
+                  <button type="button" onClick={() => setLines((current) => (current.length === 1 ? current : current.filter((item) => item.id !== row.id)))} className="p-2 text-destructive" aria-label="Delete line">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-[1fr_340px]">
-        <div className="rounded-2xl border border-border bg-card p-4">
+      <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,22rem)]">
+        <div className="min-w-0 rounded-2xl border border-border bg-card p-4">
           <h2 className="font-bold">Estimate controls</h2>
-          <div className="mt-3 grid grid-cols-2 gap-3">
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Overhead %" type="number" value={overhead} set={setOverhead} />
             <Field label="Profit %" type="number" value={profit} set={setProfit} />
           </div>
@@ -301,23 +289,23 @@ export default function EstimateBuilder() {
   );
 }
 
-function Field({ label, value, set, type = "text" }) {
+function Field({ label, value, set, type = "text", children, className = "" }) {
   return (
-    <label>
+    <label className={`min-w-0 ${className}`}>
       <span className="mb-1 block text-xs font-bold text-muted-foreground">{label}</span>
-      <input type={type} value={value} onChange={(e) => set(e.target.value)} className="w-full rounded-lg border border-input bg-background px-3 py-2.5" />
+      {children || <input type={type} value={value} onChange={(e) => set(e.target.value)} className="w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2.5" />}
     </label>
   );
 }
 
 function Cell({ value, set, type = "text", placeholder = "" }) {
-  return <input type={type} step={type === "number" ? "0.01" : undefined} value={value} placeholder={placeholder} onChange={(e) => set(e.target.value)} className="w-full min-w-24 rounded-md border border-input bg-background px-2 py-2" />;
+  return <input type={type} step={type === "number" ? "0.01" : undefined} value={value} placeholder={placeholder} onChange={(e) => set(e.target.value)} className="w-full min-w-0 rounded-md border border-input bg-background px-2 py-2" />;
 }
 
 function Sel({ value, vals, set }) {
   const options = vals.includes(value) || !value ? vals : [value, ...vals];
   return (
-    <select value={value} onChange={(e) => set(e.target.value)} className="min-w-28 rounded-md border border-input bg-background px-2 py-2">
+    <select value={value} onChange={(e) => set(e.target.value)} className="w-full min-w-0 rounded-md border border-input bg-background px-2 py-2">
       {options.map((option) => <option key={option}>{option}</option>)}
     </select>
   );

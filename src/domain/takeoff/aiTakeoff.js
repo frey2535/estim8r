@@ -163,7 +163,6 @@ export function buildAiMarks({
   maxHomeruns = DEFAULT_MAX_HOMERUNS,
   conduit,
   color = "#2563eb",
-  thickness = 2,
 }) {
   const anchorIds = new Set(ANCHOR_SYMBOL_IDS[trade] || []);
   const aliases = fixtureAliasesFromSchedules(pages, symbols);
@@ -189,7 +188,6 @@ export function buildAiMarks({
         symbolLabel: symbol.label,
         abbr: symbol.abbr,
         color,
-        markerSize: 1.6,
         anchor: anchorIds.has(symbol.id),
       };
       counts.push(mark);
@@ -215,7 +213,6 @@ export function buildAiMarks({
     conduitSize: conduit?.size || '3/4"',
     conduitMaterial: conduit?.material || "EMT",
     color,
-    thickness,
     homerunCount: group.devices.length,
   }));
   const cap = Math.max(1, Number(maxHomeruns) || DEFAULT_MAX_HOMERUNS);

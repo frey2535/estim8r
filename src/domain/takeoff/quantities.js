@@ -1,5 +1,6 @@
 import { DEFAULT_DROP_FEET } from "./catalog";
 import { areaFromPercent, feetFromPercent, polygonArea, polylineLength } from "./geometry";
+import { DEFAULT_LINE_SIZE, resolvedLineSize } from "./sizes";
 
 const LENGTH_TYPES = new Set(["line", "route", "homerun", "measure"]);
 
@@ -109,7 +110,7 @@ export function isConduitMark(mark) {
   return mark?.tool === "conduit" || (mark?.type === "route" && mark?.tool === "conduit");
 }
 
-export function conduitRuns(marks, calibration, aspect = 1) {
+export function conduitRuns(marks, calibration, aspect = 1, globalLineSize = DEFAULT_LINE_SIZE) {
   return (marks || []).filter(isConduitMark).map((mark, index) => {
     const lf = markLengthFeet(mark, calibration, aspect);
     return {
@@ -120,7 +121,7 @@ export function conduitRuns(marks, calibration, aspect = 1) {
       size: mark.conduitSize || "",
       material: mark.conduitMaterial || "",
       color: mark.color || "#2563eb",
-      thickness: mark.thickness || 2,
+      thickness: resolvedLineSize(mark, globalLineSize),
       lf: lf == null ? 0 : lf,
       calibrated: lf != null,
     };

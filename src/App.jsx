@@ -51,16 +51,18 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <ThemeProvider>
-        <QueryClientProvider client={queryClientInstance}>
-          <Router>
-            <AppRoutes />
-          </Router>
-          <UpdateAvailablePrompt />
-          <Toaster />
-        </QueryClientProvider>
-      </ThemeProvider>
-    </AuthProvider>
+    <div className="h-full min-h-dvh">
+      <AuthProvider>
+        <ThemeProvider>
+          <QueryClientProvider client={queryClientInstance}>
+            <Router>
+              <AppRoutes />
+            </Router>
+            <UpdateAvailablePrompt />
+            <Toaster />
+          </QueryClientProvider>
+        </ThemeProvider>
+      </AuthProvider>
+    </div>
   );
 }

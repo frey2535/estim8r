@@ -20,9 +20,9 @@ export default function AppLayout() {
   const takeoff = location.pathname.startsWith("/takeoff");
 
   return (
-    <div className={cn("min-h-dvh bg-background flex flex-col", takeoff && "h-dvh overflow-hidden")}>
-      <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-xl shadow-sm" style={{ paddingTop: "env(safe-area-inset-top)" }}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="flex h-dvh min-h-dvh w-full flex-col overflow-hidden bg-background">
+      <header className="sticky top-0 z-50 shrink-0 border-b border-border/60 bg-background/80 backdrop-blur-xl shadow-sm" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+        <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14">
             <Link to="/" className="flex items-center gap-2.5 min-w-0">
               <div className="grid w-8 h-8 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-md shadow-blue-950/20 dark:bg-orange-500">
@@ -71,10 +71,10 @@ export default function AppLayout() {
       </header>
 
       <main className={cn(
-        "flex-1 w-full min-h-0",
+        "flex min-h-0 w-full flex-1 flex-col",
         takeoff
-          ? "flex max-w-none flex-col overflow-hidden px-0 py-0 pb-16 lg:pb-0"
-          : "max-w-7xl mx-auto px-3 py-4 pb-24 sm:px-6 lg:px-8 lg:pb-8"
+          ? "overflow-hidden px-0 py-0 pb-16 lg:pb-0"
+          : "overflow-auto px-4 py-4 pb-24 sm:px-6 lg:px-8 lg:pb-8"
       )}>
         <Outlet />
       </main>

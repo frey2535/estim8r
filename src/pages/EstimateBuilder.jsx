@@ -4,6 +4,15 @@ import { Plus, Trash2 } from "lucide-react";
 import { compositeWage, defaultCrew } from "@/domain/labor/employeeClasses";
 import { readActiveEstimate, writeEstimate, writeWageBook } from "@/domain/estimate/estimateStore";
 import SaveProjectDocuments from "@/components/estimate/SaveProjectDocuments";
+import { listCompanyLaborUnits, listCustomLabor, listLaborLibrary, listNamedCrews, saveLaborRates, saveNamedCrew } from "@/api/laborRepository";
+import { defaultProductivityFactors, setFactorMultiplier } from "@/domain/labor/productivity";
+import { applySelectionToLine, buildLaborSourceOptions, makeLaborSelection } from "@/domain/labor/selection";
+import { findCustomLabor } from "@/domain/labor/customLabor";
+import { crewFromNamed, namedFromCrew } from "@/domain/labor/crews";
+import { defaultLaborRates } from "@/domain/labor/rates";
+import LaborSourceSelector from "@/components/labor/LaborSourceSelector";
+import ProductivityFactorEditor from "@/components/labor/ProductivityFactorEditor";
+import NamedCrewPicker from "@/components/labor/NamedCrewPicker";
 
 const ITEM_TYPES = ["Material", "Labor", "Equipment", "Subcontract", "Allowance", "Fixture", "Device", "Conduit", "Wire", "Gear", "Other"];
 const UNITS = ["EA", "LF", "SF", "FT", "100 LF", "1000 LF", "HR", "DAY", "LOT"];
@@ -49,6 +58,13 @@ export default function EstimateBuilder() {
   const [profit, setProfit] = useState(10);
   const [meta, setMeta] = useState({ fileName: "", fileSize: 0, scopeEdited: false });
   const [ready, setReady] = useState(false);
+  const [factors, setFactors] = useState(() => defaultProductivityFactors());
+  const [namedCrews, setNamedCrews] = useState([]);
+  const [namedCrewId, setNamedCrewId] = useState("");
+  const [library, setLibrary] = useState([]);
+  const [companyUnits, setCompanyUnits] = useState([]);
+  const [customUnits, setCustomUnits] = useState([]);
+  const [openSources, setOpenSources] = useState("");
   const wage = compositeWage(crew);
 
   useEffect(() => {
@@ -60,9 +76,15 @@ export default function EstimateBuilder() {
       setLines(stored.lines?.length ? stored.lines : [blankLine(compositeWage(nextCrew).rate)]);
       setOverhead(stored.overhead ?? 10);
       setProfit(stored.profit ?? 10);
+      setFactors(stored.factors?.length ? stored.factors : defaultProductivityFactors());
+      setNamedCrewId(stored.namedCrewId || "");
       setMeta({ fileName: stored.fileName || "", fileSize: stored.fileSize || 0, scopeEdited: Boolean(stored.scopeEdited) });
     }
     setReady(true);
+    listLaborLibrary({ limit: 2500 }).then(setLibrary).catch(() => setLibrary([]));
+    listCompanyLaborUnits().then(setCompanyUnits).catch(() => setCompanyUnits([]));
+    listCustomLabor().then(setCustomUnits).catch(() => setCustomUnits([]));
+    listNamedCrews().then(setNamedCrews).catch(() => setNamedCrews([]));
   }, []);
 
   useEffect(() => {
@@ -75,13 +97,15 @@ export default function EstimateBuilder() {
       fileSize: meta.fileSize,
       header,
       crew,
+      factors,
+      namedCrewId,
       overhead: Number(overhead) || 0,
       profit: Number(profit) || 0,
       lines,
       separateFromTakeoff: true,
       scopeEdited: meta.scopeEdited,
     });
-  }, [ready, header, crew, lines, overhead, profit, meta]);
+  }, [ready, header, crew, lines, overhead, profit, meta, factors, namedCrewId]);
 
   const totals = useMemo(() => lines.reduce((acc, line) => {
     const qty = Number(line.quantity) || 0;
@@ -105,6 +129,7 @@ export default function EstimateBuilder() {
     const rate = compositeWage(next).rate;
     setCrew(next);
     setLines((current) => current.map((line) => (line.laborRateEdited ? line : { ...line, laborRate: rate })));
+    saveLaborRates(defaultLaborRates(Object.fromEntries(next.map((row) => [row.id, row.wage]))));
   }
 
   function toggleClass(id) {
@@ -120,10 +145,84 @@ export default function EstimateBuilder() {
       if (line.id !== id) return line;
       const next = { ...line, [key]: value };
       if (key === "quantity" || key === "unit") next.quantityEdited = true;
-      if (key === "laborMhPerUnit") next.laborMhEdited = true;
+      if (key === "laborMhPerUnit") {
+        next.laborMhEdited = true;
+        if (next.laborSelection) {
+          next.laborSelection = {
+            ...next.laborSelection,
+            estimatorOverrideMhPerUnit: Number(value) || 0,
+            overrideReason: next.laborSelection.overrideReason || "Estimator override",
+            effectiveMhPerUnit: Number(value) || 0,
+          };
+        }
+      }
       if (key === "laborRate") next.laborRateEdited = true;
       return next;
     }));
+  }
+
+  function lineOptions(line) {
+    const item = library.find((row) => row.id === line.laborItemId)
+      || library.find((row) => row.item_name === line.description && (!line.unit || row.unit === line.unit));
+    const company = companyUnits.find((row) => (row.labor_item_id || row.laborItemId) === (item?.id || line.laborItemId));
+    const custom = findCustomLabor(customUnits, { laborItemId: item?.id || line.laborItemId, itemName: line.description, unit: line.unit });
+    return buildLaborSourceOptions({ laborItem: item, companyUnit: company, customUnit: custom });
+  }
+
+  function selectSource(line, option) {
+    const selection = makeLaborSelection({
+      laborItemId: line.laborItemId || "",
+      option,
+      factors,
+      acknowledgedUnverified: line.laborSelection?.acknowledgedUnverified || false,
+    });
+    setLines((current) => current.map((row) => (
+      row.id === line.id ? applySelectionToLine(row, selection, { rate: wage.rate }) : row
+    )));
+  }
+
+  function acknowledgeLine(line, acknowledged) {
+    if (!line.laborSelection) return;
+    setLines((current) => current.map((row) => (
+      row.id === line.id ? { ...row, laborSelection: { ...row.laborSelection, acknowledgedUnverified: acknowledged } } : row
+    )));
+  }
+
+  function changeFactor(code, multiplier) {
+    const next = setFactorMultiplier(factors, code, multiplier);
+    setFactors(next);
+    setLines((current) => current.map((line) => {
+      if (!line.laborSelection || line.laborMhEdited) return line;
+      const selection = { ...line.laborSelection, factors: next };
+      return applySelectionToLine(line, makeLaborSelection({
+        laborItemId: selection.laborItemId,
+        option: {
+          sourceType: selection.selectedSource,
+          mh: selection.baseMhPerUnit,
+          sourceRecordId: selection.sourceRecordId,
+          sourceName: selection.sourceName,
+          verificationStatus: selection.verificationStatus,
+          productionAllowed: false,
+          warning: selection.notes,
+        },
+        factors: next,
+        acknowledgedUnverified: selection.acknowledgedUnverified,
+      }), { rate: wage.rate });
+    }));
+  }
+
+  async function saveCrew(name) {
+    const named = namedFromCrew(name, crew, { id: namedCrewId || undefined });
+    const saved = await saveNamedCrew(named);
+    setNamedCrews((current) => [saved, ...current.filter((row) => row.id !== saved.id)]);
+    setNamedCrewId(saved.id);
+  }
+
+  function loadCrew(id) {
+    setNamedCrewId(id);
+    if (!id) return;
+    const named = namedCrews.find((row) => row.id === id);
+    if (named) applyCrew(crewFromNamed(named));
   }
 
   return (
@@ -143,6 +242,8 @@ export default function EstimateBuilder() {
             fileSize: meta.fileSize,
             header,
             crew,
+            factors,
+            namedCrewId,
             overhead: Number(overhead) || 0,
             profit: Number(profit) || 0,
             lines,
@@ -180,6 +281,9 @@ export default function EstimateBuilder() {
             <p className="text-xs text-muted-foreground">Select one or more classes. Default is Journeyman at the Journeyman wage. Wages are dollars per man-hour.</p>
           </div>
           <p className="text-sm font-bold">Crew rate ${wage.rate.toFixed(2)}/MH · {wage.label}</p>
+        </div>
+        <div className="mb-4">
+          <NamedCrewPicker crews={namedCrews} selectedId={namedCrewId} onLoad={loadCrew} onSave={saveCrew} />
         </div>
         <div className="mt-4">
           <table className="w-full table-auto text-sm">
@@ -231,6 +335,10 @@ export default function EstimateBuilder() {
         </div>
       </section>
 
+      <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <ProductivityFactorEditor factors={factors} onChange={changeFactor} />
+      </section>
+
       <section className="rounded-2xl border border-border bg-card shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
           <div className="min-w-0">
@@ -270,11 +378,25 @@ export default function EstimateBuilder() {
                   <div className="rounded-lg border border-transparent px-3 py-2.5 font-semibold">${lab.toFixed(2)}</div>
                 </label>
                 <Field label="Notes" className="min-[520px]:col-span-2"><Cell value={row.notes} set={(v) => patchLine(row.id, "notes", v)} /></Field>
-                <div className="flex items-end">
+                <div className="flex items-end gap-2">
+                  <button type="button" onClick={() => setOpenSources((current) => current === row.id ? "" : row.id)} className="rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-muted">
+                    {openSources === row.id ? "Hide sources" : "Labor source"}
+                  </button>
                   <button type="button" onClick={() => setLines((current) => (current.length === 1 ? current : current.filter((item) => item.id !== row.id)))} className="p-2 text-destructive" aria-label="Delete line">
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
+                {openSources === row.id ? (
+                  <div className="min-[520px]:col-span-2 md:col-span-3 xl:col-span-4 2xl:col-span-6">
+                    <LaborSourceSelector
+                      options={lineOptions(row)}
+                      selectedSource={row.laborSelection?.selectedSource}
+                      acknowledged={row.laborSelection?.acknowledgedUnverified}
+                      onSelect={(option) => selectSource(row, option)}
+                      onAcknowledge={(value) => acknowledgeLine(row, value)}
+                    />
+                  </div>
+                ) : null}
               </div>
             );
           })}

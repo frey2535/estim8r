@@ -7,6 +7,7 @@ export const LaborSourceType = z.enum([
   'custom',
   'manufacturer',
   'government',
+  'experimental',
 ]);
 
 export const LaborVerificationStatus = z.enum([
@@ -113,5 +114,10 @@ export const EstimateLaborSelectionSchema = z.object({
   estimatorOverrideMhPerUnit: z.number().nonnegative().nullable().default(null),
   sourceLaborUnitId: z.string().optional().default(''),
   sourceCompanyLaborUnitId: z.string().optional().default(''),
+  sourceRecordId: z.string().optional().default(''),
   overrideReason: z.string().optional().default(''),
+  sourceName: z.string().optional().default(''),
+  verificationStatus: LaborVerificationStatus.optional().default('unverified'),
+  acknowledgedUnverified: z.boolean().optional().default(false),
+  notes: z.string().optional().default(''),
 });

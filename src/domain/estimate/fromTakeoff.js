@@ -1,5 +1,7 @@
 import { assignLaborHours } from "../labor/libraryDocument.js";
 import { compositeWage, defaultCrew, journeymanWage } from "../labor/employeeClasses.js";
+import { defaultProductivityFactors } from "../labor/productivity.js";
+import { makeLaborSelection } from "../labor/selection.js";
 
 export function estimateStorageKey(fileName, fileSize) {
   return `estim8r.estimate.v1:${fileName || "drawing"}:${fileSize || 0}`;
@@ -21,6 +23,22 @@ function itemTypeFor(category, unit) {
 
 function makeLine({ takeoffKey, source, category, description, quantity, unit, rate }) {
   const labor = assignLaborHours({ category, symbol: description, unit });
+  const selection = labor.mhPerUnit
+    ? makeLaborSelection({
+        laborItemId: labor.laborItemId,
+        option: {
+          sourceType: labor.sourceType || "experimental",
+          mh: labor.mhPerUnit,
+          sourceRecordId: labor.laborUnitId || "",
+          sourceName: labor.sourceName,
+          verificationStatus: labor.verificationStatus || "unverified",
+          productionAllowed: false,
+          warning: labor.note,
+        },
+        factors: defaultProductivityFactors(),
+        acknowledgedUnverified: false,
+      })
+    : null;
   return {
     id: takeoffKey,
     takeoffKey,
@@ -35,6 +53,7 @@ function makeLine({ takeoffKey, source, category, description, quantity, unit, r
     laborRate: rate,
     laborItemId: labor.laborItemId,
     laborSource: labor.sourceName,
+    laborSelection: selection,
     notes: labor.note,
     quantityEdited: false,
     laborRateEdited: false,
@@ -116,6 +135,8 @@ export function mergeEstimate(existing, incomingLines) {
       unit: prior.quantityEdited ? prior.unit : incoming.unit,
       laborMhPerUnit: prior.laborMhEdited ? prior.laborMhPerUnit : incoming.laborMhPerUnit,
       laborSource: prior.laborSource || incoming.laborSource,
+      laborItemId: prior.laborItemId || incoming.laborItemId,
+      laborSelection: prior.laborSelection || undefined,
       notes: prior.notes || incoming.notes,
     });
   }
@@ -153,6 +174,8 @@ export function buildEstimateDraft({ fileName, fileSize, drawingDocs, rollup, pa
       scopeNotes: scopeFromDrawing({ fileName, drawingDocs, pageCount }),
     },
     crew,
+    factors: defaultProductivityFactors(),
+    namedCrewId: null,
     overhead: 10,
     profit: 10,
     lines: [...takeoffLines, ...drawingLines],

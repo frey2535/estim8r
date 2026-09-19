@@ -15,8 +15,10 @@ function assert(cond, message) {
 
 assert(AUDITED_LABOR_ITEMS.length === 1921, `expected 1921 workbook rows, got ${AUDITED_LABOR_ITEMS.length}`);
 assert(listBundledLaborLibrary().length === 1921, "library lists every workbook row");
-assert(AUDITED_LABOR_ITEMS.filter((row) => row.labor_units[0].production_allowed).length === 5, "five production-ready rows");
-assert(AUDITED_LABOR_ITEMS.filter((row) => row.labor_units[0].verification_status === "unverified").length === 1916, "1,916 model-baseline rows");
+assert(AUDITED_LABOR_ITEMS.every((row) => row.labor_units[0].source_type === "experimental"), "every imported unit is experimental");
+assert(AUDITED_LABOR_ITEMS.every((row) => row.labor_units[0].production_allowed === false), "no imported unit is production-allowed");
+assert(AUDITED_LABOR_ITEMS.every((row) => row.labor_units[0].verification_status === "unverified"), "all 1,921 imported rows are unverified");
+assert(!AUDITED_LABOR_ITEMS.some((row) => /neca/i.test(row.labor_units[0].source_name)), "NECA is not populated as a labor source");
 
 const listed = listBundledLaborLibrary({ search: "EL-00051" });
 assert(listed.length === 1 && listed[0].id === "EL-00051", "library search finds the connector by id");
@@ -46,8 +48,9 @@ assert(!textHasSize("emt 1/2", "1 in"), "1 in does not match 1/2");
 assert(!textHasSize("emt 1-1/4", "1 in"), "1 in does not match 1-1/4");
 
 const assigned = assignLaborHours({ category: "Raceway", symbol: 'EMT 3/4"', unit: "LF" });
-assert(assigned.laborItemId === "EL-00050", "assignLaborHours prefers verified workbook labor");
-assert(assigned.note.includes("Verified production labor"), assigned.note);
+assert(assigned.laborItemId === "EL-00050", "assignLaborHours still matches EL-00050");
+assert(assigned.sourceType === "experimental", "assigned source is experimental");
+assert(assigned.note.includes("Experimental / unverified"), assigned.note);
 
 const troffer = assignLaborHours({ category: "Lighting", symbol: "2x4 troffer", unit: "EA" });
 assert(troffer.laborItemId === "EL-01517" && troffer.mhPerUnit === 0.75, `troffer uses workbook ${troffer.laborItemId} ${troffer.mhPerUnit}`);

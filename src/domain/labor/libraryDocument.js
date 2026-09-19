@@ -98,11 +98,13 @@ export function assignLaborHours({ category, symbol, unit }) {
     return {
       laborItemId: "",
       mhPerUnit: 0,
+      sourceType: "custom",
       sourceName: LABOR_LIBRARY_DOCUMENT.name,
+      verificationStatus: "unverified",
+      productionAllowed: false,
       note: "No labor-library match. Enter man-hours.",
     };
   }
-  const per = chosen.per || 1;
   const displayUnit = unit || (chosen.unit === "100 LF" ? "LF" : "EA");
   const mhPerUnit = displayUnit === "LF" && chosen.unit === "100 LF"
     ? chosen.mh / 100
@@ -111,7 +113,10 @@ export function assignLaborHours({ category, symbol, unit }) {
   return {
     laborItemId: chosen.id,
     mhPerUnit: Math.round(mhPerUnit * 10000) / 10000,
+    sourceType: "experimental",
     sourceName: `${LABOR_LIBRARY_DOCUMENT.name} (${LABOR_LIBRARY_DOCUMENT.edition})`,
-    note: `${basis}, normal. Baseline library — not a verified production rate.`,
+    verificationStatus: "unverified",
+    productionAllowed: false,
+    note: `${basis}, normal. Experimental baseline — not a verified production rate.`,
   };
 }

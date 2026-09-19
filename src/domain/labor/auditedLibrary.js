@@ -1,12 +1,13 @@
-import { AUDITED_LABOR_ITEMS } from "./auditedLibraryData.js";
+import { AUDITED_LABOR_ITEMS as RAW_AUDITED_LABOR_ITEMS } from "./auditedLibraryData.js";
+import { asExperimentalLaborItem, EXPERIMENTAL_LABOR_SOURCE } from "./sources.js";
 
-export { AUDITED_LABOR_ITEMS };
+export const AUDITED_LABOR_ITEMS = RAW_AUDITED_LABOR_ITEMS.map(asExperimentalLaborItem);
 
 export const AUDITED_LABOR_SOURCE = {
   workbook: "Estim8r_Source_Audited_Electrical_Labor_Database.xlsx",
   sheet: "Labor Database",
-  name: "Estim8r electrical labor library",
-  edition: "source-audited",
+  name: EXPERIMENTAL_LABOR_SOURCE.name,
+  edition: EXPERIMENTAL_LABOR_SOURCE.edition,
 };
 
 const STOP_WORDS = new Set(["install", "terminate", "and", "the", "a", "an", "of", "for", "with", "to", "per", "from"]);
@@ -94,6 +95,30 @@ export function listBundledLaborCategories() {
   return [...new Set(AUDITED_LABOR_ITEMS.filter((row) => row.active).map((row) => row.category))].sort();
 }
 
+export function listBundledLaborTaxonomy() {
+  const tree = new Map();
+  for (const row of AUDITED_LABOR_ITEMS) {
+    if (!row.active) continue;
+    if (!tree.has(row.category)) tree.set(row.category, new Set());
+    if (row.subcategory) tree.get(row.category).add(row.subcategory);
+  }
+  return [...tree.entries()]
+    .map(([category, subs]) => ({ category, subcategories: [...subs].sort() }))
+    .sort((a, b) => a.category.localeCompare(b.category));
+}
+
+export function verificationSummary(rows = AUDITED_LABOR_ITEMS) {
+  const units = rows.flatMap((row) => row.labor_units || []);
+  return {
+    items: rows.length,
+    units: units.length,
+    experimental: units.filter((unit) => unit.source_type === "experimental").length,
+    unverified: units.filter((unit) => unit.verification_status === "unverified").length,
+    verified: units.filter((unit) => unit.verification_status === "verified").length,
+    productionAllowed: units.filter((unit) => unit.production_allowed).length,
+  };
+}
+
 function primaryUnit(row) {
   return (row.labor_units || []).find((unit) => unit.normal_mh != null) || row.labor_units?.[0] || null;
 }
@@ -118,8 +143,6 @@ function scoreLibraryItem(row, text, category, unit) {
   if (material && text.includes(material)) score += 10;
   if (row.size && textHasSize(text, row.size)) score += 12;
   if (categoriesCompatible(row.category, category)) score += 3;
-  const laborUnit = primaryUnit(row);
-  if (laborUnit?.production_allowed && laborUnit.verification_status === "verified") score += 5;
   return score > 0 ? score : 0;
 }
 
@@ -146,13 +169,16 @@ export function matchAuditedLaborHours({ category, symbol, unit }) {
 
   const mh = mhForDisplayUnit(best.row.unit, unit, best.laborUnit.normal_mh);
   const basis = best.row.unit === "LF" ? `${best.laborUnit.normal_mh} MH / LF` : `${best.laborUnit.normal_mh} MH each`;
-  const verified = best.laborUnit.verification_status === "verified" && best.laborUnit.production_allowed;
   return {
     laborItemId: best.row.id,
+    laborUnitId: best.laborUnit.id,
     mhPerUnit: Math.round(mh * 10000) / 10000,
-    sourceName: `${best.laborUnit.source_name} (${best.laborUnit.source_year || AUDITED_LABOR_SOURCE.edition})`,
-    note: verified
-      ? `${basis}, normal. Verified production labor. ${best.laborUnit.notes}`
-      : `${basis}, normal. ${best.laborUnit.source_name} — not a verified production rate.`,
+    sourceType: "experimental",
+    sourceName: EXPERIMENTAL_LABOR_SOURCE.name,
+    verificationStatus: "unverified",
+    productionAllowed: false,
+    note: `${basis}, normal. ${EXPERIMENTAL_LABOR_SOURCE.warning}`,
+    item: best.row,
+    unit: best.laborUnit,
   };
 }

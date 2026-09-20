@@ -4,7 +4,7 @@ import { LogIn, Mail, Lock, Loader2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { isProductionAuthMisconfigured } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
-import { PLATFORM_OWNER_EMAIL } from "@/lib/platformIdentity";
+import { PLATFORM_OWNER_EMAIL, isPlatformStaff } from "@/lib/platformIdentity";
 import { describeAuthError, readAuthCallbackError } from "@/lib/authRedirect";
 import AuthLayout from "@/components/AuthLayout";
 import GoogleSignInButton from "@/components/platform/GoogleSignInButton";
@@ -13,14 +13,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function Login({ platformOwner = false }) {
-  const { isAuthenticated, checkAppState } = useAuth();
+  const { isAuthenticated, user, checkAppState } = useAuth();
   const [email, setEmail] = useState(platformOwner ? PLATFORM_OWNER_EMAIL : "");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(() => (
     typeof window === "undefined" ? "" : readAuthCallbackError(window.location.search, window.location.hash)
   ));
   const [busy, setBusy] = useState(false);
-  if (isAuthenticated) return <Navigate to="/" replace />;
+  if (isAuthenticated) return <Navigate to={isPlatformStaff(user) ? "/admin" : "/"} replace />;
 
   async function submit(event) {
     event.preventDefault();

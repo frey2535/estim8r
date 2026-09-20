@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { BookOpen, Calculator, FileText, FolderOpen, Image as ImageIcon, ShieldCheck, StickyNote, TrendingUp } from "lucide-react";
+import { BookOpen, Calculator, FileText, FolderOpen, Image as ImageIcon, Shield, ShieldCheck, StickyNote, TrendingUp } from "lucide-react";
+import { useAuth } from "@/lib/AuthContext";
+import { canManageEstim8rAccess } from "@/lib/ownerAccessRules";
 import {
   buildMarkupPages,
   downloadBlob,
@@ -65,6 +67,7 @@ function FolderDocs({ folder }) {
 }
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const [folders, setFolders] = useState([]);
 
   useEffect(() => {
@@ -85,6 +88,15 @@ export default function Dashboard() {
         <h1 className="mt-2 text-3xl sm:text-4xl font-black text-foreground">Estim8r Command Center</h1>
         <p className="mt-2 max-w-3xl text-muted-foreground">Estimate electrical work with traceable labor sources, company production history and estimator-controlled adjustments.</p>
       </div>
+      {canManageEstim8rAccess(user) && (
+        <Link to="/admin" className="mb-8 flex items-start gap-3 rounded-2xl border border-blue-500/40 bg-blue-500/5 p-6 shadow-sm dark:border-orange-500/40 dark:bg-orange-500/5">
+          <Shield className="mt-0.5 h-6 w-6 text-blue-600 dark:text-orange-500" />
+          <div>
+            <h2 className="text-lg font-bold text-foreground">Platform owner access</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Open Access to grant, invite, or revoke who can use Estim8r.</p>
+          </div>
+        </Link>
+      )}
       <div className="mb-8 grid gap-4 md:grid-cols-3">
         {cards.map(([title, text, to, Icon]) => (
           <Link to={to} key={title} className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-all hover:border-blue-500/60 hover:shadow-md dark:hover:border-orange-500/60">

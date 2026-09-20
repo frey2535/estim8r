@@ -1,8 +1,9 @@
 import React from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { BookOpen, Calculator, FolderOpen, LogIn, LogOut, Moon, ScanSearch, Settings, Sun, TrendingUp, UserCircle } from "lucide-react";
+import { BookOpen, Calculator, FolderOpen, LogIn, LogOut, Moon, ScanSearch, Settings, Shield, Sun, TrendingUp, UserCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/AuthContext";
+import { canManageEstim8rAccess } from "@/lib/ownerAccessRules";
 import { useTheme } from "@/lib/ThemeContext";
 import AppLogo from "@/components/branding/AppLogo";
 import AppSwitcher from "@/components/platform/AppSwitcher";
@@ -19,7 +20,8 @@ const TABS = [
 
 export default function AppLayout() {
   const location = useLocation();
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, user, logout } = useAuth();
+  const showAccessAdmin = isAuthenticated && canManageEstim8rAccess(user);
   const { theme, toggleTheme } = useTheme();
   const active = (tab) => tab.path === "/" ? location.pathname === "/" : location.pathname.startsWith(tab.path);
   const takeoff = location.pathname.startsWith("/takeoff");
@@ -65,6 +67,11 @@ export default function AppLayout() {
               </button>
               {isAuthenticated ? (
                 <>
+                  {showAccessAdmin && (
+                    <Button asChild size="sm" className={cn("ml-1 h-8", location.pathname.startsWith("/admin") && "ring-2 ring-blue-600 dark:ring-orange-500")}>
+                      <Link to="/admin"><Shield className="h-3.5 w-3.5" />Access</Link>
+                    </Button>
+                  )}
                   <Link to="/settings" className="hidden sm:flex ml-1 w-8 h-8 rounded-full bg-muted hover:bg-muted/80 items-center justify-center transition-colors" aria-label="Settings">
                     <Settings className="w-4 h-4 text-foreground" />
                   </Link>

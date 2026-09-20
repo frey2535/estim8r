@@ -1,7 +1,8 @@
 import React, { useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import { platformRoleLabel } from "@/lib/platformIdentity";
+import { canManageEstim8rAccess } from "@/lib/ownerAccessRules";
 import { readLinkedBuildrCompanyId } from "@/lib/buildrCompany";
 import CompanyBrandingForm from "@/components/estimate/CompanyBrandingForm";
 import BuildrCompanyForm from "@/components/platform/BuildrCompanyForm";
@@ -30,7 +31,14 @@ export default function Settings() {
           <dt className="text-muted-foreground">Organization role</dt><dd>{user?.org_role}</dd>
           <dt className="text-muted-foreground">Buildr company ID</dt><dd className="font-mono text-xs">{readLinkedBuildrCompanyId(user) || "—"}</dd>
         </dl>
-        <Button type="button" variant="outline" className="mt-5" onClick={() => void logout()}>Sign out</Button>
+        <div className="mt-5 flex flex-wrap gap-2">
+          {canManageEstim8rAccess(user) && (
+            <Button asChild>
+              <Link to="/admin">Estim8r access</Link>
+            </Button>
+          )}
+          <Button type="button" variant="outline" onClick={() => void logout()}>Sign out</Button>
+        </div>
       </div>
       <BuildrCompanyForm />
       <div id="estimate-pdf" className="mt-7 max-w-4xl scroll-mt-20">

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/lib/AuthContext";
 import { fetchBuildrAccountStatus, isBuildrConfigured, saveBuildrProjectDocuments } from "@/api/buildrBridge";
+import { readLinkedBuildrCompanyId } from "@/lib/buildrCompany";
 import { readEstimate, writeEstimate } from "@/domain/estimate/estimateStore";
 import {
   buildMarkupPages,
@@ -87,6 +88,7 @@ export default function SaveProjectDocuments({ estimate }) {
     const payload = { ...current, ...estimate, id: current.id || estimate?.id };
     const result = await saveBuildrProjectDocuments({
       email: user?.email,
+      companyId: readLinkedBuildrCompanyId(user),
       projectName,
       projectAddress,
       createProject,
@@ -119,7 +121,7 @@ export default function SaveProjectDocuments({ estimate }) {
       }
       const current = storedEstimate(estimate);
       const existingProjectId = current.buildrSync?.projectId || estimate?.buildrSync?.projectId || null;
-      const account = await fetchBuildrAccountStatus(user?.email);
+      const account = await fetchBuildrAccountStatus(user?.email, readLinkedBuildrCompanyId(user));
       const matchingProject = matchProjectByName(account.projects, projectName);
       const decision = decideSaveDestination({
         hasBuildrAccount: account.hasAccount,
@@ -164,7 +166,7 @@ export default function SaveProjectDocuments({ estimate }) {
     if (!canSaveProjectDocuments({ fileName, projectName })) return undefined;
     const timer = window.setTimeout(() => { void runSave(false); }, 800);
     return () => window.clearTimeout(timer);
-  }, [fingerprint, user?.email]);
+  }, [fingerprint, user?.email, user?.buildr_company_id]);
 
   async function acceptCreate() {
     setPromptOpen(false);

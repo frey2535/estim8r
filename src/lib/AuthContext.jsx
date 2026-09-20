@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { base44 } from "@/api/base44Client";
 import { supabase } from "@/api/supabaseClient";
 import { entitlementGrantsAccess, getProductEntitlement } from "@/api/entitlementRepository";
+import { hasPlatformAccess } from "@/lib/platformIdentity";
 
 const AuthContext = createContext();
 const AUTH_STARTUP_TIMEOUT_MS = 10000;
@@ -38,13 +39,13 @@ export const AuthProvider = ({ children }) => {
       try {
         const entitlement = await getProductEntitlement();
         setProductEntitlement(entitlement);
-        setHasProductAccess(entitlementGrantsAccess(entitlement) || Boolean(current?.is_platform_admin));
+        setHasProductAccess(entitlementGrantsAccess(entitlement) || hasPlatformAccess(current));
       } catch (entitlementError) {
         // During rollout, missing entitlement RPC must fail closed for normal users.
         // Silent refresh keeps the current entitlement so a blip does not remount takeoff.
         if (!silent) {
           setProductEntitlement(null);
-          setHasProductAccess(Boolean(current?.is_platform_admin));
+          setHasProductAccess(hasPlatformAccess(current));
         }
         console.error("Estim8r entitlement check failed", entitlementError);
       } finally {

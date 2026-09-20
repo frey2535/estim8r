@@ -29,7 +29,9 @@ VITE_BUILDR_URL=http://localhost:5173
 VITE_BUILDR_API_URL=http://localhost:3001
 ```
 
-Use the same email on both apps.
+Buildr sync sends the signed-in email and, when linked, a Buildr company ID. Set the company ID in **Settings → Buildr company**. If no company ID is linked, Buildr still looks up the account by login email.
+
+Platform owner sign-in is **Login → Platform owner sign in** (`/login/owner`) as `currentflowconsultingllc@gmail.com`. `marcus.a.frey@gmail.com` is a backup admin on the regular login page, not the platform owner.
 
 When an estimate is created from uploaded drawings, blank header fields are filled from the title block / cover sheet (and from markup JSON when those fields are present). Missing values stay blank — Estim8r does not invent a contact, phone, or email.
 
@@ -69,6 +71,9 @@ node src/domain/estimate/fromDrawings.test.js
 node src/domain/estimate/fromTakeoff.test.js
 node src/domain/estimate/branding.test.js
 node src/domain/estimate/estimatePdf.test.js
+node src/domain/estimate/projectDocuments.test.js
+node src/lib/platformIdentity.test.js
+node src/lib/buildrCompany.test.js
 node src/domain/takeoff/aiTakeoff.test.js
 node src/domain/takeoff/sizes.test.js
 ```

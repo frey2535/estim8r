@@ -1,16 +1,19 @@
 import React, { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
+import { platformRoleLabel } from "@/lib/platformIdentity";
+import { readLinkedBuildrCompanyId } from "@/lib/buildrCompany";
 import CompanyBrandingForm from "@/components/estimate/CompanyBrandingForm";
+import BuildrCompanyForm from "@/components/platform/BuildrCompanyForm";
 
 export default function Settings() {
   const { user } = useAuth();
   const location = useLocation();
+  const platformRole = platformRoleLabel(user);
 
   useEffect(() => {
-    if (location.hash === "#estimate-pdf") {
-      document.getElementById("estimate-pdf")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    const id = location.hash === "#buildr-company" ? "buildr-company" : location.hash === "#estimate-pdf" ? "estimate-pdf" : "";
+    if (id) document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [location.hash]);
 
   return (
@@ -22,10 +25,12 @@ export default function Settings() {
         <dl className="mt-4 grid grid-cols-2 gap-4 text-sm">
           <dt className="text-muted-foreground">Email</dt><dd>{user?.email}</dd>
           <dt className="text-muted-foreground">Organization ID</dt><dd className="font-mono text-xs">{user?.org_id || "—"}</dd>
-          <dt className="text-muted-foreground">Role</dt><dd>{user?.role}</dd>
+          <dt className="text-muted-foreground">Role</dt><dd>{platformRole || user?.role}</dd>
           <dt className="text-muted-foreground">Organization role</dt><dd>{user?.org_role}</dd>
+          <dt className="text-muted-foreground">Buildr company ID</dt><dd className="font-mono text-xs">{readLinkedBuildrCompanyId(user) || "—"}</dd>
         </dl>
       </div>
+      <BuildrCompanyForm />
       <div id="estimate-pdf" className="mt-7 max-w-4xl scroll-mt-20">
         <CompanyBrandingForm showEstimateLink />
       </div>

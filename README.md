@@ -54,6 +54,8 @@ When drawings have been uploaded and an estimate exists:
 
 Later edits to a synced estimate update the same Buildr Estimate-tab documents. The link is the Estim8r estimate id plus the stored Buildr project and invoice ids.
 
+**New Estimate** (`/estimates/new`) always opens a blank template (empty header and a ready-to-fill line). It does not reopen the last job. Opening a saved project or leaving Takeoff passes `file` and `size` so that estimate still loads.
+
 ## Estimate presentation
 
 Employee class and wage, productivity factors, overhead %, and profit % live on the **Labor & markup** tab in Estimate Builder. The Estimate tab can turn on an **itemized estimate** (pick which lines are included, with check-all) and choose which customer totals appear: Material Total, Labor Total, Overhead, Profit, and Total. The branded PDF follows those choices. Wages, crew, and productivity factors stay off the customer PDF.
@@ -82,6 +84,7 @@ node src/domain/labor/auditedLibrary.test.js
 node src/domain/labor/architecture.test.js
 node src/domain/estimate/fromDrawings.test.js
 node src/domain/estimate/fromTakeoff.test.js
+node src/domain/estimate/estimateStore.test.js
 node src/domain/estimate/branding.test.js
 node src/domain/estimate/estimatePdf.test.js
 node src/domain/estimate/projectDocuments.test.js

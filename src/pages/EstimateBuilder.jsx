@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Plus, Trash2 } from "lucide-react";
 import { compositeWage, defaultCrew } from "@/domain/labor/employeeClasses";
-import { readActiveEstimate, writeEstimate, writeWageBook } from "@/domain/estimate/estimateStore";
+import { openEstimateSession, writeEstimate, writeWageBook } from "@/domain/estimate/estimateStore";
 import { estimateGrandTotal } from "@/domain/estimate/projectDocuments";
 import SaveProjectDocuments from "@/components/estimate/SaveProjectDocuments";
 import EstimatePdfActions from "@/components/estimate/EstimatePdfActions";
@@ -56,6 +56,9 @@ const emptyHeader = {
 };
 
 export default function EstimateBuilder() {
+  const [params] = useSearchParams();
+  const openFile = params.get("file") || "";
+  const openSize = Number(params.get("size") || 0);
   const [header, setHeader] = useState(emptyHeader);
   const [crew, setCrew] = useState(() => defaultCrew());
   const [lines, setLines] = useState(() => [blankLine(68)]);
@@ -75,7 +78,7 @@ export default function EstimateBuilder() {
   const wage = compositeWage(crew);
 
   useEffect(() => {
-    const stored = readActiveEstimate();
+    const stored = openEstimateSession({ fileName: openFile, fileSize: openSize });
     if (stored) {
       const nextCrew = stored.crew?.length ? stored.crew : defaultCrew();
       setHeader({ ...emptyHeader, ...stored.header });
@@ -88,8 +91,23 @@ export default function EstimateBuilder() {
       setFactors(stored.factors?.length ? stored.factors : defaultProductivityFactors());
       setNamedCrewId(stored.namedCrewId || "");
       setMeta({ fileName: stored.fileName || "", fileSize: stored.fileSize || 0, scopeEdited: Boolean(stored.scopeEdited) });
+    } else {
+      const nextCrew = defaultCrew();
+      setHeader({ ...emptyHeader });
+      setCrew(nextCrew);
+      setLines([blankLine(compositeWage(nextCrew).rate)]);
+      setOverhead(10);
+      setProfit(10);
+      setItemized(false);
+      setVisibleTotals(DEFAULT_VISIBLE_TOTALS);
+      setFactors(defaultProductivityFactors());
+      setNamedCrewId("");
+      setMeta({ fileName: "", fileSize: 0, scopeEdited: false });
     }
     setReady(true);
+  }, [openFile, openSize]);
+
+  useEffect(() => {
     listLaborLibrary({ limit: 2500 }).then(setLibrary).catch(() => setLibrary([]));
     listCompanyLaborUnits().then(setCompanyUnits).catch(() => setCompanyUnits([]));
     listCustomLabor().then(setCustomUnits).catch(() => setCustomUnits([]));

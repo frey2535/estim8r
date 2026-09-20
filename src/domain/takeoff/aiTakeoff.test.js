@@ -1,9 +1,11 @@
 import {
   aliasesFromDrawingSymbols,
   buildAiMarks,
+  conduitRunLabel,
   findConduitSections,
   groupHomeruns,
   matchTradeSymbol,
+  parseConduitCallout,
 } from "./aiTakeoff.js";
 import { parseScheduleRows } from "./drawing-docs.js";
 import { paletteForTrade } from "./trades.js";
@@ -214,5 +216,98 @@ const lonely = buildAiMarks({
   }],
 });
 assert(lonely.marks.some((mark) => mark.tool === "conduit" && mark.points.length >= 2), "conduit lines are drawn without a panel");
+
+const foreign = buildAiMarks({
+  trade: "electrical",
+  symbols: electrical.symbols,
+  pages: [
+    {
+      page: 1,
+      kind: "drawing",
+      tokens: [
+        { text: "1x4", x: 12, y: 30 },
+        { text: "1x4", x: 40, y: 18 },
+        { text: "UNDERGROUND FLOOR PLAN - PLUMBING", x: 80, y: 88 },
+        { text: "P1.01", x: 92, y: 94 },
+      ],
+    },
+    {
+      page: 2,
+      kind: "legend",
+      tokens: [
+        { text: "SS", x: 40, y: 22 },
+        { text: "PLUMBING GENERAL NOTES AND LEGENDS", x: 78, y: 88 },
+        { text: "P0.01", x: 91, y: 93 },
+        ...Array.from({ length: 90 }, (_, index) => ({ text: `NOTE ${index}`, x: 10, y: 10 + (index % 70) })),
+      ],
+    },
+    {
+      page: 3,
+      kind: "drawing",
+      tokens: [
+        { text: "EQ", x: 20, y: 20 },
+        { text: "EQ", x: 28, y: 36 },
+        { text: "FOUNDATION AND ROOF FRAMING PLAN", x: 80, y: 88 },
+        { text: "S1.01", x: 91, y: 94 },
+      ],
+    },
+    {
+      page: 4,
+      kind: "drawing",
+      tokens: [
+        { text: "OS", x: 30, y: 20 },
+        { text: "OS", x: 55, y: 40 },
+        { text: "CONSTRUCTION MANAGEMENT PLAN", x: 78, y: 88 },
+        { text: "C0.04", x: 90, y: 94 },
+      ],
+    },
+    {
+      page: 5,
+      kind: "equipment-schedule",
+      tokens: [
+        { text: "208V", x: 20, y: 20 },
+        { text: "HVAC SCHEDULES", x: 80, y: 88 },
+        { text: "M0.01", x: 91, y: 93 },
+      ],
+    },
+  ],
+});
+assert(foreign.marks.length === 0, `electrical AI must not mark plumbing/structural/CM sheets, got ${foreign.marks.length}`);
+assert(/Skipped 5/.test(foreign.summary), `summary mentions skipped foreign sheets: ${foreign.summary}`);
+
+const electricalPlan = buildAiMarks({
+  trade: "electrical",
+  symbols: electrical.symbols,
+  maxHomeruns: 3,
+  conduit: { id: "emt-3-4", label: '3/4" EMT', size: '3/4"', material: "EMT" },
+  pages: [{
+    page: 6,
+    kind: "drawing",
+    tokens: [
+      { text: "ELECTRICAL POWER PLAN", x: 80, y: 88 },
+      { text: "E1.01", x: 92, y: 94 },
+      { text: "LP", x: 72, y: 18 },
+      { text: "GFI", x: 14, y: 22 },
+      { text: "GFI", x: 20, y: 24 },
+      { text: "1x4", x: 16, y: 40 },
+      { text: "1x4", x: 22, y: 42 },
+      { text: "EQ", x: 48, y: 50 },
+      { text: "(4) 4\" PVC", x: 40, y: 36 },
+      { text: "TRANSFORMER", x: 38, y: 12 },
+    ],
+  }],
+});
+const planDevices = electricalPlan.marks.filter((mark) => mark.type === "count");
+const planConduits = electricalPlan.marks.filter((mark) => mark.tool === "conduit");
+assert(planDevices.length >= 5, `electrical plan counts devices, got ${planDevices.length}`);
+assert(planDevices.every((mark) => mark.sheet === 6), "electrical counts stay on the electrical sheet");
+assert(planConduits.length >= 1, "electrical plan draws conduit runs");
+assert(planConduits.every((mark) => (mark.points || []).length >= 2), "each conduit has an installation path");
+assert(planConduits.every((mark) => mark.sheet === 6), "conduit paths stay on the electrical sheet");
+assert(planConduits.some((mark) => mark.runLabel), "conduit runs are labeled with run count");
+assert(planConduits.some((mark) => Number(mark.parallelRuns) === 4), "drawing callout (4) 4\" PVC becomes 4 conduit runs");
+assert(parseConduitCallout('(4) 4" PVC')?.parallelRuns === 4, "parses (4) 4\" PVC");
+assert(parseConduitCallout("3 runs of 3/4\" EMT")?.parallelRuns === 3, "parses 3 runs of 3/4\" EMT");
+assert(conduitRunLabel({ runNumber: 2, parallelRuns: 4, conduitSize: '4"', conduitMaterial: "PVC" }) === 'R2 · 4 runs · 4" · PVC', "run label shows count and size");
 
 if (!process.exitCode) console.log("trade and AI takeoff checks passed");

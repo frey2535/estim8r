@@ -1,3 +1,4 @@
+import { isSheetChrome, pageDiscipline, pageMatchesTrade } from "./sheetDiscipline.js";
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
 
 const STOP = new Set(["the", "and", "for", "with", "from", "this", "that", "sheet", "note", "see", "typ", "all", "new", "nic", "nts", "rev"]);
@@ -91,12 +92,13 @@ function findSynonym(symbols, text) {
   return null;
 }
 
-export function fixtureAliasesFromSchedules(pages, symbols) {
+export function fixtureAliasesFromSchedules(pages, symbols, trade) {
   const aliases = [];
   const seen = new Set();
   for (const page of pages || []) {
     const kind = String(page.kind || "");
     if (!kind.includes("schedule") && kind !== "legend") continue;
+    if (trade && !pageMatchesTrade(page, trade)) continue;
     const rows = [];
     const sorted = [...(page.tokens || [])].sort((a, b) => a.y - b.y || a.x - b.x);
     for (const token of sorted) {
@@ -180,10 +182,11 @@ function phrasesFromTokens(tokens) {
   return phrases;
 }
 
-function shouldScan(page) {
+export function shouldScan(page, trade) {
   if (!page) return false;
   if (page.kind === "spec" || String(page.kind).endsWith("schedule")) return false;
   if (page.kind === "legend" && (page.tokens?.length || 0) < 80) return false;
+  if (trade && !pageMatchesTrade(page, trade)) return false;
   return true;
 }
 
@@ -214,11 +217,11 @@ function addSection(sections, seen, page, x, y, label) {
   });
 }
 
-export function findConduitSections(pages) {
+export function findConduitSections(pages, trade) {
   const sections = [];
   const seen = new Set();
   for (const page of pages || []) {
-    if (!shouldScan(page)) continue;
+    if (!shouldScan(page, trade)) continue;
     const tokens = page.tokens || [];
     for (const token of tokens) {
       const letter = String(token.text || "").trim().toUpperCase();
@@ -346,6 +349,136 @@ export function conduitRoutePoints(devices, anchor) {
   return points;
 }
 
+const CALLOUT_PATTERNS = [
+  /\((\d{1,2})\)\s*(\d+(?:-\d+\/\d+|\/\d+)?)\s*["”]?\s*(emt|pvc|grc|rmc|rsc|imc|c)\b/i,
+  /(\d{1,2})\s*(?:runs?|conduits?)\s+(?:of\s+)?(\d+(?:-\d+\/\d+|\/\d+)?)\s*["”]?\s*(emt|pvc|grc|rmc|rsc|imc)?/i,
+  /(\d{1,2})\s*[-x×]\s*(\d+(?:-\d+\/\d+|\/\d+)?)\s*["”]?\s*(emt|pvc|grc|rmc|rsc|imc|c)\b/i,
+];
+
+const MATERIAL_NAME = {
+  emt: "EMT",
+  pvc: "PVC",
+  grc: "GRC",
+  rmc: "RMC",
+  rsc: "RSC",
+  imc: "IMC",
+  c: "Conduit",
+};
+
+export function parseConduitCallout(text) {
+  const raw = String(text || "");
+  for (const pattern of CALLOUT_PATTERNS) {
+    const match = raw.match(pattern);
+    if (!match) continue;
+    const parallelRuns = Number(match[1]);
+    if (!parallelRuns || parallelRuns > 12) continue;
+    const sizeRaw = String(match[2] || "").replace(/\s+/g, "");
+    const material = MATERIAL_NAME[String(match[3] || "").toLowerCase()] || "";
+    return {
+      parallelRuns,
+      size: sizeRaw ? `${sizeRaw}"` : "",
+      material,
+    };
+  }
+  return null;
+}
+
+export function conduitRunLabel(mark) {
+  const runs = Number(mark?.parallelRuns) || 1;
+  const hrs = Number(mark?.homerunCount) || 0;
+  const bits = [`R${mark?.runNumber || ""}`];
+  if (runs > 1) bits.push(`${runs} runs`);
+  else if (hrs) bits.push(`${hrs} HR`);
+  if (mark?.conduitSize) bits.push(mark.conduitSize);
+  if (runs > 1 && mark?.conduitMaterial) bits.push(mark.conduitMaterial);
+  return bits.join(" · ");
+}
+
+function attachCalloutToPath(conduits, callout) {
+  let best = null;
+  let bestDist = Infinity;
+  for (const mark of conduits) {
+    if (mark.sheet !== callout.sheet) continue;
+    const dist = Math.min(...(mark.points || []).map((point) => distance(point, callout)));
+    if (dist < bestDist) {
+      best = mark;
+      bestDist = dist;
+    }
+  }
+  if (best && bestDist <= 10) {
+    best.parallelRuns = Math.max(Number(best.parallelRuns) || 1, callout.parallelRuns);
+    if (callout.size) best.conduitSize = callout.size;
+    if (callout.material) best.conduitMaterial = callout.material;
+    best.symbolLabel = callout.size && callout.material
+      ? `${callout.parallelRuns}× ${callout.size} ${callout.material}`
+      : best.symbolLabel;
+    best.runLabel = conduitRunLabel(best);
+    return true;
+  }
+  return false;
+}
+
+export function findConduitRunCallouts(pages, trade) {
+  const callouts = [];
+  for (const page of pages || []) {
+    if (!shouldScan(page, trade)) continue;
+    for (const phrase of phrasesFromTokens(page.tokens || [])) {
+      const parsed = parseConduitCallout(phrase.text);
+      if (!parsed) continue;
+      callouts.push({
+        ...parsed,
+        sheet: page.page,
+        x: phrase.x,
+        y: phrase.y,
+      });
+    }
+  }
+  return callouts;
+}
+
+function applyConduitCallouts(conduits, callouts, anchors, startNumber, trade, color) {
+  const extra = [];
+  let runNumber = startNumber;
+  for (const callout of callouts) {
+    if (attachCalloutToPath(conduits, callout) || attachCalloutToPath(extra, callout)) continue;
+    const sheetAnchors = (anchors || []).filter((anchor) => anchor.sheet === callout.sheet);
+    const ordered = [...sheetAnchors].sort((a, b) => distance(a, callout) - distance(b, callout));
+    const a = ordered[0];
+    const b = ordered[1];
+    const points = a && b
+      ? [{ x: a.x, y: a.y }, { x: callout.x, y: callout.y }, { x: b.x, y: b.y }]
+      : a
+        ? [{ x: callout.x, y: callout.y }, { x: a.x, y: a.y }]
+        : [];
+    if (points.length < 2) continue;
+    const mark = {
+      id: newId(),
+      source: "ai",
+      trade,
+      type: "route",
+      tool: "conduit",
+      sheet: callout.sheet,
+      points,
+      runNumber: runNumber + 1,
+      category: "Raceway",
+      parallelRuns: callout.parallelRuns,
+      conduitSize: callout.size || '3/4"',
+      conduitMaterial: callout.material || "EMT",
+      symbol: "emt-3-4",
+      symbolLabel: callout.size && callout.material
+        ? `${callout.parallelRuns}× ${callout.size} ${callout.material}`
+        : `${callout.parallelRuns} conduit runs`,
+      abbr: callout.size || '3/4"',
+      color,
+      homerunCount: 0,
+    };
+    mark.runLabel = conduitRunLabel(mark);
+    extra.push(mark);
+    runNumber += 1;
+  }
+  return extra;
+}
+
 export function groupHomeruns(devices, anchors, maxPerConduit = DEFAULT_MAX_HOMERUNS, options = {}) {
   const cap = Math.max(1, Number(maxPerConduit) || DEFAULT_MAX_HOMERUNS);
   const radius = Number(options.clusterRadius) > 0 ? Number(options.clusterRadius) : DEFAULT_CLUSTER_RADIUS;
@@ -371,7 +504,7 @@ function newId() {
 }
 
 function collectMatchCandidates(page) {
-  const tokens = page.tokens || [];
+  const tokens = (page.tokens || []).filter((token) => !isSheetChrome(token));
   const phrases = phrasesFromTokens(tokens);
   const candidates = phrases.map((phrase) => ({
     text: phrase.text,
@@ -400,15 +533,20 @@ export function buildAiMarks({
   color = "#2563eb",
 }) {
   const anchorIds = new Set(ANCHOR_SYMBOL_IDS[trade] || []);
+  const usableDrawing = (drawingSymbols || []).filter((item) => {
+    if (!item.page) return true;
+    const source = (pages || []).find((page) => page.page === item.page);
+    return !source || pageMatchesTrade(source, trade);
+  });
   const aliases = mergeAliases(
-    fixtureAliasesFromSchedules(pages, symbols),
-    aliasesFromDrawingSymbols(drawingSymbols, symbols),
+    fixtureAliasesFromSchedules(pages, symbols, trade),
+    aliasesFromDrawingSymbols(usableDrawing, symbols),
   );
-  const matchSymbols = [...(symbols || []), ...(drawingSymbols || [])];
+  const matchSymbols = [...(symbols || []), ...usableDrawing];
   const counts = [];
   const seen = [];
   for (const page of pages || []) {
-    if (!shouldScan(page)) continue;
+    if (!shouldScan(page, trade)) continue;
     for (const token of collectMatchCandidates(page)) {
       const symbol = matchTradeSymbol(token.text, matchSymbols, aliases, { sectionContext: token.sectionContext });
       if (!symbol) continue;
@@ -438,12 +576,12 @@ export function buildAiMarks({
   }
   const anchors = counts.filter((mark) => mark.anchor);
   const devices = counts.filter((mark) => !mark.anchor);
-  const sections = findConduitSections(pages);
+  const sections = findConduitSections(pages, trade);
   const groups = groupHomeruns(devices, anchors, maxHomeruns, { sections });
   const conduits = groups.map((group, index) => {
     const points = conduitRoutePoints(group.devices, group.anchor);
     if (points.length < 2) return null;
-    return {
+    const mark = {
       id: newId(),
       source: "ai",
       trade,
@@ -459,16 +597,26 @@ export function buildAiMarks({
       conduitSize: conduit?.size || '3/4"',
       conduitMaterial: conduit?.material || "EMT",
       color,
+      parallelRuns: 1,
       homerunCount: group.devices.length,
     };
+    mark.runLabel = conduitRunLabel(mark);
+    return mark;
   }).filter(Boolean);
+  const callouts = findConduitRunCallouts(pages, trade);
+  conduits.push(...applyConduitCallouts(conduits, callouts, anchors, conduits.length, trade, color));
   const cap = Math.max(1, Number(maxHomeruns) || DEFAULT_MAX_HOMERUNS);
   const scheduleHits = counts.filter((mark) => mark.matchedFrom === "schedule").length;
+  const skipped = (pages || []).filter((page) => !pageMatchesTrade(page, trade));
+  const skippedTrades = [...new Set(skipped.map((page) => pageDiscipline(page)))].filter((item) => item && item !== "unknown");
+  const skipNote = skipped.length
+    ? ` Skipped ${skipped.length} non-${trade} sheet(s)${skippedTrades.length ? ` (${skippedTrades.join(", ")})` : ""}.`
+    : "";
   return {
     marks: [...counts.map(({ anchor, matchedFrom, ...mark }) => mark), ...conduits],
     summary: counts.length
-      ? `AI ${trade} takeoff: ${counts.length} devices${scheduleHits ? ` (${scheduleHits} from schedule types)` : ""}, ${conduits.length} conduit runs grouping closest circuits, max ${cap} homeruns per conduit.`
-      : `No ${trade} symbols were found on the PDF text layer. Counts stay empty until that trade is labeled on the sheets.`,
+      ? `AI ${trade} takeoff: ${counts.length} devices${scheduleHits ? ` (${scheduleHits} from schedule types)` : ""}, ${conduits.length} conduit runs on ${trade} sheets showing run count and path, max ${cap} homeruns per conduit.${skipNote}`
+      : `No ${trade} symbols were found on ${trade} sheets.${skipNote || " Counts stay empty until that trade is labeled on the sheets."}`,
     deviceCount: counts.length,
     conduitCount: conduits.length,
   };

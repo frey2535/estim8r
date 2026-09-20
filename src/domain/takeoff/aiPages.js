@@ -1,4 +1,5 @@
 import { classifyPageText, extractPdfPageItems } from "./drawing-docs";
+import { classifySheetDiscipline, findSheetId, parseSheetId } from "./sheetDiscipline";
 import { getPdfDocument } from "@/lib/pdf-document";
 
 export async function readAiPages(fileBytes) {
@@ -13,8 +14,11 @@ export async function readAiPages(fileBytes) {
       x: viewport.width ? (item.x / viewport.width) * 100 : 0,
       y: viewport.height ? (item.y / viewport.height) * 100 : 0,
     })).filter((item) => item.text);
-    const kind = classifyPageText(tokens.map((item) => item.text).join("\n"));
-    pages.push({ page: pageNumber, kind, tokens });
+    const text = tokens.map((item) => item.text).join("\n");
+    const kind = classifyPageText(text);
+    const sheetId = findSheetId(tokens) || parseSheetId(text);
+    const discipline = classifySheetDiscipline(text, tokens);
+    pages.push({ page: pageNumber, kind, tokens, sheetId, discipline });
   }
   return pages;
 }

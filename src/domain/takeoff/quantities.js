@@ -13,7 +13,10 @@ export function markLengthFeet(mark, calibration, aspect) {
   }
   const points = mark.points || [];
   const percent = polylineLength(points, aspect);
-  return feetFromPercent(percent, calibration);
+  const feet = feetFromPercent(percent, calibration);
+  if (feet == null) return null;
+  const runs = Number(mark.parallelRuns) || 1;
+  return feet * Math.max(1, runs);
 }
 
 export function markAreaFeet(mark, calibration, aspect) {
@@ -117,7 +120,10 @@ export function conduitRuns(marks, calibration, aspect = 1, globalLineSize = DEF
       id: mark.id,
       runNumber: mark.runNumber || index + 1,
       sheet: mark.sheet || 1,
-      type: mark.symbolLabel || mark.symbol || "Conduit",
+      type: Number(mark.parallelRuns) > 1
+        ? `${mark.parallelRuns}× ${mark.symbolLabel || mark.symbol || "Conduit"}`
+        : (mark.symbolLabel || mark.symbol || "Conduit"),
+      parallelRuns: Number(mark.parallelRuns) || 1,
       size: mark.conduitSize || "",
       material: mark.conduitMaterial || "",
       color: mark.color || "#2563eb",

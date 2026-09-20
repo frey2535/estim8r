@@ -1090,6 +1090,27 @@ export default function TakeoffWorkspace() {
   );
 }
 
+function offsetPolyline(points, offset) {
+  return (points || []).map((point, index) => {
+    const prev = points[Math.max(0, index - 1)];
+    const next = points[Math.min(points.length - 1, index + 1)];
+    const dx = next.x - prev.x;
+    const dy = next.y - prev.y;
+    const len = Math.hypot(dx, dy) || 1;
+    return { x: point.x - (dy / len) * offset, y: point.y + (dx / len) * offset };
+  });
+}
+
+function conduitPolylines(mark) {
+  const runs = Math.max(1, Math.min(8, Number(mark.parallelRuns) || 1));
+  if (runs === 1) return [mark.points];
+  const spread = 0.65;
+  return Array.from({ length: runs }, (_, index) => {
+    const offset = (index - (runs - 1) / 2) * spread;
+    return offset ? offsetPolyline(mark.points, offset) : mark.points;
+  });
+}
+
 function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, lengthFor, markerSize = DEFAULT_MARKER_SIZE, lineSize = DEFAULT_LINE_SIZE }) {
   const routes = marks.filter((m) => m.points?.length);
   const draftEnd = draftPoints[draftPoints.length - 1];
@@ -1104,14 +1125,27 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
         if (mark.type === "area" || mark.type === "cloud") {
           return <polygon key={mark.id} points={points} fill={mark.type === "cloud" ? "none" : "rgba(37,99,235,0.12)"} stroke={color} strokeWidth={width} strokeDasharray={mark.type === "cloud" ? "1.2 0.8" : undefined} vectorEffect="non-scaling-stroke" />;
         }
-        const length = selected ? lengthFor?.(mark) : null;
+        const length = mark.tool === "conduit" ? lengthFor?.(mark) : (selected ? lengthFor?.(mark) : null);
+        const runLines = mark.tool === "conduit" ? conduitPolylines(mark) : [mark.points];
+        const label = mark.tool === "conduit"
+          ? [mark.runLabel || `R${mark.runNumber || ""}`, length != null ? formatFeet(length) : ""].filter(Boolean).join(" · ")
+          : "";
         return (
           <g key={mark.id}>
             {selected && <polyline points={points} fill="none" stroke="#ffffff" strokeWidth={width + 2.5} vectorEffect="non-scaling-stroke" />}
-            <polyline points={points} fill="none" stroke={color} strokeWidth={width} vectorEffect="non-scaling-stroke" />
-            {mark.tool === "conduit" && selected && end && (
+            {runLines.map((line, index) => (
+              <polyline
+                key={`${mark.id}-run-${index}`}
+                points={line.map((p) => `${p.x},${p.y}`).join(" ")}
+                fill="none"
+                stroke={color}
+                strokeWidth={width}
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
+            {mark.tool === "conduit" && end && label && (
               <text x={end.x} y={Math.max(2, end.y - 1.6)} fontSize="2.1" fontWeight="700" fill={color}>
-                {`R${mark.runNumber || ""} ${length != null ? formatFeet(length) : ""}`}
+                {label}
               </text>
             )}
           </g>

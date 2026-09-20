@@ -26,9 +26,11 @@ export default function Settings() {
         <h2 className="font-bold text-foreground">Account & Tenant</h2>
         <dl className="mt-4 grid grid-cols-2 gap-4 text-sm">
           <dt className="text-muted-foreground">Email</dt><dd>{user?.email}</dd>
+          <dt className="text-muted-foreground">Organization</dt><dd>{user?.org_name || "—"}</dd>
           <dt className="text-muted-foreground">Organization ID</dt><dd className="font-mono text-xs">{user?.org_id || "—"}</dd>
           <dt className="text-muted-foreground">Role</dt><dd>{platformRole || user?.role}</dd>
           <dt className="text-muted-foreground">Organization role</dt><dd>{user?.org_role}</dd>
+          {user?.invite_code ? <><dt className="text-muted-foreground">Team invite code</dt><dd className="font-mono text-xs">{user.invite_code}</dd></> : null}
           <dt className="text-muted-foreground">Buildr company ID</dt><dd className="font-mono text-xs">{readLinkedBuildrCompanyId(user) || "—"}</dd>
         </dl>
         <div className="mt-5 flex flex-wrap gap-2">

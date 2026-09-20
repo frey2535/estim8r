@@ -2,7 +2,13 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { Loader2, Shield } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
-import { BACKUP_ADMIN_EMAIL, PLATFORM_OWNER_EMAIL, isPlatformOwner } from "@/lib/platformIdentity";
+import {
+  BACKUP_ADMIN_EMAIL,
+  FIRST_CUSTOMER_ADMIN_EMAIL,
+  FIRST_CUSTOMER_COMPANY,
+  PLATFORM_OWNER_EMAIL,
+  isPlatformOwner,
+} from "@/lib/platformIdentity";
 import {
   accessStatusLabel,
   canManageEstim8rAccess,
@@ -79,11 +85,13 @@ export default function OwnerAdmin() {
 
   return (
     <div className="py-4 sm:py-6">
-      <p className="text-sm font-semibold uppercase tracking-widest text-blue-600 dark:text-orange-500">Platform owner</p>
+      <p className="text-sm font-semibold uppercase tracking-widest text-blue-600 dark:text-orange-500">
+        {isPlatformOwner(user) ? "Platform owner" : "Current Flow backup admin"}
+      </p>
       <h1 className="text-3xl font-black text-foreground">Estim8r access</h1>
       <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-        Signed in as {isPlatformOwner(user) ? "platform owner" : "backup admin"} ({user?.email}).
-        Grant or revoke who can use Estim8r. Backup admin is {BACKUP_ADMIN_EMAIL}.
+        Signed in as {isPlatformOwner(user) ? "the Current Flow platform owner" : "Current Flow backup admin"} ({user?.email}).
+        There is one platform owner. Grant or revoke who can use Estim8r.
       </p>
 
       <div className="mt-7 max-w-3xl rounded-2xl border border-border bg-card p-6 shadow-sm">
@@ -170,8 +178,9 @@ export default function OwnerAdmin() {
       <div className="mt-7 flex max-w-3xl items-start gap-3 rounded-2xl border border-border bg-card p-6 shadow-sm">
         <Shield className="mt-0.5 h-5 w-5 text-blue-600 dark:text-orange-500" />
         <div className="text-sm text-muted-foreground">
-          <p><span className="font-semibold text-foreground">Platform owner:</span> {PLATFORM_OWNER_EMAIL}</p>
-          <p className="mt-1"><span className="font-semibold text-foreground">Backup admin:</span> {BACKUP_ADMIN_EMAIL} — admin, not owner. Owner and backup admin cannot be revoked here.</p>
+          <p><span className="font-semibold text-foreground">Platform owner:</span> {PLATFORM_OWNER_EMAIL} — the only platform owner ID.</p>
+          <p className="mt-1"><span className="font-semibold text-foreground">Current Flow backup admin:</span> {BACKUP_ADMIN_EMAIL} — can grant and revoke, is not a second platform owner.</p>
+          <p className="mt-1"><span className="font-semibold text-foreground">First customer:</span> {FIRST_CUSTOMER_COMPANY}. Company admin is {FIRST_CUSTOMER_ADMIN_EMAIL} — admins that company only, not the platform.</p>
         </div>
       </div>
     </div>

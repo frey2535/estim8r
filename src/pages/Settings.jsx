@@ -1,8 +1,18 @@
-import React from "react";
+import React, { useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
+import CompanyBrandingForm from "@/components/estimate/CompanyBrandingForm";
 
 export default function Settings() {
   const { user } = useAuth();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.hash === "#estimate-pdf") {
+      document.getElementById("estimate-pdf")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [location.hash]);
+
   return (
     <div className="py-4 sm:py-6">
       <p className="text-sm font-semibold uppercase tracking-widest text-blue-600 dark:text-orange-500">Administration</p>
@@ -15,6 +25,9 @@ export default function Settings() {
           <dt className="text-muted-foreground">Role</dt><dd>{user?.role}</dd>
           <dt className="text-muted-foreground">Organization role</dt><dd>{user?.org_role}</dd>
         </dl>
+      </div>
+      <div id="estimate-pdf" className="mt-7 max-w-4xl scroll-mt-20">
+        <CompanyBrandingForm showEstimateLink />
       </div>
     </div>
   );

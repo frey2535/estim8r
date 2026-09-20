@@ -1,0 +1,332 @@
+import { jsPDF } from "jspdf";
+import { brandingLayout, companyLines, normalizeBranding } from "./branding.js";
+import { estimateGrandTotal } from "./projectDocuments.js";
+
+const HIDDEN_LABELS = [
+  "employee class",
+  "hourly wage",
+  "productivity factor",
+  "overhead",
+  "profit",
+  "crew rate",
+  "journeyman",
+];
+
+function hexRgb(hex) {
+  const value = String(hex || "").replace("#", "");
+  return {
+    r: parseInt(value.slice(0, 2), 16) || 0,
+    g: parseInt(value.slice(2, 4), 16) || 0,
+    b: parseInt(value.slice(4, 6), 16) || 0,
+  };
+}
+
+function money(value) {
+  return `$${(Number(value) || 0).toFixed(2)}`;
+}
+
+function safeName(value, fallback) {
+  const next = String(value || "").trim() || fallback;
+  return next.replace(/[^\w.-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || fallback;
+}
+
+export function estimatePdfFileName(estimate) {
+  const project = safeName(estimate?.header?.projectName, "estimate");
+  const number = String(estimate?.header?.estimateNumber || "").trim();
+  return number ? `${project}-${safeName(number, "estimate")}.pdf` : `${project}.pdf`;
+}
+
+export function estimatePresentation(estimate) {
+  const header = estimate?.header || {};
+  const moneyTotals = estimateGrandTotal(estimate);
+  const lines = (estimate?.lines || []).map((line) => {
+    const qty = Number(line.quantity) || 0;
+    const material = qty * (Number(line.materialUnitCost) || 0);
+    const labor = qty * (Number(line.laborMhPerUnit) || 0) * (Number(line.laborRate) || 0);
+    return {
+      itemType: line.itemType || "",
+      category: line.category || "",
+      description: line.description || "",
+      quantity: qty,
+      unit: line.unit || "",
+      material,
+      labor,
+      amount: material + labor,
+      notes: line.notes || "",
+    };
+  });
+  return {
+    title: header.projectName || "Electrical Estimate",
+    estimateNumber: header.estimateNumber || "",
+    projectAddress: header.projectAddress || "",
+    customerCompany: header.customerCompany || "",
+    customerName: header.customerName || "",
+    customerPhone: header.customerPhone || "",
+    customerEmail: header.customerEmail || "",
+    estimatorName: header.estimatorName || "",
+    bidDue: header.bidDue || "",
+    scopeNotes: header.scopeNotes || "",
+    lines,
+    totals: {
+      material: moneyTotals.material,
+      labor: moneyTotals.labor,
+      total: moneyTotals.total,
+    },
+  };
+}
+
+export function presentationHasInternals(presentation) {
+  const blob = JSON.stringify(presentation || {}).toLowerCase();
+  return HIDDEN_LABELS.some((label) => blob.includes(label));
+}
+
+function logoFormat(dataUrl) {
+  if (/^data:image\/jpe?g/i.test(dataUrl)) return "JPEG";
+  if (/^data:image\/webp/i.test(dataUrl)) return "WEBP";
+  return "PNG";
+}
+
+function wrap(doc, value, width) {
+  const text = String(value || "");
+  if (!text) return [];
+  return doc.splitTextToSize(text, width);
+}
+
+export function buildEstimatePdf(estimate, brandingInput) {
+  const branding = brandingLayout(normalizeBranding(brandingInput));
+  const presentation = estimatePresentation(estimate);
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  const page = { width: 612, height: 792, left: 40, right: 572 };
+  const strings = [];
+  const color = (hex) => hexRgb(hex);
+
+  function write(text, x, y, options) {
+    const value = String(text ?? "");
+    if (!value) return 0;
+    strings.push(value);
+    doc.text(value, x, y, options);
+    return doc.getTextDimensions(value).h;
+  }
+
+  function fill(hex) {
+    const rgb = color(hex);
+    doc.setFillColor(rgb.r, rgb.g, rgb.b);
+  }
+
+  function ink(hex) {
+    const rgb = color(hex);
+    doc.setTextColor(rgb.r, rgb.g, rgb.b);
+  }
+
+  function pageBackground() {
+    fill(branding.pageColor);
+    doc.rect(0, 0, page.width, page.height, "F");
+  }
+
+  function headerBar(y = 0) {
+    fill(branding.headerColor);
+    doc.rect(0, y, page.width, branding.headerHeight, "F");
+    const pad = 18;
+    let x = pad;
+    const logoY = y + (branding.headerHeight - branding.logo) / 2;
+    if (branding.logoDataUrl) {
+      try {
+        doc.addImage(branding.logoDataUrl, logoFormat(branding.logoDataUrl), x, logoY, branding.logo, branding.logo);
+        x += branding.logo + 12;
+      } catch {
+        /* skip a broken logo rather than failing the PDF */
+      }
+    }
+    doc.setFont(branding.font, "bold");
+    doc.setFontSize(branding.headerSize === "small" ? 14 : branding.headerSize === "large" ? 22 : 18);
+    ink(branding.headerTextColor);
+    write(branding.companyName || "Estimate", x, y + 28);
+    doc.setFont(branding.font, "normal");
+    doc.setFontSize(9);
+    let lineY = y + 44;
+    for (const line of companyLines(branding)) {
+      write(line, x, lineY);
+      lineY += 12;
+    }
+    return y + branding.headerHeight;
+  }
+
+  function card(x, y, width, height) {
+    fill(branding.cardColor);
+    doc.roundedRect(x, y, width, height, branding.cardRadius, branding.cardRadius, "F");
+  }
+
+  pageBackground();
+  let cursor = headerBar(0) + 18;
+  const cardWidth = page.right - page.left;
+  const infoLines = [
+    ["Project", presentation.title, "Estimate #", presentation.estimateNumber],
+    ["Address", presentation.projectAddress, "Customer", presentation.customerCompany],
+    ["Contact", presentation.customerName, "Phone", presentation.customerPhone],
+    ["Email", presentation.customerEmail, "Estimator", presentation.estimatorName],
+    ["Bid due", presentation.bidDue, "", ""],
+  ].filter((row) => row[1] || row[3]);
+  const noteLines = wrap(doc, presentation.scopeNotes, cardWidth - branding.cardPad * 2);
+  const infoHeight = branding.cardPad * 2 + infoLines.length * 28 + (noteLines.length ? noteLines.length * 12 + 18 : 0);
+  card(page.left, cursor, cardWidth, Math.max(72, infoHeight));
+  doc.setFont(branding.font, "bold");
+  doc.setFontSize(11);
+  ink(branding.secondaryColor);
+  write("Project & customer", page.left + branding.cardPad, cursor + 16);
+  let infoY = cursor + 36;
+  doc.setFontSize(9);
+  for (const [leftLabel, leftValue, rightLabel, rightValue] of infoLines) {
+    doc.setFont(branding.font, "bold");
+    ink(branding.secondaryColor);
+    write(leftLabel, page.left + branding.cardPad, infoY);
+    if (rightLabel) write(rightLabel, page.left + cardWidth / 2, infoY);
+    doc.setFont(branding.font, "normal");
+    ink(branding.textColor);
+    write(leftValue || "—", page.left + branding.cardPad, infoY + 12);
+    if (rightLabel) write(rightValue || "—", page.left + cardWidth / 2, infoY + 12);
+    infoY += 28;
+  }
+  if (noteLines.length) {
+    doc.setFont(branding.font, "bold");
+    ink(branding.secondaryColor);
+    write("Scope", page.left + branding.cardPad, infoY);
+    doc.setFont(branding.font, "normal");
+    ink(branding.textColor);
+    noteLines.forEach((line, index) => write(line, page.left + branding.cardPad, infoY + 14 + index * 12));
+  }
+  cursor += Math.max(72, infoHeight) + 18;
+
+  const columns = [
+    { key: "description", label: "Item", width: 186, align: "left" },
+    { key: "quantity", label: "Qty", width: 46, align: "right" },
+    { key: "unit", label: "Unit", width: 40, align: "left" },
+    { key: "material", label: "Material", width: 80, align: "right" },
+    { key: "labor", label: "Labor", width: 80, align: "right" },
+    { key: "amount", label: "Amount", width: 80, align: "right" },
+  ];
+
+  function ensureSpace(needed) {
+    if (cursor + needed < 750) return;
+    doc.addPage();
+    pageBackground();
+    cursor = headerBar(0) + 16;
+  }
+
+  function cellValue(line, key) {
+    if (key === "quantity") return Number(line.quantity || 0).toFixed(2);
+    if (key === "material" || key === "labor" || key === "amount") return money(line[key]);
+    return line[key] || "";
+  }
+
+  function drawTableHeader() {
+    fill(branding.primaryColor);
+    doc.rect(page.left, cursor, cardWidth, 22, "F");
+    doc.setFont(branding.font, "bold");
+    doc.setFontSize(8);
+    ink(branding.headerTextColor);
+    let x = page.left + 8;
+    for (const column of columns) {
+      write(column.label, column.align === "right" ? x + column.width - 4 : x, cursor + 15, {
+        align: column.align === "right" ? "right" : "left",
+      });
+      x += column.width;
+    }
+    cursor += 22;
+  }
+
+  ensureSpace(80);
+  doc.setFont(branding.font, "bold");
+  doc.setFontSize(12);
+  ink(branding.secondaryColor);
+  write("Estimate", page.left, cursor);
+  cursor += 16;
+  drawTableHeader();
+
+  const rows = presentation.lines.length
+    ? presentation.lines
+    : [{ description: "No line items yet", quantity: 0, unit: "", material: 0, labor: 0, amount: 0 }];
+
+  rows.forEach((line, index) => {
+    const desc = wrap(doc, line.description || line.category || line.itemType || "Item", columns[0].width - 10);
+    const height = Math.max(22, desc.length * 12 + 10);
+    ensureSpace(height + 8);
+    if (index % 2 === 0) {
+      fill(branding.cardColor);
+      doc.rect(page.left, cursor, cardWidth, height, "F");
+    }
+    doc.setFont(branding.font, "normal");
+    doc.setFontSize(8);
+    ink(branding.textColor);
+    let x = page.left + 8;
+    desc.forEach((part, partIndex) => write(part, x, cursor + 14 + partIndex * 12));
+    x += columns[0].width;
+    for (const column of columns.slice(1)) {
+      write(cellValue(line, column.key), column.align === "right" ? x + column.width - 4 : x, cursor + 14, {
+        align: column.align === "right" ? "right" : "left",
+      });
+      x += column.width;
+    }
+    cursor += height;
+  });
+
+  cursor += 16;
+  const totalsHeight = branding.cardPad * 2 + 78;
+  ensureSpace(totalsHeight + 8);
+  card(page.right - 240, cursor, 240, totalsHeight);
+  const totals = [
+    ["Material", money(presentation.totals.material)],
+    ["Labor", money(presentation.totals.labor)],
+    ["Estimate total", money(presentation.totals.total)],
+  ];
+  totals.forEach(([label, value], index) => {
+    const y = cursor + branding.cardPad + 16 + index * 22;
+    doc.setFont(branding.font, index === 2 ? "bold" : "normal");
+    doc.setFontSize(index === 2 ? 12 : 10);
+    ink(index === 2 ? branding.accentColor : branding.textColor);
+    write(label, page.right - 228, y);
+    write(value, page.right - 16, y, { align: "right" });
+  });
+
+  return {
+    doc,
+    strings,
+    fileName: estimatePdfFileName(estimate),
+    presentation,
+  };
+}
+
+export function estimatePdfBlob(estimate, brandingInput) {
+  const { doc, fileName, presentation, strings } = buildEstimatePdf(estimate, brandingInput);
+  return {
+    blob: doc.output("blob"),
+    fileName,
+    presentation,
+    strings,
+  };
+}
+
+export function printEstimatePdf(doc) {
+  if (typeof document === "undefined") return;
+  const url = doc.output("bloburl");
+  const frame = document.createElement("iframe");
+  frame.setAttribute("aria-hidden", "true");
+  frame.style.position = "fixed";
+  frame.style.right = "0";
+  frame.style.bottom = "0";
+  frame.style.width = "0";
+  frame.style.height = "0";
+  frame.style.border = "0";
+  frame.src = url;
+  document.body.appendChild(frame);
+  frame.onload = () => {
+    try {
+      frame.contentWindow?.focus();
+      frame.contentWindow?.print();
+    } finally {
+      window.setTimeout(() => {
+        frame.remove();
+        URL.revokeObjectURL(url);
+      }, 1500);
+    }
+  };
+}

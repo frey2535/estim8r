@@ -9,6 +9,8 @@ import {
   readTakeoffSession,
 } from "@/domain/estimate/projectDocuments";
 import { readEstimate } from "@/domain/estimate/estimateStore";
+import { readCompanyBranding } from "@/domain/estimate/branding";
+import { estimatePdfBlob } from "@/domain/estimate/estimatePdf";
 import { titleBlockForMarkup } from "@/domain/estimate/fromDrawings";
 
 const cards = [
@@ -27,10 +29,8 @@ function FolderDocs({ folder }) {
   function downloadEstimate() {
     const estimate = readEstimate(folder.fileName, folder.fileSize);
     if (!estimate) return;
-    downloadBlob(
-      new Blob([JSON.stringify(estimate, null, 2)], { type: "application/json" }),
-      folder.estimateName || `${folder.projectName}-estimate.json`,
-    );
+    const { blob, fileName } = estimatePdfBlob(estimate, readCompanyBranding());
+    downloadBlob(blob, fileName);
   }
 
   function downloadMarkup() {
@@ -55,7 +55,7 @@ function FolderDocs({ folder }) {
         <ImageIcon className="h-3.5 w-3.5" /> Drawing
       </button>
       <button type="button" onClick={downloadEstimate} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-muted">
-        <FileText className="h-3.5 w-3.5" /> Estimate
+        <FileText className="h-3.5 w-3.5" /> Estimate PDF
       </button>
       <button type="button" onClick={downloadMarkup} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-muted">
         <StickyNote className="h-3.5 w-3.5" /> Markup pages

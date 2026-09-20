@@ -43,6 +43,12 @@ When drawings have been uploaded and an estimate exists:
 
 Later edits to a synced estimate update the same Buildr Estimate-tab documents. The link is the Estim8r estimate id plus the stored Buildr project and invoice ids.
 
+## Estimate presentation
+
+Employee class and wage, productivity factors, overhead, and profit live on the **Labor & markup** tab in Estimate Builder. They are not shown on the Estimate tab or on the customer PDF.
+
+The estimate saves as a downloadable, printable PDF from the Estimate tab and from the Estimates folder. Company branding for that PDF lives in **Settings → Estimate PDF branding**: logo, company information, colors, text color, font, header size/color, card size/color, and related controls.
+
 ## Labor architecture (Phase 1–2)
 
 - **Taxonomy** — `labor_items` (trade / category / subcategory / item / size / unit)
@@ -61,6 +67,8 @@ node src/domain/labor/auditedLibrary.test.js
 node src/domain/labor/architecture.test.js
 node src/domain/estimate/fromDrawings.test.js
 node src/domain/estimate/fromTakeoff.test.js
+node src/domain/estimate/branding.test.js
+node src/domain/estimate/estimatePdf.test.js
 node src/domain/takeoff/aiTakeoff.test.js
 node src/domain/takeoff/sizes.test.js
 ```

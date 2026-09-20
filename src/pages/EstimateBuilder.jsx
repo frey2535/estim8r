@@ -3,7 +3,9 @@ import { Link } from "react-router-dom";
 import { Plus, Trash2 } from "lucide-react";
 import { compositeWage, defaultCrew } from "@/domain/labor/employeeClasses";
 import { readActiveEstimate, writeEstimate, writeWageBook } from "@/domain/estimate/estimateStore";
+import { estimateGrandTotal } from "@/domain/estimate/projectDocuments";
 import SaveProjectDocuments from "@/components/estimate/SaveProjectDocuments";
+import EstimatePdfActions from "@/components/estimate/EstimatePdfActions";
 import { listCompanyLaborUnits, listCustomLabor, listLaborLibrary, listNamedCrews, saveLaborRates, saveNamedCrew } from "@/api/laborRepository";
 import { defaultProductivityFactors, setFactorMultiplier } from "@/domain/labor/productivity";
 import { applySelectionToLine, buildLaborSourceOptions, makeLaborSelection } from "@/domain/labor/selection";
@@ -13,6 +15,7 @@ import { defaultLaborRates } from "@/domain/labor/rates";
 import LaborSourceSelector from "@/components/labor/LaborSourceSelector";
 import ProductivityFactorEditor from "@/components/labor/ProductivityFactorEditor";
 import NamedCrewPicker from "@/components/labor/NamedCrewPicker";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const ITEM_TYPES = ["Material", "Labor", "Equipment", "Subcontract", "Allowance", "Fixture", "Device", "Conduit", "Wire", "Gear", "Other"];
 const UNITS = ["EA", "LF", "SF", "FT", "100 LF", "1000 LF", "HR", "DAY", "LOT"];
@@ -107,19 +110,25 @@ export default function EstimateBuilder() {
     });
   }, [ready, header, crew, lines, overhead, profit, meta, factors, namedCrewId]);
 
-  const totals = useMemo(() => lines.reduce((acc, line) => {
-    const qty = Number(line.quantity) || 0;
-    acc.material += qty * (Number(line.materialUnitCost) || 0);
-    acc.hours += qty * (Number(line.laborMhPerUnit) || 0);
-    acc.labor += qty * (Number(line.laborMhPerUnit) || 0) * (Number(line.laborRate) || 0);
-    return acc;
-  }, { material: 0, hours: 0, labor: 0 }), [lines]);
+  const draft = useMemo(() => ({
+    version: 1,
+    fileName: meta.fileName,
+    fileSize: meta.fileSize,
+    header,
+    crew,
+    factors,
+    namedCrewId,
+    overhead: Number(overhead) || 0,
+    profit: Number(profit) || 0,
+    lines,
+    separateFromTakeoff: true,
+    scopeEdited: meta.scopeEdited,
+  }), [header, crew, factors, namedCrewId, overhead, profit, lines, meta]);
 
-  const direct = totals.material + totals.labor;
-  const oh = direct * ((Number(overhead) || 0) / 100);
-  const sub = direct + oh;
-  const prof = sub * ((Number(profit) || 0) / 100);
-  const grand = sub + prof;
+  const totals = useMemo(() => estimateGrandTotal(draft), [draft]);
+  const oh = totals.overhead;
+  const prof = totals.profit;
+  const grand = totals.total;
 
   function setHeaderField(key, value) {
     setHeader((current) => ({ ...current, [key]: value }));
@@ -236,23 +245,17 @@ export default function EstimateBuilder() {
         </p>
         <Link to="/takeoff" className="mt-2 inline-block text-sm font-semibold text-blue-600 dark:text-orange-500">Back to takeoff</Link>
         <div className="mt-3">
-          {ready && <SaveProjectDocuments estimate={{
-            version: 1,
-            fileName: meta.fileName,
-            fileSize: meta.fileSize,
-            header,
-            crew,
-            factors,
-            namedCrewId,
-            overhead: Number(overhead) || 0,
-            profit: Number(profit) || 0,
-            lines,
-            separateFromTakeoff: true,
-            scopeEdited: meta.scopeEdited,
-          }} />}
+          {ready && <SaveProjectDocuments estimate={draft} />}
         </div>
       </div>
 
+      <Tabs defaultValue="estimate" className="w-full min-w-0">
+        <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto bg-muted/70 p-1">
+          <TabsTrigger value="estimate" className="px-4 py-2">Estimate</TabsTrigger>
+          <TabsTrigger value="labor-markup" className="px-4 py-2">Labor &amp; markup</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="estimate" className="mt-4 space-y-5">
       <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
         <h2 className="mb-4 text-lg font-bold">Project &amp; Customer</h2>
         <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -272,71 +275,6 @@ export default function EstimateBuilder() {
             <textarea value={header.scopeNotes} onChange={(e) => { setMeta((current) => ({ ...current, scopeEdited: true })); setHeaderField("scopeNotes", e.target.value); }} rows={4} className="w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2.5" />
           </label>
         </div>
-      </section>
-
-      <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-bold">Employee class &amp; wage</h2>
-            <p className="text-xs text-muted-foreground">Select one or more classes. Default is Journeyman at the Journeyman wage. Wages are dollars per man-hour.</p>
-          </div>
-          <p className="text-sm font-bold">Crew rate ${wage.rate.toFixed(2)}/MH · {wage.label}</p>
-        </div>
-        <div className="mb-4">
-          <NamedCrewPicker crews={namedCrews} selectedId={namedCrewId} onLoad={loadCrew} onSave={saveCrew} />
-        </div>
-        <div className="mt-4">
-          <table className="w-full table-auto text-sm">
-            <thead className="text-left text-xs uppercase text-muted-foreground">
-              <tr>
-                <th className="p-2">Use</th>
-                <th className="p-2">Class</th>
-                <th className="p-2">Hourly wage $/MH</th>
-                <th className="p-2">Headcount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {crew.map((row) => (
-                <tr key={row.id} className="border-t border-border">
-                  <td className="p-2">
-                    <input type="checkbox" checked={row.selected} onChange={() => toggleClass(row.id)} aria-label={`Select ${row.label}`} />
-                  </td>
-                  <td className="p-2 font-semibold">{row.label}{row.id === "journeyman" ? " (default)" : ""}</td>
-                  <td className="p-2">
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={row.wage}
-                      aria-label={`${row.label} wage`}
-                      onChange={(e) => applyCrew(crew.map((item) => item.id === row.id ? { ...item, wage: e.target.value } : item))}
-                      className="w-full min-w-0 max-w-40 rounded-md border border-input bg-background px-2 py-1.5"
-                    />
-                  </td>
-                  <td className="p-2">
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={row.headcount}
-                      aria-label={`${row.label} headcount`}
-                      onChange={(e) => applyCrew(crew.map((item) => {
-                        if (item.id !== row.id) return item;
-                        const headcount = e.target.value;
-                        return { ...item, headcount, selected: Number(headcount) > 0 };
-                      }))}
-                      className="w-full min-w-0 max-w-28 rounded-md border border-input bg-background px-2 py-1.5"
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-        <ProductivityFactorEditor factors={factors} onChange={changeFactor} />
       </section>
 
       <section className="rounded-2xl border border-border bg-card shadow-sm">
@@ -405,7 +343,92 @@ export default function EstimateBuilder() {
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,22rem)]">
         <div className="min-w-0 rounded-2xl border border-border bg-card p-4">
-          <h2 className="font-bold">Estimate controls</h2>
+          <h2 className="font-bold">Estimate PDF</h2>
+          <p className="mt-1 text-xs text-muted-foreground">Download or print the customer estimate. Company branding is set in Settings.</p>
+          <div className="mt-3">
+            <EstimatePdfActions estimate={draft} />
+          </div>
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <Sum label="Material" value={totals.material} />
+          <Sum label="Labor" value={totals.labor} />
+          <div className="mt-3 flex justify-between border-t border-border pt-4 text-xl font-black">
+            <span>Estimate Total</span>
+            <span className="text-blue-600 dark:text-orange-500">${grand.toFixed(2)}</span>
+          </div>
+        </div>
+      </section>
+        </TabsContent>
+
+        <TabsContent value="labor-markup" className="mt-4 space-y-5">
+      <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold">Employee class &amp; wage</h2>
+            <p className="text-xs text-muted-foreground">Select one or more classes. Default is Journeyman at the Journeyman wage. Wages are dollars per man-hour. These values stay off the estimate and the PDF.</p>
+          </div>
+          <p className="text-sm font-bold">Crew rate ${wage.rate.toFixed(2)}/MH · {wage.label}</p>
+        </div>
+        <div className="mb-4">
+          <NamedCrewPicker crews={namedCrews} selectedId={namedCrewId} onLoad={loadCrew} onSave={saveCrew} />
+        </div>
+        <div className="mt-4">
+          <table className="w-full table-auto text-sm">
+            <thead className="text-left text-xs uppercase text-muted-foreground">
+              <tr>
+                <th className="p-2">Use</th>
+                <th className="p-2">Class</th>
+                <th className="p-2">Hourly wage $/MH</th>
+                <th className="p-2">Headcount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {crew.map((row) => (
+                <tr key={row.id} className="border-t border-border">
+                  <td className="p-2">
+                    <input type="checkbox" checked={row.selected} onChange={() => toggleClass(row.id)} aria-label={`Select ${row.label}`} />
+                  </td>
+                  <td className="p-2 font-semibold">{row.label}{row.id === "journeyman" ? " (default)" : ""}</td>
+                  <td className="p-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={row.wage}
+                      aria-label={`${row.label} wage`}
+                      onChange={(e) => applyCrew(crew.map((item) => item.id === row.id ? { ...item, wage: e.target.value } : item))}
+                      className="w-full min-w-0 max-w-40 rounded-md border border-input bg-background px-2 py-1.5"
+                    />
+                  </td>
+                  <td className="p-2">
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={row.headcount}
+                      aria-label={`${row.label} headcount`}
+                      onChange={(e) => applyCrew(crew.map((item) => {
+                        if (item.id !== row.id) return item;
+                        const headcount = e.target.value;
+                        return { ...item, headcount, selected: Number(headcount) > 0 };
+                      }))}
+                      className="w-full min-w-0 max-w-28 rounded-md border border-input bg-background px-2 py-1.5"
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <ProductivityFactorEditor factors={factors} onChange={changeFactor} />
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,22rem)]">
+        <div className="min-w-0 rounded-2xl border border-border bg-card p-4">
+          <h2 className="font-bold">Overhead &amp; profit</h2>
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Overhead %" type="number" value={overhead} set={setOverhead} />
             <Field label="Profit %" type="number" value={profit} set={setProfit} />
@@ -422,6 +445,8 @@ export default function EstimateBuilder() {
           </div>
         </div>
       </section>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

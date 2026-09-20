@@ -1,5 +1,7 @@
-export const DEFAULT_MARKER_SIZE = 1.6;
-export const DEFAULT_LINE_SIZE = 2;
+export const DEFAULT_MARKER_SIZE = 0.55;
+export const DEFAULT_LINE_SIZE = 1.35;
+export const LEGACY_DEFAULT_MARKER_SIZE = 1.6;
+export const LEGACY_DEFAULT_LINE_SIZE = 2;
 
 export function clampMarkSize(value, fallback) {
   const size = Number(value);
@@ -36,4 +38,18 @@ export function markerSizePatch(size) {
 export function lineSizePatch(size) {
   const next = clampMarkSize(size, DEFAULT_LINE_SIZE);
   return { thickness: next, lineSize: next, lineSizeOverride: true, thicknessOverride: true };
+}
+
+export function normalizeSavedMarkerSize(value) {
+  const size = Number(value);
+  if (!Number.isFinite(size) || size <= 0) return DEFAULT_MARKER_SIZE;
+  if (size >= LEGACY_DEFAULT_MARKER_SIZE - 0.05) return DEFAULT_MARKER_SIZE;
+  return size;
+}
+
+export function normalizeSavedLineSize(value) {
+  const size = Number(value);
+  if (!Number.isFinite(size) || size <= 0) return DEFAULT_LINE_SIZE;
+  if (size >= LEGACY_DEFAULT_LINE_SIZE - 0.05) return DEFAULT_LINE_SIZE;
+  return size;
 }

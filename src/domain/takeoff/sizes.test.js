@@ -5,6 +5,8 @@ import {
   isMarkerMark,
   lineSizePatch,
   markerSizePatch,
+  normalizeSavedLineSize,
+  normalizeSavedMarkerSize,
   resolvedLineSize,
   resolvedMarkerSize,
 } from "./sizes.js";
@@ -21,6 +23,12 @@ assert(resolvedMarkerSize({ markerSize: 4 }, 2.4) === 2.4, "stamped size is not 
 assert(resolvedMarkerSize({ markerSize: 4, markerSizeOverride: true }, 2.4) === 4, "marker override wins");
 assert(resolvedMarkerSize({ markerSizeOverride: true }, 2.4) === 2.4, "invalid marker override falls back to global");
 assert(resolvedMarkerSize({}, 0) === DEFAULT_MARKER_SIZE, "invalid global marker size uses default");
+assert(DEFAULT_MARKER_SIZE <= 0.7, "default markers are small enough to read the plan");
+assert(normalizeSavedMarkerSize(1.6) === DEFAULT_MARKER_SIZE, "saved 1.6 migrates to the new default");
+assert(normalizeSavedLineSize(2) === DEFAULT_LINE_SIZE, "saved default line size migrates");
+assert(DEFAULT_MARKER_SIZE <= 0.7, "default markers are small enough to read the plan");
+assert(normalizeSavedMarkerSize(1.6) === DEFAULT_MARKER_SIZE, "saved 1.6 markers migrate to the new default");
+assert(normalizeSavedLineSize(2) === DEFAULT_LINE_SIZE, "saved default line size migrates");
 
 assert(resolvedLineSize({}, 3) === 3, "lines follow the global size");
 assert(resolvedLineSize({ thickness: 5 }, 3) === 3, "stamped thickness is not an override");

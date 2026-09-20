@@ -21,6 +21,7 @@ import { buildAiMarks } from "@/domain/takeoff/aiTakeoff";
 import { readAiPages } from "@/domain/takeoff/aiPages";
 import { drawingSymbolsFromDocs, readDrawingDocuments } from "@/domain/takeoff/drawing-docs";
 import { DEFAULT_LINE_SIZE, DEFAULT_MARKER_SIZE, resolvedLineSize, resolvedMarkerSize } from "@/domain/takeoff/sizes";
+import { OVERLAY_FONT_SIZE, layoutOverlayCallouts } from "@/domain/takeoff/overlayLayout";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -389,35 +390,48 @@ function ReviewOverlay({ marks, selectedId, groups }) {
     if (groupIndex >= 0) return colors[groupIndex % colors.length];
     return mark.color || "#2563eb";
   };
+  const callouts = layoutOverlayCallouts({
+    conduits: marks.filter((mark) => mark.tool === "conduit" && mark.points?.length),
+    devices: marks.filter((mark) => mark.type === "count" || mark.type === "drop"),
+    selectedId,
+  });
   return (
     <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
       {marks.filter((mark) => mark.points?.length).map((mark) => {
         const points = mark.points.map((point) => `${point.x},${point.y}`).join(" ");
         const color = colorFor(mark);
         const width = resolvedLineSize(mark, DEFAULT_LINE_SIZE);
-        const end = mark.points[mark.points.length - 1];
         return (
           <g key={mark.id}>
-            {mark.id === selectedId ? <polyline points={points} fill="none" stroke="#ffffff" strokeWidth={width + 2.5} vectorEffect="non-scaling-stroke" /> : null}
+            {mark.id === selectedId ? <polyline points={points} fill="none" stroke="#ffffff" strokeWidth={width + 1.4} vectorEffect="non-scaling-stroke" /> : null}
             <polyline points={points} fill="none" stroke={color} strokeWidth={width} vectorEffect="non-scaling-stroke" />
-            {end ? (
-              <text x={end.x} y={Math.max(2, end.y - 1.6)} fontSize="2.1" fontWeight="700" fill={color}>
-                {`R${mark.runNumber || ""}`}
-              </text>
-            ) : null}
           </g>
         );
       })}
-      {marks.filter((mark) => mark.type === "count" || mark.type === "drop").map((mark, index) => {
+      {marks.filter((mark) => mark.type === "count" || mark.type === "drop").map((mark) => {
         const radius = resolvedMarkerSize(mark, DEFAULT_MARKER_SIZE);
         const color = colorFor(mark);
         return (
           <g key={mark.id}>
-            <circle cx={mark.x} cy={mark.y} r={radius} fill={color} stroke={mark.id === selectedId ? "#ea580c" : "white"} strokeWidth={mark.id === selectedId ? ".55" : ".3"} vectorEffect="non-scaling-stroke" />
-            <text x={mark.x} y={mark.y + radius * 0.28} textAnchor="middle" fontSize={Math.max(0.8, radius * 0.75)} fontWeight="700" fill="white">{mark.abbr || index + 1}</text>
+            <circle cx={mark.x} cy={mark.y} r={radius} fill={color} fillOpacity="0.92" stroke={mark.id === selectedId ? "#ea580c" : "white"} strokeWidth={mark.id === selectedId ? ".35" : ".16"} vectorEffect="non-scaling-stroke" />
           </g>
         );
       })}
+      {[...callouts.conduitLabels, ...callouts.deviceLabels].map((label) => (
+        <text
+          key={`${label.id}-${label.text}`}
+          x={label.x}
+          y={label.y}
+          fontSize={OVERLAY_FONT_SIZE}
+          fontWeight="600"
+          fill="#1e3a8a"
+          stroke="#ffffff"
+          strokeWidth="0.22"
+          paintOrder="stroke"
+        >
+          {label.text}
+        </text>
+      ))}
     </svg>
   );
 }

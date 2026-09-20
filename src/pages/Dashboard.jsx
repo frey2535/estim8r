@@ -1,19 +1,19 @@
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { BookOpen, Calculator, FileText, FolderOpen, Image as ImageIcon, Shield, ShieldCheck, StickyNote, TrendingUp } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { BookOpen, Calculator, FileText, FolderOpen, Image as ImageIcon, Shield, ShieldCheck, StickyNote, Trash2, TrendingUp } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { canManageEstim8rAccess } from "@/lib/ownerAccessRules";
 import {
-  buildMarkupPages,
+  deleteDrawingFile,
+  deleteProjectFolder,
   downloadBlob,
   getDrawingFile,
   listProjectFolders,
   readTakeoffSession,
 } from "@/domain/estimate/projectDocuments";
-import { readEstimate } from "@/domain/estimate/estimateStore";
+import { activateEstimate, deleteStoredEstimate, readEstimate } from "@/domain/estimate/estimateStore";
 import { readCompanyBranding } from "@/domain/estimate/branding";
 import { estimatePdfBlob } from "@/domain/estimate/estimatePdf";
-import { titleBlockForMarkup } from "@/domain/estimate/fromDrawings";
 
 const cards = [
   ["Create Estimate", "Build a bid using verified labor, company history and transparent productivity factors.", "/estimates/new", Calculator],
@@ -21,7 +21,17 @@ const cards = [
   ["Production History", "Turn actual field production into company-specific labor intelligence.", "/production", TrendingUp],
 ];
 
+function markupPath(folder) {
+  const params = new URLSearchParams({
+    file: folder.fileName || "",
+    size: String(folder.fileSize || 0),
+  });
+  return `/markup?${params.toString()}`;
+}
+
 function FolderDocs({ folder }) {
+  const navigate = useNavigate();
+
   async function downloadDrawing() {
     const file = await getDrawingFile(folder.fileName, folder.fileSize);
     if (!file) return;
@@ -35,20 +45,13 @@ function FolderDocs({ folder }) {
     downloadBlob(blob, fileName);
   }
 
-  function downloadMarkup() {
-    const takeoff = readTakeoffSession(folder.fileName, folder.fileSize);
-    const estimate = readEstimate(folder.fileName, folder.fileSize);
-    const markup = buildMarkupPages({
-      fileName: folder.fileName,
-      pageCount: Math.max(Number(takeoff?.pageCount) || 1, Number(takeoff?.sheet) || 1, ...((takeoff?.marks || []).map((mark) => Number(mark.sheet) || 1)), 1),
-      marks: takeoff?.marks || [],
-      calibration: takeoff?.calibration || null,
-      titleBlock: titleBlockForMarkup(estimate?.header),
-    });
-    downloadBlob(
-      new Blob([JSON.stringify(markup, null, 2)], { type: "application/json" }),
-      folder.markupName || `${folder.projectName}-markup-pages.json`,
-    );
+  function openEstimate() {
+    activateEstimate(folder.fileName, folder.fileSize);
+    navigate("/estimates/new");
+  }
+
+  function openMarkup() {
+    navigate(markupPath(folder));
   }
 
   return (
@@ -59,8 +62,11 @@ function FolderDocs({ folder }) {
       <button type="button" onClick={downloadEstimate} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-muted">
         <FileText className="h-3.5 w-3.5" /> Estimate PDF
       </button>
-      <button type="button" onClick={downloadMarkup} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-muted">
+      <button type="button" onClick={openMarkup} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-muted">
         <StickyNote className="h-3.5 w-3.5" /> Markup pages
+      </button>
+      <button type="button" onClick={openEstimate} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-muted">
+        Open estimate
       </button>
     </div>
   );
@@ -99,11 +105,13 @@ export default function Dashboard() {
       )}
       <div className="mb-8 grid gap-4 md:grid-cols-3">
         {cards.map(([title, text, to, Icon]) => (
-          <Link to={to} key={title} className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-all hover:border-blue-500/60 hover:shadow-md dark:hover:border-orange-500/60">
-            <Icon className="mb-4 h-7 w-7 text-blue-600 dark:text-orange-500" />
-            <h2 className="text-lg font-bold text-foreground">{title}</h2>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">{text}</p>
-          </Link>
+          <div key={title} className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-all hover:border-blue-500/60 hover:shadow-md dark:hover:border-orange-500/60">
+            <Link to={to} className="block">
+              <Icon className="mb-4 h-7 w-7 text-blue-600 dark:text-orange-500" />
+              <h2 className="text-lg font-bold text-foreground">{title}</h2>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">{text}</p>
+            </Link>
+          </div>
         ))}
       </div>
 
@@ -134,7 +142,20 @@ export default function Dashboard() {
                       <p className="mt-1 text-xs font-semibold text-blue-600 dark:text-orange-500">Also saved on the Buildr project Estimate tab</p>
                     ) : null}
                   </div>
-                  <Link to="/estimates/new" className="text-sm font-semibold text-blue-600 dark:text-orange-500">Open estimate</Link>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!window.confirm(`Delete ${folder.projectName || "this project"} from the Estimates folder?`)) return;
+                      deleteStoredEstimate(folder.fileName, folder.fileSize);
+                      deleteProjectFolder(folder);
+                      void deleteDrawingFile(folder.fileName, folder.fileSize).catch(() => {});
+                      setFolders(listProjectFolders());
+                    }}
+                    className="inline-flex items-center gap-1 rounded-lg border border-destructive/40 px-2.5 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10"
+                    aria-label={`Delete ${folder.projectName || "project"}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Delete
+                  </button>
                 </div>
                 <FolderDocs folder={folder} />
               </article>

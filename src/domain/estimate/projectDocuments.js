@@ -1,3 +1,6 @@
+import { buildReviewMarkupPages } from "../takeoff/markupPages.js";
+import { includedLines } from "./presentation.js";
+
 export const PROJECT_FOLDER_INDEX_KEY = "estim8r.projectDocs.v1";
 
 export function projectFolderKey(projectName) {
@@ -78,6 +81,8 @@ export function estimateContentFingerprint(estimate, takeoff) {
     fileSize: estimate?.fileSize || 0,
     header: estimate?.header || {},
     lines: estimate?.lines || [],
+    itemized: Boolean(estimate?.itemized),
+    visibleTotals: estimate?.visibleTotals || null,
     overhead: estimate?.overhead,
     profit: estimate?.profit,
     crew: estimate?.crew || [],
@@ -118,7 +123,21 @@ export function buildMarkupPages({ fileName, pageCount, marks, calibration, titl
     pages,
   };
   if (titleBlock && typeof titleBlock === "object") markup.titleBlock = titleBlock;
+  markup.reviewPages = buildReviewMarkupPages({ marks });
   return markup;
+}
+
+export function writeTakeoffSession(fileName, fileSize, session) {
+  const payload = session && typeof session === "object" ? session : {};
+  localStorage.setItem(takeoffStorageKey(fileName, fileSize), JSON.stringify(payload));
+  return payload;
+}
+
+export function deleteProjectFolder(folder) {
+  const id = folder?.id || projectFolderKey(folder?.projectName);
+  const folders = readFolderIndex().filter((item) => item.id !== id);
+  writeFolderIndex(folders);
+  return folders;
 }
 
 export function readTakeoffSession(fileName, fileSize) {
@@ -222,6 +241,19 @@ export async function getDrawingFile(fileName, fileSize) {
   return file || null;
 }
 
+export async function deleteDrawingFile(fileName, fileSize) {
+  if (!fileName || typeof indexedDB === "undefined") return null;
+  const db = await openDrawingDb();
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction(DRAWING_STORE, "readwrite");
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.objectStore(DRAWING_STORE).delete(drawingRecordKey(fileName, fileSize));
+  });
+  db.close();
+  return drawingRecordKey(fileName, fileSize);
+}
+
 export function downloadBlob(blob, fileName) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -232,7 +264,7 @@ export function downloadBlob(blob, fileName) {
 }
 
 export function estimateTotals(estimate) {
-  const lines = estimate?.lines || [];
+  const lines = includedLines(estimate);
   return lines.reduce((acc, line) => {
     const qty = Number(line.quantity) || 0;
     acc.material += qty * (Number(line.materialUnitCost) || 0);

@@ -40,6 +40,20 @@ export function readActiveEstimate() {
   return readJson(key);
 }
 
+export function activateEstimate(fileName, fileSize) {
+  const key = estimateStorageKey(fileName, fileSize);
+  const stored = readJson(key);
+  if (!stored) return null;
+  localStorage.setItem(ACTIVE_ESTIMATE_KEY, key);
+  return stored;
+}
+
+export function deleteStoredEstimate(fileName, fileSize) {
+  const key = estimateStorageKey(fileName, fileSize);
+  localStorage.removeItem(key);
+  if (localStorage.getItem(ACTIVE_ESTIMATE_KEY) === key) localStorage.removeItem(ACTIVE_ESTIMATE_KEY);
+}
+
 export function writeEstimate(draft) {
   const existing = readEstimate(draft.fileName, draft.fileSize) || {};
   const next = {

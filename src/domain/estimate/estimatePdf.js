@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import { brandingLayout, companyLines, normalizeBranding } from "./branding.js";
 import { estimateGrandTotal } from "./projectDocuments.js";
+import { includedLines, resolveVisibleTotals, TOTAL_OPTIONS } from "./presentation.js";
 
 const HIDDEN_LABELS = [
   "employee class",
@@ -39,7 +40,8 @@ export function estimatePdfFileName(estimate) {
 export function estimatePresentation(estimate) {
   const header = estimate?.header || {};
   const moneyTotals = estimateGrandTotal(estimate);
-  const lines = (estimate?.lines || []).map((line) => {
+  const visible = resolveVisibleTotals(estimate);
+  const lines = includedLines(estimate).map((line) => {
     const qty = Number(line.quantity) || 0;
     const material = qty * (Number(line.materialUnitCost) || 0);
     const labor = qty * (Number(line.laborMhPerUnit) || 0) * (Number(line.laborRate) || 0);
@@ -67,11 +69,11 @@ export function estimatePresentation(estimate) {
     bidDue: header.bidDue || "",
     scopeNotes: header.scopeNotes || "",
     lines,
-    totals: {
-      material: moneyTotals.material,
-      labor: moneyTotals.labor,
-      total: moneyTotals.total,
-    },
+    totals: Object.fromEntries(
+      TOTAL_OPTIONS
+        .filter((option) => visible[option.key])
+        .map((option) => [option.key, moneyTotals[option.key]]),
+    ),
   };
 }
 
@@ -270,21 +272,18 @@ export function buildEstimatePdf(estimate, brandingInput) {
   });
 
   cursor += 16;
-  const totalsHeight = branding.cardPad * 2 + 78;
+  const totalRows = TOTAL_OPTIONS.filter((option) => option.key in presentation.totals);
+  const totalsHeight = branding.cardPad * 2 + Math.max(22, totalRows.length * 22 + 12);
   ensureSpace(totalsHeight + 8);
   card(page.right - 240, cursor, 240, totalsHeight);
-  const totals = [
-    ["Material", money(presentation.totals.material)],
-    ["Labor", money(presentation.totals.labor)],
-    ["Estimate total", money(presentation.totals.total)],
-  ];
-  totals.forEach(([label, value], index) => {
+  totalRows.forEach((option, index) => {
     const y = cursor + branding.cardPad + 16 + index * 22;
-    doc.setFont(branding.font, index === 2 ? "bold" : "normal");
-    doc.setFontSize(index === 2 ? 12 : 10);
-    ink(index === 2 ? branding.accentColor : branding.textColor);
-    write(label, page.right - 228, y);
-    write(value, page.right - 16, y, { align: "right" });
+    const last = option.key === "total";
+    doc.setFont(branding.font, last ? "bold" : "normal");
+    doc.setFontSize(last ? 12 : 10);
+    ink(last ? branding.accentColor : branding.textColor);
+    write(option.label, page.right - 228, y);
+    write(money(presentation.totals[option.key]), page.right - 16, y, { align: "right" });
   });
 
   return {

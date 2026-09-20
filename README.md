@@ -56,9 +56,13 @@ Later edits to a synced estimate update the same Buildr Estimate-tab documents. 
 
 ## Estimate presentation
 
-Employee class and wage, productivity factors, overhead, and profit live on the **Labor & markup** tab in Estimate Builder. They are not shown on the Estimate tab or on the customer PDF.
+Employee class and wage, productivity factors, overhead %, and profit % live on the **Labor & markup** tab in Estimate Builder. The Estimate tab can turn on an **itemized estimate** (pick which lines are included, with check-all) and choose which customer totals appear: Material Total, Labor Total, Overhead, Profit, and Total. The branded PDF follows those choices. Wages, crew, and productivity factors stay off the customer PDF.
 
 The estimate saves as a downloadable, printable PDF from the Estimate tab and from the Estimates folder. Company branding for that PDF lives in **Settings → Estimate PDF branding**: logo, company information, colors, text color, font, header size/color, card size/color, and related controls.
+
+## Markup pages
+
+The Estimates folder **Markup pages** button opens `/markup`, where AI builds review drawings for conduit runs, each device type (Lighting, receptacles, equipment, HVAC, Fire Alarm, and the rest), and how circuits are grouped per conduit. Marks can be edited or deleted; those edits write back to the takeoff.
 
 ## Labor architecture (Phase 1–2)
 
@@ -86,5 +90,6 @@ node src/lib/buildrCompany.test.js
 node src/lib/authRedirect.test.js
 node src/lib/ownerAccessRules.test.js
 node src/domain/takeoff/aiTakeoff.test.js
+node src/domain/takeoff/markupPages.test.js
 node src/domain/takeoff/sizes.test.js
 ```

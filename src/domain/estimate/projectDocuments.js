@@ -24,7 +24,7 @@ export function decideSaveDestination({ hasBuildrAccount, canUseBuildr, matching
   return { action: "local" };
 }
 
-export function buildMarkupPages({ fileName, pageCount, marks, calibration }) {
+export function buildMarkupPages({ fileName, pageCount, marks, calibration, titleBlock }) {
   const count = Math.max(1, Number(pageCount) || 1);
   const pages = [];
   for (let page = 1; page <= count; page += 1) {
@@ -33,13 +33,15 @@ export function buildMarkupPages({ fileName, pageCount, marks, calibration }) {
       marks: (marks || []).filter((mark) => (mark.sheet || 1) === page),
     });
   }
-  return {
+  const markup = {
     version: 1,
     kind: "markup-pages",
     fileName: fileName || "",
     calibration: calibration || null,
     pages,
   };
+  if (titleBlock && typeof titleBlock === "object") markup.titleBlock = titleBlock;
+  return markup;
 }
 
 export function readTakeoffSession(fileName, fileSize) {

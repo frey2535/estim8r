@@ -48,7 +48,7 @@ export function writeEstimate(draft) {
 }
 
 /** Copies takeoff quantities into the estimate. Never writes the takeoff sheet. */
-export function syncStoredEstimate({ fileName, fileSize, drawingDocs, rollup, pageCount }) {
+export function syncStoredEstimate({ fileName, fileSize, drawingDocs, rollup, pageCount, markup }) {
   const existing = readEstimate(fileName, fileSize);
   const draft = syncEstimateDraft(existing, {
     fileName,
@@ -56,6 +56,7 @@ export function syncStoredEstimate({ fileName, fileSize, drawingDocs, rollup, pa
     drawingDocs,
     rollup,
     pageCount,
+    markup,
     wageBook: readWageBook(),
   });
   return writeEstimate(draft);

@@ -59,6 +59,15 @@ const markup = buildMarkupPages({
 assert(markup.pages.length === 2, "one markup page per sheet");
 assert(markup.pages[0].marks.length === 1, "page 1 marks");
 assert(markup.pages[1].marks.length === 2, "page 2 marks");
+assert(markup.titleBlock === undefined, "markup without a title block stays in the old shape");
+
+const markedUp = buildMarkupPages({
+  fileName: "plan.pdf",
+  pageCount: 1,
+  marks: [],
+  titleBlock: { customerCompany: "CITY OF SHELBYVILLE", projectAddress: "220 Tulip Tree Rd, Shelbyville, TN 37160" },
+});
+assert(markedUp.titleBlock.customerCompany === "CITY OF SHELBYVILLE", "saved markup can carry extracted title-block fields");
 
 const money = estimateGrandTotal({
   overhead: 10,

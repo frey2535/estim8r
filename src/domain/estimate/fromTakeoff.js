@@ -2,6 +2,7 @@ import { assignLaborHours } from "../labor/libraryDocument.js";
 import { compositeWage, defaultCrew, journeymanWage } from "../labor/employeeClasses.js";
 import { defaultProductivityFactors } from "../labor/productivity.js";
 import { makeLaborSelection } from "../labor/selection.js";
+import { fillEmptyHeader, headerFromDrawings } from "./fromDrawings.js";
 
 export function estimateStorageKey(fileName, fileSize) {
   return `estim8r.estimate.v1:${fileName || "drawing"}:${fileSize || 0}`;
@@ -151,24 +152,25 @@ export function mergeEstimate(existing, incomingLines) {
   return next;
 }
 
-export function buildEstimateDraft({ fileName, fileSize, drawingDocs, rollup, pageCount, wageBook }) {
+export function buildEstimateDraft({ fileName, fileSize, drawingDocs, rollup, pageCount, wageBook, markup }) {
   const crew = defaultCrew(wageBook);
   const rate = compositeWage(crew).rate || journeymanWage(crew);
   const takeoffLines = linesFromRollup(rollup, rate);
   const drawingLines = takeoffLines.length ? [] : linesFromDrawing(drawingDocs, rate);
   const base = fileName ? String(fileName).replace(/\.[^.]+$/, "") : "Drawing estimate";
+  const fromDrawings = headerFromDrawings({ fileName, drawingDocs, markup });
   return {
     version: 1,
     fileName: fileName || "",
     fileSize: fileSize || 0,
     header: {
-      projectName: base,
-      projectAddress: "",
-      estimateNumber: "",
-      customerCompany: "",
-      customerName: "",
-      customerPhone: "",
-      customerEmail: "",
+      projectName: fromDrawings.projectName || base,
+      projectAddress: fromDrawings.projectAddress,
+      estimateNumber: fromDrawings.estimateNumber,
+      customerCompany: fromDrawings.customerCompany,
+      customerName: fromDrawings.customerName,
+      customerPhone: fromDrawings.customerPhone,
+      customerEmail: fromDrawings.customerEmail,
       estimatorName: "",
       bidDue: "",
       scopeNotes: scopeFromDrawing({ fileName, drawingDocs, pageCount }),
@@ -192,14 +194,14 @@ export function syncEstimateDraft(existing, input) {
   const drawingLines = takeoffLines.length ? [] : linesFromDrawing(input.drawingDocs, rate).map((line) => applyRate(line, rate));
   const incoming = [...takeoffLines, ...drawingLines];
   if (!existing) return buildEstimateDraft(input);
+  const fromDrawings = headerFromDrawings(input);
   return {
     ...existing,
     crew,
-    header: {
+    header: fillEmptyHeader({
       ...existing.header,
-      projectName: existing.header?.projectName || input.fileName?.replace(/\.[^.]+$/, "") || "",
       scopeNotes: existing.scopeEdited ? existing.header?.scopeNotes : scopeFromDrawing(input),
-    },
+    }, fromDrawings, { fileName: input.fileName }),
     lines: mergeEstimate(existing, incoming).map((line) => applyRate(line, rate)),
     separateFromTakeoff: true,
   };

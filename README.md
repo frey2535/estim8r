@@ -31,7 +31,14 @@ VITE_BUILDR_API_URL=http://localhost:3001
 
 Buildr sync sends the signed-in email and, when linked, a Buildr company ID. Set the company ID in **Settings → Buildr company**. If no company ID is linked, Buildr still looks up the account by login email.
 
-Sign in from the header **Sign in** button (opens the sign-in page) or **Sign in with Google**. The sign-in page also has **Sign in with Google**, email/password, and a **Platform owner sign in** button. Platform owner is `currentflowconsultingllc@gmail.com`. `marcus.a.frey@gmail.com` is a backup admin on the regular sign-in page, not the platform owner. Google sign-in needs the Google provider enabled on the Supabase project.
+Sign in from the header **Sign in** button (opens the sign-in page) or **Sign in with Google**. The sign-in page also has **Sign in with Google**, email/password, and a **Platform owner sign in** button. Platform owner is `currentflowconsultingllc@gmail.com`. `marcus.a.frey@gmail.com` is a backup admin on the regular sign-in page, not the platform owner.
+
+Google/Gmail sign-in sends the user to Supabase, then back to `/login` on the same origin. A 400 on that hop is usually a dashboard mismatch, not the Estim8r button. Set:
+
+1. **Supabase → Authentication → Providers → Google** — enable it. Paste the Google Cloud client ID and secret.
+2. **Google Cloud → Credentials → OAuth client (Web)** — Authorized JavaScript origins: `https://estim8r.currentflowconsulting.org` and `http://localhost:5177`. Authorized redirect URI must be the Supabase callback, `https://<project-ref>.supabase.co/auth/v1/callback` (copy it from the Google provider page). Do not put the Estim8r URL there.
+3. **Supabase → Authentication → URL Configuration** — Site URL `https://estim8r.currentflowconsulting.org`. Redirect URLs must include `https://estim8r.currentflowconsulting.org/**` and `http://localhost:5177/**`. If this Supabase project is also used by another Current Flow app, add Estim8r’s URLs; the Site URL alone is not enough.
+4. If that Gmail already has an email/password user, enable identity linking for the same email (or use the same Google account after linking). Otherwise Google returns 400 for the second identity.
 
 When an estimate is created from uploaded drawings, blank header fields are filled from the title block / cover sheet (and from markup JSON when those fields are present). Missing values stay blank — Estim8r does not invent a contact, phone, or email.
 
@@ -74,6 +81,7 @@ node src/domain/estimate/estimatePdf.test.js
 node src/domain/estimate/projectDocuments.test.js
 node src/lib/platformIdentity.test.js
 node src/lib/buildrCompany.test.js
+node src/lib/authRedirect.test.js
 node src/domain/takeoff/aiTakeoff.test.js
 node src/domain/takeoff/sizes.test.js
 ```

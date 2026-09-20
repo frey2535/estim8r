@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
+import { trimAuthUrl } from '@/lib/authRedirect';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = trimAuthUrl(import.meta.env.VITE_SUPABASE_URL);
+const supabaseAnonKey = String(import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
@@ -24,6 +25,7 @@ export const supabase = isSupabaseConfigured
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: true,
+        flowType: 'pkce',
       },
     })
   : null;

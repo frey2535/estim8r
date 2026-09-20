@@ -1,5 +1,6 @@
 import { requireSupabase } from "./supabaseClient";
 import { applyPlatformIdentity, normalizeEmail } from "@/lib/platformIdentity";
+import { authRedirectUrl, describeAuthError } from "@/lib/authRedirect";
 
 async function organizationForProfile(client, profile) {
   if (!profile?.org_id) return null;
@@ -63,19 +64,33 @@ export const supabaseAuth = {
       email: normalizeEmail(email),
       password,
     });
-    if (error) throw error;
+    if (error) {
+      error.message = describeAuthError(error);
+      throw error;
+    }
     return profileForUser(data.user);
   },
 
   async loginWithGoogle() {
     const client = requireSupabase();
-    const { error } = await client.auth.signInWithOAuth({
+    const { data, error } = await client.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/`,
+        redirectTo: authRedirectUrl("/login"),
+        skipBrowserRedirect: true,
+        queryParams: {
+          access_type: "online",
+          prompt: "select_account",
+        },
+        scopes: "email profile",
       },
     });
-    if (error) throw error;
+    if (error) {
+      error.message = describeAuthError(error, { google: true });
+      throw error;
+    }
+    if (!data?.url) throw new Error("Google sign-in did not return an authorization URL.");
+    window.location.assign(data.url);
   },
 
   async register({ email, password, fullName, organizationName, companyName, inviteCode }) {
@@ -115,7 +130,7 @@ export const supabaseAuth = {
   async resetPasswordRequest(email) {
     const client = requireSupabase();
     const { error } = await client.auth.resetPasswordForEmail(normalizeEmail(email), {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: authRedirectUrl("/reset-password"),
     });
     if (error) throw error;
     return { ok: true };

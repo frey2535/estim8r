@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { isProductionAuthMisconfigured } from "@/api/supabaseClient";
+import { describeAuthError } from "@/lib/authRedirect";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -28,7 +29,7 @@ export default function GoogleSignInButton({ className, compact = false }) {
       if (isProductionAuthMisconfigured) throw new Error("Production authentication is not configured on this build.");
       await base44.auth.loginWithGoogle();
     } catch (err) {
-      setError(err.message || "Google sign-in failed.");
+      setError(describeAuthError(err, { google: true }));
       setBusy(false);
     }
   }

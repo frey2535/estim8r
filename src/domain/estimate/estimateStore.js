@@ -4,6 +4,7 @@ import {
   estimateStorageKey,
   syncEstimateDraft,
 } from "./fromTakeoff.js";
+import { makeEstimateId } from "./projectDocuments.js";
 
 function readJson(key) {
   try {
@@ -40,11 +41,18 @@ export function readActiveEstimate() {
 }
 
 export function writeEstimate(draft) {
-  const key = estimateStorageKey(draft.fileName, draft.fileSize);
-  localStorage.setItem(key, JSON.stringify(draft));
+  const existing = readEstimate(draft.fileName, draft.fileSize) || {};
+  const next = {
+    ...existing,
+    ...draft,
+    id: draft.id || existing.id || makeEstimateId(),
+    buildrSync: draft.buildrSync || existing.buildrSync || null,
+  };
+  const key = estimateStorageKey(next.fileName, next.fileSize);
+  localStorage.setItem(key, JSON.stringify(next));
   localStorage.setItem(ACTIVE_ESTIMATE_KEY, key);
-  if (draft.crew) writeWageBook(draft.crew);
-  return draft;
+  if (next.crew) writeWageBook(next.crew);
+  return next;
 }
 
 /** Copies takeoff quantities into the estimate. Never writes the takeoff sheet. */

@@ -45,6 +45,8 @@ function AppRoutes() {
             <Route path="/markup" element={<MarkupPages />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/profile" element={<Settings />} />
+          </Route>
+          <Route element={<ProtectedRoute requireProduct={false} unauthenticatedElement={<Navigate to="/login" replace />} />}>
             <Route path="/admin" element={<OwnerAdmin />} />
           </Route>
         </Route>

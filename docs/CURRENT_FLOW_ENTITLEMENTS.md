@@ -7,7 +7,7 @@ Current Flow authentication and product ownership are intentionally separate.
 1. A user signs into a Current Flow identity.
 2. The identity resolves to an individual profile and optionally an organization.
 3. The app checks `product_entitlements` for its own product key.
-4. Access is granted only by a current individual or organization entitlement, or platform-admin override.
+4. Access is granted only by a current individual or organization entitlement, or platform-admin override. The platform owner (`currentflowconsultingllc@gmail.com`) and backup admin (`marcus.a.frey@gmail.com`) always have Estim8r and never see the product gate. `/admin` is the grant/revoke Access screen and does not require a product entitlement.
 
 Estim8r uses the product key `estim8r`.
 

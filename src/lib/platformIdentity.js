@@ -45,3 +45,8 @@ export function hasPlatformAccess(userOrEmail) {
   if (userOrEmail && typeof userOrEmail === "object" && userOrEmail.is_platform_admin) return true;
   return isPlatformStaff(userOrEmail);
 }
+
+export function needsProductEntitlementGate(userOrEmail, hasProductAccess) {
+  if (hasPlatformAccess(userOrEmail)) return false;
+  return !hasProductAccess;
+}

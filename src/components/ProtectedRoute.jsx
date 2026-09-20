@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
+import { needsProductEntitlementGate } from "@/lib/platformIdentity";
 import UserNotRegisteredError from "@/components/UserNotRegisteredError";
 import ProductAccessRequired from "@/components/ProductAccessRequired";
 
@@ -10,8 +11,8 @@ const DefaultFallback = () => (
   </div>
 );
 
-export default function ProtectedRoute({ fallback = <DefaultFallback />, unauthenticatedElement }) {
-  const { isAuthenticated, isLoadingAuth, authChecked, authError, checkUserAuth, entitlementChecked, hasProductAccess } = useAuth();
+export default function ProtectedRoute({ fallback = <DefaultFallback />, unauthenticatedElement, requireProduct = true }) {
+  const { isAuthenticated, isLoadingAuth, authChecked, authError, checkUserAuth, entitlementChecked, hasProductAccess, user } = useAuth();
 
   useEffect(() => {
     if (!authChecked && !isLoadingAuth) checkUserAuth();
@@ -25,6 +26,6 @@ export default function ProtectedRoute({ fallback = <DefaultFallback />, unauthe
   }
 
   if (!isAuthenticated) return unauthenticatedElement;
-  if (!hasProductAccess) return <ProductAccessRequired />;
+  if (requireProduct && needsProductEntitlementGate(user, hasProductAccess)) return <ProductAccessRequired />;
   return <Outlet />;
 }

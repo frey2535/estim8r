@@ -16,6 +16,7 @@ const EstimateBuilder = lazy(() => import("@/pages/EstimateBuilder"));
 const Production = lazy(() => import("@/pages/Production"));
 const TakeoffWorkspace = lazy(() => import("@/pages/TakeoffWorkspace"));
 const Settings = lazy(() => import("@/pages/Settings"));
+const OwnerAdmin = lazy(() => import("@/pages/OwnerAdmin"));
 const Register = lazy(() => import("@/pages/Register"));
 const ForgotPassword = lazy(() => import("@/pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
@@ -42,6 +43,7 @@ function AppRoutes() {
             <Route path="/takeoff" element={<TakeoffWorkspace />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/profile" element={<Settings />} />
+            <Route path="/admin" element={<OwnerAdmin />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -33,6 +33,8 @@ Buildr sync sends the signed-in email and, when linked, a Buildr company ID. Set
 
 Sign in from the header **Sign in** button (opens the sign-in page) or **Sign in with Google**. The sign-in page also has **Sign in with Google**, email/password, and a **Platform owner sign in** button. Platform owner is `currentflowconsultingllc@gmail.com`. `marcus.a.frey@gmail.com` is a backup admin on the regular sign-in page, not the platform owner.
 
+After the platform owner (or backup admin) signs in, **Access** in the header opens **Estim8r access** (`/admin`). Grant or invite by email, and revoke from the user list. Owner and backup admin rows stay protected. Apply `supabase db push` so the grant/revoke RPCs exist.
+
 Google/Gmail sign-in sends the user to Supabase, then back to `/login` on the same origin. A 400 on that hop is usually a dashboard mismatch, not the Estim8r button. Set:
 
 1. **Supabase → Authentication → Providers → Google** — enable it. Paste the Google Cloud client ID and secret.
@@ -82,6 +84,7 @@ node src/domain/estimate/projectDocuments.test.js
 node src/lib/platformIdentity.test.js
 node src/lib/buildrCompany.test.js
 node src/lib/authRedirect.test.js
+node src/lib/ownerAccessRules.test.js
 node src/domain/takeoff/aiTakeoff.test.js
 node src/domain/takeoff/sizes.test.js
 ```

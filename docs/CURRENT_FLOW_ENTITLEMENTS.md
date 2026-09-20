@@ -27,7 +27,7 @@ An entitlement can belong directly to a profile or to an organization. Organizat
 
 ## Security
 
-The browser cannot create or modify entitlements. Authenticated clients receive SELECT only. Purchase fulfillment must be performed by a trusted server, Supabase Edge Function, payment webhook, or platform-admin service using privileged credentials.
+The browser cannot create or modify entitlements directly. Authenticated clients receive SELECT only. Purchase fulfillment uses a trusted server, Edge Function, or webhook. The platform owner (and backup admin) grant or revoke Estim8r through security-definer RPCs on **Access** (`/admin`).
 
 This prevents a user from granting themselves Estim8r by editing client-side state.
 

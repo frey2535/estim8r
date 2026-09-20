@@ -20,6 +20,7 @@ import {
   readTakeoffSession,
   upsertProjectFolder,
 } from "@/domain/estimate/projectDocuments";
+import { titleBlockForMarkup } from "@/domain/estimate/fromDrawings";
 
 function promptKey(projectName) {
   return `estim8r.projectDocs.prompted:${String(projectName || "").trim().toLowerCase()}`;
@@ -59,6 +60,7 @@ export default function SaveProjectDocuments({ estimate }) {
       pageCount,
       marks: takeoff?.marks || [],
       calibration: takeoff?.calibration || null,
+      titleBlock: titleBlockForMarkup(estimate?.header),
     });
     const result = await saveBuildrProjectDocuments({
       email: user?.email,

@@ -31,6 +31,8 @@ VITE_BUILDR_API_URL=http://localhost:3001
 
 Use the same email on both apps.
 
+When an estimate is created from uploaded drawings, blank header fields are filled from the title block / cover sheet (and from markup JSON when those fields are present). Missing values stay blank — Estim8r does not invent a contact, phone, or email.
+
 ## Project documents
 
 When drawings have been uploaded and an estimate exists:
@@ -55,6 +57,7 @@ Existing estimates keep their stored man-hours. Takeoff, drawings, auth, and Sup
 ```bash
 node src/domain/labor/auditedLibrary.test.js
 node src/domain/labor/architecture.test.js
+node src/domain/estimate/fromDrawings.test.js
 node src/domain/estimate/fromTakeoff.test.js
 node src/domain/takeoff/aiTakeoff.test.js
 node src/domain/takeoff/sizes.test.js

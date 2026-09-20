@@ -90,34 +90,47 @@ export function parseScheduleRows(rows, source) {
   return uniqueById(items);
 }
 
-export async function extractPdfPageItems(pdf, pageNumber) {
+export async function extractPdfPage(pdf, pageNumber) {
   const page = await pdf.getPage(pageNumber);
   const content = await page.getTextContent();
   const viewport = page.getViewport({ scale: 1 });
-  return (content.items || []).map((item) => ({
+  const items = (content.items || []).map((item) => ({
     str: String(item.str || ""),
     x: item.transform?.[4] ?? 0,
     y: viewport.height - (item.transform?.[5] ?? 0),
     w: item.width || 0,
   })).filter((item) => item.str.trim());
+  return { items, viewport };
+}
+
+export async function extractPdfPageItems(pdf, pageNumber) {
+  const { items } = await extractPdfPage(pdf, pageNumber);
+  return items;
 }
 
 export async function readDrawingDocuments(fileBytes) {
-  const empty = { pages: [], symbols: [], scheduleItems: [], notes: [] };
+  const empty = { pages: [], symbols: [], scheduleItems: [], notes: [], titleBlock: null };
   if (!fileBytes) return empty;
   const { getPdfDocument } = await import("@/lib/pdf-document");
+  const { parseTitleBlock, titleBlockRowsFromItems } = await import("@/domain/estimate/fromDrawings");
   const pdf = await getPdfDocument(fileBytes);
   const pages = [];
   const symbols = [];
   const scheduleItems = [];
   const notes = [];
+  const titleParts = [];
 
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-    const items = await extractPdfPageItems(pdf, pageNumber);
+    const { items, viewport } = await extractPdfPage(pdf, pageNumber);
     const rows = clusterTextRows(items);
     const text = rows.map((row) => row.text).join("\n");
     const kind = classifyPageText(text);
     pages.push({ page: pageNumber, kind, textLength: text.length });
+    const titleRows = titleBlockRowsFromItems(items, viewport);
+    const titleText = titleRows.join("\n");
+    if (pageNumber <= 3 || /title\s+sheet|cover\s+sheet/i.test(text) || /title\s+sheet|cover\s+sheet/i.test(titleText)) {
+      if (titleText.trim()) titleParts.push(titleText);
+    }
 
     if (kind === "drawing") continue;
     if (items.length < 3 || text.trim().length < 12) {
@@ -138,6 +151,7 @@ export async function readDrawingDocuments(fileBytes) {
     symbols: uniqueById(symbols),
     scheduleItems: uniqueById(scheduleItems),
     notes,
+    titleBlock: parseTitleBlock(titleParts.join("\n\n")),
   };
 }
 

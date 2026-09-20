@@ -1,4 +1,5 @@
 import { linesFromRollup, mergeEstimate, syncEstimateDraft } from "./fromTakeoff.js";
+import { parseTitleBlock } from "./fromDrawings.js";
 import { compositeWage, defaultCrew, journeymanWage } from "../labor/employeeClasses.js";
 import { assignLaborHours } from "../labor/libraryDocument.js";
 
@@ -61,5 +62,48 @@ assert(draft.separateFromTakeoff === true, "estimate is marked separate from tak
 assert(draft.header.projectName === "level-1", "project name from drawing");
 assert(draft.lines.every((line) => line.source === "takeoff"), "takeoff quantities win over blank legend lines");
 assert(assignLaborHours({ category: "Lighting", symbol: "2x4 troffer", unit: "EA" }).mhPerUnit === 0.75, "workbook troffer match");
+
+const soccerBlock = parseTitleBlock(`
+Shelbyville
+Multipurpose
+Soccer Field
+Complex Pavilion
+220 Tulip Tree Rd,
+Shelbyville, TN 37160
+CITY OF SHELBYVILLE
+201 N Spring Street,
+Shelbyville, TN 37160
+WOLD ARCHITECTS
+AND ENGINEERS
+woldae.com | 615 370 8500
+Comm: 257031
+Drawn: YJR
+`);
+const soccer = syncEstimateDraft(null, {
+  fileName: "257031-Soccer Pavilion-DRAWINGS.pdf",
+  fileSize: 14039938,
+  drawingDocs: { titleBlock: soccerBlock, symbols: [], scheduleItems: [], pages: [], notes: [] },
+  rollup,
+  pageCount: 52,
+});
+assert(soccer.header.customerCompany === "CITY OF SHELBYVILLE", "estimate company from title block");
+assert(soccer.header.projectAddress === "220 Tulip Tree Rd, Shelbyville, TN 37160", "estimate address from title block");
+assert(soccer.header.customerPhone === "615-370-8500", "estimate phone from title block");
+assert(soccer.header.customerEmail === "", "no email on the drawings");
+assert(soccer.header.customerName === "", "no contact name on the drawings");
+assert(soccer.header.estimateNumber === "257031", "commission number from title block");
+assert(soccer.separateFromTakeoff === true, "soccer estimate stays separate from takeoff");
+
+const editedHeader = syncEstimateDraft({
+  ...soccer,
+  header: { ...soccer.header, customerCompany: "Typed Contractor" },
+}, {
+  fileName: "257031-Soccer Pavilion-DRAWINGS.pdf",
+  drawingDocs: { titleBlock: soccerBlock, symbols: [], scheduleItems: [], pages: [], notes: [] },
+  rollup,
+  pageCount: 52,
+});
+assert(editedHeader.header.customerCompany === "Typed Contractor", "typed company is not overwritten");
+assert(editedHeader.lines.length === soccer.lines.length, "header fill does not change takeoff lines");
 
 if (!process.exitCode) console.log("estimate labor checks passed");

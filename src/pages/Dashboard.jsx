@@ -9,6 +9,7 @@ import {
   readTakeoffSession,
 } from "@/domain/estimate/projectDocuments";
 import { readEstimate } from "@/domain/estimate/estimateStore";
+import { titleBlockForMarkup } from "@/domain/estimate/fromDrawings";
 
 const cards = [
   ["Create Estimate", "Build a bid using verified labor, company history and transparent productivity factors.", "/estimates/new", Calculator],
@@ -34,11 +35,13 @@ function FolderDocs({ folder }) {
 
   function downloadMarkup() {
     const takeoff = readTakeoffSession(folder.fileName, folder.fileSize);
+    const estimate = readEstimate(folder.fileName, folder.fileSize);
     const markup = buildMarkupPages({
       fileName: folder.fileName,
       pageCount: Math.max(Number(takeoff?.pageCount) || 1, Number(takeoff?.sheet) || 1, ...((takeoff?.marks || []).map((mark) => Number(mark.sheet) || 1)), 1),
       marks: takeoff?.marks || [],
       calibration: takeoff?.calibration || null,
+      titleBlock: titleBlockForMarkup(estimate?.header),
     });
     downloadBlob(
       new Blob([JSON.stringify(markup, null, 2)], { type: "application/json" }),

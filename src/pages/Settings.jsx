@@ -5,9 +5,10 @@ import { platformRoleLabel } from "@/lib/platformIdentity";
 import { readLinkedBuildrCompanyId } from "@/lib/buildrCompany";
 import CompanyBrandingForm from "@/components/estimate/CompanyBrandingForm";
 import BuildrCompanyForm from "@/components/platform/BuildrCompanyForm";
+import { Button } from "@/components/ui/button";
 
 export default function Settings() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const location = useLocation();
   const platformRole = platformRoleLabel(user);
 
@@ -29,6 +30,7 @@ export default function Settings() {
           <dt className="text-muted-foreground">Organization role</dt><dd>{user?.org_role}</dd>
           <dt className="text-muted-foreground">Buildr company ID</dt><dd className="font-mono text-xs">{readLinkedBuildrCompanyId(user) || "—"}</dd>
         </dl>
+        <Button type="button" variant="outline" className="mt-5" onClick={() => void logout()}>Sign out</Button>
       </div>
       <BuildrCompanyForm />
       <div id="estimate-pdf" className="mt-7 max-w-4xl scroll-mt-20">

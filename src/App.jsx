@@ -28,13 +28,13 @@ function AppRoutes() {
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/login/owner" element={<Login platformOwner />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
-          <Route element={<AppLayout />}>
+        <Route element={<AppLayout />}>
+          <Route path="/login" element={<Login />} />
+          <Route path="/login/owner" element={<Login platformOwner />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/estimates/new" element={<EstimateBuilder />} />
             <Route path="/labor" element={<LaborLibrary />} />

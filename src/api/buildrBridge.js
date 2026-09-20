@@ -22,7 +22,7 @@ async function readJson(response) {
   }
 }
 
-export async function fetchBuildrAccountStatus(email) {
+export async function fetchBuildrAccountStatus(email, companyId) {
   const api = buildrApiUrl();
   if (!api || !email) {
     return { configured: Boolean(api), hasAccount: false, canUseBuildr: false, projects: [] };
@@ -32,7 +32,7 @@ export async function fetchBuildrAccountStatus(email) {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, companyId: companyId || undefined }),
     });
     const data = await readJson(response);
     if (!response.ok) {
@@ -44,6 +44,7 @@ export async function fetchBuildrAccountStatus(email) {
       canUseBuildr: Boolean(data.canUseBuildr ?? data.hasAccount),
       projects: Array.isArray(data.projects) ? data.projects : [],
       companyId: data.companyId || null,
+      companyName: data.companyName || null,
     };
   } catch (error) {
     return {
@@ -58,6 +59,7 @@ export async function fetchBuildrAccountStatus(email) {
 
 export async function saveBuildrProjectDocuments({
   email,
+  companyId,
   projectName,
   projectAddress,
   createProject,
@@ -72,6 +74,7 @@ export async function saveBuildrProjectDocuments({
   if (!api) throw new Error("Buildr is not configured.");
   const form = new FormData();
   form.append("email", email || "");
+  if (companyId) form.append("companyId", companyId);
   form.append("projectName", projectName || "");
   form.append("projectAddress", projectAddress || "");
   form.append("createProject", createProject ? "true" : "false");

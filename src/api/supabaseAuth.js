@@ -1,8 +1,5 @@
 import { requireSupabase } from "./supabaseClient";
-
-function normalizeEmail(email) {
-  return String(email || "").trim().toLowerCase();
-}
+import { applyPlatformIdentity, normalizeEmail } from "@/lib/platformIdentity";
 
 async function organizationForProfile(client, profile) {
   if (!profile?.org_id) return null;
@@ -16,7 +13,7 @@ async function organizationForProfile(client, profile) {
 }
 
 function mapProfile(profile, org, authUser) {
-  return {
+  return applyPlatformIdentity({
     ...profile,
     email: normalizeEmail(profile.email || authUser?.email),
     full_name: profile.full_name || normalizeEmail(profile.email || authUser?.email).split("@")[0],
@@ -28,9 +25,10 @@ function mapProfile(profile, org, authUser) {
     access_status: profile.access_status || org?.access_status || "trial",
     purchase_source: profile.purchase_source || org?.purchase_source || "manual",
     seat_limit: org?.seat_limit || null,
+    buildr_company_id: profile.buildr_company_id || null,
     is_platform_admin: Boolean(profile.is_platform_admin),
     authUser,
-  };
+  });
 }
 
 async function profileForUser(user) {

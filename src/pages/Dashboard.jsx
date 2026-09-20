@@ -45,8 +45,12 @@ function FolderDocs({ folder }) {
   }
 
   function openEstimate() {
+    const params = new URLSearchParams({
+      file: folder.fileName || "",
+      size: String(folder.fileSize || 0),
+    });
     activateEstimate(folder.fileName, folder.fileSize);
-    navigate("/estimates/new");
+    navigate(`/estimates/new?${params.toString()}`);
   }
 
   function openMarkup() {

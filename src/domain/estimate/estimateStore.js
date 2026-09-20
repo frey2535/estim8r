@@ -40,6 +40,24 @@ export function readActiveEstimate() {
   return readJson(key);
 }
 
+export function startNewEstimate() {
+  try {
+    localStorage.removeItem(ACTIVE_ESTIMATE_KEY);
+  } catch {
+    /* private mode */
+  }
+}
+
+/** Open a saved estimate, or clear the last one so New Estimate is a blank template. */
+export function openEstimateSession({ fileName, fileSize } = {}) {
+  if (fileName) {
+    const stored = activateEstimate(fileName, fileSize) || readEstimate(fileName, fileSize);
+    if (stored) return stored;
+  }
+  startNewEstimate();
+  return null;
+}
+
 export function activateEstimate(fileName, fileSize) {
   const key = estimateStorageKey(fileName, fileSize);
   const stored = readJson(key);

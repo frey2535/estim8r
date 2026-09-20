@@ -56,6 +56,7 @@ function makeLine({ takeoffKey, source, category, description, quantity, unit, r
     laborSource: labor.sourceName,
     laborSelection: selection,
     notes: labor.note,
+    included: true,
     quantityEdited: false,
     laborRateEdited: false,
     laborMhEdited: false,
@@ -181,6 +182,8 @@ export function buildEstimateDraft({ fileName, fileSize, drawingDocs, rollup, pa
     overhead: 10,
     profit: 10,
     lines: [...takeoffLines, ...drawingLines],
+    itemized: false,
+    visibleTotals: undefined,
     separateFromTakeoff: true,
     scopeEdited: false,
   };

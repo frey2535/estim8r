@@ -74,13 +74,43 @@ assert(built.doc.getNumberOfPages() >= 1, "PDF has a page");
 assert(built.strings.includes("Current Flow Electric"), "PDF prints company name");
 assert(built.strings.includes("CITY OF SHELBYVILLE"), "PDF prints title-block company");
 assert(built.strings.includes("Duplex receptacle"), "PDF prints line items");
-assert(built.strings.includes("Estimate total"), "PDF prints the customer total");
+assert(built.strings.includes("Total"), "PDF prints the customer total");
+assert(built.strings.includes("Material Total"), "PDF prints the material total");
+assert(built.strings.includes("Labor Total"), "PDF prints the labor total");
 assert(!built.strings.some((line) => /employee class|productivity|overhead|profit|journeyman|crew rate/i.test(line)), "PDF omits internals");
 
 const bytes = built.doc.output("arraybuffer");
 assert(bytes.byteLength > 500, "PDF bytes are non-empty");
 const header = String.fromCharCode(...new Uint8Array(bytes.slice(0, 5)));
 assert(header === "%PDF-", `PDF header ${header}`);
+
+const itemized = estimatePresentation({
+  ...estimate,
+  itemized: true,
+  lines: [
+    { ...estimate.lines[0], included: true },
+    {
+      itemType: "Device",
+      category: "Devices",
+      description: "Excluded receptacle",
+      quantity: 4,
+      unit: "EA",
+      materialUnitCost: 10,
+      laborMhPerUnit: 0.22,
+      laborRate: 68,
+      included: false,
+    },
+  ],
+});
+assert(itemized.lines.length === 1, "itemized PDF omits unchecked lines");
+assert(itemized.lines[0].description === "Duplex receptacle", "itemized PDF keeps checked lines");
+assert(itemized.totals.material === 48, "itemized material ignores unchecked lines");
+
+const withOverhead = estimatePresentation({ ...estimate, visibleTotals: { overhead: true, profit: true } });
+assert(withOverhead.totals.overhead > 0, "opt-in overhead total is present");
+assert(withOverhead.totals.profit > 0, "opt-in profit total is present");
+const overheadPdf = buildEstimatePdf({ ...estimate, visibleTotals: { overhead: true } }, { companyName: "Current Flow Electric" });
+assert(overheadPdf.strings.includes("Overhead"), "opt-in overhead prints on the PDF");
 
 const before = estimateContentFingerprint(estimate);
 const branded = { ...estimate };

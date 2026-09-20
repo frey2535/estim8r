@@ -16,6 +16,7 @@ import LaborSourceSelector from "@/components/labor/LaborSourceSelector";
 import ProductivityFactorEditor from "@/components/labor/ProductivityFactorEditor";
 import NamedCrewPicker from "@/components/labor/NamedCrewPicker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DEFAULT_VISIBLE_TOTALS, resolveVisibleTotals, setAllLinesIncluded, TOTAL_OPTIONS } from "@/domain/estimate/presentation";
 
 const ITEM_TYPES = ["Material", "Labor", "Equipment", "Subcontract", "Allowance", "Fixture", "Device", "Conduit", "Wire", "Gear", "Other"];
 const UNITS = ["EA", "LF", "SF", "FT", "100 LF", "1000 LF", "HR", "DAY", "LOT"];
@@ -34,6 +35,7 @@ function blankLine(rate) {
     laborMhPerUnit: 0,
     laborRate: rate,
     notes: "",
+    included: true,
     quantityEdited: true,
     laborRateEdited: false,
     laborMhEdited: true,
@@ -59,6 +61,8 @@ export default function EstimateBuilder() {
   const [lines, setLines] = useState(() => [blankLine(68)]);
   const [overhead, setOverhead] = useState(10);
   const [profit, setProfit] = useState(10);
+  const [itemized, setItemized] = useState(false);
+  const [visibleTotals, setVisibleTotals] = useState(DEFAULT_VISIBLE_TOTALS);
   const [meta, setMeta] = useState({ fileName: "", fileSize: 0, scopeEdited: false });
   const [ready, setReady] = useState(false);
   const [factors, setFactors] = useState(() => defaultProductivityFactors());
@@ -79,6 +83,8 @@ export default function EstimateBuilder() {
       setLines(stored.lines?.length ? stored.lines : [blankLine(compositeWage(nextCrew).rate)]);
       setOverhead(stored.overhead ?? 10);
       setProfit(stored.profit ?? 10);
+      setItemized(Boolean(stored.itemized));
+      setVisibleTotals(resolveVisibleTotals(stored));
       setFactors(stored.factors?.length ? stored.factors : defaultProductivityFactors());
       setNamedCrewId(stored.namedCrewId || "");
       setMeta({ fileName: stored.fileName || "", fileSize: stored.fileSize || 0, scopeEdited: Boolean(stored.scopeEdited) });
@@ -105,10 +111,12 @@ export default function EstimateBuilder() {
       overhead: Number(overhead) || 0,
       profit: Number(profit) || 0,
       lines,
+      itemized,
+      visibleTotals,
       separateFromTakeoff: true,
       scopeEdited: meta.scopeEdited,
     });
-  }, [ready, header, crew, lines, overhead, profit, meta, factors, namedCrewId]);
+  }, [ready, header, crew, lines, overhead, profit, itemized, visibleTotals, meta, factors, namedCrewId]);
 
   const draft = useMemo(() => ({
     version: 1,
@@ -121,9 +129,11 @@ export default function EstimateBuilder() {
     overhead: Number(overhead) || 0,
     profit: Number(profit) || 0,
     lines,
+    itemized,
+    visibleTotals,
     separateFromTakeoff: true,
     scopeEdited: meta.scopeEdited,
-  }), [header, crew, factors, namedCrewId, overhead, profit, lines, meta]);
+  }), [header, crew, factors, namedCrewId, overhead, profit, lines, itemized, visibleTotals, meta]);
 
   const totals = useMemo(() => estimateGrandTotal(draft), [draft]);
   const oh = totals.overhead;
@@ -283,9 +293,25 @@ export default function EstimateBuilder() {
             <h2 className="text-lg font-bold">Estimate Lines</h2>
             <p className="text-xs text-muted-foreground">Quantities match the takeoff. Man-hours come from the labor library. Labor rate follows the selected classes unless you edit a line.</p>
           </div>
-          <button type="button" onClick={() => setLines((current) => [...current, blankLine(wage.rate)])} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white dark:bg-orange-500">
-            <Plus className="h-4 w-4" />Add line
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold">
+              <input type="checkbox" checked={itemized} onChange={(e) => setItemized(e.target.checked)} />
+              Itemized estimate
+            </label>
+            {itemized ? (
+              <>
+                <button type="button" onClick={() => setLines((current) => setAllLinesIncluded(current, true))} className="rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-muted">
+                  Check all
+                </button>
+                <button type="button" onClick={() => setLines((current) => setAllLinesIncluded(current, false))} className="rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-muted">
+                  Uncheck all
+                </button>
+              </>
+            ) : null}
+            <button type="button" onClick={() => setLines((current) => [...current, blankLine(wage.rate)])} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white dark:bg-orange-500">
+              <Plus className="h-4 w-4" />Add line
+            </button>
+          </div>
         </div>
         <div className="divide-y divide-border">
           {lines.map((row) => {
@@ -294,7 +320,18 @@ export default function EstimateBuilder() {
             const hours = qty * (Number(row.laborMhPerUnit) || 0);
             const lab = hours * (Number(row.laborRate) || 0);
             return (
-              <div key={row.id} className="grid grid-cols-1 gap-2 p-3 min-[520px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+              <div key={row.id} className={`grid grid-cols-1 gap-2 p-3 min-[520px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 ${itemized && row.included === false ? "opacity-60" : ""}`}>
+                {itemized ? (
+                  <label className="flex items-center gap-2 text-xs font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={row.included !== false}
+                      onChange={(e) => patchLine(row.id, "included", e.target.checked)}
+                      aria-label={`Include ${row.description || "line"}`}
+                    />
+                    Include
+                  </label>
+                ) : null}
                 <Field label="Type"><Sel value={row.itemType} vals={ITEM_TYPES} set={(v) => patchLine(row.id, "itemType", v)} /></Field>
                 <Field label="Category"><Cell value={row.category} set={(v) => patchLine(row.id, "category", v)} /></Field>
                 <Field label="Item / description" className="min-[520px]:col-span-2"><Cell value={row.description} set={(v) => patchLine(row.id, "description", v)} placeholder="Item description" /></Field>
@@ -350,11 +387,31 @@ export default function EstimateBuilder() {
           </div>
         </div>
         <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-          <Sum label="Material" value={totals.material} />
-          <Sum label="Labor" value={totals.labor} />
-          <div className="mt-3 flex justify-between border-t border-border pt-4 text-xl font-black">
-            <span>Estimate Total</span>
-            <span className="text-blue-600 dark:text-orange-500">${grand.toFixed(2)}</span>
+          <h2 className="font-bold">Totals on this estimate</h2>
+          <p className="mt-1 text-xs text-muted-foreground">Choose which totals appear here and on the customer PDF. Overhead and profit stay on Labor &amp; markup unless you turn them on.</p>
+          <div className="mt-3 grid gap-2">
+            {TOTAL_OPTIONS.map((option) => (
+              <label key={option.key} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={Boolean(visibleTotals[option.key])}
+                  onChange={(e) => setVisibleTotals((current) => ({ ...current, [option.key]: e.target.checked }))}
+                />
+                {option.label}
+              </label>
+            ))}
+          </div>
+          <div className="mt-4">
+            {visibleTotals.material ? <Sum label="Material Total" value={totals.material} /> : null}
+            {visibleTotals.labor ? <Sum label="Labor Total" value={totals.labor} /> : null}
+            {visibleTotals.overhead ? <Sum label="Overhead" value={oh} /> : null}
+            {visibleTotals.profit ? <Sum label="Profit" value={prof} /> : null}
+            {visibleTotals.total ? (
+              <div className="mt-3 flex justify-between border-t border-border pt-4 text-xl font-black">
+                <span>Total</span>
+                <span className="text-blue-600 dark:text-orange-500">${grand.toFixed(2)}</span>
+              </div>
+            ) : null}
           </div>
         </div>
       </section>

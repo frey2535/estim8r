@@ -3,6 +3,7 @@ import {
   buildrSyncFromResult,
   canSaveProjectDocuments,
   decideSaveDestination,
+  deleteProjectFolder,
   estimateContentFingerprint,
   estimateGrandTotal,
   findDocumentForEstim8r,
@@ -10,6 +11,7 @@ import {
   matchProjectByName,
   parseEstim8rEstimateId,
   projectFolderKey,
+  upsertProjectFolder,
 } from "./projectDocuments.js";
 
 function assert(cond, message) {
@@ -78,6 +80,7 @@ assert(markup.pages.length === 2, "one markup page per sheet");
 assert(markup.pages[0].marks.length === 1, "page 1 marks");
 assert(markup.pages[1].marks.length === 2, "page 2 marks");
 assert(markup.titleBlock === undefined, "markup without a title block stays in the old shape");
+assert(Array.isArray(markup.reviewPages), "saved markup also carries AI review pages");
 
 const markedUp = buildMarkupPages({
   fileName: "plan.pdf",
@@ -95,6 +98,30 @@ const money = estimateGrandTotal({
 assert(money.material === 100, `material ${money.material}`);
 assert(money.labor === 100, `labor ${money.labor}`);
 assert(Math.abs(money.total - 242) < 0.001, `grand ${money.total}`);
+
+const itemizedMoney = estimateGrandTotal({
+  itemized: true,
+  overhead: 10,
+  profit: 10,
+  lines: [
+    { quantity: 2, materialUnitCost: 50, laborMhPerUnit: 1, laborRate: 50, included: true },
+    { quantity: 8, materialUnitCost: 50, laborMhPerUnit: 1, laborRate: 50, included: false },
+  ],
+});
+assert(itemizedMoney.material === 100, `itemized material ${itemizedMoney.material}`);
+assert(itemizedMoney.labor === 100, `itemized labor ${itemizedMoney.labor}`);
+
+const memory = globalThis.localStorage;
+if (!memory) {
+  const store = new Map();
+  globalThis.localStorage = {
+    getItem: (key) => (store.has(key) ? store.get(key) : null),
+    setItem: (key, value) => { store.set(key, String(value)); },
+    removeItem: (key) => { store.delete(key); },
+  };
+}
+upsertProjectFolder({ projectName: "Delete Me", projectAddress: "1 Main", fileName: "gone.pdf", fileSize: 12 });
+assert(deleteProjectFolder({ id: "delete me" }).every((folder) => folder.projectName !== "Delete Me"), "folder delete removes the card");
 
 assert(parseEstim8rEstimateId("Imported from Estim8r\nEstim8r-id: est_abc") === "est_abc", "parse stored estimate id");
 assert(findInvoiceForEstim8r(

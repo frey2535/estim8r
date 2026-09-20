@@ -15,6 +15,7 @@ const LaborLibrary = lazy(() => import("@/pages/LaborLibrary"));
 const EstimateBuilder = lazy(() => import("@/pages/EstimateBuilder"));
 const Production = lazy(() => import("@/pages/Production"));
 const TakeoffWorkspace = lazy(() => import("@/pages/TakeoffWorkspace"));
+const MarkupPages = lazy(() => import("@/pages/MarkupPages"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const OwnerAdmin = lazy(() => import("@/pages/OwnerAdmin"));
 const Register = lazy(() => import("@/pages/Register"));
@@ -41,6 +42,7 @@ function AppRoutes() {
             <Route path="/labor" element={<LaborLibrary />} />
             <Route path="/production" element={<Production />} />
             <Route path="/takeoff" element={<TakeoffWorkspace />} />
+            <Route path="/markup" element={<MarkupPages />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/profile" element={<Settings />} />
             <Route path="/admin" element={<OwnerAdmin />} />

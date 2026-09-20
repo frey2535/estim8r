@@ -24,7 +24,7 @@ export default function AppLayout() {
   const showAccessAdmin = isAuthenticated && canManageEstim8rAccess(user);
   const { theme, toggleTheme } = useTheme();
   const active = (tab) => tab.path === "/" ? location.pathname === "/" : location.pathname.startsWith(tab.path);
-  const takeoff = location.pathname.startsWith("/takeoff");
+  const takeoff = location.pathname.startsWith("/takeoff") || location.pathname.startsWith("/markup");
   const onLogin = location.pathname.startsWith("/login");
 
   return (

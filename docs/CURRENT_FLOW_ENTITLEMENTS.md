@@ -47,3 +47,20 @@ Bundles simply create one entitlement per included product with the same `bundle
 ## Rollout
 
 Do not enable production enforcement until the migration has been applied and existing legitimate Estim8r owners/customers have been granted an entitlement. Platform admins retain access during rollout.
+
+## Shared live project
+
+The production Current Flow project is NECalcul8r-shaped. Profiles use `created_date` / `updated_date`, and CHECKs reject `access_type = owner_grant`, `access_status = revoked`, and `purchase_source = platform_owner`. Do **not** run `supabase db push` of the full Estim8r migration history against that project.
+
+Client RPCs (already matching):
+
+- `list_estim8r_access()`
+- `grant_estim8r_access({ target_email })`
+- `revoke_estim8r_access({ target_email })`
+
+To apply or re-apply only the live-safe functions (idempotent):
+
+```bash
+supabase link --project-ref gqdxvctvufalunaaopyj
+supabase db query --linked --file supabase/migrations/20260920150000_live_shared_estim8r_access_rpcs.sql
+```

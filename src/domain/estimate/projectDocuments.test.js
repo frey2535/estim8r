@@ -1,9 +1,14 @@
 import {
   buildMarkupPages,
+  buildrSyncFromResult,
   canSaveProjectDocuments,
   decideSaveDestination,
+  estimateContentFingerprint,
   estimateGrandTotal,
+  findDocumentForEstim8r,
+  findInvoiceForEstim8r,
   matchProjectByName,
+  parseEstim8rEstimateId,
   projectFolderKey,
 } from "./projectDocuments.js";
 
@@ -42,6 +47,19 @@ assert(decideSaveDestination({
   matchingProject: null,
 }).action === "local", "Buildr account without company access stays in Estim8r");
 
+assert(decideSaveDestination({
+  hasBuildrAccount: true,
+  canUseBuildr: true,
+  matchingProject: null,
+  existingProjectId: "proj_1",
+}).action === "buildr", "already synced estimate updates the stored Buildr project");
+assert(decideSaveDestination({
+  hasBuildrAccount: true,
+  canUseBuildr: true,
+  matchingProject: null,
+  existingProjectId: "proj_1",
+}).project.id === "proj_1", "stored Buildr project id is reused");
+
 assert(canSaveProjectDocuments({ fileName: "plan.pdf", projectName: "Main Hospital" }) === true, "drawing plus project name can save");
 assert(canSaveProjectDocuments({ fileName: "", projectName: "Main Hospital" }) === false, "no drawing cannot save");
 assert(canSaveProjectDocuments({ fileName: "plan.pdf", projectName: "" }) === false, "no project name cannot save");
@@ -77,5 +95,28 @@ const money = estimateGrandTotal({
 assert(money.material === 100, `material ${money.material}`);
 assert(money.labor === 100, `labor ${money.labor}`);
 assert(Math.abs(money.total - 242) < 0.001, `grand ${money.total}`);
+
+assert(parseEstim8rEstimateId("Imported from Estim8r\nEstim8r-id: est_abc") === "est_abc", "parse stored estimate id");
+assert(findInvoiceForEstim8r(
+  [{ id: "inv_old", invoiceNumber: "E-1" }, { id: "inv_1", notes: "Estim8r-id: est_abc" }],
+  { estimateId: "est_abc" },
+)?.id === "inv_1", "invoice keyed by Estim8r estimate id");
+assert(findInvoiceForEstim8r(
+  [{ id: "inv_1", notes: "Estim8r-id: est_abc" }],
+  { invoiceId: "inv_1", estimateId: "est_abc" },
+)?.id === "inv_1", "invoice keyed by stored Buildr invoice id");
+assert(findDocumentForEstim8r(
+  [{ id: "d1", docType: "estim8r_estimate", number: "est_abc", title: "old.json" }],
+  { docType: "estim8r_estimate", estimateId: "est_abc", title: "new.json" },
+)?.id === "d1", "document keyed by estimate id, not title");
+
+const firstPrint = estimateContentFingerprint({ id: "est_abc", header: { projectName: "A" }, lines: [{ quantity: 1 }] });
+const editedPrint = estimateContentFingerprint({ id: "est_abc", header: { projectName: "A" }, lines: [{ quantity: 2 }] });
+assert(firstPrint !== editedPrint, "line edits change the sync fingerprint");
+assert(buildrSyncFromResult({
+  project: { id: "proj_1" },
+  invoice: { id: "inv_1" },
+  documents: [{ id: "doc_e", doc_type: "estim8r_estimate" }],
+}, "est_abc").projectId === "proj_1", "sync record keeps project id");
 
 if (!process.exitCode) console.log("project document checks passed");

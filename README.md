@@ -41,6 +41,8 @@ When drawings have been uploaded and an estimate exists:
 2. **Buildr account, no matching project** — Estim8r asks whether to create the project. If yes, Estim8r and Buildr create it and save the documents there.
 3. **No Buildr account** — documents stay in Estim8r’s Estimates folder, listed by project name with the project address underneath.
 
+Later edits to a synced estimate update the same Buildr Estimate-tab documents. The link is the Estim8r estimate id plus the stored Buildr project and invoice ids.
+
 ## Labor architecture (Phase 1–2)
 
 - **Taxonomy** — `labor_items` (trade / category / subcategory / item / size / unit)

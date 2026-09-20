@@ -11,10 +11,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/lib/AuthContext";
 import { fetchBuildrAccountStatus, isBuildrConfigured, saveBuildrProjectDocuments } from "@/api/buildrBridge";
+import { readEstimate, writeEstimate } from "@/domain/estimate/estimateStore";
 import {
   buildMarkupPages,
+  buildrSyncFromResult,
   canSaveProjectDocuments,
   decideSaveDestination,
+  estimateContentFingerprint,
   getDrawingFile,
   matchProjectByName,
   readTakeoffSession,
@@ -26,12 +29,18 @@ function promptKey(projectName) {
   return `estim8r.projectDocs.prompted:${String(projectName || "").trim().toLowerCase()}`;
 }
 
+function storedEstimate(estimate) {
+  return readEstimate(estimate?.fileName, estimate?.fileSize) || estimate || {};
+}
+
 export default function SaveProjectDocuments({ estimate }) {
   const { user } = useAuth();
   const fileName = estimate?.fileName || "";
   const fileSize = estimate?.fileSize || 0;
   const projectName = estimate?.header?.projectName || "";
   const projectAddress = estimate?.header?.projectAddress || "";
+  const takeoff = readTakeoffSession(fileName, fileSize);
+  const fingerprint = estimateContentFingerprint(estimate, takeoff);
   const [promptOpen, setPromptOpen] = useState(false);
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
@@ -50,30 +59,48 @@ export default function SaveProjectDocuments({ estimate }) {
     });
   }
 
+  function persistSync(result) {
+    const current = storedEstimate(estimate);
+    const sync = buildrSyncFromResult(result, current.id || estimate?.id);
+    writeEstimate({
+      ...current,
+      ...estimate,
+      id: current.id || estimate?.id,
+      buildrSync: sync,
+    });
+    return sync;
+  }
+
   async function saveToBuildr(createProject) {
+    const current = storedEstimate(estimate);
     const drawingFile = await getDrawingFile(fileName, fileSize);
-    const takeoff = readTakeoffSession(fileName, fileSize);
-    const markedSheets = (takeoff?.marks || []).map((mark) => Number(mark.sheet) || 1);
-    const pageCount = Math.max(Number(takeoff?.pageCount) || 1, Number(takeoff?.sheet) || 1, ...markedSheets, 1);
+    const session = readTakeoffSession(fileName, fileSize);
+    const markedSheets = (session?.marks || []).map((mark) => Number(mark.sheet) || 1);
+    const pageCount = Math.max(Number(session?.pageCount) || 1, Number(session?.sheet) || 1, ...markedSheets, 1);
     const markupPages = buildMarkupPages({
       fileName,
       pageCount,
-      marks: takeoff?.marks || [],
-      calibration: takeoff?.calibration || null,
+      marks: session?.marks || [],
+      calibration: session?.calibration || null,
       titleBlock: titleBlockForMarkup(estimate?.header),
     });
+    const payload = { ...current, ...estimate, id: current.id || estimate?.id };
     const result = await saveBuildrProjectDocuments({
       email: user?.email,
       projectName,
       projectAddress,
       createProject,
-      estimate,
+      estimate: payload,
       drawingFile,
       markupPages,
+      estim8rEstimateId: payload.id,
+      buildrProjectId: current.buildrSync?.projectId || estimate?.buildrSync?.projectId || null,
+      buildrInvoiceId: current.buildrSync?.invoiceId || estimate?.buildrSync?.invoiceId || null,
     });
+    const sync = persistSync(result);
     await saveLocal({
       savedTo: "buildr",
-      buildrProjectId: result.project?.id || null,
+      buildrProjectId: sync.projectId,
       drawingName: drawingFile?.name || fileName,
     });
     return result;
@@ -81,34 +108,37 @@ export default function SaveProjectDocuments({ estimate }) {
 
   async function runSave(forceLocal = false) {
     if (!canSaveProjectDocuments({ fileName, projectName }) || !estimate) return;
-    const runId = `${fileName}:${fileSize}:${projectName}`;
-    if (!forceLocal && lastRun.current === runId && !promptOpen) return;
+    if (!forceLocal && lastRun.current === fingerprint && !promptOpen) return;
     setBusy(true);
-    setStatus("");
     try {
       if (forceLocal || !isBuildrConfigured()) {
         await saveLocal({ savedTo: "estim8r" });
-        lastRun.current = runId;
+        lastRun.current = fingerprint;
         setStatus("Saved in the Estimates folder under this project name.");
         return;
       }
+      const current = storedEstimate(estimate);
+      const existingProjectId = current.buildrSync?.projectId || estimate?.buildrSync?.projectId || null;
       const account = await fetchBuildrAccountStatus(user?.email);
       const matchingProject = matchProjectByName(account.projects, projectName);
       const decision = decideSaveDestination({
         hasBuildrAccount: account.hasAccount,
         canUseBuildr: account.canUseBuildr,
         matchingProject,
+        existingProjectId,
       });
       if (decision.action === "buildr") {
         await saveToBuildr(false);
-        lastRun.current = runId;
-        setStatus(`Saved to the Buildr project “${decision.project.name}” Estimate tab.`);
+        lastRun.current = fingerprint;
+        setStatus(existingProjectId
+          ? `Updated the Buildr project Estimate tab.`
+          : `Saved to the Buildr project “${decision.project.name || projectName}” Estimate tab.`);
         return;
       }
       if (decision.action === "prompt") {
         if (sessionStorage.getItem(promptKey(projectName)) === "declined") {
           await saveLocal({ savedTo: "estim8r" });
-          lastRun.current = runId;
+          lastRun.current = fingerprint;
           setStatus("Saved in the Estimates folder under this project name.");
           return;
         }
@@ -119,11 +149,11 @@ export default function SaveProjectDocuments({ estimate }) {
         return;
       }
       await saveLocal({ savedTo: "estim8r" });
-      lastRun.current = runId;
+      lastRun.current = fingerprint;
       setStatus("Saved in the Estimates folder under this project name.");
     } catch (error) {
       await saveLocal({ savedTo: "estim8r" });
-      lastRun.current = runId;
+      lastRun.current = fingerprint;
       setStatus(error?.message || "Could not reach Buildr. Documents were saved in Estim8r.");
     } finally {
       setBusy(false);
@@ -132,16 +162,16 @@ export default function SaveProjectDocuments({ estimate }) {
 
   useEffect(() => {
     if (!canSaveProjectDocuments({ fileName, projectName })) return undefined;
-    const timer = window.setTimeout(() => { void runSave(false); }, 400);
+    const timer = window.setTimeout(() => { void runSave(false); }, 800);
     return () => window.clearTimeout(timer);
-  }, [fileName, fileSize, projectName, projectAddress, user?.email]);
+  }, [fingerprint, user?.email]);
 
   async function acceptCreate() {
     setPromptOpen(false);
     setBusy(true);
     try {
       const result = await saveToBuildr(true);
-      lastRun.current = `${fileName}:${fileSize}:${projectName}`;
+      lastRun.current = fingerprint;
       sessionStorage.removeItem(promptKey(projectName));
       setStatus(`Created “${result.project?.name || projectName}” in Buildr and saved the documents on its Estimate tab.`);
     } catch (error) {
@@ -156,7 +186,7 @@ export default function SaveProjectDocuments({ estimate }) {
     sessionStorage.setItem(promptKey(projectName), "declined");
     setPromptOpen(false);
     await saveLocal({ savedTo: "estim8r" });
-    lastRun.current = `${fileName}:${fileSize}:${projectName}`;
+    lastRun.current = fingerprint;
     setStatus("Saved in the Estimates folder under this project name.");
   }
 

@@ -64,6 +64,9 @@ export async function saveBuildrProjectDocuments({
   estimate,
   drawingFile,
   markupPages,
+  estim8rEstimateId,
+  buildrProjectId,
+  buildrInvoiceId,
 }) {
   const api = buildrApiUrl();
   if (!api) throw new Error("Buildr is not configured.");
@@ -72,6 +75,9 @@ export async function saveBuildrProjectDocuments({
   form.append("projectName", projectName || "");
   form.append("projectAddress", projectAddress || "");
   form.append("createProject", createProject ? "true" : "false");
+  if (estim8rEstimateId) form.append("estim8rEstimateId", estim8rEstimateId);
+  if (buildrProjectId) form.append("buildrProjectId", buildrProjectId);
+  if (buildrInvoiceId) form.append("buildrInvoiceId", buildrInvoiceId);
   form.append(
     "estimate",
     new Blob([JSON.stringify(estimate || {}, null, 2)], { type: "application/json" }),

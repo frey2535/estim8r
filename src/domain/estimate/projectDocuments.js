@@ -14,7 +14,10 @@ export function matchProjectByName(projects, projectName) {
   return (projects || []).find((project) => projectFolderKey(project.name) === key) || null;
 }
 
-export function decideSaveDestination({ hasBuildrAccount, canUseBuildr, matchingProject }) {
+export function decideSaveDestination({ hasBuildrAccount, canUseBuildr, matchingProject, existingProjectId }) {
+  if (existingProjectId) {
+    return { action: "buildr", project: matchingProject || { id: existingProjectId } };
+  }
   if (matchingProject && (hasBuildrAccount || canUseBuildr)) {
     return { action: "buildr", project: matchingProject };
   }
@@ -22,6 +25,80 @@ export function decideSaveDestination({ hasBuildrAccount, canUseBuildr, matching
     return { action: "prompt" };
   }
   return { action: "local" };
+}
+
+export const ESTIM8R_ID_NOTE = "Estim8r-id:";
+
+export function makeEstimateId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return `est_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function estim8rInvoiceNote(estimateId, extra) {
+  return [`${ESTIM8R_ID_NOTE} ${estimateId}`, extra].filter(Boolean).join("\n");
+}
+
+export function parseEstim8rEstimateId(notes) {
+  const match = String(notes || "").match(/Estim8r-id:\s*(\S+)/i);
+  return match?.[1] || null;
+}
+
+export function findInvoiceForEstim8r(invoices, { invoiceId, estimateId, invoiceNumber } = {}) {
+  const rows = invoices || [];
+  if (invoiceId) {
+    const byId = rows.find((row) => row.id === invoiceId);
+    if (byId) return byId;
+  }
+  if (estimateId) {
+    const byNote = rows.find((row) => parseEstim8rEstimateId(row.notes) === estimateId);
+    if (byNote) return byNote;
+  }
+  if (invoiceNumber) {
+    return rows.find((row) => row.invoiceNumber === invoiceNumber || row.invoice_number === invoiceNumber) || null;
+  }
+  return null;
+}
+
+export function findDocumentForEstim8r(docs, { docType, estimateId, title } = {}) {
+  const rows = docs || [];
+  if (estimateId) {
+    const byNumber = rows.find((row) => row.docType === docType && row.number === estimateId);
+    if (byNumber) return byNumber;
+  }
+  if (title) {
+    return rows.find((row) => row.docType === docType && row.title === title) || null;
+  }
+  return null;
+}
+
+export function estimateContentFingerprint(estimate, takeoff) {
+  return JSON.stringify({
+    id: estimate?.id || "",
+    fileName: estimate?.fileName || "",
+    fileSize: estimate?.fileSize || 0,
+    header: estimate?.header || {},
+    lines: estimate?.lines || [],
+    overhead: estimate?.overhead,
+    profit: estimate?.profit,
+    crew: estimate?.crew || [],
+    factors: estimate?.factors || [],
+    marks: takeoff?.marks || [],
+    calibration: takeoff?.calibration || null,
+    pageCount: takeoff?.pageCount || takeoff?.sheet || 1,
+  });
+}
+
+export function buildrSyncFromResult(result, estimateId) {
+  const documents = {};
+  for (const doc of result?.documents || []) {
+    if (doc?.doc_type) documents[doc.doc_type] = doc.id;
+  }
+  return {
+    estimateId,
+    projectId: result?.project?.id || null,
+    invoiceId: result?.invoice?.id || null,
+    documents,
+  };
 }
 
 export function buildMarkupPages({ fileName, pageCount, marks, calibration, titleBlock }) {

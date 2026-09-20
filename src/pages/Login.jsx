@@ -5,6 +5,7 @@ import { base44 } from "@/api/base44Client";
 import { isProductionAuthMisconfigured } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
 import { PLATFORM_OWNER_EMAIL } from "@/lib/platformIdentity";
+import { describeAuthError, readAuthCallbackError } from "@/lib/authRedirect";
 import AuthLayout from "@/components/AuthLayout";
 import GoogleSignInButton from "@/components/platform/GoogleSignInButton";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,9 @@ export default function Login({ platformOwner = false }) {
   const { isAuthenticated, checkAppState } = useAuth();
   const [email, setEmail] = useState(platformOwner ? PLATFORM_OWNER_EMAIL : "");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(() => (
+    typeof window === "undefined" ? "" : readAuthCallbackError(window.location.search, window.location.hash)
+  ));
   const [busy, setBusy] = useState(false);
   if (isAuthenticated) return <Navigate to="/" replace />;
 
@@ -29,7 +32,7 @@ export default function Login({ platformOwner = false }) {
       await base44.auth.loginViaEmailPassword(signInEmail, password);
       await checkAppState();
     } catch (err) {
-      setError(err.message || "Invalid email or password");
+      setError(describeAuthError(err));
     } finally {
       setBusy(false);
     }

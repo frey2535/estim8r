@@ -3,6 +3,7 @@ import {
   PLATFORM_OWNER_EMAIL,
   applyPlatformIdentity,
   hasPlatformAccess,
+  needsProductEntitlementGate,
   isBackupAdmin,
   isPlatformOwner,
   isPlatformStaff,
@@ -36,5 +37,9 @@ assert(backup.is_backup_admin && backup.is_platform_admin && !backup.is_platform
 assert(hasPlatformAccess(owner) && hasPlatformAccess(backup), "staff have platform access");
 assert(hasPlatformAccess({ email: "x@y.com", is_platform_admin: true }), "db platform admin still has access");
 assert(!hasPlatformAccess({ email: "x@y.com", is_platform_admin: false }), "ordinary users do not");
+assert(!needsProductEntitlementGate(owner, false), "owner never sees the product gate");
+assert(!needsProductEntitlementGate(backup, false), "backup admin never sees the product gate");
+assert(needsProductEntitlementGate({ email: "mfrey@dayoneelectric.com" }, false), "ungranted users see the product gate");
+assert(!needsProductEntitlementGate({ email: "mfrey@dayoneelectric.com" }, true), "granted users skip the product gate");
 
 if (!process.exitCode) console.log("platform identity checks passed");

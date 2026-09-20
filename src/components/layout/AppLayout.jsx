@@ -1,10 +1,13 @@
 import React from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { BookOpen, Calculator, FolderOpen, Moon, ScanSearch, Settings, Sun, TrendingUp, UserCircle } from "lucide-react";
+import { BookOpen, Calculator, FolderOpen, LogIn, LogOut, Moon, ScanSearch, Settings, Sun, TrendingUp, UserCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/AuthContext";
 import { useTheme } from "@/lib/ThemeContext";
 import AppLogo from "@/components/branding/AppLogo";
 import AppSwitcher from "@/components/platform/AppSwitcher";
+import GoogleSignInButton from "@/components/platform/GoogleSignInButton";
+import { Button } from "@/components/ui/button";
 
 const TABS = [
   { key: "estimates", path: "/", label: "Estimates", icon: FolderOpen },
@@ -16,9 +19,11 @@ const TABS = [
 
 export default function AppLayout() {
   const location = useLocation();
+  const { isAuthenticated, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const active = (tab) => tab.path === "/" ? location.pathname === "/" : location.pathname.startsWith(tab.path);
   const takeoff = location.pathname.startsWith("/takeoff");
+  const onLogin = location.pathname.startsWith("/login");
 
   return (
     <div className="flex h-dvh min-h-dvh w-full flex-col overflow-hidden bg-background">
@@ -58,12 +63,27 @@ export default function AppLayout() {
               <button type="button" onClick={toggleTheme} className="ml-1 w-8 h-8 rounded-full bg-muted hover:bg-muted/80 active:bg-muted/60 flex items-center justify-center transition-colors" aria-label="Toggle dark mode" title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
                 {theme === "dark" ? <Sun className="w-4 h-4 text-foreground" /> : <Moon className="w-4 h-4 text-foreground" />}
               </button>
-              <Link to="/settings" className="hidden sm:flex ml-1 w-8 h-8 rounded-full bg-muted hover:bg-muted/80 items-center justify-center transition-colors" aria-label="Settings">
-                <Settings className="w-4 h-4 text-foreground" />
-              </Link>
-              <Link to="/profile" className="ml-1 w-8 h-8 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center transition-colors" aria-label="Profile">
-                <UserCircle className="w-5 h-5 text-foreground" />
-              </Link>
+              {isAuthenticated ? (
+                <>
+                  <Link to="/settings" className="hidden sm:flex ml-1 w-8 h-8 rounded-full bg-muted hover:bg-muted/80 items-center justify-center transition-colors" aria-label="Settings">
+                    <Settings className="w-4 h-4 text-foreground" />
+                  </Link>
+                  <Link to="/profile" className="ml-1 w-8 h-8 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center transition-colors" aria-label="Profile">
+                    <UserCircle className="w-5 h-5 text-foreground" />
+                  </Link>
+                  <Button type="button" variant="outline" size="sm" className="ml-1 h-8" onClick={() => void logout()}>
+                    <LogOut className="h-3.5 w-3.5" />
+                    Sign out
+                  </Button>
+                </>
+              ) : (
+                <div className="ml-1 flex items-center gap-1.5">
+                  <Button asChild size="sm" className={cn("h-8", onLogin && !location.pathname.startsWith("/login/owner") && "ring-2 ring-blue-600 dark:ring-orange-500")}>
+                    <Link to="/login"><LogIn className="h-3.5 w-3.5" />Sign in</Link>
+                  </Button>
+                  <GoogleSignInButton compact className="h-8 px-3" />
+                </div>
+              )}
             </div>
           </div>
         </div>

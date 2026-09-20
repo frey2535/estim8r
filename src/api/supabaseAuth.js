@@ -67,6 +67,17 @@ export const supabaseAuth = {
     return profileForUser(data.user);
   },
 
+  async loginWithGoogle() {
+    const client = requireSupabase();
+    const { error } = await client.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/`,
+      },
+    });
+    if (error) throw error;
+  },
+
   async register({ email, password, fullName, organizationName, companyName, inviteCode }) {
     const client = requireSupabase();
     const normalized = normalizeEmail(email);

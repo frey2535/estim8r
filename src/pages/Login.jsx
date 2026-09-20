@@ -6,6 +6,7 @@ import { isProductionAuthMisconfigured } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
 import { PLATFORM_OWNER_EMAIL } from "@/lib/platformIdentity";
 import AuthLayout from "@/components/AuthLayout";
+import GoogleSignInButton from "@/components/platform/GoogleSignInButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,13 +38,19 @@ export default function Login({ platformOwner = false }) {
   return (
     <AuthLayout
       icon={LogIn}
-      title={platformOwner ? "Platform owner" : "Welcome to Estim8r"}
-      subtitle={platformOwner ? "Sign in as Current Flow platform owner" : "Use your Current Flow account"}
+      title={platformOwner ? "Platform owner" : "Sign in to Estim8r"}
+      subtitle={platformOwner ? "Sign in as Current Flow platform owner" : "Use Google or your Current Flow email"}
       footer={platformOwner
         ? <>Not the platform owner? <Link to="/login" className="text-primary font-medium hover:underline">Sign in</Link></>
         : <>Don't have an account? <Link to="/register" className="text-primary font-medium hover:underline">Create one</Link></>}
     >
       {error && <div className="mb-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
+      <GoogleSignInButton className="h-12 w-full" />
+      <div className="my-4 flex items-center gap-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <span className="h-px flex-1 bg-border" />
+        or email
+        <span className="h-px flex-1 bg-border" />
+      </div>
       <form onSubmit={submit} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
@@ -72,13 +79,13 @@ export default function Login({ platformOwner = false }) {
           </div>
         </div>
         <Button type="submit" className="h-12 w-full" disabled={busy || isProductionAuthMisconfigured}>
-          {busy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Signing in...</> : platformOwner ? "Sign in as platform owner" : "Sign in"}
+          {busy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Signing in...</> : platformOwner ? "Sign in as platform owner" : "Sign in with email"}
         </Button>
       </form>
       {!platformOwner && (
-        <p className="mt-4 text-center text-sm text-muted-foreground">
-          <Link to="/login/owner" className="text-primary font-medium hover:underline">Platform owner sign in</Link>
-        </p>
+        <Button asChild variant="secondary" className="mt-4 h-12 w-full">
+          <Link to="/login/owner">Platform owner sign in</Link>
+        </Button>
       )}
     </AuthLayout>
   );

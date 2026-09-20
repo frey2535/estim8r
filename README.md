@@ -31,7 +31,7 @@ VITE_BUILDR_API_URL=http://localhost:3001
 
 Buildr sync sends the signed-in email and, when linked, a Buildr company ID. Set the company ID in **Settings → Buildr company**. If no company ID is linked, Buildr still looks up the account by login email.
 
-Platform owner sign-in is **Login → Platform owner sign in** (`/login/owner`) as `currentflowconsultingllc@gmail.com`. `marcus.a.frey@gmail.com` is a backup admin on the regular login page, not the platform owner.
+Sign in from the header **Sign in** button (opens the sign-in page) or **Sign in with Google**. The sign-in page also has **Sign in with Google**, email/password, and a **Platform owner sign in** button. Platform owner is `currentflowconsultingllc@gmail.com`. `marcus.a.frey@gmail.com` is a backup admin on the regular sign-in page, not the platform owner. Google sign-in needs the Google provider enabled on the Supabase project.
 
 When an estimate is created from uploaded drawings, blank header fields are filled from the title block / cover sheet (and from markup JSON when those fields are present). Missing values stay blank — Estim8r does not invent a contact, phone, or email.
 

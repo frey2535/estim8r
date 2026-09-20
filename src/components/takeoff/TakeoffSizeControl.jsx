@@ -17,8 +17,8 @@ export default function TakeoffSizeControl({
           {compact ? "All markers" : "Markers"}
           <input
             type="number"
-            min="0.5"
-            step="0.1"
+            min="0.25"
+            step="0.05"
             aria-label="Size of all markers"
             value={markerSize}
             onChange={(event) => onMarkerSize(Number(event.target.value))}
@@ -29,8 +29,8 @@ export default function TakeoffSizeControl({
           {compact ? "All lines" : "Lines"}
           <input
             type="number"
-            min="0.5"
-            step="0.1"
+            min="0.25"
+            step="0.05"
             aria-label="Size of all lines"
             value={lineSize}
             onChange={(event) => onLineSize(Number(event.target.value))}

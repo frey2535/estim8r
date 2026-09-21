@@ -91,6 +91,56 @@ export default function TakeoffInspector({
                   onChange={(e) => onUpdateMark(selected.id, { circuit: e.target.value, circuitNumber: e.target.value })}
                 />
               </Field>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Breaker amps">
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    className={inputClass}
+                    value={selected.breakerAmps || selected.circuitAmps || ""}
+                    placeholder="20"
+                    onChange={(e) => onUpdateMark(selected.id, { breakerAmps: Number(e.target.value) || "" })}
+                  />
+                </Field>
+                <Field label="Poles">
+                  <select
+                    className={inputClass}
+                    value={selected.circuitPoles || selected.poles || 1}
+                    onChange={(e) => onUpdateMark(selected.id, { circuitPoles: Number(e.target.value) || 1 })}
+                  >
+                    <option value={1}>1-pole</option>
+                    <option value={2}>2-pole</option>
+                    <option value={3}>3-pole</option>
+                  </select>
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Wire size">
+                  <input
+                    className={inputClass}
+                    value={selected.circuitWireSize || selected.wireSize || ""}
+                    placeholder="#12"
+                    onChange={(e) => onUpdateMark(selected.id, { circuitWireSize: e.target.value })}
+                  />
+                </Field>
+                <Field label="Ground size">
+                  <input
+                    className={inputClass}
+                    value={selected.circuitGroundSize || selected.groundSize || ""}
+                    placeholder="#12"
+                    onChange={(e) => onUpdateMark(selected.id, { circuitGroundSize: e.target.value })}
+                  />
+                </Field>
+              </div>
+              <label className="flex items-center gap-2 text-[11px] font-semibold">
+                <input
+                  type="checkbox"
+                  checked={selected.neutralRequired ?? selected.circuitNeutralRequired ?? true}
+                  onChange={(e) => onUpdateMark(selected.id, { neutralRequired: e.target.checked, circuitNeutralRequired: e.target.checked })}
+                />
+                Neutral required
+              </label>
               <Field label="Assigned conduit">
                 <select
                   className={inputClass}
@@ -136,6 +186,20 @@ export default function TakeoffInspector({
               </Field>
             )}
           </div>
+          {selectedIsConduit && trueAnalysis?.conduitWireMakeup ? (() => {
+            const makeup = trueAnalysis.conduitWireMakeup.find((row) => row.conduitId === selected.id);
+            if (!makeup) return null;
+            return (
+              <div className="rounded-lg border border-border bg-muted/30 p-2 text-[11px]">
+                <div className="font-bold">Wire makeup · C{makeup.runNumber || "?"}</div>
+                <div className="mt-1">{makeup.lengthLf.toFixed(1)} LF conduit · {makeup.totalConductorFeet.toFixed(1)} conductor LF</div>
+                <div className="mt-1 space-y-0.5">
+                  {makeup.wireTotals.map((wire) => <div key={wire.size}>{wire.size}: {wire.feet.toFixed(1)} LF</div>)}
+                </div>
+                {makeup.warnings.map((warning) => <div key={warning} className="mt-1 text-amber-700 dark:text-amber-300">• {warning}</div>)}
+              </div>
+            );
+          })() : null}
           {(selected.tool === "conduit" || selected.type === "route") && (
             <Field label="Conduit type / size">
               <select

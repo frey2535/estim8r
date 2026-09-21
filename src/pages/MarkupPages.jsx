@@ -428,7 +428,7 @@ function ReviewOverlay({ marks, selectedId }) {
           );
         }
         return (
-          <rect key={mark.id} x={mark.x - outline.w / 2} y={mark.y - outline.h / 2} width={outline.w} height={outline.h} rx={outline.kind === "tag" ? 0.08 : 0.12} fill={color} fillOpacity={outline.kind === "tag" ? 0.12 : DEVICE_FILL_OPACITY} stroke={stroke} strokeWidth={selected ? 0.28 : 0.12} strokeDasharray={outline.kind === "tag" ? "0.35 0.28" : undefined} vectorEffect="non-scaling-stroke" />
+          <rect key={mark.id} x={mark.x - outline.w / 2} y={mark.y - outline.h / 2} width={outline.w} height={outline.h} rx={0.12} fill={color} fillOpacity={DEVICE_FILL_OPACITY} stroke={stroke} strokeWidth={selected ? 0.28 : 0.12} vectorEffect="non-scaling-stroke" />
         );
       })}
       {[...callouts.conduitLabels, ...callouts.deviceLabels].map((label) => (

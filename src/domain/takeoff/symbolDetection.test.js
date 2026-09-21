@@ -62,7 +62,8 @@ assert(!counts.some((mark) => /R16|R34|16\.3|34\.3/i.test(`${mark.typeCode} ${ma
 assert(!counts.some((mark) => mark.x >= 80 && mark.typeCode === "3"), "the 3 in R34.3 is not a type 3 fixture");
 assert(counts.some((mark) => mark.typeCode === "1E"), "real type 1E on the plan is still counted");
 assert(counts.some((mark) => mark.symbol === "gfci"), "receptacles stay selectable counts");
-assert(counts.every((mark) => mark.outlineSource === "text"), "without extracted geometry, AI does not invent a generic device body");
+assert(counts.every((mark) => mark.outlineSource === "text" && mark.detectSource === "original-pdf"), "text-only counts stay visible and were read from the original PDF");
+assert(counts.every((mark) => mark.reviewStatus === "pending"), "new AI counts stay in the accuracy review queue");
 
 const canPaths = candidatesFromConstructedPaths([{
   ctm: [1, 0, 0, 1, 0, 0],
@@ -134,6 +135,6 @@ assert(hitTestDeviceFill(canMark, { x: canMark.x, y: canMark.y }), "every counte
 assert(hitTestDeviceFill(troffer, { x: troffer.x, y: troffer.y }), "extracted troffers stay selectable");
 const selected = deviceOutline(canMark, 0.55, { selected: true });
 const idle = deviceOutline(canMark, 0.55);
-assert(selected.r > idle.r, "selected device enlarges");
+assert(selected.r === idle.r, "selection does not enlarge the extracted outline");
 
 if (!process.exitCode) console.log("symbol detection checks passed");

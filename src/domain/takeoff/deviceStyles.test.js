@@ -78,5 +78,18 @@ assert(hitTestDeviceFill({
   outlineSource: "vector",
   outline: { kind: "rect", source: "vector", w: 2.1, h: 1.05, points: [] },
 }, { x: 20.4, y: 36.6 }), "extracted outlines stay selectable");
+const selectedOutline = deviceOutline({
+  x: 20,
+  y: 36.5,
+  outlineSource: "vector",
+  outline: { kind: "circle", source: "vector", r: 0.6, w: 1.2, h: 1.2, points: [] },
+}, 0.55, { selected: true });
+const idleOutline = deviceOutline({
+  x: 20,
+  y: 36.5,
+  outlineSource: "vector",
+  outline: { kind: "circle", source: "vector", r: 0.6, w: 1.2, h: 1.2, points: [] },
+}, 0.55);
+assert(selectedOutline.r === idleOutline.r, "selection does not enlarge dots");
 
 if (!process.exitCode) console.log("device style checks passed");

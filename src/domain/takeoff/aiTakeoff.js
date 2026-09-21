@@ -1,8 +1,9 @@
+import { applyDeviceTypeColors } from "./deviceStyles.js";
 import { isSheetChrome, pageDiscipline, pageMatchesTrade } from "./sheetDiscipline.js";
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
 
 const STOP = new Set(["the", "and", "for", "with", "from", "this", "that", "sheet", "note", "see", "typ", "all", "new", "nic", "nts", "rev"]);
-const TYPE_CODE = /^[A-Z]{1,3}\d{0,2}[A-Z]?$/i;
+const TYPE_CODE = /^(?:[A-Z]{1,3}\d{0,2}[A-Z]?|\d{1,2}[A-Z]?)$/i;
 const SECTION_WORD = /^(section|sections|conduit|run|detail|det)$/i;
 const SECTION_PHRASE = /(?:conduit\s*)?(?:section|run)s?\s*([a-z])\b|\b([a-z])\s*(?:conduit|section)s?\b/i;
 export const DEFAULT_CLUSTER_RADIUS = 22;
@@ -566,6 +567,9 @@ export function buildAiMarks({
         symbol: symbol.id,
         symbolLabel: symbol.label,
         abbr: symbol.abbr,
+        typeCode: fromSchedule
+          ? String(token.text || "").trim().replace(/^type\s+/i, "").toUpperCase()
+          : (symbol.abbr || "").toUpperCase(),
         color,
         matchedFrom: fromSchedule ? "schedule" : "drawing",
         anchor: anchorIds.has(symbol.id),
@@ -613,7 +617,10 @@ export function buildAiMarks({
     ? ` Skipped ${skipped.length} non-${trade} sheet(s)${skippedTrades.length ? ` (${skippedTrades.join(", ")})` : ""}.`
     : "";
   return {
-    marks: [...counts.map(({ anchor, matchedFrom, ...mark }) => mark), ...conduits],
+    marks: applyDeviceTypeColors([
+      ...counts.map(({ anchor, matchedFrom, ...mark }) => mark),
+      ...conduits,
+    ]),
     summary: counts.length
       ? `AI ${trade} takeoff: ${counts.length} devices${scheduleHits ? ` (${scheduleHits} from schedule types)` : ""}, ${conduits.length} conduit runs on ${trade} sheets showing run count and path, max ${cap} homeruns per conduit.${skipNote}`
       : `No ${trade} symbols were found on ${trade} sheets.${skipNote || " Counts stay empty until that trade is labeled on the sheets."}`,

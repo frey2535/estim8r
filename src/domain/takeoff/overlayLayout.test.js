@@ -55,8 +55,8 @@ const piled = layoutOverlayCallouts({
 });
 assert(piled.conduitLabels.every((label) => !/LF/.test(label.text)), "idle conduit labels omit LF");
 assert(piled.conduitLabels.every((label) => label.text.length <= 8), "idle conduit labels stay short");
-assert(piled.deviceLabels.length <= 3, `device callouts do not pile up, got ${piled.deviceLabels.length}`);
-const boxes = [...piled.conduitLabels, ...piled.deviceLabels];
+assert(piled.deviceLabels.length === 0, "device markers have no type-code text");
+const boxes = [...piled.conduitLabels];
 let overlap = false;
 for (let i = 0; i < boxes.length; i += 1) {
   for (let j = i + 1; j < boxes.length; j += 1) {

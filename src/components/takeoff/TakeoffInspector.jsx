@@ -30,7 +30,8 @@ export default function TakeoffInspector({
   runs,
   drawingDocs,
   trade,
-  drawingSymbols = [],
+  marks = [],
+  pageKinds = {},
   selected,
   conduitOptions,
   onSelectRun,
@@ -61,7 +62,8 @@ export default function TakeoffInspector({
             <Field label="Device / symbol">
               <TradeSymbolSelect
                 trade={trade}
-                drawingSymbols={drawingSymbols}
+                marks={marks}
+                pageKinds={pageKinds}
                 value={selected.symbol || selected.symbolLabel}
                 className={inputClass}
                 onChange={(item) => onUpdateMark(selected.id, symbolPatchFromCatalog(item))}
@@ -154,7 +156,8 @@ export default function TakeoffInspector({
             <div key={key} className="space-y-1 rounded-lg border border-border px-2 py-1.5">
               <TradeSymbolSelect
                 trade={trade}
-                drawingSymbols={drawingSymbols}
+                marks={marks}
+                pageKinds={pageKinds}
                 value={symbol}
                 className={inputClass}
                 aria-label="Item name"

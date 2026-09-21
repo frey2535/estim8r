@@ -16,7 +16,7 @@ import {
 } from "@/domain/takeoff/markupPages";
 import { hitTestMark, sheetAspect } from "@/domain/takeoff/geometry";
 import { rollupTakeoff } from "@/domain/takeoff/quantities";
-import { paletteForTrade, findConduitOption, symbolPatchFromCatalog, DEFAULT_CONDUIT_ID } from "@/domain/takeoff/trades";
+import { paletteForTrade, pageKindsFromDocs, findConduitOption, symbolPatchFromCatalog, DEFAULT_CONDUIT_ID } from "@/domain/takeoff/trades";
 import TradeSymbolSelect from "@/components/takeoff/TradeSymbolSelect";
 import { buildAiMarks } from "@/domain/takeoff/aiTakeoff";
 import { readAiPages } from "@/domain/takeoff/aiPages";
@@ -68,6 +68,7 @@ export default function MarkupPages() {
   const [zoom, setZoom] = useState(1);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [drawingSymbols, setDrawingSymbols] = useState([]);
+  const [pageKinds, setPageKinds] = useState({});
   const folders = useMemo(() => listProjectFolders(), []);
   const trade = session?.trade || "electrical";
 
@@ -115,9 +116,12 @@ export default function MarkupPages() {
     setDrawingName(file.name || name);
     if (file.type === "application/pdf" || /\.pdf$/i.test(file.name || name)) {
       try {
-        setDrawingSymbols(drawingSymbolsFromDocs(await readDrawingDocuments(bytes)));
+        const docs = await readDrawingDocuments(bytes);
+        setDrawingSymbols(drawingSymbolsFromDocs(docs));
+        setPageKinds(pageKindsFromDocs(docs));
       } catch {
         setDrawingSymbols([]);
+        setPageKinds({});
       }
     }
     if (!(stored?.marks || []).length && (file.type === "application/pdf" || /\.pdf$/i.test(file.name || name))) {
@@ -358,7 +362,8 @@ export default function MarkupPages() {
                 <label className="block text-xs font-bold text-muted-foreground">Device / symbol
                   <TradeSymbolSelect
                     trade={trade}
-                    drawingSymbols={drawingSymbols}
+                    marks={marks}
+                    pageKinds={pageKinds}
                     value={selected.symbol || selected.symbolLabel}
                     className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
                     onChange={(item) => updateMark(selected.id, symbolPatchFromCatalog(item))}
@@ -453,14 +458,14 @@ function ReviewOverlay({ marks, selectedId }) {
           <rect key={mark.id} x={mark.x - outline.w / 2} y={mark.y - outline.h / 2} width={outline.w} height={outline.h} rx={0.12} fill={color} fillOpacity={DEVICE_FILL_OPACITY} stroke={stroke} strokeWidth={selected ? 0.28 : 0.12} vectorEffect="non-scaling-stroke" />
         );
       })}
-      {[...callouts.conduitLabels, ...callouts.deviceLabels].map((label) => (
+      {callouts.conduitLabels.map((label) => (
         <text
           key={`${label.id}-${label.text}`}
           x={label.x}
           y={label.y}
           fontSize={OVERLAY_FONT_SIZE}
           fontWeight="600"
-          fill={devices.find((mark) => mark.id === label.id)?.color || "#475569"}
+          fill="#475569"
           stroke="#ffffff"
           strokeWidth="0.22"
           paintOrder="stroke"

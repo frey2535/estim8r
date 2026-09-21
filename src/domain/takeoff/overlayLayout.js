@@ -125,7 +125,7 @@ function tryPlace(anchor, text, occupied, fontSize = OVERLAY_FONT_SIZE) {
 
 export function layoutOverlayCallouts({
   conduits = [],
-  devices = [],
+  devices: _devices = [],
   selectedId,
   lengthTextFor,
   fontSize = OVERLAY_FONT_SIZE,
@@ -152,23 +152,5 @@ export function layoutOverlayCallouts({
     conduitLabels.push({ id: mark.id, text, selected, ...required });
   }
 
-  const deviceLabels = [];
-  for (const cluster of clusterDeviceCallouts(devices)) {
-    if (!cluster.text) continue;
-    const box = tryPlace({
-      x: cluster.x,
-      y: cluster.y,
-      nx: 0.85,
-      ny: -0.7,
-    }, cluster.text, occupied, fontSize);
-    if (!box) continue;
-    deviceLabels.push({
-      id: cluster.id,
-      text: cluster.text,
-      count: cluster.count,
-      ...box,
-    });
-  }
-
-  return { conduitLabels, deviceLabels };
+  return { conduitLabels, deviceLabels: [] };
 }

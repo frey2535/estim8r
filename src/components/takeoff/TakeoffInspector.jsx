@@ -81,6 +81,30 @@ export default function TakeoffInspector({
           <Field label="Marker text">
             <input className={inputClass} value={selected.abbr || ""} onChange={(e) => onUpdateMark(selected.id, { abbr: e.target.value })} />
           </Field>
+          {selectedIsMarker ? (
+            <>
+              <Field label="Circuit">
+                <input
+                  className={inputClass}
+                  value={selected.circuit || selected.circuitNumber || ""}
+                  placeholder="Example: LN1-12"
+                  onChange={(e) => onUpdateMark(selected.id, { circuit: e.target.value, circuitNumber: e.target.value })}
+                />
+              </Field>
+              <Field label="Assigned conduit">
+                <select
+                  className={inputClass}
+                  value={selected.circuitRunId || ""}
+                  onChange={(e) => onUpdateMark(selected.id, { circuitRunId: e.target.value || null })}
+                >
+                  <option value="">Unassigned</option>
+                  {runs
+                    .filter((run) => run.sheet === (selected.sheet || 1))
+                    .map((run) => <option key={run.id} value={run.id}>Conduit {run.runNumber} · {run.type}</option>)}
+                </select>
+              </Field>
+            </>
+          ) : null}
           <div className="grid grid-cols-2 gap-2">
             <Field label="Color">
               <input type="color" className="h-8 w-full" value={selected.color || "#2563eb"} onChange={(e) => onUpdateMark(selected.id, { color: e.target.value })} />

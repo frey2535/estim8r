@@ -27,10 +27,13 @@ import TakeoffInspector from "@/components/takeoff/TakeoffInspector";
 import TakeoffSizeControl from "@/components/takeoff/TakeoffSizeControl";
 import AccuracyPopout from "@/components/takeoff/AccuracyPopout";
 import {
-  devicesForAccuracyReview,
+  applyReviewDecision,
+  isUncertainDetection,
   neighborReviewId,
   needsAccuracyReview,
+  reviewQueue,
   reviewSummary,
+  typeInstanceCount,
 } from "@/domain/takeoff/accuracyReview";
 import { getPdfDocument } from "@/lib/pdf-document";
 import { syncStoredEstimate } from "@/domain/estimate/estimateStore";
@@ -183,10 +186,10 @@ export default function TakeoffWorkspace() {
     [marks, sheetMeta.page],
   );
   const sheetReview = useMemo(
-    () => devicesForAccuracyReview(sheetMarks, sheetMeta.page),
-    [sheetMarks, sheetMeta.page],
+    () => reviewQueue(marks, sheetMeta.page),
+    [marks, sheetMeta.page],
   );
-  const accuracyTotals = useMemo(() => reviewSummary(sheetMarks, sheetMeta.page), [sheetMarks, sheetMeta.page]);
+  const accuracyTotals = useMemo(() => reviewSummary(marks, sheetMeta.page), [marks, sheetMeta.page]);
   const selectedMark = marks.find((mark) => mark.id === selectedId) || null;
   const reviewIndex = Math.max(0, sheetReview.findIndex((mark) => mark.id === selectedId));
   const aspect = viewerRef.current
@@ -533,29 +536,38 @@ export default function TakeoffWorkspace() {
   }
 
   function openAccuracyReview() {
-    const pending = sheetReview.find(needsAccuracyReview) || sheetReview[0];
+    const pending = sheetReview.find((mark) => needsAccuracyReview(mark, marks, sheetMeta.page)) || sheetReview[0];
     if (!pending) {
-      setStatus("No device counts on this sheet to review.");
+      setStatus("No device types left to review on this sheet.");
       return;
     }
     setTool("select");
     setSelectedId(pending.id);
     setReviewOpen(true);
-    setStatus(`Accuracy review ${accuracyTotals.pending} pending · ${accuracyTotals.accepted} accepted · ${accuracyTotals.rejected} rejected.`);
+    setStatus(`Accuracy review ${accuracyTotals.typesPending} type(s) · ${accuracyTotals.uncertainPending} uncertain.`);
   }
 
   function stepAccuracyReview(direction) {
-    const nextId = neighborReviewId(sheetMarks, selectedId, direction, sheetMeta.page);
+    const nextId = neighborReviewId(marks, selectedId, direction, sheetMeta.page);
     if (!nextId) return;
     setSelectedId(nextId);
     setReviewOpen(true);
   }
 
   function setReviewStatus(status) {
-    if (!selectedId) return;
-    updateMark(selectedId, { reviewStatus: status });
-    setStatus(status === "accepted" ? "Count accepted against the original PDF." : "Count rejected. The marker stays on the sheet.");
-    const remaining = sheetReview.filter((mark) => mark.id !== selectedId && needsAccuracyReview(mark));
+    if (!selectedMark || !isDeviceMark(selectedMark)) return;
+    const instanceOnly = isUncertainDetection(selectedMark);
+    const count = instanceOnly ? 1 : typeInstanceCount(marks, selectedMark);
+    setMarks((current) => applyReviewDecision(current, selectedMark, status));
+    setStatus(instanceOnly
+      ? (status === "accepted" ? "Uncertain count accepted." : "Uncertain count rejected. The marker stays on the sheet.")
+      : (status === "accepted"
+        ? `Type ${selectedMark.typeCode || selectedMark.abbr || ""} accepted for ${count} counts.`
+        : `Type ${selectedMark.typeCode || selectedMark.abbr || ""} rejected for ${count} counts. Markers stay on the sheet.`));
+    const remaining = reviewQueue(
+      applyReviewDecision(marks, selectedMark, status),
+      sheetMeta.page,
+    );
     if (remaining[0]) {
       setSelectedId(remaining[0].id);
       setReviewOpen(true);
@@ -633,7 +645,7 @@ export default function TakeoffWorkspace() {
         hitRoute: (mark, at, aspect) => hitTestMark(sizedMark(mark), at, aspect, markHitThreshold(mark)),
       });
       setSelectedId(hit?.id || null);
-      setReviewOpen(Boolean(hit && isDeviceMark(hit)));
+      setReviewOpen(Boolean(hit && isDeviceMark(hit) && needsAccuracyReview(hit, marks, sheetMeta.page)));
       setStatus(hit ? `Selected ${hit.symbolLabel || hit.typeCode || hit.type}.` : "Nothing selected.");
       return;
     }
@@ -1175,6 +1187,8 @@ export default function TakeoffWorkspace() {
         fileBytes={isPdf ? fileBytes : null}
         index={reviewIndex}
         total={sheetReview.length}
+        instanceOnly={Boolean(selectedMark && isUncertainDetection(selectedMark))}
+        typeCount={selectedMark ? typeInstanceCount(marks, selectedMark) : 1}
         onAccept={() => setReviewStatus("accepted")}
         onReject={() => setReviewStatus("rejected")}
         onPrev={() => stepAccuracyReview(-1)}

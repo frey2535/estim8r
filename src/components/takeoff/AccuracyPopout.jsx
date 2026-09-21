@@ -26,6 +26,8 @@ export default function AccuracyPopout({
   fileBytes,
   index = 0,
   total = 0,
+  instanceOnly = false,
+  typeCount = 1,
   onAccept,
   onReject,
   onPrev,
@@ -55,7 +57,9 @@ export default function AccuracyPopout({
         <DialogHeader>
           <DialogTitle>Accuracy review</DialogTitle>
           <DialogDescription>
-            Clean original PDF only — this crop has no takeoff overlay. Markers on the sheet stay their detected size.
+            {instanceOnly
+              ? "AI was uncertain about this count. Verify this instance only."
+              : `Verify this device type once. Accept or reject applies to ${typeCount} count${typeCount === 1 ? "" : "s"} of the same type.`}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -83,8 +87,9 @@ export default function AccuracyPopout({
             </div>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            {index + 1} of {total} on this sheet
-            {mark?.detectSource === "original-pdf" ? " · read from the original PDF" : ""}
+            {index + 1} of {total} review item{total === 1 ? "" : "s"}
+            {instanceOnly ? " · uncertain count" : ` · type ${mark?.typeCode || mark?.abbr || ""}`}
+            {mark?.detectSource === "original-pdf" ? " · original PDF" : ""}
           </p>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={onPrev} className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-muted">Previous</button>

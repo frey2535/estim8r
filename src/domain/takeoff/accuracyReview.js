@@ -1,4 +1,4 @@
-import { isDeviceMark } from "./deviceStyles.js";
+import { deviceTypeKey, isDeviceMark } from "./deviceStyles.js";
 
 export const DETECT_SOURCE_ORIGINAL_PDF = "original-pdf";
 
@@ -30,6 +30,14 @@ export function cropToViewportPixels(crop, viewport) {
   };
 }
 
+export function isUncertainDetection(mark) {
+  if (!isDeviceMark(mark)) return false;
+  if (mark.confidence === "low" || mark.uncertain === true) return true;
+  if (mark.outlineSource && mark.outlineSource !== "vector") return true;
+  if (!deviceTypeKey(mark)) return true;
+  return false;
+}
+
 export function devicesForAccuracyReview(marks, sheet) {
   return (marks || []).filter((mark) => (
     isDeviceMark(mark)
@@ -42,12 +50,43 @@ export function reviewStatusForMark(mark) {
   return "pending";
 }
 
-export function needsAccuracyReview(mark) {
-  return isDeviceMark(mark) && reviewStatusForMark(mark) === "pending";
+export function typeInstanceCount(marks, mark) {
+  const key = deviceTypeKey(mark);
+  if (!key) return 1;
+  return devicesForAccuracyReview(marks).filter((item) => !isUncertainDetection(item) && deviceTypeKey(item) === key).length;
+}
+
+export function reviewQueue(marks, sheet) {
+  const all = devicesForAccuracyReview(marks);
+  const local = devicesForAccuracyReview(marks, sheet);
+  const reviewedTypes = new Set(
+    all
+      .filter((item) => !isUncertainDetection(item) && reviewStatusForMark(item) !== "pending")
+      .map((item) => deviceTypeKey(item))
+      .filter(Boolean),
+  );
+  const seenTypes = new Set();
+  const queue = [];
+  for (const mark of local) {
+    if (isUncertainDetection(mark)) {
+      if (reviewStatusForMark(mark) === "pending") queue.push(mark);
+      continue;
+    }
+    const key = deviceTypeKey(mark);
+    if (!key || seenTypes.has(key) || reviewedTypes.has(key)) continue;
+    seenTypes.add(key);
+    queue.push(mark);
+  }
+  return queue;
+}
+
+export function needsAccuracyReview(mark, marks, sheet) {
+  if (!mark) return false;
+  return reviewQueue(marks || [mark], sheet ?? mark.sheet).some((item) => item.id === mark.id);
 }
 
 export function neighborReviewId(marks, currentId, direction = 1, sheet) {
-  const items = devicesForAccuracyReview(marks, sheet);
+  const items = reviewQueue(marks, sheet);
   if (!items.length) return null;
   const index = items.findIndex((mark) => mark.id === currentId);
   const start = index < 0 ? 0 : index;
@@ -55,9 +94,22 @@ export function neighborReviewId(marks, currentId, direction = 1, sheet) {
   return items[next].id;
 }
 
+export function applyReviewDecision(marks, current, status) {
+  if (!current) return marks || [];
+  const type = deviceTypeKey(current);
+  const instanceOnly = isUncertainDetection(current) || !type;
+  return (marks || []).map((mark) => {
+    if (!isDeviceMark(mark)) return mark;
+    if (instanceOnly) return mark.id === current.id ? { ...mark, reviewStatus: status } : mark;
+    if (isUncertainDetection(mark)) return mark;
+    if (deviceTypeKey(mark) !== type) return mark;
+    return { ...mark, reviewStatus: status };
+  });
+}
+
 export function reviewSummary(marks, sheet) {
   const items = devicesForAccuracyReview(marks, sheet);
-  let pending = 0;
+  const queue = reviewQueue(marks, sheet);
   let accepted = 0;
   let rejected = 0;
   let vector = 0;
@@ -66,17 +118,18 @@ export function reviewSummary(marks, sheet) {
     const status = reviewStatusForMark(mark);
     if (status === "accepted") accepted += 1;
     else if (status === "rejected") rejected += 1;
-    else pending += 1;
     if (mark.outlineSource === "vector") vector += 1;
     else text += 1;
   }
   return {
     total: items.length,
-    pending,
+    pending: queue.length,
     accepted,
     rejected,
     vector,
     text,
+    typesPending: queue.filter((mark) => !isUncertainDetection(mark)).length,
+    uncertainPending: queue.filter((mark) => isUncertainDetection(mark)).length,
   };
 }
 

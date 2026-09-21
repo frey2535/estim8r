@@ -74,6 +74,20 @@ const conduit = {
 assert(reviewCategoryForMark(hvac) === "HVAC", "AHU counts land on the HVAC drawing");
 assert(reviewCategoryForMark(fire) === "Fire Alarm", "fire alarm stays on its own drawing");
 assert(reviewCategoryForMark(conduit) === "Conduit", "conduit runs are not mixed into device pages");
+assert(reviewCategoryForMark({
+  type: "count",
+  category: "Equipment",
+  symbol: "vf",
+  symbolLabel: "Vent fan",
+  abbr: "VF",
+}) === "Equipment", "vent fans stay electrical equipment, not HVAC");
+assert(reviewCategoryForMark({
+  type: "count",
+  category: "Equipment",
+  symbol: "ef",
+  symbolLabel: "Exhaust fan",
+  abbr: "EF",
+}) === "Equipment", "exhaust fans stay electrical equipment, not HVAC");
 
 const pages = buildReviewMarkupPages({ marks: [lighting, receptacle, hvac, fire, conduit] });
 assert(pages.some((page) => page.kind === "conduit" && page.sourcePage === 9), "conduit runs get a page");

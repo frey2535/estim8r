@@ -22,6 +22,8 @@ const SYNONYMS = [
   { test: /transformer|xfmr/, id: "transformer" },
   { test: /groundrod|groundingelectrode|groundgrid|grounding/, id: "ground-rod" },
   { test: /sitelight|arealight|polelight/, id: "site-pole" },
+  { test: /ventfan/, id: "vf" },
+  { test: /exhaustfan/, id: "ef" },
 ];
 
 export function normalizeTakeoffText(text) {

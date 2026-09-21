@@ -1,4 +1,4 @@
-import { paletteForTrade, symbolsForSelectedTrade, symbolsOnDrawingForTrade, symbolPatchFromCatalog, tradeIdForSymbol } from "./trades.js";
+import { paletteForTrade, symbolsForSelectedTrade, symbolsOnDrawingForTrade, symbolPatchFromCatalog, tradeIdForSymbol, tradeIdFromLabel } from "./trades.js";
 
 function assert(cond, message) {
   if (!cond) {
@@ -46,6 +46,13 @@ const electricalAll = symbolsForSelectedTrade("electrical");
 assert(electricalAll.every((item) => item.trade === "electrical"), "electrical dropdown stamps trade=electrical");
 assert(electricalAll.every((item) => !otherTradeIds.includes(item.id)), "electrical dropdown excludes other-trade catalog ids");
 assert(!electricalAll.some((item) => ["HVAC", "Fire Alarm", "Access Control", "Plumbing", "Mechanical", "Civil", "Structural"].includes(item.category)), "electrical dropdown has no other-trade categories");
+assert(electricalAll.some((item) => item.id === "vf" && item.abbr === "VF" && item.trade === "electrical"), "electrical catalog includes vent fans");
+assert(electricalAll.some((item) => item.id === "ef" && item.abbr === "EF" && item.trade === "electrical"), "electrical catalog includes exhaust fans");
+assert(!paletteForTrade("hvac").symbols.some((item) => item.id === "vf" || item.id === "ef"), "HVAC palette does not steal VF/EF");
+assert(tradeIdFromLabel("Vent fan") === "electrical" && tradeIdFromLabel("Exhaust fan") === "electrical", "fan labels are electrical");
+assert(tradeIdFromLabel("VF") === "electrical" && tradeIdFromLabel("EF") === "electrical", "VF/EF type codes are electrical");
+assert(tradeIdForSymbol({ id: "legend:vf", label: "Vent fan", abbr: "VF", takeoffCategory: "Equipment", category: "From drawing", source: "legend" }) === "electrical", "drawing VF stays electrical");
+assert(tradeIdForSymbol({ id: "legend:ef", label: "Exhaust fan", abbr: "EF", takeoffCategory: "Equipment", category: "From drawing", source: "legend" }) === "electrical", "drawing EF stays electrical");
 
 const leakedDrawing = [
   { id: "legend:wc", label: "Water closet", abbr: "WC", takeoffCategory: "Equipment", category: "From drawing", source: "legend" },
@@ -72,5 +79,15 @@ assert(onPlan.some((item) => item.id === "2x4") && onPlan.some((item) => item.id
 assert(!onPlan.some((item) => item.id === "legend:r" || item.label === "Legend duplex" || item.label === "Schedule type only"), "drawing dropdown excludes legend and schedule sheets");
 assert(!onPlan.some((item) => item.id === "wc"), "drawing dropdown excludes other-trade plan devices");
 assert(!onPlan.some((item) => item.id === "gfci" || item.id === "2x2"), "drawing dropdown does not list catalog types that are not on the plan");
+
+const fanPlanMarks = [
+  { id: "vf1", type: "count", sheet: 2, trade: "electrical", symbol: "vf", symbolLabel: "Vent fan", abbr: "VF", typeCode: "VF", category: "Equipment" },
+  { id: "ef1", type: "count", sheet: 2, trade: "electrical", symbol: "ef", symbolLabel: "Exhaust fan", abbr: "EF", typeCode: "EF", category: "Equipment" },
+  { id: "vf-legend", type: "count", sheet: 8, source: "legend", symbol: "legend:vf", symbolLabel: "Vent fan", abbr: "VF", category: "Equipment" },
+];
+const fansOnPlan = symbolsOnDrawingForTrade("electrical", fanPlanMarks, { pageKinds });
+assert(fansOnPlan.some((item) => item.id === "vf") && fansOnPlan.some((item) => item.id === "ef"), "drawing dropdown lists VF and EF found on the plan");
+assert(!fansOnPlan.some((item) => item.id === "legend:vf"), "drawing dropdown excludes legend-only VF rows");
+assert(fansOnPlan.every((item) => item.trade === "electrical"), "plan fans stay on the electrical trade");
 
 if (!process.exitCode) console.log("trade palette checks passed");

@@ -62,4 +62,21 @@ const shortened = shortenCircuitPath([{ x: 10, y: 10 }, { x: 40, y: 10 }]);
 assert(shortened[0].x > 10 && shortened[0].x < 40, "circuit path starts at the device edge, not on the count");
 assert(shortened[1].x === 40, "circuit still reaches the panel");
 
+const extracted = deviceOutline({
+  x: 20,
+  y: 36.5,
+  symbol: "2x4",
+  abbr: "1E",
+  outlineSource: "vector",
+  outline: { kind: "rect", source: "vector", w: 2.1, h: 1.05, points: [] },
+}, 0.4);
+assert(extracted.kind === "rect" && Math.abs(extracted.w - 2.1) < 0.01, "vector outlines keep the extracted size when the marker control changes");
+assert(hitTestDeviceFill({
+  x: 20,
+  y: 36.5,
+  type: "count",
+  outlineSource: "vector",
+  outline: { kind: "rect", source: "vector", w: 2.1, h: 1.05, points: [] },
+}, { x: 20.4, y: 36.6 }), "extracted outlines stay selectable");
+
 if (!process.exitCode) console.log("device style checks passed");

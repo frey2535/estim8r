@@ -1166,6 +1166,19 @@ function DeviceFill({ mark, selected, markerSize }) {
   const color = mark.color || "#1e3a8a";
   const opacity = mark.fillOpacity ?? DEVICE_FILL_OPACITY;
   const stroke = selected ? "#ea580c" : color;
+  const strokeWidth = selected ? 0.28 : 0.12;
+  if (outline.kind === "path" && outline.points?.length >= 3) {
+    return (
+      <polygon
+        points={outline.points.map((point) => `${point.x},${point.y}`).join(" ")}
+        fill={color}
+        fillOpacity={opacity}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        vectorEffect="non-scaling-stroke"
+      />
+    );
+  }
   if (outline.kind === "circle") {
     return (
       <circle
@@ -1175,7 +1188,7 @@ function DeviceFill({ mark, selected, markerSize }) {
         fill={color}
         fillOpacity={opacity}
         stroke={stroke}
-        strokeWidth={selected ? 0.28 : 0.12}
+        strokeWidth={strokeWidth}
         vectorEffect="non-scaling-stroke"
       />
     );
@@ -1186,11 +1199,12 @@ function DeviceFill({ mark, selected, markerSize }) {
       y={mark.y - outline.h / 2}
       width={outline.w}
       height={outline.h}
-      rx={0.12}
+      rx={outline.kind === "tag" ? 0.08 : 0.12}
       fill={color}
-      fillOpacity={opacity}
+      fillOpacity={outline.kind === "tag" ? 0.12 : opacity}
       stroke={stroke}
-      strokeWidth={selected ? 0.28 : 0.12}
+      strokeWidth={strokeWidth}
+      strokeDasharray={outline.kind === "tag" ? "0.35 0.28" : undefined}
       vectorEffect="non-scaling-stroke"
     />
   );

@@ -1,5 +1,13 @@
-import { applyDeviceTypeColors } from "./deviceStyles.js";
+import { applyDeviceTypeColors, deviceOutline } from "./deviceStyles.js";
 import { isSheetChrome, pageDiscipline, pageMatchesTrade } from "./sheetDiscipline.js";
+import {
+  fixtureSizeFromWholeToken,
+  isCanDeviceText,
+  isReferenceCallout,
+  resolveCanSymbol,
+  shouldAcceptPlanToken,
+  snapFillToDevice,
+} from "./symbolDetection.js";
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
 
 const STOP = new Set(["the", "and", "for", "with", "from", "this", "that", "sheet", "note", "see", "typ", "all", "new", "nic", "nts", "rev"]);
@@ -41,7 +49,12 @@ function fixtureSizeKey(text) {
   return `${Number(size[1])}x${Number(size[2])}`;
 }
 
-function findFixtureInText(symbols, text) {
+function findFixtureInText(symbols, text, options = {}) {
+  if (isReferenceCallout(text)) return null;
+  if (isCanDeviceText(text)) return resolveCanSymbol(symbols);
+  const whole = fixtureSizeFromWholeToken(text);
+  if (whole) return findFixtureBySize(symbols, whole);
+  if (!options.allowEmbedded) return null;
   const compact = normalizeTakeoffText(text);
   let best = null;
   let bestScore = -1;
@@ -109,7 +122,10 @@ export function fixtureAliasesFromSchedules(pages, symbols, trade) {
     }
     for (const row of rows) {
       const blob = row.tokens.map((token) => token.text).join(" ");
-      const symbol = findFixtureInText(symbols, blob) || findLabelMatch(symbols, blob) || findSynonym(symbols, blob);
+      const symbol = (isCanDeviceText(blob) && resolveCanSymbol(symbols))
+        || findFixtureInText(symbols, blob, { allowEmbedded: true })
+        || findLabelMatch(symbols, blob)
+        || findSynonym(symbols, blob);
       if (!symbol) continue;
       const taken = new Set((symbols || []).map((item) => normalizeTakeoffText(item.abbr)).filter((abbr) => abbr.length >= 2));
       for (const token of row.tokens) {
@@ -135,7 +151,8 @@ export function aliasesFromDrawingSymbols(drawingSymbols, catalogSymbols) {
     if (!code || !TYPE_CODE.test(code)) continue;
     const id = code.toUpperCase();
     if (seen.has(id)) continue;
-    const resolved = findFixtureInText(catalogSymbols, item.label || "")
+    const resolved = (isCanDeviceText(item.label) && resolveCanSymbol(catalogSymbols))
+      || findFixtureInText(catalogSymbols, item.label || "", { allowEmbedded: true })
       || findLabelMatch(catalogSymbols, item.label || "")
       || findSynonym(catalogSymbols, item.label || "")
       || item;
@@ -243,8 +260,13 @@ export function matchTradeSymbol(text, symbols, aliases = [], options = {}) {
   const token = raw.replace(/^type\s+/i, "");
   const lower = token.toLowerCase();
   const compact = normalizeTakeoffText(token);
-  if (!compact || STOP.has(lower)) return null;
-  const fixture = findFixtureInText(symbols, token);
+  if (!compact || STOP.has(lower) || isReferenceCallout(raw) || isReferenceCallout(token)) return null;
+  if (options.reject && options.reject({ text: raw })) return null;
+  if (isCanDeviceText(token) || isCanDeviceText(options.nearbyText)) {
+    const can = resolveCanSymbol(symbols);
+    if (can) return can;
+  }
+  const fixture = findFixtureInText(symbols, token, { allowEmbedded: options.allowEmbedded });
   if (fixture) return fixture;
   const synonym = findSynonym(symbols, token);
   if (synonym) return synonym;
@@ -504,13 +526,21 @@ function newId() {
   return globalThis.crypto?.randomUUID?.() || `ai-${Math.random().toString(36).slice(2)}`;
 }
 
+function nearbyText(token, tokens) {
+  return (tokens || [])
+    .filter((other) => Math.hypot((other.x || 0) - (token.x || 0), (other.y || 0) - (token.y || 0)) <= 2.8)
+    .map((other) => other.text)
+    .join(" ");
+}
+
 function collectMatchCandidates(page) {
-  const tokens = (page.tokens || []).filter((token) => !isSheetChrome(token));
-  const phrases = phrasesFromTokens(tokens);
+  const tokens = (page.tokens || []).filter((token) => !isSheetChrome(token) && shouldAcceptPlanToken(token, page.tokens));
+  const phrases = phrasesFromTokens(tokens).filter((phrase) => shouldAcceptPlanToken(phrase, page.tokens));
   const candidates = phrases.map((phrase) => ({
     text: phrase.text,
     x: phrase.x,
     y: phrase.y,
+    nearbyText: phrase.parts.map((part) => part.text).join(" "),
     sectionContext: phrase.parts.some((part) => isSectionContext(part, tokens)) || SECTION_PHRASE.test(phrase.text),
   }));
   for (const token of tokens) {
@@ -518,6 +548,7 @@ function collectMatchCandidates(page) {
       text: token.text,
       x: token.x,
       y: token.y,
+      nearbyText: nearbyText(token, page.tokens),
       sectionContext: isSectionContext(token, tokens),
     });
   }
@@ -549,20 +580,28 @@ export function buildAiMarks({
   for (const page of pages || []) {
     if (!shouldScan(page, trade)) continue;
     for (const token of collectMatchCandidates(page)) {
-      const symbol = matchTradeSymbol(token.text, matchSymbols, aliases, { sectionContext: token.sectionContext });
+      let symbol = matchTradeSymbol(token.text, matchSymbols, aliases, {
+        sectionContext: token.sectionContext,
+        nearbyText: token.nearbyText,
+        reject: (item) => !shouldAcceptPlanToken({ ...token, text: item.text }, page.tokens),
+      });
       if (!symbol) continue;
+      if (isCanDeviceText(token.text, token.nearbyText, symbol.label)) {
+        symbol = resolveCanSymbol(matchSymbols) || symbol;
+      }
       const near = seen.some((item) => item.sheet === page.page && item.symbol === symbol.id && distance(item, token) < 1.2);
       if (near) continue;
       const compact = normalizeTakeoffText(String(token.text || "").replace(/^type\s+/i, ""));
       const fromSchedule = aliases.some((alias) => normalizeTakeoffText(alias.code) === compact && alias.symbol?.id === symbol.id);
+      const snapped = snapFillToDevice(token, isCanDeviceText(symbol.label, symbol.id) ? "circle" : deviceOutline({ ...symbol, typeCode: token.text }).kind);
       const mark = {
         id: newId(),
         source: "ai",
         trade,
         type: "count",
         sheet: page.page,
-        x: token.x,
-        y: token.y,
+        x: snapped.x,
+        y: snapped.y,
         category: symbol.takeoffCategory || symbol.category,
         symbol: symbol.id,
         symbolLabel: symbol.label,

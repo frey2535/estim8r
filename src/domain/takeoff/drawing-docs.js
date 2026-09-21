@@ -6,6 +6,41 @@ const SPEC_RE = /specification|general\s+notes|electrical\s+notes|abbreviations/
 const SKIP = /^(symbol|symbols|description|type|manufacturer|model|remarks|notes|qty|quantity|mounting|voltage|watts|lamp|catalog)$/i;
 const TYPE_RE = /^(?:type\s*)?([a-z]{1,3}\d{0,3}[a-z]{0,2}|\d{1,3}[a-z]{0,3})$/i;
 
+function parseFraction(value) {
+  const text = String(value || "").trim();
+  if (!text) return 0;
+  if (text.includes("/")) {
+    const [a, b] = text.split("/").map(Number);
+    return b ? a / b : 0;
+  }
+  return Number(text) || 0;
+}
+
+export function parsePrintedScale(text) {
+  const blob = String(text || "");
+  const architectural = blob.match(/\b(\d+(?:\/\d+)?|\d*\.\d+)\s*"\s*=\s*(\d+)\s*'\s*(?:-\s*(\d+)\s*")?/i);
+  if (architectural) {
+    const drawingInches = parseFraction(architectural[1]);
+    const feet = Number(architectural[2]) + (Number(architectural[3] || 0) / 12);
+    if (drawingInches > 0 && feet > 0) return { drawingInches, realFeet: feet, label: architectural[0].replace(/\s+/g, " ").trim() };
+  }
+  return null;
+}
+
+export function printedScaleCalibration(page) {
+  const scale = page?.printedScale;
+  const widthPt = Number(page?.widthPt) || 0;
+  if (!scale?.drawingInches || !scale.realFeet || !widthPt) return null;
+  const sheetWidthInches = widthPt / 72;
+  const feetPerDrawingInch = scale.realFeet / scale.drawingInches;
+  return {
+    feet: sheetWidthInches * feetPerDrawingInch,
+    percentLength: 100,
+    source: "printed-scale",
+    scaleLabel: scale.label,
+  };
+}
+
 export function classifyPageText(text) {
   const blob = String(text || "");
   if (LIGHTING_SCHED_RE.test(blob)) return "lighting-schedule";
@@ -125,7 +160,7 @@ export async function readDrawingDocuments(fileBytes) {
     const rows = clusterTextRows(items);
     const text = rows.map((row) => row.text).join("\n");
     const kind = classifyPageText(text);
-    pages.push({ page: pageNumber, kind, textLength: text.length });
+    pages.push({ page: pageNumber, kind, textLength: text.length, text, widthPt: viewport.width, heightPt: viewport.height, printedScale: parsePrintedScale(text) });
     const titleRows = titleBlockRowsFromItems(items, viewport);
     const titleText = titleRows.join("\n");
     if (pageNumber <= 3 || /title\s+sheet|cover\s+sheet/i.test(text) || /title\s+sheet|cover\s+sheet/i.test(titleText)) {

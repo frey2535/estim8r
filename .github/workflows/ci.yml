@@ -1,0 +1,35 @@
+name: Estim8r CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck diagnostics
+        continue-on-error: true
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+        env:
+          VITE_APP_BUILD_SHA: ${{ github.sha }}
+          VITE_APP_NAME: Estim8r
+          VITE_APP_URL: https://estim8r.currentflowconsulting.org

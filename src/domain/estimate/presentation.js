@@ -1,16 +1,20 @@
 export const DEFAULT_VISIBLE_TOTALS = {
   material: true,
   labor: true,
+  contingency: false,
   overhead: false,
   profit: false,
+  bondInsurance: false,
   total: true,
 };
 
 export const TOTAL_OPTIONS = [
   { key: "material", label: "Material Total" },
   { key: "labor", label: "Labor Total" },
+  { key: "contingency", label: "Contingency" },
   { key: "overhead", label: "Overhead" },
   { key: "profit", label: "Profit" },
+  { key: "bondInsurance", label: "Bond / Insurance" },
   { key: "total", label: "Total" },
 ];
 

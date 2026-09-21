@@ -277,13 +277,21 @@ export function estimateTotals(estimate) {
 export function estimateGrandTotal(estimate) {
   const totals = estimateTotals(estimate);
   const direct = totals.material + totals.labor;
-  const overhead = direct * ((Number(estimate?.overhead) || 0) / 100);
-  const profit = (direct + overhead) * ((Number(estimate?.profit) || 0) / 100);
+  const contingency = direct * ((Number(estimate?.contingency) || 0) / 100);
+  const overheadBase = direct + contingency;
+  const overhead = overheadBase * ((Number(estimate?.overhead) || 0) / 100);
+  const profitBase = overheadBase + overhead;
+  const profit = profitBase * ((Number(estimate?.profit) || 0) / 100);
+  const bondBase = profitBase + profit;
+  const bondInsurance = bondBase * ((Number(estimate?.bondInsurance) || 0) / 100);
   return {
     ...totals,
+    direct,
+    contingency,
     overhead,
     profit,
-    total: direct + overhead + profit,
+    bondInsurance,
+    total: bondBase + bondInsurance,
   };
 }
 

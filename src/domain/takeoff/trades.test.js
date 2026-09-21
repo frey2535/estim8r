@@ -1,4 +1,4 @@
-import { paletteForTrade } from "./trades.js";
+import { paletteForTrade, symbolsForSelectedTrade, symbolPatchFromCatalog } from "./trades.js";
 
 function assert(cond, message) {
   if (!cond) {
@@ -20,5 +20,25 @@ assert(!plumbing.symbols.some((item) => item.id === "duplex" || item.id === "2x4
 const mechanical = paletteForTrade("mechanical");
 assert(mechanical.symbols.every((item) => item.category === "Mechanical"), "mechanical palette is mechanical devices only");
 assert(!mechanical.categories.includes("Receptacles"), "mechanical category list does not include electrical categories");
+
+const mixedDrawing = [
+  { id: "wc-d", label: "Water closet (drawing)", abbr: "WC", takeoffCategory: "Plumbing", category: "From drawing" },
+  { id: "dup-d", label: "Duplex (drawing)", abbr: "R", takeoffCategory: "Receptacles", category: "From drawing" },
+];
+const plumbingDropdown = symbolsForSelectedTrade("plumbing", mixedDrawing);
+assert(plumbingDropdown.some((item) => item.id === "wc" || item.id === "wc-d"), "plumbing dropdown includes plumbing devices");
+assert(plumbingDropdown.every((item) => item.category === "Plumbing" || item.takeoffCategory === "Plumbing"), "plumbing dropdown is plumbing only");
+assert(!plumbingDropdown.some((item) => item.id === "duplex" || item.id === "dup-d" || item.id === "2x4"), "plumbing dropdown excludes electrical devices");
+
+const electricalDropdown = symbolsForSelectedTrade("electrical", mixedDrawing);
+assert(electricalDropdown.some((item) => item.id === "duplex" || item.id === "dup-d"), "electrical dropdown includes receptacles");
+assert(!electricalDropdown.some((item) => item.id === "wc" || item.id === "wc-d" || item.id === "ahu-m"), "electrical dropdown excludes plumbing and mechanical");
+
+const lightingOnly = symbolsForSelectedTrade("electrical", mixedDrawing, { category: "Lighting" });
+assert(lightingOnly.every((item) => item.category === "Lighting"), "category filter stays inside the selected trade");
+assert(!lightingOnly.some((item) => item.id === "duplex" || item.id === "wc"), "lighting list does not include receptacles or plumbing");
+
+const patch = symbolPatchFromCatalog(electrical.symbols.find((item) => item.id === "duplex"));
+assert(patch.symbol === "duplex" && patch.category === "Receptacles", "catalog patch keeps trade category");
 
 if (!process.exitCode) console.log("trade palette checks passed");

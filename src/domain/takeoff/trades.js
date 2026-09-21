@@ -156,6 +156,30 @@ export function paletteForTrade(tradeId, drawingSymbols = []) {
   return { categories, symbols, fromDrawing };
 }
 
+export function symbolsForSelectedTrade(tradeId, drawingSymbols = [], options = {}) {
+  const palette = paletteForTrade(tradeId, drawingSymbols);
+  const category = options.category;
+  if (category === DRAWING_CATEGORY) return palette.fromDrawing;
+  if (category) return palette.symbols.filter((item) => item.category === category);
+  const seen = new Set();
+  return [...palette.fromDrawing, ...palette.symbols].filter((item) => {
+    if (!item?.id || seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+}
+
+export function symbolPatchFromCatalog(item) {
+  if (!item) return {};
+  return {
+    symbol: item.id,
+    symbolLabel: item.label,
+    abbr: item.abbr,
+    category: item.takeoffCategory || item.category,
+    typeCode: item.abbr,
+  };
+}
+
 export const ANCHOR_SYMBOL_IDS = {
   electrical: ["panel", "lighting-panel", "power-panel", "receptacle-panel", "switchboard", "switchgear", "mcc", "main-sw", "transformer", "dry-tx", "pad-tx", "generator", "ats"],
   hvac: ["ahu", "cu"],

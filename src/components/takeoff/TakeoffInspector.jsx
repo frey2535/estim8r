@@ -1,6 +1,7 @@
 import React from "react";
 import { Layers3 } from "lucide-react";
 import { formatArea, formatFeet } from "@/domain/takeoff/geometry";
+import { symbolPatchFromCatalog } from "@/domain/takeoff/trades";
 import {
   DEFAULT_LINE_SIZE,
   DEFAULT_MARKER_SIZE,
@@ -11,6 +12,7 @@ import {
   resolvedLineSize,
   resolvedMarkerSize,
 } from "@/domain/takeoff/sizes";
+import TradeSymbolSelect from "@/components/takeoff/TradeSymbolSelect";
 
 function Field({ label, children }) {
   return (
@@ -27,6 +29,8 @@ export default function TakeoffInspector({
   rollup,
   runs,
   drawingDocs,
+  trade,
+  drawingSymbols = [],
   selected,
   conduitOptions,
   onSelectRun,
@@ -42,16 +46,30 @@ export default function TakeoffInspector({
 }) {
   const selectedIsLine = isLineMark(selected);
   const selectedIsMarker = isMarkerMark(selected);
+  const selectedIsConduit = selected?.tool === "conduit" || selected?.type === "route" || selected?.category === "Raceway";
+  const selectedIsNote = selected?.type === "note";
   return (
     <aside className="hidden min-h-0 overflow-auto border-l border-border bg-card p-3 lg:block">
       {selected && (
         <div className="mb-3 space-y-2 rounded-lg border border-border p-2">
           <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Selected item</div>
-          <Field label="Name">
-            <input className={inputClass} value={selected.symbolLabel || ""} onChange={(e) => onUpdateMark(selected.id, { symbolLabel: e.target.value })} />
-          </Field>
+          {selectedIsConduit || selectedIsNote ? (
+            <Field label="Name">
+              <input className={inputClass} value={selected.symbolLabel || ""} onChange={(e) => onUpdateMark(selected.id, { symbolLabel: e.target.value })} />
+            </Field>
+          ) : (
+            <Field label="Device / symbol">
+              <TradeSymbolSelect
+                trade={trade}
+                drawingSymbols={drawingSymbols}
+                value={selected.symbol || selected.symbolLabel}
+                className={inputClass}
+                onChange={(item) => onUpdateMark(selected.id, symbolPatchFromCatalog(item))}
+              />
+            </Field>
+          )}
           <Field label="Category">
-            <input className={inputClass} value={selected.category || ""} onChange={(e) => onUpdateMark(selected.id, { category: e.target.value })} />
+            <input className={inputClass} value={selected.category || ""} readOnly />
           </Field>
           <Field label="Marker text">
             <input className={inputClass} value={selected.abbr || ""} onChange={(e) => onUpdateMark(selected.id, { abbr: e.target.value })} />
@@ -134,8 +152,19 @@ export default function TakeoffInspector({
           const sf = edit.sf ?? (row.hasArea ? row.sf : "");
           return (
             <div key={key} className="space-y-1 rounded-lg border border-border px-2 py-1.5">
-              <input className={inputClass} aria-label="Item name" value={symbol} onChange={(e) => onEditRow(row, { symbol: e.target.value })} onBlur={() => onRenameRow?.(row, { symbol, category })} />
-              <input className={inputClass} aria-label="Item category" value={category} onChange={(e) => onEditRow(row, { category: e.target.value })} onBlur={() => onRenameRow?.(row, { symbol, category })} />
+              <TradeSymbolSelect
+                trade={trade}
+                drawingSymbols={drawingSymbols}
+                value={symbol}
+                className={inputClass}
+                aria-label="Item name"
+                onChange={(item) => {
+                  const next = { symbol: item.label, category: item.takeoffCategory || item.category };
+                  onEditRow(row, next);
+                  onRenameRow?.(row, next);
+                }}
+              />
+              <input className={inputClass} aria-label="Item category" value={category} readOnly />
               <div className="grid grid-cols-3 gap-1">
                 <input className={inputClass} aria-label="Count" type="number" value={count} onChange={(e) => onEditRow(row, { count: e.target.value })} />
                 <input className={inputClass} aria-label="Length" type="number" value={lf} onChange={(e) => onEditRow(row, { lf: e.target.value })} />

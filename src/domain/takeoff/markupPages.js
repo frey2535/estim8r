@@ -148,6 +148,12 @@ export function buildReviewMarkupPages({ marks } = {}) {
           label: group.label,
           deviceIds: group.deviceIds,
           deviceCount: group.devices.length,
+          circuits: [...new Set(group.devices.map((device) => String(device.circuit || device.circuitNumber || "").trim()).filter(Boolean))].sort(),
+          devices: group.devices.map((device) => ({
+            id: device.id,
+            label: device.symbolLabel || device.symbol || device.abbr || "Device",
+            circuit: String(device.circuit || device.circuitNumber || "").trim(),
+          })),
         })),
         summary: `${groups.length} conduit group${groups.length === 1 ? "" : "s"}`,
       });
@@ -161,4 +167,49 @@ export function assignDeviceToConduit(marks, deviceId, conduitId) {
   return (marks || []).map((mark) => (
     mark.id === deviceId ? { ...mark, circuitRunId: conduitId || null } : mark
   ));
+}
+
+
+export function conduitCircuitSchedule(marks) {
+  return associateDevicesToConduits(marks).map((group) => {
+    const circuits = [...new Set(
+      group.devices
+        .map((device) => String(device.circuit || device.circuitNumber || "").trim())
+        .filter(Boolean),
+    )].sort();
+    return {
+      conduitId: group.conduitId,
+      runNumber: group.runNumber,
+      sheet: group.sheet,
+      label: group.label,
+      conduitSize: group.conduit?.conduitSize || group.conduit?.abbr || "",
+      conduitMaterial: group.conduit?.conduitMaterial || "",
+      circuits,
+      circuitCount: circuits.length,
+      deviceCount: group.devices.length,
+      devices: group.devices.map((device) => ({
+        id: device.id,
+        label: device.symbolLabel || device.symbol || device.abbr || "Device",
+        circuit: String(device.circuit || device.circuitNumber || "").trim(),
+      })),
+    };
+  }).sort((a, b) => (a.sheet - b.sheet) || ((a.runNumber || 0) - (b.runNumber || 0)));
+}
+
+export function conduitCircuitScheduleCsv(marks) {
+  const csv = (value) => {
+    const text = String(value ?? "");
+    return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+  };
+  const rows = [["Conduit #", "Sheet", "Conduit", "Circuits", "Device Count"]];
+  for (const row of conduitCircuitSchedule(marks)) {
+    rows.push([
+      row.runNumber || "",
+      row.sheet,
+      [row.conduitSize, row.conduitMaterial].filter(Boolean).join(" ") || row.label,
+      row.circuits.join(", "),
+      row.deviceCount,
+    ]);
+  }
+  return rows.map((row) => row.map(csv).join(",")).join("\n");
 }

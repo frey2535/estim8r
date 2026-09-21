@@ -707,3 +707,94 @@ export function trueTakeoffCsv(analysis, lines, summary) {
   }
   return rows.map((row) => row.map(csv).join(",")).join("\n");
 }
+
+
+export const WORK_CATEGORY_ORDER = [
+  "Rough-in",
+  "Wire / Cable Pulling",
+  "Equipment Termination",
+  "Device Install",
+  "Other / Review",
+];
+
+export function workCategoryForEstimateLine(line) {
+  const category = String(line?.category || "").toLowerCase();
+  const itemType = String(line?.itemType || "").toLowerCase();
+  const text = `${line?.description || ""} ${line?.category || ""} ${line?.itemType || ""}`.toLowerCase();
+
+  if (
+    itemType === "wire"
+    || /\bwire\b|\bcable\b|conductor|thhn|thwn|mc cable|romex|fiber|cat\s*6|cat6|pull(?:ing)?\s+(?:wire|cable)/i.test(text)
+  ) return "Wire / Cable Pulling";
+
+  if (
+    category === "raceway"
+    || /conduit|emt\b|pvc\b|rigid|rmc\b|imc\b|wiremold|raceway|cable tray|ladder tray|basket tray|junction box|pull box|device box|unistrut|strut|rack|support|sleeve|trench|ductbank|duct bank|concrete encasement/i.test(text)
+  ) return "Rough-in";
+
+  if (
+    category === "panels / mcc"
+    || category === "mechanical connections"
+    || /service|switchgear|switchboard|panel(?:board)?|subpanel|transformer|vfd\b|plc\b|motor control|\bmcc\b|unit sub|unit substation|vav\b|ahu\b|rtu\b|ptac\b|exhaust fan|ventilation fan|electric heater|disconnect|termination|motor\b|generator|\bats\b|meter|surge protective|\bspd\b/i.test(text)
+  ) return "Equipment Termination";
+
+  if (
+    itemType === "device"
+    || itemType === "fixture"
+    || category === "lighting"
+    || category === "receptacles"
+    || category === "switches"
+    || /light|fixture|luminaire|recept|outlet|gfci|gfi|switch|dimmer|occupancy sensor|photocell|device|exit sign|emergency light/i.test(text)
+  ) return "Device Install";
+
+  return "Other / Review";
+}
+
+export function calculateWorkCategoryBreakdown(lines) {
+  const grouped = Object.fromEntries(WORK_CATEGORY_ORDER.map((name) => [name, {
+    category: name,
+    lineCount: 0,
+    quantity: 0,
+    material: 0,
+    hours: 0,
+    labor: 0,
+    direct: 0,
+    lines: [],
+  }]));
+
+  for (const line of lines || []) {
+    if (line?.included === false) continue;
+    const category = workCategoryForEstimateLine(line);
+    const row = grouped[category];
+    const quantity = num(line?.quantity);
+    const material = quantity * num(line?.materialUnitCost);
+    const hours = quantity * num(line?.laborMhPerUnit);
+    const labor = hours * num(line?.laborRate);
+    row.lineCount += 1;
+    row.quantity += quantity;
+    row.material += material;
+    row.hours += hours;
+    row.labor += labor;
+    row.direct += material + labor;
+    row.lines.push({
+      id: line?.id,
+      description: line?.description || "",
+      sourceCategory: line?.category || "",
+      quantity: money(quantity),
+      unit: line?.unit || "",
+      material: money(material),
+      hours: money(hours),
+      labor: money(labor),
+      direct: money(material + labor),
+    });
+  }
+
+  return WORK_CATEGORY_ORDER.map((name) => ({
+    ...grouped[name],
+    quantity: money(grouped[name].quantity),
+    material: money(grouped[name].material),
+    hours: money(grouped[name].hours),
+    labor: money(grouped[name].labor),
+    direct: money(grouped[name].direct),
+  }));
+}

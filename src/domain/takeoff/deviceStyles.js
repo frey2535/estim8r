@@ -1,5 +1,8 @@
+import { isCanDeviceText } from "./symbolDetection.js";
+
 export const DEVICE_FILL_OPACITY = 0.32;
 export const CIRCUIT_COLOR = "#64748b";
+export const SELECTED_OUTLINE_SCALE = 1.45;
 
 export const SCHEDULE_TYPE_COLORS = {
   1: "#1e3a8a",
@@ -83,10 +86,16 @@ export function applyDeviceTypeColors(marks) {
   });
 }
 
-export function deviceOutline(mark, markerSize = 0.55) {
-  const scale = Math.max(0.4, Number(markerSize) || 0.55) / 0.55;
-  const blob = `${mark?.symbol || ""} ${mark?.symbolLabel || ""} ${mark?.abbr || ""} ${mark?.typeCode || ""}`.toLowerCase();
-  const size = blob.match(/(\d)\s*[x×]\s*(\d)/);
+export function deviceOutline(mark, markerSize = 0.55, options = {}) {
+  const scale = (Math.max(0.4, Number(markerSize) || 0.55) / 0.55) * (options.selected ? SELECTED_OUTLINE_SCALE : 1);
+  const blob = `${mark?.symbol || ""} ${mark?.symbolLabel || ""} ${mark?.abbr || ""} ${mark?.typeCode || ""}`;
+  if (isCanDeviceText(blob) || /downlight|pendant|high bay|low bay|occup|sensor|switch/.test(blob.toLowerCase())) {
+    return { kind: "circle", r: 0.42 * scale };
+  }
+  if (/recept|gfci|gfi|duplex|outlet|\br\b|quad/.test(blob.toLowerCase())) {
+    return { kind: "circle", r: 0.38 * scale };
+  }
+  const size = blob.toLowerCase().match(/(\d)\s*[x×]\s*(\d)/);
   if (size) {
     const a = Number(size[1]);
     const b = Number(size[2]);
@@ -94,23 +103,18 @@ export function deviceOutline(mark, markerSize = 0.55) {
     const short = Math.min(a, b);
     return { kind: "rect", w: 0.42 * long * scale, h: 0.38 * short * scale };
   }
-  if (/recept|gfci|gfi|duplex|outlet|\br\b|quad/.test(blob)) {
-    return { kind: "circle", r: 0.38 * scale };
-  }
-  if (/downlight|can light|pendant|high bay|low bay|occup|sensor|switch/.test(blob)) {
-    return { kind: "circle", r: 0.4 * scale };
-  }
   return { kind: "rect", w: 0.95 * scale, h: 0.55 * scale };
 }
 
 export function hitTestDeviceFill(mark, point, markerSize = 0.55) {
   if (!mark || !point) return false;
   const outline = deviceOutline(mark, markerSize);
+  const pad = 0.55;
   if (outline.kind === "circle") {
-    return Math.hypot(point.x - mark.x, point.y - mark.y) <= outline.r + 0.15;
+    return Math.hypot(point.x - mark.x, point.y - mark.y) <= Math.max(outline.r, pad);
   }
-  return Math.abs(point.x - mark.x) <= outline.w / 2 + 0.12
-    && Math.abs(point.y - mark.y) <= outline.h / 2 + 0.12;
+  return Math.abs(point.x - mark.x) <= Math.max(outline.w / 2, pad)
+    && Math.abs(point.y - mark.y) <= Math.max(outline.h / 2, pad);
 }
 
 export function selectMarkAtPoint(marks, point, options = {}) {

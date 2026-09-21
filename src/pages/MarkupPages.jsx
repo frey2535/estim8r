@@ -413,7 +413,7 @@ function ReviewOverlay({ marks, selectedId }) {
         );
       })}
       {devices.map((mark) => {
-        const outline = deviceOutline(mark, DEFAULT_MARKER_SIZE);
+        const outline = deviceOutline(mark, DEFAULT_MARKER_SIZE, { selected });
         const color = mark.color || "#1e3a8a";
         const selected = mark.id === selectedId;
         if (outline.kind === "circle") {

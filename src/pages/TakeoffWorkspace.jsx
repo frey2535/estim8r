@@ -1162,7 +1162,7 @@ function OverlayLabel({ label, fill }) {
 }
 
 function DeviceFill({ mark, selected, markerSize }) {
-  const outline = deviceOutline(mark, markerSize);
+  const outline = deviceOutline(mark, markerSize, { selected });
   const color = mark.color || "#1e3a8a";
   const opacity = mark.fillOpacity ?? DEVICE_FILL_OPACITY;
   const stroke = selected ? "#ea580c" : color;

@@ -36,8 +36,13 @@ import {
   typeInstanceCount,
 } from "@/domain/takeoff/accuracyReview";
 import { getPdfDocument } from "@/lib/pdf-document";
-import { syncStoredEstimate } from "@/domain/estimate/estimateStore";
+import { readEstimate, syncStoredEstimate, writeEstimate } from "@/domain/estimate/estimateStore";
 import { downloadBlob, putDrawingFile } from "@/domain/estimate/projectDocuments";
+import {
+  analyzeElectricalTakeoff,
+  buildTrueElectricalEstimateDraft,
+  trueTakeoffCsv,
+} from "@/domain/estimate/trueElectricalTakeoff";
 import {
   buildSupplyQuote,
   buildSupplyQuotePdf,
@@ -158,6 +163,7 @@ export default function TakeoffWorkspace() {
   ));
   const [reviewOpen, setReviewOpen] = useState(false);
   const [supplyQuote, setSupplyQuote] = useState(null);
+  const [trueTakeoffResult, setTrueTakeoffResult] = useState(null);
 
   const isPdf = file?.type === "application/pdf" || file?.name?.toLowerCase().endsWith(".pdf");
   const drawingSymbols = useMemo(() => drawingSymbolsFromDocs(drawingDocs), [drawingDocs]);
@@ -222,6 +228,10 @@ export default function TakeoffWorkspace() {
   const runs = useMemo(
     () => conduitRuns(marks, calibration, aspect, penThickness),
     [marks, calibration, aspect, penThickness],
+  );
+  const trueAnalysis = useMemo(
+    () => analyzeElectricalTakeoff({ drawingDocs, rollup: editedRollup, runs, marks }),
+    [drawingDocs, editedRollup, runs, marks],
   );
 
   useEffect(() => {
@@ -462,6 +472,41 @@ export default function TakeoffWorkspace() {
     observer.observe(el);
     return () => observer.disconnect();
   }, [file]);
+
+
+  function buildAndSaveTrueElectricalEstimate({ download = false } = {}) {
+    if (!file) return null;
+    const existing = readEstimate(file.name, file.size);
+    const draft = buildTrueElectricalEstimateDraft(existing, {
+      fileName: file.name,
+      fileSize: file.size,
+      drawingDocs,
+      rollup: editedRollup,
+      runs,
+      marks,
+    });
+    writeEstimate(draft);
+    setTrueTakeoffResult(draft.trueTakeoff);
+    saveTakeoff(true);
+    if (download) {
+      const csv = trueTakeoffCsv(
+        draft.trueTakeoff.analysis,
+        draft.lines,
+        draft.trueTakeoff.summary,
+      );
+      downloadBlob(
+        new Blob([csv], { type: "text/csv;charset=utf-8" }),
+        `${(file.name || "electrical-takeoff").replace(/\.[^.]+$/, "")}-true-electrical-takeoff.csv`,
+      );
+    }
+    const warningCount = draft.trueTakeoff.analysis.warnings.length;
+    setStatus(
+      `True electrical estimate built: $${draft.trueTakeoff.summary.total.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+      + (warningCount ? ` · ${warningCount} bid-lock warning${warningCount === 1 ? "" : "s"}` : " · bid-lock checks clear"),
+    );
+    return draft;
+  }
+
 
   function commitMarks(next, message) {
     historyRef.current.past.push(marks);
@@ -1024,6 +1069,8 @@ export default function TakeoffWorkspace() {
           <button type="button" onClick={() => saveTakeoff()} className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 dark:bg-orange-500">
             <Save className="h-4 w-4" /> Save
           </button>
+          <button type="button" onClick={() => buildAndSaveTrueElectricalEstimate()} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-emerald-700">True Takeoff</button>
+          <button type="button" onClick={() => buildAndSaveTrueElectricalEstimate({ download: true })} className="rounded-lg border border-emerald-600 px-3 py-1.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300">Takeoff CSV</button>
           <Link to={file ? `/estimates/new?file=${encodeURIComponent(file.name)}&size=${file.size}` : "/estimates/new"} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Estimate</Link>
           <button type="button" onClick={downloadQuoteExcel} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Quote Excel</button>
           <button type="button" onClick={downloadQuotePdf} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Quote PDF</button>
@@ -1263,6 +1310,9 @@ export default function TakeoffWorkspace() {
           onDownloadQuotePdf={downloadQuotePdf}
           globalMarkerSize={penSize}
           globalLineSize={penThickness}
+          trueAnalysis={trueAnalysis}
+          trueTakeoffResult={trueTakeoffResult}
+          onBuildTrueTakeoff={() => buildAndSaveTrueElectricalEstimate()}
         />
       </div>
       <AccuracyPopout

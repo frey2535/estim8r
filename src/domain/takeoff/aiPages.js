@@ -1,4 +1,5 @@
 import { classifyPageText, extractPdfPageItems } from "./drawing-docs";
+import { extractPageSymbolPaths } from "./pdfPaths";
 import { classifySheetDiscipline, findSheetId, parseSheetId } from "./sheetDiscipline";
 import { getPdfDocument } from "@/lib/pdf-document";
 
@@ -18,7 +19,13 @@ export async function readAiPages(fileBytes) {
     const kind = classifyPageText(text);
     const sheetId = findSheetId(tokens) || parseSheetId(text);
     const discipline = classifySheetDiscipline(text, tokens);
-    pages.push({ page: pageNumber, kind, tokens, sheetId, discipline });
+    let paths = [];
+    try {
+      paths = await extractPageSymbolPaths(page);
+    } catch {
+      paths = [];
+    }
+    pages.push({ page: pageNumber, kind, tokens, sheetId, discipline, paths });
   }
   return pages;
 }

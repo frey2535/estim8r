@@ -1,4 +1,4 @@
-import { applyDeviceTypeColors, deviceOutline } from "./deviceStyles.js";
+import { applyDeviceTypeColors } from "./deviceStyles.js";
 import { isSheetChrome, pageDiscipline, pageMatchesTrade } from "./sheetDiscipline.js";
 import {
   fixtureSizeFromWholeToken,
@@ -6,8 +6,8 @@ import {
   isReferenceCallout,
   resolveCanSymbol,
   shouldAcceptPlanToken,
-  snapFillToDevice,
 } from "./symbolDetection.js";
+import { associateGeometry } from "./vectorSymbols.js";
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
 
 const STOP = new Set(["the", "and", "for", "with", "from", "this", "that", "sheet", "note", "see", "typ", "all", "new", "nic", "nts", "rev"]);
@@ -586,22 +586,27 @@ export function buildAiMarks({
         reject: (item) => !shouldAcceptPlanToken({ ...token, text: item.text }, page.tokens),
       });
       if (!symbol) continue;
-      if (isCanDeviceText(token.text, token.nearbyText, symbol.label)) {
+      const geometry = associateGeometry(token, page.paths || []);
+      if (geometry?.kind === "circle") {
+        symbol = resolveCanSymbol(matchSymbols) || symbol;
+      } else if (isCanDeviceText(token.text, token.nearbyText, symbol.label) && geometry?.kind !== "rect") {
         symbol = resolveCanSymbol(matchSymbols) || symbol;
       }
-      const near = seen.some((item) => item.sheet === page.page && item.symbol === symbol.id && distance(item, token) < 1.2);
+      const placed = geometry
+        ? { x: geometry.cx, y: geometry.cy }
+        : { x: token.x, y: token.y };
+      const near = seen.some((item) => item.sheet === page.page && item.symbol === symbol.id && distance(item, placed) < 1.2);
       if (near) continue;
       const compact = normalizeTakeoffText(String(token.text || "").replace(/^type\s+/i, ""));
       const fromSchedule = aliases.some((alias) => normalizeTakeoffText(alias.code) === compact && alias.symbol?.id === symbol.id);
-      const snapped = snapFillToDevice(token, isCanDeviceText(symbol.label, symbol.id) ? "circle" : deviceOutline({ ...symbol, typeCode: token.text }).kind);
       const mark = {
         id: newId(),
         source: "ai",
         trade,
         type: "count",
         sheet: page.page,
-        x: snapped.x,
-        y: snapped.y,
+        x: placed.x,
+        y: placed.y,
         category: symbol.takeoffCategory || symbol.category,
         symbol: symbol.id,
         symbolLabel: symbol.label,
@@ -611,6 +616,8 @@ export function buildAiMarks({
           : (symbol.abbr || "").toUpperCase(),
         color,
         matchedFrom: fromSchedule ? "schedule" : "drawing",
+        outline: geometry?.outline || { kind: "tag", source: "text", w: 0.72, h: 0.42 },
+        outlineSource: geometry ? "vector" : "text",
         anchor: anchorIds.has(symbol.id),
       };
       counts.push(mark);

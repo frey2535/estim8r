@@ -413,16 +413,22 @@ function ReviewOverlay({ marks, selectedId }) {
         );
       })}
       {devices.map((mark) => {
+        const selected = mark.id === selectedId;
         const outline = deviceOutline(mark, DEFAULT_MARKER_SIZE, { selected });
         const color = mark.color || "#1e3a8a";
-        const selected = mark.id === selectedId;
+        const stroke = selected ? "#ea580c" : color;
+        if (outline.kind === "path" && outline.points?.length >= 3) {
+          return (
+            <polygon key={mark.id} points={outline.points.map((point) => `${point.x},${point.y}`).join(" ")} fill={color} fillOpacity={DEVICE_FILL_OPACITY} stroke={stroke} strokeWidth={selected ? 0.28 : 0.12} vectorEffect="non-scaling-stroke" />
+          );
+        }
         if (outline.kind === "circle") {
           return (
-            <circle key={mark.id} cx={mark.x} cy={mark.y} r={outline.r} fill={color} fillOpacity={DEVICE_FILL_OPACITY} stroke={selected ? "#ea580c" : color} strokeWidth={selected ? 0.28 : 0.12} vectorEffect="non-scaling-stroke" />
+            <circle key={mark.id} cx={mark.x} cy={mark.y} r={outline.r} fill={color} fillOpacity={DEVICE_FILL_OPACITY} stroke={stroke} strokeWidth={selected ? 0.28 : 0.12} vectorEffect="non-scaling-stroke" />
           );
         }
         return (
-          <rect key={mark.id} x={mark.x - outline.w / 2} y={mark.y - outline.h / 2} width={outline.w} height={outline.h} rx={0.12} fill={color} fillOpacity={DEVICE_FILL_OPACITY} stroke={selected ? "#ea580c" : color} strokeWidth={selected ? 0.28 : 0.12} vectorEffect="non-scaling-stroke" />
+          <rect key={mark.id} x={mark.x - outline.w / 2} y={mark.y - outline.h / 2} width={outline.w} height={outline.h} rx={outline.kind === "tag" ? 0.08 : 0.12} fill={color} fillOpacity={outline.kind === "tag" ? 0.12 : DEVICE_FILL_OPACITY} stroke={stroke} strokeWidth={selected ? 0.28 : 0.12} strokeDasharray={outline.kind === "tag" ? "0.35 0.28" : undefined} vectorEffect="non-scaling-stroke" />
         );
       })}
       {[...callouts.conduitLabels, ...callouts.deviceLabels].map((label) => (

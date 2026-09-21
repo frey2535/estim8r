@@ -39,6 +39,8 @@ export default function TakeoffInspector({
   onRenameRow,
   onSelectSheet,
   onCopy,
+  onDownloadQuoteCsv,
+  onDownloadQuotePdf,
   scheduleEdits,
   totals,
   globalMarkerSize = DEFAULT_MARKER_SIZE,
@@ -217,6 +219,8 @@ export default function TakeoffInspector({
         </div>
       )}
       <button type="button" onClick={onCopy} className="mt-3 w-full rounded-lg border border-border px-2 py-2 text-xs font-semibold hover:bg-muted">Copy schedule CSV</button>
+      <button type="button" onClick={onDownloadQuoteCsv} className="mt-2 w-full rounded-lg border border-border px-2 py-2 text-xs font-semibold hover:bg-muted">Download quote (Excel)</button>
+      <button type="button" onClick={onDownloadQuotePdf} className="mt-2 w-full rounded-lg border border-border px-2 py-2 text-xs font-semibold hover:bg-muted">Download quote (PDF)</button>
       <p className="mt-2 text-[10px] text-muted-foreground">Totals {totals.count} devices · {rollup.calibrated ? formatFeet(totals.lf) : "LF needs scale"} · {rollup.calibrated ? formatArea(totals.sf) : "SF needs scale"}</p>
     </aside>
   );

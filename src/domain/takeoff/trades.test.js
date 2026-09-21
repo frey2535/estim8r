@@ -1,4 +1,4 @@
-import { paletteForTrade, symbolsForSelectedTrade, symbolPatchFromCatalog } from "./trades.js";
+import { paletteForTrade, symbolsForSelectedTrade, symbolPatchFromCatalog, tradeIdForSymbol } from "./trades.js";
 
 function assert(cond, message) {
   if (!cond) {
@@ -40,5 +40,21 @@ assert(!lightingOnly.some((item) => item.id === "duplex" || item.id === "wc"), "
 
 const patch = symbolPatchFromCatalog(electrical.symbols.find((item) => item.id === "duplex"));
 assert(patch.symbol === "duplex" && patch.category === "Receptacles", "catalog patch keeps trade category");
+
+const otherTradeIds = ["wc", "lav", "ahu-m", "pump", "mh", "col", "smoke", "fa", "facp", "reader", "ddc", "ahu", "cu"];
+const electricalAll = symbolsForSelectedTrade("electrical");
+assert(electricalAll.every((item) => item.trade === "electrical"), "electrical dropdown stamps trade=electrical");
+assert(electricalAll.every((item) => !otherTradeIds.includes(item.id)), "electrical dropdown excludes other-trade catalog ids");
+assert(!electricalAll.some((item) => ["HVAC", "Fire Alarm", "Access Control", "Plumbing", "Mechanical", "Civil", "Structural"].includes(item.category)), "electrical dropdown has no other-trade categories");
+
+const leakedDrawing = [
+  { id: "legend:wc", label: "Water closet", abbr: "WC", takeoffCategory: "Equipment", category: "From drawing", source: "legend" },
+  { id: "legend:ahu", label: "Air handling unit", abbr: "AHU", takeoffCategory: "Equipment", category: "From drawing", source: "legend" },
+  { id: "legend:r", label: "Duplex receptacle", abbr: "R", takeoffCategory: "Equipment", category: "From drawing", source: "legend" },
+];
+assert(tradeIdForSymbol(leakedDrawing[0]) === "plumbing", "drawing WC is plumbing even when tagged Equipment");
+const electricalFromLeaks = symbolsForSelectedTrade("electrical", leakedDrawing);
+assert(!electricalFromLeaks.some((item) => item.id === "legend:wc" || item.id === "legend:ahu"), "electrical dropdown drops other-trade legend items tagged Equipment");
+assert(electricalFromLeaks.some((item) => item.id === "legend:r"), "electrical dropdown keeps electrical legend items");
 
 if (!process.exitCode) console.log("trade palette checks passed");

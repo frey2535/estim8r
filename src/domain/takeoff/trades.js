@@ -144,29 +144,104 @@ export function findConduitOption(id, tradeId) {
   return rows.find((item) => item.id === id) || rows[0];
 }
 
+const CATEGORY_TO_TRADE = {
+  Receptacles: "electrical",
+  Lighting: "electrical",
+  Switches: "electrical",
+  "Panels / MCC": "electrical",
+  Equipment: "electrical",
+  Raceway: "electrical",
+  "Low Voltage": "electrical",
+  HVAC: "hvac",
+  "Fire Alarm": "fire-alarm",
+  "Access Control": "controls",
+  Mechanical: "mechanical",
+  Plumbing: "plumbing",
+  Civil: "civil",
+  Structural: "structural",
+  Controls: "controls",
+  ETC: "etc",
+};
+
+export function tradeIdForCategory(category) {
+  return CATEGORY_TO_TRADE[category] || "";
+}
+
+export function tradeIdFromLabel(label) {
+  const text = String(label || "").toLowerCase();
+  if (!text.trim()) return "";
+  if (/water closet|\burinal\b|lavatory|\bsink\b|floor drain|cleanout|hose bibb|\bplumbing\b/.test(text)) return "plumbing";
+  if (/\bmanhole\b|catch basin|storm inlet|\bcurb\b|paving|\bcivil\b/.test(text)) return "civil";
+  if (/\bcolumn\b|\bfooting\b|\bbrace\b|grid line|structural/.test(text)) return "structural";
+  if (/\bvav\b|\bboiler\b|\bchiller\b|\bpump\b|air handling|\bmechanical\b/.test(text)) return "mechanical";
+  if (/fire alarm|smoke detector|heat detector|strobe|\bhorn\b|pull station|\bfacp\b/.test(text)) return "fire-alarm";
+  if (/card reader|maglock|rex\b|access control/.test(text)) return "controls";
+  if (/\bhvac\b|condensing unit|fan-coil|unit heater/.test(text)) return "hvac";
+  if (/recept|outlet|gfci|duplex|troffer|luminaire|fixture|switchgear|panelboard|conduit|emt\b/.test(text)) return "electrical";
+  return "";
+}
+
+function isDrawingSymbol(item) {
+  const category = item?.category || item?.drawingCategory;
+  return category === DRAWING_CATEGORY
+    || item?.source === "legend"
+    || item?.source === "lighting-schedule"
+    || item?.source === "device-schedule"
+    || item?.source === "equipment-schedule"
+    || String(item?.id || "").startsWith("legend:")
+    || String(item?.id || "").startsWith("sched:");
+}
+
+export function tradeIdForSymbol(item) {
+  if (!item) return "";
+  if (item.trade && TRADES.some((row) => row.id === item.trade)) return item.trade;
+  if (isDrawingSymbol(item)) {
+    return tradeIdFromLabel(item.label || item.symbolLabel)
+      || tradeIdForCategory(item.takeoffCategory)
+      || "";
+  }
+  return tradeIdForCategory(item.takeoffCategory) || tradeIdForCategory(item.category) || "";
+}
+
+function stampTrade(item) {
+  const trade = tradeIdForSymbol(item);
+  return trade ? { ...item, trade } : null;
+}
+
 export function paletteForTrade(tradeId, drawingSymbols = []) {
-  const allowed = new Set(categoriesForTrade(tradeId));
-  const symbols = [...DEVICE_SYMBOLS, ...TRADE_ONLY_SYMBOLS].filter((item) => allowed.has(item.category));
-  const fromDrawing = (drawingSymbols || []).filter((item) => allowed.has(item.takeoffCategory || item.category));
+  const selected = tradeById(tradeId).id;
+  const symbols = [...DEVICE_SYMBOLS, ...TRADE_ONLY_SYMBOLS]
+    .map(stampTrade)
+    .filter((item) => item?.trade === selected);
+  const fromDrawing = (drawingSymbols || [])
+    .map(stampTrade)
+    .filter((item) => item?.trade === selected);
   const categories = [];
   if (fromDrawing.length) categories.push(DRAWING_CATEGORY);
-  for (const category of categoriesForTrade(tradeId)) {
+  for (const category of categoriesForTrade(selected)) {
     if (symbols.some((item) => item.category === category)) categories.push(category);
   }
   return { categories, symbols, fromDrawing };
 }
 
 export function symbolsForSelectedTrade(tradeId, drawingSymbols = [], options = {}) {
-  const palette = paletteForTrade(tradeId, drawingSymbols);
+  const selected = tradeById(tradeId).id;
+  const palette = paletteForTrade(selected, drawingSymbols);
   const category = options.category;
-  if (category === DRAWING_CATEGORY) return palette.fromDrawing;
-  if (category) return palette.symbols.filter((item) => item.category === category);
-  const seen = new Set();
-  return [...palette.fromDrawing, ...palette.symbols].filter((item) => {
-    if (!item?.id || seen.has(item.id)) return false;
-    seen.add(item.id);
-    return true;
-  });
+  const belongs = (item) => item?.id && item.trade === selected;
+  let list = [];
+  if (category === DRAWING_CATEGORY) list = palette.fromDrawing;
+  else if (category && tradeIdForCategory(category) === selected) {
+    list = palette.symbols.filter((item) => item.category === category);
+  } else {
+    const seen = new Set();
+    list = [...palette.fromDrawing, ...palette.symbols].filter((item) => {
+      if (!belongs(item) || seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    });
+  }
+  return list.filter(belongs);
 }
 
 export function symbolPatchFromCatalog(item) {

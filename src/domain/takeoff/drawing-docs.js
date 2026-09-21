@@ -79,7 +79,7 @@ export function parseScheduleRows(rows, source) {
     if (!label || SKIP.test(label) || label.length < 3) continue;
     items.push({
       id: `sched:${source}:${type}:${slug(label).slice(0, 40)}`,
-      category: source === "equipment-schedule" ? "Equipment" : source === "device-schedule" ? "Receptacles" : "Lighting",
+      category: guessCategory(label) || (source === "equipment-schedule" ? "Equipment" : source === "device-schedule" ? "Receptacles" : "Lighting"),
       drawingCategory: "From drawing",
       label: `Type ${type} — ${label}`,
       abbr: type,
@@ -178,6 +178,10 @@ export function drawingSymbolsFromDocs(docs) {
 
 function guessCategory(label) {
   const text = label.toLowerCase();
+  if (/water closet|\burinal\b|lavatory|\bsink\b|floor drain|cleanout|hose bibb|plumbing/.test(text)) return "Plumbing";
+  if (/\bahu\b|vav box|boiler|chiller|\bpump\b|mechanical/.test(text)) return "Mechanical";
+  if (/manhole|catch basin|storm inlet|\bcurb\b|paving/.test(text)) return "Civil";
+  if (/\bcolumn\b|footing|\bbrace\b|grid line/.test(text)) return "Structural";
   if (/recept|outlet|gfci|duplex|twist/.test(text)) return "Receptacles";
   if (/light|fixture|troffer|luminaire|exit|emerg|pole|flood|pendant|can /.test(text)) return "Lighting";
   if (/switch|dimmer|occup|sensor|photocell/.test(text)) return "Switches";
@@ -185,8 +189,9 @@ function guessCategory(label) {
   if (/conduit|emt|imc|raceway|tray/.test(text)) return "Raceway";
   if (/fire|smoke|strobe|horn|pull/.test(text)) return "Fire Alarm";
   if (/data|voice|camera|wap|speaker/.test(text)) return "Low Voltage";
-  if (/hvac|disconnect|stat|motor starter/.test(text)) return "HVAC";
-  return "Equipment";
+  if (/hvac|condensing|fan-coil|unit heater/.test(text)) return "HVAC";
+  if (/motor|junction|pull box|equipment connection/.test(text)) return "Equipment";
+  return "";
 }
 
 function slug(value) {

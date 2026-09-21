@@ -10,7 +10,8 @@ export default function TradeSymbolSelect({
   className = "w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm",
   "aria-label": ariaLabel = "Device / symbol",
 }) {
-  const options = symbolsForSelectedTrade(trade, drawingSymbols, { category });
+  const options = symbolsForSelectedTrade(trade, drawingSymbols, { category })
+    .filter((item) => item.trade === trade);
   const current = options.find((item) => item.id === value || item.abbr === value || item.label === value);
   return (
     <select

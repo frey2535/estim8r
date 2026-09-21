@@ -620,6 +620,7 @@ export function buildAiMarks({
         outline: geometry?.outline || null,
         outlineSource: geometry ? "vector" : "text",
         detectSource: DETECT_SOURCE_ORIGINAL_PDF,
+        confidence: geometry ? "high" : "low",
         reviewStatus: "pending",
         anchor: anchorIds.has(symbol.id),
       };

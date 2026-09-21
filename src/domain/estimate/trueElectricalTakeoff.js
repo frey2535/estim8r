@@ -657,6 +657,7 @@ export function buildTrueElectricalEstimateDraft(existing, {
       settings: { ...settings, laborRate },
       summary: calculateTrueBidSummary(lines, { ...settings, laborRate }),
       byScope: calculateBidByScope(lines, { ...settings, laborRate }),
+      workCategories: calculateWorkCategoryBreakdown(lines),
       updatedAt: new Date().toISOString(),
     },
     separateFromTakeoff: true,
@@ -674,21 +675,33 @@ export function trueTakeoffCsv(analysis, lines, summary) {
     ["Devices", analysis?.totals?.devices || 0],
     ["Measured conduit LF", analysis?.totals?.conduitLf || 0],
     [],
-    ["Category", "Description", "Qty", "Unit", "Material $/Unit", "MH/Unit", "Labor $/Hr", "Scope", "Confidence", "Notes"],
+    ["Work Category", "Source Category", "Description", "Qty", "Unit", "Material $/Unit", "MH/Unit", "Total MH", "Labor $/Hr", "Labor $", "Scope", "Confidence", "Notes"],
   ];
   for (const line of lines || []) {
+    const qty = num(line.quantity);
+    const mh = qty * num(line.laborMhPerUnit);
+    const labor = mh * num(line.laborRate);
     rows.push([
+      workCategoryForEstimateLine(line),
       line.category,
       line.description,
       line.quantity,
       line.unit,
       line.materialUnitCost,
       line.laborMhPerUnit,
+      money(mh),
       line.laborRate,
+      money(labor),
       line.trueTakeoff?.scope || "",
       line.trueTakeoff?.confidence || "",
       line.notes || "",
     ]);
+  }
+  rows.push([]);
+  rows.push(["WORK CATEGORY TOTALS"]);
+  rows.push(["Work Category", "Lines", "Material", "Man-hours", "Labor", "Direct"]);
+  for (const row of calculateWorkCategoryBreakdown(lines)) {
+    rows.push([row.category, row.lineCount, row.material, row.hours, row.labor, row.direct]);
   }
   rows.push([]);
   rows.push(["Material", summary?.material || 0]);

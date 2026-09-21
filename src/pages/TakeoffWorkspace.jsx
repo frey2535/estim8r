@@ -237,17 +237,32 @@ export default function TakeoffWorkspace() {
   useEffect(() => {
     if (!file) return;
     try {
-      syncStoredEstimate({
-        fileName: file.name,
-        fileSize: file.size,
-        drawingDocs,
-        rollup: editedRollup,
-        pageCount: sheetMeta.pageCount,
-      });
+      const existing = readEstimate(file.name, file.size);
+      if (existing?.trueTakeoff) {
+        const draft = buildTrueElectricalEstimateDraft(existing, {
+          fileName: file.name,
+          fileSize: file.size,
+          drawingDocs,
+          rollup: editedRollup,
+          runs,
+          marks,
+          settings: existing.trueTakeoff.settings,
+        });
+        writeEstimate(draft);
+        setTrueTakeoffResult(draft.trueTakeoff);
+      } else {
+        syncStoredEstimate({
+          fileName: file.name,
+          fileSize: file.size,
+          drawingDocs,
+          rollup: editedRollup,
+          pageCount: sheetMeta.pageCount,
+        });
+      }
     } catch {
       /* estimate copy failed; takeoff sheet is unchanged */
     }
-  }, [file, drawingDocs, editedRollup, sheetMeta.pageCount]);
+  }, [file, drawingDocs, editedRollup, runs, marks, sheetMeta.pageCount]);
   const draftPreview = hoverPoint && draftPoints.length ? [...draftPoints, hoverPoint] : draftPoints;
   const draftFeet = feetFromPercent(polylineLength(draftPreview, aspect), calibration);
   const imageDisplay = fitSheetSize(
@@ -538,6 +553,7 @@ export default function TakeoffWorkspace() {
     setFileBytes(null);
     setMarks([]);
     setSupplyQuote(null);
+    setTrueTakeoffResult(null);
     setDraftPoints([]);
     setDrawingError("");
     setLoadingDrawing(false);

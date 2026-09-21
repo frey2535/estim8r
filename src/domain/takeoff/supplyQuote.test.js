@@ -3,7 +3,9 @@ import {
   buildSupplyQuotePdf,
   modelFromKnownFields,
   supplyQuoteCsvFileName,
+  supplyQuoteExcelFileName,
   supplyQuoteToCsv,
+  supplyQuoteToExcel,
 } from "./supplyQuote.js";
 
 function assert(cond, message) {
@@ -43,6 +45,8 @@ assert(quote.rows.find((row) => row.description.includes("Type 1"))?.quantity ==
 assert(quote.rows.find((row) => row.description.includes("Duplex"))?.quantity === 1, "receptacle count is 1");
 assert(quote.rows.find((row) => row.description.includes("Type 1"))?.model === "2GTL4", "model comes from the matched drawing schedule field");
 assert(quote.rows.find((row) => row.description.includes("Duplex"))?.model === "", "model stays blank when catalog and mark have none");
+assert(quote.rows.find((row) => row.description.includes("Type 1"))?.device === "1", "device/equipment comes from the type code");
+assert(quote.rows.find((row) => row.description.includes("Duplex"))?.device === "R", "receptacle device uses the plan abbr");
 assert(quote.totals.quantity === 3, "quote quantity is takeoff device count");
 assert(modelFromKnownFields({ label: "Lithonia 2GTL4" }) === "", "description text is not treated as a model");
 
@@ -51,17 +55,29 @@ const invented = buildSupplyQuote({
   catalog: [{ id: "duplex", abbr: "R", label: "Duplex receptacle" }],
 });
 assert(invented.rows[0].model === "", "no model is invented for a catalog device without a model field");
+assert(invented.rows[0].device === "R", "device still lists the known abbr when model is blank");
 
 const csv = supplyQuoteToCsv(quote);
-assert(csv.includes("Model,Description,Quantity,Unit,Category"), "csv has quote headers");
+assert(csv.includes("Device / equipment,Model,Description,Quantity"), "csv has quote headers");
 assert(csv.includes("2GTL4"), "csv includes the known model");
 assert(csv.includes("Type 1 2x4 troffer"), "csv includes the takeoff description");
 assert(supplyQuoteCsvFileName(quote) === "supply-quote-E1.01-Lighting.csv", `csv name is ${supplyQuoteCsvFileName(quote)}`);
 
+const excel = supplyQuoteToExcel(quote);
+assert(excel.includes("Excel.Sheet") && excel.includes("<Workbook"), "excel is a SpreadsheetML workbook");
+assert(excel.includes("Device / equipment"), "excel has the device column");
+assert(excel.includes("2GTL4"), "excel includes the known model");
+assert(excel.includes("Type 1 2x4 troffer"), "excel includes the takeoff description");
+assert(!excel.includes("SHOULD-NOT-APPEAR-ALONE"), "legend-only models do not become their own excel rows");
+assert(!excel.includes("EMT"), "conduit is not drawn or listed on the excel sheet");
+assert(supplyQuoteExcelFileName(quote) === "supply-quote-E1.01-Lighting.xls", `excel name is ${supplyQuoteExcelFileName(quote)}`);
+
 const pdf = buildSupplyQuotePdf(quote);
 assert(typeof pdf.doc.output === "function", "pdf document is created");
 assert(pdf.fileName === "supply-quote-E1.01-Lighting.pdf", "pdf file name matches the drawing");
+assert(pdf.strings.includes("Device / equipment"), "pdf has the device column");
 assert(pdf.strings.includes("2GTL4") && pdf.strings.some((line) => /Duplex receptacle/.test(line)), "pdf lists model and description");
 assert(!pdf.strings.includes("SHOULD-NOT-APPEAR-ALONE"), "legend-only models do not become their own rows");
+assert(!pdf.strings.some((line) => /EMT|conduit/i.test(line)), "conduit is not drawn or listed on the pdf");
 
 if (!process.exitCode) console.log("supply quote checks passed");

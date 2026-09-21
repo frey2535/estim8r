@@ -43,8 +43,8 @@ import {
   buildSupplyQuotePdf,
   catalogForQuote,
   pageKindsFromDocs,
-  supplyQuoteCsvFileName,
-  supplyQuoteToCsv,
+  supplyQuoteExcelFileName,
+  supplyQuoteToExcel,
 } from "@/domain/takeoff/supplyQuote";
 import {
   DEFAULT_LINE_SIZE,
@@ -158,6 +158,7 @@ export default function TakeoffWorkspace() {
     typeof window !== "undefined" ? window.matchMedia("(min-width: 1024px)").matches : true
   ));
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [supplyQuote, setSupplyQuote] = useState(null);
 
   const isPdf = file?.type === "application/pdf" || file?.name?.toLowerCase().endsWith(".pdf");
   const drawingSymbols = useMemo(() => drawingSymbolsFromDocs(drawingDocs), [drawingDocs]);
@@ -297,6 +298,7 @@ export default function TakeoffWorkspace() {
     if (saved?.penSize) setPenSize(normalizeSavedMarkerSize(saved.penSize));
     if (saved?.scheduleEdits) setScheduleEdits(saved.scheduleEdits);
     if (saved?.sheet) setSheetMeta((current) => ({ ...current, page: saved.sheet }));
+    setSupplyQuote(saved?.supplyQuote || null);
 
     try {
       const bytes = await nextFile.arrayBuffer();
@@ -352,12 +354,14 @@ export default function TakeoffWorkspace() {
       scheduleEdits,
       sheet: sheetMeta.page,
       pageCount: sheetMeta.pageCount,
+      supplyQuote,
     };
   }
 
   function saveTakeoff(silent = false) {
     if (!file) return;
-    const payload = sessionPayload();
+    const quote = persistSupplyQuote();
+    const payload = { ...sessionPayload(), supplyQuote: quote };
     try {
       localStorage.setItem(storageKey(file), JSON.stringify(payload));
       setSavedAt(payload.savedAt);
@@ -380,9 +384,9 @@ export default function TakeoffWorkspace() {
     setStatus("Takeoff JSON downloaded.");
   }
 
-  function makeSupplyQuote() {
+  function makeSupplyQuote(nextMarks = marks) {
     return buildSupplyQuote({
-      marks,
+      marks: nextMarks,
       drawingSymbols,
       catalog: catalogForQuote(),
       pageKinds: pageKindsFromDocs(drawingDocs),
@@ -391,16 +395,25 @@ export default function TakeoffWorkspace() {
     });
   }
 
-  function downloadQuoteCsv() {
-    const quote = makeSupplyQuote();
-    downloadBlob(new Blob([supplyQuoteToCsv(quote)], { type: "text/csv;charset=utf-8" }), supplyQuoteCsvFileName(quote));
+  function persistSupplyQuote(nextMarks = marks) {
+    const quote = makeSupplyQuote(nextMarks);
+    setSupplyQuote(quote);
+    return quote;
+  }
+
+  function downloadQuoteExcel() {
+    const quote = persistSupplyQuote();
+    downloadBlob(
+      new Blob([supplyQuoteToExcel(quote)], { type: "application/vnd.ms-excel" }),
+      supplyQuoteExcelFileName(quote),
+    );
     setStatus(quote.rows.length
-      ? `Downloaded ${supplyQuoteCsvFileName(quote)} for the supply house.`
+      ? `Downloaded ${supplyQuoteExcelFileName(quote)} for the supply house.`
       : "No takeoff devices to quote yet.");
   }
 
   function downloadQuotePdf() {
-    const quote = makeSupplyQuote();
+    const quote = persistSupplyQuote();
     const { doc, fileName } = buildSupplyQuotePdf(quote);
     downloadBlob(doc.output("blob"), fileName);
     setStatus(quote.rows.length
@@ -480,6 +493,7 @@ export default function TakeoffWorkspace() {
     setFileUrl("");
     setFileBytes(null);
     setMarks([]);
+    setSupplyQuote(null);
     setDraftPoints([]);
     setDrawingError("");
     setLoadingDrawing(false);
@@ -664,11 +678,18 @@ export default function TakeoffWorkspace() {
         conduit: conduitChoice,
         color: penColor,
       });
-      setMarks((current) => [
-        ...current.filter((mark) => !(mark.source === "ai" && mark.trade === trade)),
-        ...planned.marks,
-      ]);
-      setStatus(planned.summary);
+      let nextMarks = planned.marks;
+      setMarks((current) => {
+        nextMarks = [
+          ...current.filter((mark) => !(mark.source === "ai" && mark.trade === trade)),
+          ...planned.marks,
+        ];
+        return nextMarks;
+      });
+      const quote = persistSupplyQuote(nextMarks);
+      setStatus(quote.rows.length
+        ? `${planned.summary} Supply quote ready (${quote.totals.quantity} plan devices).`
+        : `${planned.summary} Supply quote has no plan devices yet.`);
     } catch (error) {
       setStatus(error?.message || "AI takeoff could not read this drawing.");
     } finally {
@@ -1005,7 +1026,7 @@ export default function TakeoffWorkspace() {
             <Save className="h-4 w-4" /> Save
           </button>
           <Link to={file ? `/estimates/new?file=${encodeURIComponent(file.name)}&size=${file.size}` : "/estimates/new"} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Estimate</Link>
-          <button type="button" onClick={downloadQuoteCsv} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Quote Excel</button>
+          <button type="button" onClick={downloadQuoteExcel} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Quote Excel</button>
           <button type="button" onClick={downloadQuotePdf} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Quote PDF</button>
           <button type="button" onClick={downloadTakeoff} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Export JSON</button>
           <button type="button" onClick={openDrawingPicker} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Replace</button>
@@ -1239,7 +1260,7 @@ export default function TakeoffWorkspace() {
           onRenameRow={renameScheduleRow}
           onSelectSheet={selectSheet}
           onCopy={copyQuantities}
-          onDownloadQuoteCsv={downloadQuoteCsv}
+          onDownloadQuoteExcel={downloadQuoteExcel}
           onDownloadQuotePdf={downloadQuotePdf}
           globalMarkerSize={penSize}
           globalLineSize={penThickness}

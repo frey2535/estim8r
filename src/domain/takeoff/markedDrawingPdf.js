@@ -45,7 +45,7 @@ function drawRoute(ctx, mark, width, height) {
   ctx.save();
   ctx.strokeStyle = mark.color || "#64748b";
   ctx.lineWidth = Math.max(3, width * 0.0022);
-  ctx.globalAlpha = 0.9;
+  ctx.globalAlpha = 1;
   ctx.beginPath();
   points.forEach((point, index) => {
     const x = pct(point.x, width);

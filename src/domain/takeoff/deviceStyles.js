@@ -38,6 +38,12 @@ export function isCircuitMark(mark) {
     || (mark?.type === "route" && mark?.tool !== "polyline");
 }
 
+export function planOverlayMarks(marks) {
+  const list = marks || [];
+  if (list.some(isDeviceMark)) return list.filter((mark) => !isCircuitMark(mark));
+  return list;
+}
+
 export function deviceTypeKey(mark) {
   const raw = String(mark?.typeCode || mark?.abbr || mark?.symbol || "")
     .trim()

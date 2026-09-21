@@ -5,6 +5,7 @@ import {
   applyDeviceTypeColors,
   deviceOutline,
   hitTestDeviceFill,
+  planOverlayMarks,
   scheduleTypeColor,
   selectMarkAtPoint,
   shortenCircuitPath,
@@ -61,6 +62,18 @@ assert(picked?.id === "dev", "clicking a device on a circuit selects the device"
 const shortened = shortenCircuitPath([{ x: 10, y: 10 }, { x: 40, y: 10 }]);
 assert(shortened[0].x > 10 && shortened[0].x < 40, "circuit path starts at the device edge, not on the count");
 assert(shortened[1].x === 40, "circuit still reaches the panel");
+
+const plan = planOverlayMarks([
+  { id: "dev", type: "count", symbol: "2x4", x: 12, y: 20 },
+  { id: "ckt", type: "route", tool: "conduit", points: [{ x: 12, y: 20 }, { x: 70, y: 20 }] },
+  { id: "hr", type: "homerun", points: [{ x: 12, y: 20 }, { x: 40, y: 10 }] },
+]);
+assert(plan.every((mark) => mark.type === "count"), "device-count sheets overlay devices only");
+assert(!plan.some((mark) => mark.tool === "conduit" || mark.type === "homerun"), "grouped circuits stay off the count sheet");
+const conduitOnly = planOverlayMarks([
+  { id: "ckt", type: "route", tool: "conduit", points: [{ x: 10, y: 10 }, { x: 40, y: 10 }] },
+]);
+assert(conduitOnly.length === 1 && conduitOnly[0].tool === "conduit", "a conduit sheet still shows its runs");
 
 const extracted = deviceOutline({
   x: 20,

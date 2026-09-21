@@ -1,4 +1,4 @@
-import { paletteForTrade, symbolsForSelectedTrade, symbolPatchFromCatalog, tradeIdForSymbol } from "./trades.js";
+import { paletteForTrade, symbolsForSelectedTrade, symbolsOnDrawingForTrade, symbolPatchFromCatalog, tradeIdForSymbol } from "./trades.js";
 
 function assert(cond, message) {
   if (!cond) {
@@ -55,6 +55,22 @@ const leakedDrawing = [
 assert(tradeIdForSymbol(leakedDrawing[0]) === "plumbing", "drawing WC is plumbing even when tagged Equipment");
 const electricalFromLeaks = symbolsForSelectedTrade("electrical", leakedDrawing);
 assert(!electricalFromLeaks.some((item) => item.id === "legend:wc" || item.id === "legend:ahu"), "electrical dropdown drops other-trade legend items tagged Equipment");
-assert(electricalFromLeaks.some((item) => item.id === "legend:r"), "electrical dropdown keeps electrical legend items");
+assert(electricalFromLeaks.some((item) => item.id === "legend:r"), "electrical palette matching can still see electrical legend aliases");
+
+const planMarks = [
+  { id: "m1", type: "count", sheet: 2, trade: "electrical", symbol: "2x4", symbolLabel: "Type 1 2x4 troffer", abbr: "1", typeCode: "1", category: "Lighting" },
+  { id: "m2", type: "count", sheet: 2, trade: "electrical", symbol: "2x4", symbolLabel: "Type 1 2x4 troffer", abbr: "1", typeCode: "1", category: "Lighting" },
+  { id: "m3", type: "count", sheet: 2, trade: "electrical", symbol: "duplex", symbolLabel: "Duplex receptacle", abbr: "R", category: "Receptacles" },
+  { id: "m4", type: "count", sheet: 2, trade: "plumbing", symbol: "wc", symbolLabel: "Water closet", abbr: "WC", category: "Plumbing" },
+  { id: "m5", type: "count", sheet: 8, source: "legend", symbol: "legend:r", symbolLabel: "Legend duplex", abbr: "R", category: "Receptacles" },
+  { id: "m6", type: "count", sheet: 9, trade: "electrical", symbol: "2x4", symbolLabel: "Schedule type only", abbr: "1E", category: "Lighting" },
+];
+const pageKinds = { 2: "drawing", 8: "legend", 9: "lighting-schedule" };
+const onPlan = symbolsOnDrawingForTrade("electrical", planMarks, { pageKinds });
+assert(onPlan.every((item) => item.trade === "electrical"), "drawing dropdown stays on the selected trade");
+assert(onPlan.some((item) => item.id === "2x4") && onPlan.some((item) => item.id === "duplex"), "drawing dropdown lists types found on the plan");
+assert(!onPlan.some((item) => item.id === "legend:r" || item.label === "Legend duplex" || item.label === "Schedule type only"), "drawing dropdown excludes legend and schedule sheets");
+assert(!onPlan.some((item) => item.id === "wc"), "drawing dropdown excludes other-trade plan devices");
+assert(!onPlan.some((item) => item.id === "gfci" || item.id === "2x2"), "drawing dropdown does not list catalog types that are not on the plan");
 
 if (!process.exitCode) console.log("trade palette checks passed");

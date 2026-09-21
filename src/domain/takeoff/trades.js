@@ -255,6 +255,72 @@ export function symbolPatchFromCatalog(item) {
   };
 }
 
+const LEGEND_SHEET_KINDS = new Set([
+  "legend",
+  "lighting-schedule",
+  "device-schedule",
+  "equipment-schedule",
+  "spec",
+]);
+
+export function pageKindsFromDocs(docs) {
+  const map = {};
+  for (const page of docs?.pages || []) {
+    if (page?.page) map[page.page] = page.kind;
+  }
+  return map;
+}
+
+export function isLegendSheetKind(kind) {
+  return LEGEND_SHEET_KINDS.has(kind);
+}
+
+function isPlanDeviceMark(mark, pageKinds = {}) {
+  if (mark?.type !== "count" && mark?.type !== "drop") return false;
+  if (mark?.source === "legend") return false;
+  const kind = pageKinds[mark?.sheet];
+  if (kind && isLegendSheetKind(kind)) return false;
+  return true;
+}
+
+export function symbolFromDrawingMark(mark) {
+  const id = mark?.symbol || mark?.typeCode || mark?.abbr;
+  if (!id) return null;
+  const stamped = stampTrade({
+    ...mark,
+    label: mark.symbolLabel || mark.symbol || mark.typeCode || mark.abbr,
+    category: mark.category,
+    takeoffCategory: mark.takeoffCategory || mark.category,
+  });
+  if (!stamped) return null;
+  return {
+    id,
+    label: mark.symbolLabel || mark.symbol || mark.typeCode || mark.abbr,
+    abbr: mark.abbr || mark.typeCode || "",
+    category: mark.category || stamped.category || "",
+    trade: stamped.trade,
+    typeCode: mark.typeCode || mark.abbr,
+  };
+}
+
+export function symbolsOnDrawingForTrade(tradeId, marks = [], options = {}) {
+  const selected = tradeById(tradeId).id;
+  const pageKinds = options.pageKinds || {};
+  const category = options.category;
+  const seen = new Set();
+  const list = [];
+  for (const mark of marks) {
+    if (!isPlanDeviceMark(mark, pageKinds)) continue;
+    const item = symbolFromDrawingMark(mark);
+    if (!item || item.trade !== selected) continue;
+    if (category && item.category && item.category !== category) continue;
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    list.push(item);
+  }
+  return list;
+}
+
 export const ANCHOR_SYMBOL_IDS = {
   electrical: ["panel", "lighting-panel", "power-panel", "receptacle-panel", "switchboard", "switchgear", "mcc", "main-sw", "transformer", "dry-tx", "pad-tx", "generator", "ats"],
   hvac: ["ahu", "cu"],

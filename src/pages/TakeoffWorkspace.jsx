@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
 import {
-  DEFAULT_DROP_FEET, DRAWING_CATEGORY, TAKEOFF_TOOLS, TOOL_GROUPS,
+  DEFAULT_DROP_FEET, TAKEOFF_TOOLS, TOOL_GROUPS,
   toolByKey,
 } from "@/domain/takeoff/catalog";
 import {
@@ -18,7 +18,7 @@ import {
 } from "@/domain/takeoff/geometry";
 import { conduitRuns, nextConduitRunNumber, quantitiesToCsv, rollupTakeoff, applyScheduleEdits, markLengthFeet } from "@/domain/takeoff/quantities";
 import { drawingSymbolsFromDocs, readDrawingDocuments } from "@/domain/takeoff/drawing-docs";
-import { paletteForTrade, tradeById, conduitOptionsForTrade, findConduitOption, TRADES, DEFAULT_CONDUIT_ID } from "@/domain/takeoff/trades";
+import { paletteForTrade, pageKindsFromDocs, symbolsOnDrawingForTrade, tradeById, conduitOptionsForTrade, findConduitOption, TRADES, DEFAULT_CONDUIT_ID } from "@/domain/takeoff/trades";
 import { buildAiMarks } from "@/domain/takeoff/aiTakeoff";
 import { readAiPages } from "@/domain/takeoff/aiPages";
 import SheetThumbnailPanel, { readThumbsOpen, writeThumbsOpen } from "@/components/takeoff/SheetThumbnailPanel";
@@ -162,16 +162,25 @@ export default function TakeoffWorkspace() {
   const isPdf = file?.type === "application/pdf" || file?.name?.toLowerCase().endsWith(".pdf");
   const drawingSymbols = useMemo(() => drawingSymbolsFromDocs(drawingDocs), [drawingDocs]);
   const palette = useMemo(() => paletteForTrade(trade, drawingSymbols), [trade, drawingSymbols]);
-  const categories = palette.categories;
+  const pageKinds = useMemo(() => pageKindsFromDocs(drawingDocs), [drawingDocs]);
+  const drawingTypes = useMemo(
+    () => symbolsOnDrawingForTrade(trade, marks, { pageKinds }),
+    [trade, marks, pageKinds],
+  );
+  const categories = useMemo(
+    () => [...new Set(drawingTypes.map((item) => item.category).filter(Boolean))],
+    [drawingTypes],
+  );
   const symbols = useMemo(
-    () => (category === DRAWING_CATEGORY ? palette.fromDrawing : palette.symbols.filter((item) => item.category === category)),
-    [category, palette],
+    () => symbolsOnDrawingForTrade(trade, marks, {
+      pageKinds,
+      category: categories.includes(category) ? category : undefined,
+    }),
+    [trade, marks, pageKinds, category, categories],
   );
   const conduitChoices = useMemo(() => conduitOptionsForTrade(trade), [trade]);
   const conduitChoice = findConduitOption(conduitId, trade);
-  const symbol = palette.symbols.find((item) => item.id === symbolId)
-    || palette.fromDrawing.find((item) => item.id === symbolId)
-    || palette.symbols[0];
+  const symbol = symbols.find((item) => item.id === symbolId) || symbols[0];
 
   useEffect(() => {
     if (categories.length && !categories.includes(category)) setCategory(categories[0]);
@@ -241,7 +250,7 @@ export default function TakeoffWorkspace() {
 
   useEffect(() => {
     if (!symbols.some((item) => item.id === symbolId)) {
-      setSymbolId(symbols[0]?.id || "duplex");
+      setSymbolId(symbols[0]?.id || "");
     }
   }, [category, symbolId, symbols]);
 
@@ -419,10 +428,7 @@ export default function TakeoffWorkspace() {
       setDrawingDocs(docs);
       const found = (docs.symbols?.length || 0) + (docs.scheduleItems?.length || 0);
       if (found) {
-        setStatus(`Read ${docs.symbols.length} legend symbols and ${docs.scheduleItems.length} schedule / spec types from the drawing.`);
-        setCategory(DRAWING_CATEGORY);
-        const first = drawingSymbolsFromDocs(docs)[0];
-        if (first) setSymbolId(first.id);
+        setStatus(`Read ${docs.symbols.length} legend symbols and ${docs.scheduleItems.length} schedule / spec types for matching. Device list uses types found on the plan.`);
       } else if (docs.notes?.length) {
         setStatus(docs.notes[0]);
       }
@@ -1050,8 +1056,8 @@ export default function TakeoffWorkspace() {
               trades={TRADES}
               trade={trade}
               onTrade={setTrade}
-              drawingSymbols={drawingSymbols}
-              categories={categories}
+              marks={marks}
+              pageKinds={pageKinds}
               category={category}
               onCategory={(value) => { setCategory(value); setSymbolQuery(""); }}
               symbolId={symbolId}
@@ -1098,8 +1104,8 @@ export default function TakeoffWorkspace() {
               trades={TRADES}
               trade={trade}
               onTrade={setTrade}
-              drawingSymbols={drawingSymbols}
-              categories={categories}
+              marks={marks}
+              pageKinds={pageKinds}
               category={category}
               onCategory={(value) => { setCategory(value); setSymbolQuery(""); }}
               symbolId={symbolId}
@@ -1222,7 +1228,8 @@ export default function TakeoffWorkspace() {
           runs={runs}
           drawingDocs={drawingDocs}
           trade={trade}
-          drawingSymbols={drawingSymbols}
+          marks={marks}
+          pageKinds={pageKinds}
           selected={selectedMark}
           conduitOptions={conduitChoices}
           scheduleEdits={scheduleEdits}
@@ -1407,9 +1414,6 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
       ))}
       {callouts.conduitLabels.map((label) => (
         <OverlayLabel key={`conduit-${label.id}`} label={label} fill={label.selected ? "#334155" : "#475569"} />
-      ))}
-      {callouts.deviceLabels.map((label) => (
-        <OverlayLabel key={`device-${label.id}`} label={label} fill={devices.find((mark) => mark.id === label.id)?.color || "#1e3a8a"} />
       ))}
       {marks.filter((m) => m.type === "note").map((mark) => (
         <text key={mark.id} x={mark.x} y={mark.y} fontSize={OVERLAY_FONT_SIZE} fontWeight="600" fill={mark.color || (mark.id === selectedId ? "#ea580c" : "#dc2626")}>{mark.text}</text>

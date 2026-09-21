@@ -3,7 +3,7 @@ import { pointHitsOutline, scaleOutline } from "./vectorSymbols.js";
 
 export const DEVICE_FILL_OPACITY = 0.32;
 export const CIRCUIT_COLOR = "#64748b";
-export const SELECTED_OUTLINE_SCALE = 1.45;
+export const SELECTED_OUTLINE_SCALE = 1;
 
 export const SCHEDULE_TYPE_COLORS = {
   1: "#1e3a8a",
@@ -87,14 +87,11 @@ export function applyDeviceTypeColors(marks) {
   });
 }
 
-export function deviceOutline(mark, markerSize = 0.55, options = {}) {
+export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
   if (mark?.outline?.source === "vector") {
-    return scaleOutline(mark.outline, options.selected ? SELECTED_OUTLINE_SCALE : 1, { x: mark.x, y: mark.y });
+    return scaleOutline(mark.outline, 1, { x: mark.x, y: mark.y });
   }
-  const scale = (Math.max(0.4, Number(markerSize) || 0.55) / 0.55) * (options.selected ? SELECTED_OUTLINE_SCALE : 1);
-  if (mark?.outline?.kind === "tag" || mark?.outlineSource === "text") {
-    return { kind: "tag", source: "text", w: 0.72 * scale, h: 0.42 * scale };
-  }
+  const scale = Math.max(0.4, Number(markerSize) || 0.55) / 0.55;
   const blob = `${mark?.symbol || ""} ${mark?.symbolLabel || ""} ${mark?.abbr || ""} ${mark?.typeCode || ""}`;
   if (isCanDeviceText(blob) || /downlight|pendant|high bay|low bay|occup|sensor|switch/.test(blob.toLowerCase())) {
     return { kind: "circle", r: 0.42 * scale };

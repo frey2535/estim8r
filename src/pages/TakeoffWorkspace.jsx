@@ -25,6 +25,13 @@ import SheetThumbnailPanel, { readThumbsOpen, writeThumbsOpen } from "@/componen
 import DevicePicker from "@/components/takeoff/DevicePicker";
 import TakeoffInspector from "@/components/takeoff/TakeoffInspector";
 import TakeoffSizeControl from "@/components/takeoff/TakeoffSizeControl";
+import AccuracyPopout from "@/components/takeoff/AccuracyPopout";
+import {
+  devicesForAccuracyReview,
+  neighborReviewId,
+  needsAccuracyReview,
+  reviewSummary,
+} from "@/domain/takeoff/accuracyReview";
 import { getPdfDocument } from "@/lib/pdf-document";
 import { syncStoredEstimate } from "@/domain/estimate/estimateStore";
 import { putDrawingFile } from "@/domain/estimate/projectDocuments";
@@ -138,6 +145,7 @@ export default function TakeoffWorkspace() {
   const [wideLayout, setWideLayout] = useState(() => (
     typeof window !== "undefined" ? window.matchMedia("(min-width: 1024px)").matches : true
   ));
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   const isPdf = file?.type === "application/pdf" || file?.name?.toLowerCase().endsWith(".pdf");
   const drawingSymbols = useMemo(() => drawingSymbolsFromDocs(drawingDocs), [drawingDocs]);
@@ -174,6 +182,13 @@ export default function TakeoffWorkspace() {
     () => marks.filter((mark) => (mark.sheet || 1) === (sheetMeta.page || 1)),
     [marks, sheetMeta.page],
   );
+  const sheetReview = useMemo(
+    () => devicesForAccuracyReview(sheetMarks, sheetMeta.page),
+    [sheetMarks, sheetMeta.page],
+  );
+  const accuracyTotals = useMemo(() => reviewSummary(sheetMarks, sheetMeta.page), [sheetMarks, sheetMeta.page]);
+  const selectedMark = marks.find((mark) => mark.id === selectedId) || null;
+  const reviewIndex = Math.max(0, sheetReview.findIndex((mark) => mark.id === selectedId));
   const aspect = viewerRef.current
     ? sheetAspect(viewerRef.current.clientWidth, viewerRef.current.clientHeight)
     : 1;
@@ -517,6 +532,36 @@ export default function TakeoffWorkspace() {
     setMarks((current) => current.map((mark) => (mark.id === id ? { ...mark, ...patch } : mark)));
   }
 
+  function openAccuracyReview() {
+    const pending = sheetReview.find(needsAccuracyReview) || sheetReview[0];
+    if (!pending) {
+      setStatus("No device counts on this sheet to review.");
+      return;
+    }
+    setTool("select");
+    setSelectedId(pending.id);
+    setReviewOpen(true);
+    setStatus(`Accuracy review ${accuracyTotals.pending} pending · ${accuracyTotals.accepted} accepted · ${accuracyTotals.rejected} rejected.`);
+  }
+
+  function stepAccuracyReview(direction) {
+    const nextId = neighborReviewId(sheetMarks, selectedId, direction, sheetMeta.page);
+    if (!nextId) return;
+    setSelectedId(nextId);
+    setReviewOpen(true);
+  }
+
+  function setReviewStatus(status) {
+    if (!selectedId) return;
+    updateMark(selectedId, { reviewStatus: status });
+    setStatus(status === "accepted" ? "Count accepted against the original PDF." : "Count rejected. The marker stays on the sheet.");
+    const remaining = sheetReview.filter((mark) => mark.id !== selectedId && needsAccuracyReview(mark));
+    if (remaining[0]) {
+      setSelectedId(remaining[0].id);
+      setReviewOpen(true);
+    }
+  }
+
   function editScheduleRow(row, patch) {
     const key = `${row.category}|${row.symbol}`;
     setScheduleEdits((current) => ({ ...current, [key]: { ...current[key], ...patch } }));
@@ -588,6 +633,7 @@ export default function TakeoffWorkspace() {
         hitRoute: (mark, at, aspect) => hitTestMark(sizedMark(mark), at, aspect, markHitThreshold(mark)),
       });
       setSelectedId(hit?.id || null);
+      setReviewOpen(Boolean(hit && isDeviceMark(hit)));
       setStatus(hit ? `Selected ${hit.symbolLabel || hit.typeCode || hit.type}.` : "Nothing selected.");
       return;
     }
@@ -1021,6 +1067,9 @@ export default function TakeoffWorkspace() {
                 </div>
               )}
               {selectedId && <button type="button" onClick={deleteSelected} className="rounded-lg px-2 py-1 text-xs font-semibold text-destructive hover:bg-destructive/10">Delete</button>}
+              <button type="button" onClick={openAccuracyReview} className="rounded-lg border border-border px-2 py-1 text-xs font-semibold hover:bg-muted">
+                Review{accuracyTotals.pending ? ` ${accuracyTotals.pending}` : ""}
+              </button>
             </div>
             <div className="flex items-center gap-1">
               <button type="button" onClick={clearAll} className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" />Clear</button>
@@ -1106,7 +1155,7 @@ export default function TakeoffWorkspace() {
           totals={editedRollup.totals}
           runs={runs}
           drawingDocs={drawingDocs}
-          selected={marks.find((mark) => mark.id === selectedId) || null}
+          selected={selectedMark}
           conduitOptions={conduitChoices}
           scheduleEdits={scheduleEdits}
           onSelectRun={(id) => { setSelectedId(id); setTool("select"); }}
@@ -1119,6 +1168,18 @@ export default function TakeoffWorkspace() {
           globalLineSize={penThickness}
         />
       </div>
+      <AccuracyPopout
+        open={reviewOpen && Boolean(selectedMark && isDeviceMark(selectedMark))}
+        onOpenChange={setReviewOpen}
+        mark={selectedMark && isDeviceMark(selectedMark) ? selectedMark : null}
+        fileBytes={isPdf ? fileBytes : null}
+        index={reviewIndex}
+        total={sheetReview.length}
+        onAccept={() => setReviewStatus("accepted")}
+        onReject={() => setReviewStatus("rejected")}
+        onPrev={() => stepAccuracyReview(-1)}
+        onNext={() => stepAccuracyReview(1)}
+      />
     </div>
   );
 }
@@ -1199,12 +1260,11 @@ function DeviceFill({ mark, selected, markerSize }) {
       y={mark.y - outline.h / 2}
       width={outline.w}
       height={outline.h}
-      rx={outline.kind === "tag" ? 0.08 : 0.12}
+      rx={0.12}
       fill={color}
-      fillOpacity={outline.kind === "tag" ? 0.12 : opacity}
+      fillOpacity={opacity}
       stroke={stroke}
       strokeWidth={strokeWidth}
-      strokeDasharray={outline.kind === "tag" ? "0.35 0.28" : undefined}
       vectorEffect="non-scaling-stroke"
     />
   );

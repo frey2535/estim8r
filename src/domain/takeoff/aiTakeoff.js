@@ -7,6 +7,7 @@ import {
   resolveCanSymbol,
   shouldAcceptPlanToken,
 } from "./symbolDetection.js";
+import { DETECT_SOURCE_ORIGINAL_PDF } from "./accuracyReview.js";
 import { associateGeometry } from "./vectorSymbols.js";
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
 
@@ -616,8 +617,10 @@ export function buildAiMarks({
           : (symbol.abbr || "").toUpperCase(),
         color,
         matchedFrom: fromSchedule ? "schedule" : "drawing",
-        outline: geometry?.outline || { kind: "tag", source: "text", w: 0.72, h: 0.42 },
+        outline: geometry?.outline || null,
         outlineSource: geometry ? "vector" : "text",
+        detectSource: DETECT_SOURCE_ORIGINAL_PDF,
+        reviewStatus: "pending",
         anchor: anchorIds.has(symbol.id),
       };
       counts.push(mark);

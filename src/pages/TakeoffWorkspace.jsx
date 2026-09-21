@@ -42,7 +42,6 @@ import {
   buildSupplyQuote,
   buildSupplyQuotePdf,
   catalogForQuote,
-  pageKindsFromDocs,
   supplyQuoteExcelFileName,
   supplyQuoteToExcel,
 } from "@/domain/takeoff/supplyQuote";

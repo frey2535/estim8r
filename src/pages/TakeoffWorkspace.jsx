@@ -988,11 +988,6 @@ export default function TakeoffWorkspace() {
             </div>
           ))}
           <div className="border-t border-border pt-3 space-y-2">
-            <label className="block text-xs font-bold text-muted-foreground">Trade
-              <select value={trade} onChange={(event) => setTrade(event.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-2 py-2 text-sm font-semibold text-foreground">
-                {TRADES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-              </select>
-            </label>
             <label className="block text-xs font-bold text-muted-foreground">Conduit size
               <select value={conduitChoice.id} onChange={(event) => setConduitId(event.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-2 py-2 text-sm font-semibold text-foreground">
                 {conduitChoices.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
@@ -1012,6 +1007,9 @@ export default function TakeoffWorkspace() {
             </label>
             <p className="text-[11px] leading-4 text-muted-foreground">Default is 3. AI will not put more homeruns in one conduit unless you raise this.</p>
             <DevicePicker
+              trades={TRADES}
+              trade={trade}
+              onTrade={setTrade}
               categories={categories}
               category={category}
               onCategory={(value) => { setCategory(value); setSymbolQuery(""); }}
@@ -1053,6 +1051,22 @@ export default function TakeoffWorkspace() {
                 <Icon className="h-3.5 w-3.5" />{item.label}
               </button>;
             })}
+          </div>
+          <div className="shrink-0 border-b border-border px-2 py-2 lg:hidden">
+            <DevicePicker
+              compact
+              trades={TRADES}
+              trade={trade}
+              onTrade={setTrade}
+              categories={categories}
+              category={category}
+              onCategory={(value) => { setCategory(value); setSymbolQuery(""); }}
+              symbols={symbols}
+              symbolId={symbolId}
+              onSymbol={setSymbolId}
+              query={symbolQuery}
+              onQuery={setSymbolQuery}
+            />
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-2 py-1.5">
             <div className="flex flex-wrap items-center gap-1">

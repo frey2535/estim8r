@@ -82,8 +82,12 @@ assert(pages.some((page) => page.kind === "devices" && page.category === "Recept
 assert(pages.some((page) => page.kind === "devices" && page.category === "HVAC"), "HVAC has its own drawing");
 assert(pages.some((page) => page.kind === "devices" && page.category === "Fire Alarm" && page.sourcePage === 10), "fire alarm has its own drawing");
 assert(!pages.some((page) => page.kind === "devices" && page.category === "Lighting" && page.marks.some((mark) => mark.id === "rec-1")), "device pages do not mix types");
+assert(pages.filter((page) => page.kind === "devices").every((page) => page.marks.every((mark) => mark.tool !== "conduit" && mark.type !== "route")), "device-count markup pages have no conduit overlay");
+const conduitPage = pages.find((page) => page.kind === "conduit" && page.sourcePage === 9);
+assert(conduitPage && conduitPage.marks.every((mark) => mark.tool === "conduit"), "conduit overlay lives on the conduit markup page");
 const circuits = pages.find((page) => page.kind === "circuits" && page.sourcePage === 9);
 assert(circuits, "circuits per conduit get a page");
+assert(circuits.marks.some((mark) => mark.tool === "conduit"), "grouped circuits stay on the circuit markup page");
 assert(circuits.groups[0].deviceIds.includes("light-1"), "devices on the conduit polyline group to that run");
 
 const grouped = associateDevicesToConduits([lighting, receptacle, conduit]);

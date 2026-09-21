@@ -55,6 +55,7 @@ import {
   hitTestDeviceFill,
   isCircuitMark,
   isDeviceMark,
+  planOverlayMarks,
   selectMarkAtPoint,
   shortenCircuitPath,
 } from "@/domain/takeoff/deviceStyles";
@@ -185,6 +186,7 @@ export default function TakeoffWorkspace() {
     () => marks.filter((mark) => (mark.sheet || 1) === (sheetMeta.page || 1)),
     [marks, sheetMeta.page],
   );
+  const overlayMarks = useMemo(() => planOverlayMarks(sheetMarks), [sheetMarks]);
   const sheetReview = useMemo(
     () => reviewQueue(marks, sheetMeta.page),
     [marks, sheetMeta.page],
@@ -639,7 +641,7 @@ export default function TakeoffWorkspace() {
     const sheetAspectRatio = currentAspect();
 
     if (tool === "select") {
-      const hit = selectMarkAtPoint(sheetMarks, point, {
+      const hit = selectMarkAtPoint(overlayMarks, point, {
         aspect: sheetAspectRatio,
         markerSize: penSize,
         hitRoute: (mark, at, aspect) => hitTestMark(sizedMark(mark), at, aspect, markHitThreshold(mark)),
@@ -1160,7 +1162,7 @@ export default function TakeoffWorkspace() {
                   <div className="p-8 text-sm text-muted-foreground">Reading drawing…</div>
                 )}
                 <MarkupOverlay
-                  marks={sheetMarks}
+                  marks={overlayMarks}
                   draftPoints={draftPreview}
                   draftFeet={["conduit", "polyline", "linear", "homerun"].includes(tool) ? draftFeet : null}
                   selectedId={selectedId}

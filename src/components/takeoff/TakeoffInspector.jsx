@@ -46,6 +46,9 @@ export default function TakeoffInspector({
   totals,
   globalMarkerSize = DEFAULT_MARKER_SIZE,
   globalLineSize = DEFAULT_LINE_SIZE,
+  trueAnalysis,
+  trueTakeoffResult,
+  onBuildTrueTakeoff,
 }) {
   const selectedIsLine = isLineMark(selected);
   const selectedIsMarker = isMarkerMark(selected);
@@ -221,6 +224,32 @@ export default function TakeoffInspector({
           {drawingDocs.notes[0] && <p className="mt-1 text-amber-800 dark:text-amber-200">{drawingDocs.notes[0]}</p>}
         </div>
       )}
+      {trueAnalysis && (
+        <div className="mt-3 rounded-lg border border-emerald-500/40 bg-emerald-50/50 p-2 text-[11px] leading-4 dark:bg-emerald-500/5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="font-bold text-emerald-800 dark:text-emerald-300">True electrical audit</div>
+            <button type="button" onClick={onBuildTrueTakeoff} className="rounded bg-emerald-600 px-2 py-1 font-bold text-white">Build</button>
+          </div>
+          <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-1 text-foreground">
+            <span>Devices</span><strong>{trueAnalysis.totals.devices}</strong>
+            <span>Measured conduit</span><strong>{trueAnalysis.totals.conduitLf.toFixed(1)} LF</strong>
+            <span>Panels</span><strong>{trueAnalysis.panels.length}</strong>
+            <span>Transformers</span><strong>{trueAnalysis.transformers.length}</strong>
+            <span>Mechanical tags</span><strong>{Object.values(trueAnalysis.equipment).flat().length}</strong>
+            <span>Warnings</span><strong>{trueAnalysis.warnings.length}</strong>
+          </div>
+          {trueTakeoffResult?.summary ? (
+            <div className="mt-2 rounded border border-emerald-500/30 bg-background p-2">
+              <div className="flex justify-between"><span>Direct</span><strong>${trueTakeoffResult.summary.direct.toLocaleString(){'}'}</strong></div>
+              <div className="flex justify-between text-sm"><span>Bid total</span><strong className="text-emerald-700 dark:text-emerald-300">${trueTakeoffResult.summary.total.toLocaleString(){'}'}</strong></div>
+            </div>
+          ) : null}
+          {trueAnalysis.warnings.slice(0, 4).map((warning) => (
+            <p key={warning} className="mt-1 text-amber-800 dark:text-amber-200">• {warning}</p>
+          ))}
+        </div>
+      )}
+
       <button type="button" onClick={onCopy} className="mt-3 w-full rounded-lg border border-border px-2 py-2 text-xs font-semibold hover:bg-muted">Copy schedule CSV</button>
       <button type="button" onClick={onDownloadQuoteExcel} className="mt-2 w-full rounded-lg border border-border px-2 py-2 text-xs font-semibold hover:bg-muted">Download quote (Excel)</button>
       <button type="button" onClick={onDownloadQuotePdf} className="mt-2 w-full rounded-lg border border-border px-2 py-2 text-xs font-semibold hover:bg-muted">Download quote (PDF)</button>

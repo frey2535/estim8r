@@ -46,11 +46,13 @@ When an estimate is created from uploaded drawings, blank header fields are fill
 
 ## Project documents
 
-When drawings have been uploaded and an estimate exists:
+Save from Estimate Builder once the project has a name. Drawings, takeoff, and markup pages are optional. Saving without a project name asks for a name; missing drawings do not block save.
 
-1. **Buildr project already exists** — drawings, estimate, and markup pages are saved on that project’s Estimate tab.
-2. **Buildr account, no matching project** — Estim8r asks whether to create the project. If yes, Estim8r and Buildr create it and save the documents there.
-3. **No Buildr account** — documents stay in Estim8r’s Estimates folder, listed by project name with the project address underneath.
+- **Standalone estimate** — items, quantities, labor, and markup save to the Estimates folder under the project name. If a Buildr company is linked, the estimate also syncs to that project’s Estimate tab.
+- **Drawings + takeoff** — when drawings have been uploaded and an estimate exists:
+  1. **Buildr project already exists** — drawings, estimate, and markup pages are saved on that project’s Estimate tab.
+  2. **Buildr account, no matching project** — Estim8r asks whether to create the project. If yes, Estim8r and Buildr create it and save the documents there.
+  3. **No Buildr account** — documents stay in Estim8r’s Estimates folder, listed by project name with the project address underneath.
 
 Later edits to a synced estimate update the same Buildr Estimate-tab documents. The link is the Estim8r estimate id plus the stored Buildr project and invoice ids.
 

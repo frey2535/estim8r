@@ -39,4 +39,15 @@ startNewEstimate();
 assert(readActiveEstimate() === null, "startNewEstimate leaves no active estimate");
 assert(openEstimateSession({ fileName: "missing.pdf", fileSize: 1 }) === null, "a missing file opens a blank template");
 
+const standalone = writeEstimate({
+  fileName: "standalone:main hospital",
+  fileSize: 0,
+  header: { projectName: "Main Hospital" },
+  lines: [{ id: "2", description: "Panel", quantity: 1, materialUnitCost: 400, laborMhPerUnit: 2, laborRate: 68 }],
+  overhead: 10,
+  profit: 10,
+});
+assert(standalone.header.projectName === "Main Hospital", "standalone estimate writes without a drawing");
+assert(openEstimateSession({ fileName: "standalone:main hospital", fileSize: 0 })?.id === standalone.id, "standalone estimates reopen from the Estimates folder");
+
 if (!process.exitCode) console.log("estimate store checks passed");

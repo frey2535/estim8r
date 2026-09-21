@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Plus, Trash2 } from "lucide-react";
 import { compositeWage, defaultCrew } from "@/domain/labor/employeeClasses";
 import { openEstimateSession, writeEstimate, writeWageBook } from "@/domain/estimate/estimateStore";
-import { estimateGrandTotal } from "@/domain/estimate/projectDocuments";
+import { estimateFileNameForSave, estimateGrandTotal, isDrawingFileName } from "@/domain/estimate/projectDocuments";
 import SaveProjectDocuments from "@/components/estimate/SaveProjectDocuments";
 import EstimatePdfActions from "@/components/estimate/EstimatePdfActions";
 import { listCompanyLaborUnits, listCustomLabor, listLaborLibrary, listNamedCrews, saveLaborRates, saveNamedCrew } from "@/api/laborRepository";
@@ -124,14 +124,16 @@ export default function EstimateBuilder() {
     listNamedCrews().then(setNamedCrews).catch(() => setNamedCrews([]));
   }, []);
 
+  const storageFileName = estimateFileNameForSave({ fileName: meta.fileName, projectName: header.projectName });
+
   useEffect(() => {
     if (!ready) return;
     writeWageBook(crew);
-    if (!meta.fileName) return;
+    if (!storageFileName) return;
     writeEstimate({
       version: 1,
-      fileName: meta.fileName,
-      fileSize: meta.fileSize,
+      fileName: storageFileName,
+      fileSize: meta.fileSize || 0,
       header,
       crew,
       factors,
@@ -147,12 +149,12 @@ export default function EstimateBuilder() {
       scopeEdited: meta.scopeEdited,
       trueTakeoff,
     });
-  }, [ready, header, crew, lines, contingency, overhead, profit, bondInsurance, itemized, visibleTotals, meta, factors, namedCrewId, trueTakeoff]);
+  }, [ready, header, crew, lines, contingency, overhead, profit, bondInsurance, itemized, visibleTotals, meta, factors, namedCrewId, trueTakeoff, storageFileName]);
 
   const draft = useMemo(() => ({
     version: 1,
-    fileName: meta.fileName,
-    fileSize: meta.fileSize,
+    fileName: storageFileName,
+    fileSize: meta.fileSize || 0,
     header,
     crew,
     factors,
@@ -167,7 +169,7 @@ export default function EstimateBuilder() {
     separateFromTakeoff: true,
     scopeEdited: meta.scopeEdited,
     trueTakeoff,
-  }), [header, crew, factors, namedCrewId, contingency, overhead, profit, bondInsurance, lines, itemized, visibleTotals, meta, trueTakeoff]);
+  }), [header, crew, factors, namedCrewId, contingency, overhead, profit, bondInsurance, lines, itemized, visibleTotals, meta, trueTakeoff, storageFileName]);
 
   const totals = useMemo(() => estimateGrandTotal(draft), [draft]);
   const cont = totals.contingency || 0;
@@ -301,12 +303,12 @@ export default function EstimateBuilder() {
         <p className="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-orange-500">Estimate Builder</p>
         <h1 className="text-3xl font-black">Electrical Estimate</h1>
         <p className="text-sm text-muted-foreground">
-          Line items follow the takeoff quantities. Editing this estimate does not change the takeoff sheet.
-          {meta.fileName ? ` Drawing: ${meta.fileName}.` : ""}
+          Add items, quantities, labor, and markup here. Drawings and takeoff are optional and do not have to be started to save.
+          {isDrawingFileName(meta.fileName) ? ` Drawing: ${meta.fileName}.` : ""}
         </p>
         <Link to="/takeoff" className="mt-2 inline-block text-sm font-semibold text-blue-600 dark:text-orange-500">Back to takeoff</Link>
         <div className="mt-3">
-          {ready && <SaveProjectDocuments estimate={draft} />}
+          {ready && <SaveProjectDocuments estimate={draft} onProjectName={(name) => setHeaderField("projectName", name)} />}
         </div>
       </div>
 
@@ -321,7 +323,7 @@ export default function EstimateBuilder() {
       <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
         <h2 className="mb-4 text-lg font-bold">Project &amp; Customer</h2>
         <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          <Field label="Project name" value={header.projectName} set={(v) => setHeaderField("projectName", v)} />
+          <Field label="Project name" value={header.projectName} set={(v) => setHeaderField("projectName", v)} required hint="Required to save" />
           <Field label="Estimate #" value={header.estimateNumber} set={(v) => setHeaderField("estimateNumber", v)} />
           <Field label="Customer / company" value={header.customerCompany} set={(v) => setHeaderField("customerCompany", v)} />
           <Field label="Contact name" value={header.customerName} set={(v) => setHeaderField("customerName", v)} />
@@ -333,7 +335,7 @@ export default function EstimateBuilder() {
         <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
           <Field label="Project address" value={header.projectAddress} set={(v) => setHeaderField("projectAddress", v)} />
           <label className="min-w-0">
-            <span className="mb-1 block text-xs font-bold text-muted-foreground">Scope from the drawing</span>
+            <span className="mb-1 block text-xs font-bold text-muted-foreground">Scope notes</span>
             <textarea value={header.scopeNotes} onChange={(e) => { setMeta((current) => ({ ...current, scopeEdited: true })); setHeaderField("scopeNotes", e.target.value); }} rows={4} className="w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2.5" />
           </label>
         </div>
@@ -343,7 +345,7 @@ export default function EstimateBuilder() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
           <div className="min-w-0">
             <h2 className="text-lg font-bold">Estimate Lines</h2>
-            <p className="text-xs text-muted-foreground">Quantities match the takeoff. Man-hours come from the labor library. Labor rate follows the selected classes unless you edit a line.</p>
+            <p className="text-xs text-muted-foreground">Add quantities here. If this estimate came from takeoff, those quantities stay editable and do not change the takeoff sheet. Man-hours come from the labor library. Labor rate follows the selected classes unless you edit a line.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold">
@@ -789,11 +791,14 @@ export default function EstimateBuilder() {
   );
 }
 
-function Field({ label, value, set, type = "text", children, className = "" }) {
+function Field({ label, value, set, type = "text", children, className = "", required = false, hint = "" }) {
   return (
     <label className={`min-w-0 ${className}`}>
-      <span className="mb-1 block text-xs font-bold text-muted-foreground">{label}</span>
-      {children || <input type={type} value={value} onChange={(e) => set(e.target.value)} className="w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2.5" />}
+      <span className="mb-1 block text-xs font-bold text-muted-foreground">
+        {label}
+        {required ? <span className="ml-1 font-semibold text-blue-600 dark:text-orange-500">{hint || "Required"}</span> : null}
+      </span>
+      {children || <input type={type} value={value} onChange={(e) => set(e.target.value)} required={required} className="w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2.5" />}
     </label>
   );
 }

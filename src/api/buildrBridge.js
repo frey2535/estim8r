@@ -86,11 +86,13 @@ export async function saveBuildrProjectDocuments({
     new Blob([JSON.stringify(estimate || {}, null, 2)], { type: "application/json" }),
     `${projectName || "estimate"}-estimate.json`,
   );
-  form.append(
-    "markup",
-    new Blob([JSON.stringify(markupPages || {}, null, 2)], { type: "application/json" }),
-    `${projectName || "estimate"}-markup-pages.json`,
-  );
+  if (markupPages) {
+    form.append(
+      "markup",
+      new Blob([JSON.stringify(markupPages, null, 2)], { type: "application/json" }),
+      `${projectName || "estimate"}-markup-pages.json`,
+    );
+  }
   if (drawingFile) {
     form.append("drawing", drawingFile, drawingFile.name || `${projectName || "drawing"}.pdf`);
   }

@@ -80,4 +80,17 @@ assert(pdf.strings.includes("2GTL4") && pdf.strings.some((line) => /Duplex recep
 assert(!pdf.strings.includes("SHOULD-NOT-APPEAR-ALONE"), "legend-only models do not become their own rows");
 assert(!pdf.strings.some((line) => /EMT|conduit/i.test(line)), "conduit is not drawn or listed on the pdf");
 
+const fanQuote = buildSupplyQuote({
+  marks: [
+    { id: "vf1", type: "count", sheet: 2, symbol: "vf", symbolLabel: "Vent fan", abbr: "VF", typeCode: "VF", category: "Equipment" },
+    { id: "vf2", type: "count", sheet: 2, symbol: "vf", symbolLabel: "Vent fan", abbr: "VF", typeCode: "VF", category: "Equipment" },
+    { id: "ef1", type: "count", sheet: 2, symbol: "ef", symbolLabel: "Exhaust fan", abbr: "EF", typeCode: "EF", category: "Equipment" },
+    { id: "ef-legend", type: "count", sheet: 8, source: "legend", symbol: "legend:ef", symbolLabel: "Exhaust fan", abbr: "EF" },
+  ],
+  pageKinds: { 2: "drawing", 8: "legend" },
+});
+assert(fanQuote.rows.find((row) => row.device === "VF")?.quantity === 2, "quote counts plan VF devices");
+assert(fanQuote.rows.find((row) => row.device === "EF")?.quantity === 1, "quote counts plan EF devices and skips the legend row");
+assert(fanQuote.rows.every((row) => row.model === ""), "fan quote does not invent model numbers");
+
 if (!process.exitCode) console.log("supply quote checks passed");

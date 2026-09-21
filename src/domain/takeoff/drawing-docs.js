@@ -190,6 +190,7 @@ function guessCategory(label) {
   if (/fire|smoke|strobe|horn|pull/.test(text)) return "Fire Alarm";
   if (/data|voice|camera|wap|speaker/.test(text)) return "Low Voltage";
   if (/hvac|condensing|fan-coil|unit heater/.test(text)) return "HVAC";
+  if (/\b(?:vent|exhaust)\s*fans?\b/.test(text)) return "Equipment";
   if (/motor|junction|pull box|equipment connection/.test(text)) return "Equipment";
   return "";
 }

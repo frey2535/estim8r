@@ -177,6 +177,7 @@ export function tradeIdFromLabel(label) {
   if (/fire alarm|smoke detector|heat detector|strobe|\bhorn\b|pull station|\bfacp\b/.test(text)) return "fire-alarm";
   if (/card reader|maglock|rex\b|access control/.test(text)) return "controls";
   if (/\bhvac\b|condensing unit|fan-coil|unit heater/.test(text)) return "hvac";
+  if (/^(?:vf|ef)\b|\b(?:vent|exhaust)\s*fans?\b/.test(text)) return "electrical";
   if (/recept|outlet|gfci|duplex|troffer|luminaire|fixture|switchgear|panelboard|conduit|emt\b/.test(text)) return "electrical";
   return "";
 }

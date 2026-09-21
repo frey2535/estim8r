@@ -15,7 +15,7 @@ function isConduitMark(mark) {
   return mark?.tool === "conduit" || (mark?.type === "route" && mark?.tool === "conduit");
 }
 
-const HVAC_RE = /\bhvac\b|ahu|rtu|vav|condenser|heat\s*pump|furnace|exhaust\s*fan|unit\s*heater|fan-?coil|humidistat|thermostat/i;
+const HVAC_RE = /\bhvac\b|ahu|rtu|vav|condenser|heat\s*pump|furnace|unit\s*heater|fan-?coil|humidistat|thermostat/i;
 const FIRE_RE = /fire\s*alarm|smoke|strobe|horn|pull\s*station|facp/i;
 const MATCH_RADIUS = 2.5;
 

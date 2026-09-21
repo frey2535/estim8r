@@ -173,7 +173,6 @@ export const DEVICE_SYMBOLS = [
     ["hvac-rec", "HVAC receptacle", "HVACR"],
     ["cu", "Condensing unit connection", "CU"],
     ["ahu", "AHU connection", "AHU"],
-    ["ef", "Exhaust fan connection", "EF"],
     ["uh", "Unit heater connection", "UH"],
     ["fc", "Fan-coil connection", "FC"],
   ]),
@@ -198,6 +197,8 @@ export const DEVICE_SYMBOLS = [
   ]),
   ...devices("Equipment", [
     ["motor", "Motor", "M"],
+    ["vf", "Vent fan", "VF"],
+    ["ef", "Exhaust fan", "EF"],
     ["equip", "Equipment connection", "EQ"],
     ["jbox", "Junction box", "JB"],
     ["pull-box", "Pull box", "PB"],

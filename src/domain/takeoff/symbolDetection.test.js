@@ -1,5 +1,6 @@
-import { paletteForTrade } from "./trades.js";
+import { paletteForTrade, symbolsOnDrawingForTrade } from "./trades.js";
 import { buildAiMarks, matchTradeSymbol } from "./aiTakeoff.js";
+import { layoutOverlayCallouts } from "./overlayLayout.js";
 import { deviceOutline, hitTestDeviceFill } from "./deviceStyles.js";
 import {
   isCanDeviceText,
@@ -136,5 +137,59 @@ assert(hitTestDeviceFill(troffer, { x: troffer.x, y: troffer.y }), "extracted tr
 const selected = deviceOutline(canMark, 0.55, { selected: true });
 const idle = deviceOutline(canMark, 0.55);
 assert(selected.r === idle.r, "selection does not enlarge the extracted outline");
+
+assert(matchTradeSymbol("VF", electrical.symbols)?.id === "vf", "VF matches the electrical vent fan");
+assert(matchTradeSymbol("EF", electrical.symbols)?.id === "ef", "EF matches the electrical exhaust fan");
+assert(matchTradeSymbol("VENT FAN", electrical.symbols)?.id === "vf", "vent fan copy matches electrical");
+assert(matchTradeSymbol("EXHAUST FAN", electrical.symbols)?.id === "ef", "exhaust fan copy matches electrical");
+
+const fanPlan = buildAiMarks({
+  trade: "electrical",
+  symbols: electrical.symbols,
+  drawingSymbols: [
+    { abbr: "VF", type: "VF", label: "Vent fan", takeoffCategory: "Equipment", category: "From drawing", source: "legend", page: 8 },
+    { abbr: "EF", type: "EF", label: "Exhaust fan", takeoffCategory: "Equipment", category: "From drawing", source: "legend", page: 8 },
+  ],
+  pages: [
+    {
+      page: 2,
+      kind: "drawing",
+      tokens: [
+        { text: "ELECTRICAL POWER PLAN", x: 80, y: 88 },
+        { text: "E1.02", x: 92, y: 94 },
+        { text: "VF", x: 22, y: 36 },
+        { text: "VF", x: 40, y: 44 },
+        { text: "EF", x: 28, y: 52 },
+        { text: "GFI", x: 48, y: 50 },
+      ],
+    },
+    {
+      page: 8,
+      kind: "legend",
+      tokens: [
+        { text: "ELECTRICAL LEGEND", x: 20, y: 12 },
+        { text: "VF", x: 12, y: 20 },
+        { text: "VENT", x: 18, y: 20 },
+        { text: "FAN", x: 24, y: 20 },
+        { text: "EF", x: 12, y: 24 },
+        { text: "EXHAUST", x: 18, y: 24 },
+        { text: "FAN", x: 28, y: 24 },
+      ],
+    },
+  ],
+});
+const fanCounts = fanPlan.marks.filter((mark) => mark.type === "count");
+const vfMarks = fanCounts.filter((mark) => mark.symbol === "vf");
+const efMarks = fanCounts.filter((mark) => mark.symbol === "ef");
+assert(vfMarks.length === 2, `VF on the plan is counted, got ${vfMarks.length}`);
+assert(efMarks.length === 1, `EF on the plan is counted, got ${efMarks.length}`);
+assert(vfMarks.every((mark) => mark.sheet === 2 && mark.trade === "electrical" && mark.category === "Equipment"), "VF counts are electrical equipment on the plan sheet");
+assert(efMarks.every((mark) => mark.sheet === 2 && mark.trade === "electrical" && mark.category === "Equipment"), "EF counts are electrical equipment on the plan sheet");
+assert(!fanCounts.some((mark) => mark.sheet === 8), "legend rows are not counted as plan devices");
+const fanDropdown = symbolsOnDrawingForTrade("electrical", fanPlan.marks, { pageKinds: { 2: "drawing", 8: "legend" } });
+assert(fanDropdown.some((item) => item.id === "vf") && fanDropdown.some((item) => item.id === "ef"), "Device/symbol dropdown lists VF and EF from the plan");
+assert(!fanDropdown.some((item) => item.id === "2x4" || item.id === "downlight"), "dropdown stays drawing-only and does not invent extra types");
+const fanOverlay = layoutOverlayCallouts({ devices: fanCounts, conduits: fanPlan.marks.filter((mark) => mark.tool === "conduit") });
+assert(fanOverlay.deviceLabels.length === 0, "fan markers do not draw type-code text");
 
 if (!process.exitCode) console.log("symbol detection checks passed");

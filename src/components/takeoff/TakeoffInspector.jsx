@@ -240,8 +240,8 @@ export default function TakeoffInspector({
           </div>
           {trueTakeoffResult?.summary ? (
             <div className="mt-2 rounded border border-emerald-500/30 bg-background p-2">
-              <div className="flex justify-between"><span>Direct</span><strong>${trueTakeoffResult.summary.direct.toLocaleString(){'}'}</strong></div>
-              <div className="flex justify-between text-sm"><span>Bid total</span><strong className="text-emerald-700 dark:text-emerald-300">${trueTakeoffResult.summary.total.toLocaleString(){'}'}</strong></div>
+              <div className="flex justify-between"><span>Direct</span><strong>{`${trueTakeoffResult.summary.direct.toLocaleString()}`}</strong></div>
+              <div className="flex justify-between text-sm"><span>Bid total</span><strong className="text-emerald-700 dark:text-emerald-300">{`${trueTakeoffResult.summary.total.toLocaleString()}`}</strong></div>
             </div>
           ) : null}
           {trueAnalysis.warnings.slice(0, 4).map((warning) => (

@@ -1010,10 +1010,10 @@ export default function TakeoffWorkspace() {
               trades={TRADES}
               trade={trade}
               onTrade={setTrade}
+              drawingSymbols={drawingSymbols}
               categories={categories}
               category={category}
               onCategory={(value) => { setCategory(value); setSymbolQuery(""); }}
-              symbols={symbols}
               symbolId={symbolId}
               onSymbol={setSymbolId}
               query={symbolQuery}
@@ -1058,10 +1058,10 @@ export default function TakeoffWorkspace() {
               trades={TRADES}
               trade={trade}
               onTrade={setTrade}
+              drawingSymbols={drawingSymbols}
               categories={categories}
               category={category}
               onCategory={(value) => { setCategory(value); setSymbolQuery(""); }}
-              symbols={symbols}
               symbolId={symbolId}
               onSymbol={setSymbolId}
               query={symbolQuery}
@@ -1181,6 +1181,8 @@ export default function TakeoffWorkspace() {
           totals={editedRollup.totals}
           runs={runs}
           drawingDocs={drawingDocs}
+          trade={trade}
+          drawingSymbols={drawingSymbols}
           selected={selectedMark}
           conduitOptions={conduitChoices}
           scheduleEdits={scheduleEdits}

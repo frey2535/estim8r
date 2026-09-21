@@ -16,7 +16,8 @@ import {
 } from "@/domain/takeoff/markupPages";
 import { hitTestMark, sheetAspect } from "@/domain/takeoff/geometry";
 import { rollupTakeoff } from "@/domain/takeoff/quantities";
-import { paletteForTrade, findConduitOption, DEFAULT_CONDUIT_ID } from "@/domain/takeoff/trades";
+import { paletteForTrade, findConduitOption, symbolPatchFromCatalog, DEFAULT_CONDUIT_ID } from "@/domain/takeoff/trades";
+import TradeSymbolSelect from "@/components/takeoff/TradeSymbolSelect";
 import { buildAiMarks } from "@/domain/takeoff/aiTakeoff";
 import { readAiPages } from "@/domain/takeoff/aiPages";
 import { drawingSymbolsFromDocs, readDrawingDocuments } from "@/domain/takeoff/drawing-docs";
@@ -66,7 +67,9 @@ export default function MarkupPages() {
   const [selectedId, setSelectedId] = useState("");
   const [zoom, setZoom] = useState(1);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
+  const [drawingSymbols, setDrawingSymbols] = useState([]);
   const folders = useMemo(() => listProjectFolders(), []);
+  const trade = session?.trade || "electrical";
 
   const calibration = session?.calibration || null;
   const reviewPages = useMemo(() => buildReviewMarkupPages({ marks }), [marks]);
@@ -110,6 +113,13 @@ export default function MarkupPages() {
     const bytes = await file.arrayBuffer();
     setFileBytes(bytes);
     setDrawingName(file.name || name);
+    if (file.type === "application/pdf" || /\.pdf$/i.test(file.name || name)) {
+      try {
+        setDrawingSymbols(drawingSymbolsFromDocs(await readDrawingDocuments(bytes)));
+      } catch {
+        setDrawingSymbols([]);
+      }
+    }
     if (!(stored?.marks || []).length && (file.type === "application/pdf" || /\.pdf$/i.test(file.name || name))) {
       await createAiMarkup(bytes, file.name || name, size, stored);
     }
@@ -340,11 +350,23 @@ export default function MarkupPages() {
           <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Edit takeoff</h2>
           {selected ? (
             <div className="mt-3 space-y-2 rounded-lg border border-border p-3">
-              <label className="block text-xs font-bold text-muted-foreground">Name
-                <input className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm" value={selected.symbolLabel || ""} onChange={(e) => updateMark(selected.id, { symbolLabel: e.target.value })} />
-              </label>
+              {selected.tool === "conduit" || selected.type === "route" || selected.category === "Raceway" || selected.type === "note" ? (
+                <label className="block text-xs font-bold text-muted-foreground">Name
+                  <input className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm" value={selected.symbolLabel || ""} onChange={(e) => updateMark(selected.id, { symbolLabel: e.target.value })} />
+                </label>
+              ) : (
+                <label className="block text-xs font-bold text-muted-foreground">Device / symbol
+                  <TradeSymbolSelect
+                    trade={trade}
+                    drawingSymbols={drawingSymbols}
+                    value={selected.symbol || selected.symbolLabel}
+                    className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+                    onChange={(item) => updateMark(selected.id, symbolPatchFromCatalog(item))}
+                  />
+                </label>
+              )}
               <label className="block text-xs font-bold text-muted-foreground">Category
-                <input className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm" value={selected.category || ""} onChange={(e) => updateMark(selected.id, { category: e.target.value })} />
+                <input className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm" value={selected.category || ""} readOnly />
               </label>
               <label className="block text-xs font-bold text-muted-foreground">Marker
                 <input className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm" value={selected.abbr || ""} onChange={(e) => updateMark(selected.id, { abbr: e.target.value })} />

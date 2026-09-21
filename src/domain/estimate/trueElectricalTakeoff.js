@@ -731,6 +731,7 @@ export const WORK_CATEGORY_ORDER = [
 ];
 
 export function workCategoryForEstimateLine(line) {
+  if (WORK_CATEGORY_ORDER.includes(line?.workCategory)) return line.workCategory;
   const category = String(line?.category || "").toLowerCase();
   const itemType = String(line?.itemType || "").toLowerCase();
   const text = `${line?.description || ""} ${line?.category || ""} ${line?.itemType || ""}`.toLowerCase();

@@ -4,16 +4,25 @@ import { DEFAULT_LINE_SIZE, resolvedLineSize } from "./sizes";
 
 const LENGTH_TYPES = new Set(["line", "route", "homerun", "measure"]);
 
+function calibrationForMark(mark, calibration) {
+  if (mark?.calibration?.feet) return mark.calibration;
+  if (calibration && !calibration.feet && typeof calibration === "object") {
+    return calibration[mark?.sheet || 1] || null;
+  }
+  return calibration || null;
+}
+
 export function markLengthFeet(mark, calibration, aspect) {
   if (mark?.lengthEdited && mark.storedFeet != null && mark.storedFeet !== "") return Number(mark.storedFeet);
+  const resolvedCalibration = calibrationForMark(mark, calibration);
   if (!LENGTH_TYPES.has(mark.type) && mark.type !== "drop") return null;
   if (mark.type === "drop") {
     if (mark.feet != null) return Number(mark.feet);
-    return calibration ? DEFAULT_DROP_FEET : null;
+    return resolvedCalibration ? DEFAULT_DROP_FEET : null;
   }
   const points = mark.points || [];
   const percent = polylineLength(points, aspect);
-  const feet = feetFromPercent(percent, calibration);
+  const feet = feetFromPercent(percent, resolvedCalibration);
   if (feet == null) return null;
   const runs = Number(mark.parallelRuns) || 1;
   return feet * Math.max(1, runs);
@@ -21,7 +30,7 @@ export function markLengthFeet(mark, calibration, aspect) {
 
 export function markAreaFeet(mark, calibration, aspect) {
   if (mark.type !== "area") return null;
-  return areaFromPercent(polygonArea(mark.points || [], aspect), calibration);
+  return areaFromPercent(polygonArea(mark.points || [], aspect), calibrationForMark(mark, calibration));
 }
 
 export function rollupTakeoff(marks, calibration, aspect = 1, sheet = null) {
@@ -72,7 +81,8 @@ export function rollupTakeoff(marks, calibration, aspect = 1, sheet = null) {
     return acc;
   }, { count: 0, lf: 0, sf: 0 });
 
-  return { rows: list, totals, calibrated: Boolean(calibration?.feet) };
+  const calibrated = scoped.length ? scoped.every((mark) => Boolean(calibrationForMark(mark, calibration)?.feet) || !mark.points?.length) : Boolean(calibration?.feet || Object.values(calibration || {}).some((item) => item?.feet));
+  return { rows: list, totals, calibrated };
 }
 
 export function applyScheduleEdits(rollup, edits = {}) {

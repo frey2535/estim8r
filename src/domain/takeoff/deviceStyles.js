@@ -85,7 +85,7 @@ export function applyDeviceTypeColors(marks) {
     sheetMaps.set(sheet, colorMapForDeviceTypes(keys));
   }
   return list.map((mark) => {
-    if (isCircuitMark(mark)) return { ...mark, color: CIRCUIT_COLOR, layer: "circuit" };
+    if (isCircuitMark(mark)) return { ...mark, color: mark.color || CIRCUIT_COLOR, layer: "circuit" };
     if (!isDeviceMark(mark)) return mark;
     const key = deviceTypeKey(mark);
     const color = sheetMaps.get(mark.sheet || 1)?.get(key) || scheduleTypeColor(key) || FALLBACK_COLORS[0];

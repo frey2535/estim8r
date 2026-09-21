@@ -17,6 +17,7 @@ import ProductivityFactorEditor from "@/components/labor/ProductivityFactorEdito
 import NamedCrewPicker from "@/components/labor/NamedCrewPicker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DEFAULT_VISIBLE_TOTALS, resolveVisibleTotals, setAllLinesIncluded, TOTAL_OPTIONS } from "@/domain/estimate/presentation";
+import { calculateBidByScope } from "@/domain/estimate/trueElectricalTakeoff";
 
 const ITEM_TYPES = ["Material", "Labor", "Equipment", "Subcontract", "Allowance", "Fixture", "Device", "Conduit", "Wire", "Gear", "Other"];
 const UNITS = ["EA", "LF", "SF", "FT", "100 LF", "1000 LF", "HR", "DAY", "LOT"];
@@ -174,6 +175,16 @@ export default function EstimateBuilder() {
   const prof = totals.profit;
   const bond = totals.bondInsurance || 0;
   const grand = totals.total;
+  const scopeTotals = useMemo(() => (
+    trueTakeoff?.analysis
+      ? calculateBidByScope(lines, {
+          contingency: Number(contingency) || 0,
+          overhead: Number(overhead) || 0,
+          profit: Number(profit) || 0,
+          bondInsurance: Number(bondInsurance) || 0,
+        })
+      : {}
+  ), [trueTakeoff, lines, contingency, overhead, profit, bondInsurance]);
 
   function setHeaderField(key, value) {
     setHeader((current) => ({ ...current, [key]: value }));
@@ -565,6 +576,19 @@ export default function EstimateBuilder() {
                 <AuditStat label="Measured conduit" value={`${draft.trueTakeoff.analysis.totals.conduitLf.toFixed(1)} LF`} />
                 <AuditStat label="Bid-lock warnings" value={draft.trueTakeoff.analysis.warnings.length} />
               </div>
+              {Object.keys(scopeTotals).length ? (
+                <div className="mt-5">
+                  <h3 className="text-sm font-bold">Base &amp; alternate rollup</h3>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                    {Object.entries(scopeTotals).map(([scope, value]) => (
+                      <div key={scope} className="rounded-lg border border-border bg-background p-3">
+                        <div className="text-xs font-bold text-muted-foreground">{scope}</div>
+                        <div className="mt-1 text-lg font-black">{`${value.total.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </section>
 
             <section className="grid gap-4 lg:grid-cols-2">

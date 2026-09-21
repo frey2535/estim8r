@@ -742,7 +742,7 @@ export default function TakeoffWorkspace() {
       mark.layer = "device";
       mark.fillOpacity = DEVICE_FILL_OPACITY;
     } else if (isCircuitMark(mark)) {
-      mark.color = CIRCUIT_COLOR;
+      mark.color = mark.color || CIRCUIT_COLOR;
       mark.layer = "circuit";
     }
     commitMarks([...marks, mark], message);
@@ -1085,6 +1085,18 @@ export default function TakeoffWorkspace() {
       if (!canDrag) return;
       const start = point;
       const origin = mark.points ? mark.points.map((item) => ({ ...item })) : { x: mark.x, y: mark.y };
+      const isEditableConduit = mark.tool === "conduit" && Array.isArray(origin) && origin.length >= 2;
+      let endpointIndex = -1;
+      if (isEditableConduit) {
+        const endpointThreshold = Math.max(1.4, markHitThreshold(mark, 2.4));
+        const first = origin[0];
+        const last = origin[origin.length - 1];
+        const firstDistance = Math.hypot(point.x - first.x, point.y - first.y);
+        const lastDistance = Math.hypot(point.x - last.x, point.y - last.y);
+        if (firstDistance <= endpointThreshold || lastDistance <= endpointThreshold) {
+          endpointIndex = firstDistance <= lastDistance ? 0 : origin.length - 1;
+        }
+      }
       const move = (moveEvent) => {
         const now = drawingPoint(moveEvent);
         if (!now) return;
@@ -1092,7 +1104,18 @@ export default function TakeoffWorkspace() {
         const dy = now.y - start.y;
         setMarks((current) => current.map((item) => {
           if (item.id !== selectedId) return item;
-          if (item.points) return { ...item, points: origin.map((pt) => ({ x: pt.x + dx, y: pt.y + dy })) };
+          if (item.points) {
+            if (endpointIndex >= 0) {
+              return {
+                ...item,
+                points: origin.map((pt, index) => (
+                  index === endpointIndex ? { x: now.x, y: now.y } : { ...pt }
+                )),
+                lengthEdited: false,
+              };
+            }
+            return { ...item, points: origin.map((pt) => ({ x: pt.x + dx, y: pt.y + dy })), lengthEdited: false };
+          }
           return { ...item, x: origin.x + dx, y: origin.y + dy };
         }));
       };
@@ -1103,6 +1126,48 @@ export default function TakeoffWorkspace() {
       window.addEventListener("pointermove", move);
       window.addEventListener("pointerup", up);
     }
+  }
+
+
+  function onViewerContextMenu(event) {
+    event.preventDefault();
+    if (!file) return;
+    const point = drawingPoint(event);
+    if (!point) return;
+    const sheetAspectRatio = currentAspect();
+    const candidates = sheetMarks.filter((mark) => mark?.tool === "conduit" && mark?.points?.length >= 2);
+    const hit = [...candidates].reverse().find((mark) => (
+      hitTestMark(sizedMark(mark), point, sheetAspectRatio, markHitThreshold(mark, 3.8))
+    ));
+    const conduit = hit || (selectedMark?.tool === "conduit" ? selectedMark : null);
+    if (!conduit) {
+      setStatus("Right-click directly on a conduit run to add a junction box.");
+      return;
+    }
+
+    const junctionBox = {
+      id: crypto.randomUUID(),
+      sheet: conduit.sheet || sheetMeta.page || 1,
+      trade,
+      source: "manual",
+      type: "count",
+      x: point.x,
+      y: point.y,
+      color: conduit.color || penColor,
+      category: "Equipment",
+      symbol: "junction-box",
+      symbolLabel: "Junction Box",
+      abbr: "JB",
+      typeCode: "JB",
+      circuitRunId: conduit.id,
+      parentConduitId: conduit.id,
+      reviewStatus: "accepted",
+      layer: "device",
+      fillOpacity: DEVICE_FILL_OPACITY,
+    };
+    commitMarks([...marks, junctionBox], `Junction box added to conduit ${conduit.runNumber || ""}.`);
+    setSelectedId(junctionBox.id);
+    setTool("select");
   }
 
   async function copyQuantities() {
@@ -1346,6 +1411,7 @@ export default function TakeoffWorkspace() {
                 ref={viewerRef}
                 onClick={onDrawingClick}
                 onDoubleClick={finishPath}
+                onContextMenu={onViewerContextMenu}
                 onPointerDown={onViewerPointerDown}
                 style={{ transform: `translate(${pan.x}px, ${pan.y}px)` }}
                 onPointerMove={(event) => {
@@ -1574,7 +1640,7 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
       })}
       {circuits.map((mark) => {
         const selected = mark.id === selectedId;
-        const color = CIRCUIT_COLOR;
+        const color = mark.color || CIRCUIT_COLOR;
         const width = resolvedLineSize(mark, lineSize);
         const path = mark.tool === "conduit" ? conduitPolylines({ ...mark, points: shortenCircuitPath(mark.points) }) : [shortenCircuitPath(mark.points)];
         const dash = mark.tool === "circuit" || mark.type === "homerun" ? "0.9 0.65" : undefined;
@@ -1598,6 +1664,21 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
             ))}
           </g>
         );
+      })}
+      {circuits.filter((mark) => mark.id === selectedId && mark.tool === "conduit" && mark.points?.length >= 2).flatMap((mark) => {
+        const endpoints = [mark.points[0], mark.points[mark.points.length - 1]];
+        return endpoints.map((point, index) => (
+          <circle
+            key={`${mark.id}-endpoint-${index}`}
+            cx={point.x}
+            cy={point.y}
+            r="0.65"
+            fill="#ffffff"
+            stroke={mark.color || CIRCUIT_COLOR}
+            strokeWidth="0.28"
+            vectorEffect="non-scaling-stroke"
+          />
+        ));
       })}
       {draftPoints.length > 1 && <polyline points={draftPoints.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#f97316" strokeWidth=".45" strokeDasharray="1 1" vectorEffect="non-scaling-stroke" />}
       {draftEnd && draftFeet != null && (

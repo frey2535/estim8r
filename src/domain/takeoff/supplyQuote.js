@@ -43,6 +43,28 @@ export function modelFromKnownFields(item) {
   return String(raw).trim();
 }
 
+export function deviceFromKnownFields(mark, drawingItem, catalogItem) {
+  const raw = mark?.typeCode
+    || mark?.abbr
+    || drawingItem?.type
+    || drawingItem?.abbr
+    || catalogItem?.type
+    || catalogItem?.abbr
+    || mark?.symbol
+    || drawingItem?.id
+    || catalogItem?.id
+    || "";
+  return String(raw).trim();
+}
+
+function xmlText(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
 export function catalogForQuote() {
   return [...DEVICE_SYMBOLS, ...TRADE_ONLY_SYMBOLS];
 }
@@ -80,12 +102,14 @@ export function buildSupplyQuote({
     if (isLegendQuoteSource(mark, pageKinds)) continue;
     const drawingItem = findKnownMatch(mark, drawingSymbols);
     const catalogItem = findKnownMatch(mark, catalog);
+    const device = deviceFromKnownFields(mark, drawingItem, catalogItem);
     const model = modelFromKnownFields(mark) || modelFromKnownFields(drawingItem) || modelFromKnownFields(catalogItem);
     const description = mark.symbolLabel || drawingItem?.label || catalogItem?.label || mark.symbol || mark.typeCode || "Device";
     const category = mark.category || drawingItem?.takeoffCategory || catalogItem?.category || "";
-    const key = `${model}|${description}|${category}`;
+    const key = `${device}|${model}|${description}|${category}`;
     if (!rows.has(key)) {
       rows.set(key, {
+        device,
         model,
         description,
         category,
@@ -96,32 +120,70 @@ export function buildSupplyQuote({
     rows.get(key).quantity += 1;
   }
   const list = [...rows.values()].sort((a, b) => (
-    a.description.localeCompare(b.description) || a.model.localeCompare(b.model)
+    a.device.localeCompare(b.device) || a.description.localeCompare(b.description) || a.model.localeCompare(b.model)
   ));
   const quantity = list.reduce((sum, row) => sum + row.quantity, 0);
   return {
     title: "Supply house material quote",
     projectName: projectName || String(fileName || "").replace(/\.[^.]+$/, "") || "Takeoff",
     fileBase: supplyQuoteFileBase(fileName),
+    generatedAt: new Date().toISOString(),
     rows: list,
     totals: { quantity, items: list.length },
   };
 }
 
+const QUOTE_HEADERS = ["Device / equipment", "Model", "Description", "Quantity"];
+
+function quoteExportRows(quote) {
+  const rows = quote.rows.length
+    ? quote.rows
+    : [{ device: "", model: "", description: "No takeoff devices", quantity: 0 }];
+  return [
+    ...rows,
+    { device: "", model: "", description: "TOTAL", quantity: quote.totals.quantity },
+  ];
+}
+
 export function supplyQuoteToCsv(quote) {
   const lines = [
-    ["Model", "Description", "Quantity", "Unit", "Category"].map(csvCell).join(","),
-    ...quote.rows.map((row) => [
+    QUOTE_HEADERS.map(csvCell).join(","),
+    ...quoteExportRows(quote).map((row) => [
+      csvCell(row.device),
       csvCell(row.model),
       csvCell(row.description),
       row.quantity,
-      csvCell(row.unit),
-      csvCell(row.category),
     ].join(",")),
   ];
-  if (!quote.rows.length) lines.push(["", "No takeoff devices", 0, "EA", ""].map(csvCell).join(","));
-  lines.push(["", "TOTAL", quote.totals.quantity, "EA", ""].map(csvCell).join(","));
   return `\uFEFF${lines.join("\n")}\n`;
+}
+
+export function supplyQuoteToExcel(quote) {
+  const headerCells = QUOTE_HEADERS.map((label) => (
+    `<Cell><Data ss:Type="String">${xmlText(label)}</Data></Cell>`
+  )).join("");
+  const body = quoteExportRows(quote).map((row) => [
+    "<Row>",
+    `<Cell><Data ss:Type="String">${xmlText(row.device)}</Data></Cell>`,
+    `<Cell><Data ss:Type="String">${xmlText(row.model)}</Data></Cell>`,
+    `<Cell><Data ss:Type="String">${xmlText(row.description)}</Data></Cell>`,
+    `<Cell><Data ss:Type="Number">${Number(row.quantity) || 0}</Data></Cell>`,
+    "</Row>",
+  ].join("")).join("");
+  return [
+    `<?xml version="1.0"?>`,
+    `<?mso-application progid="Excel.Sheet"?>`,
+    `<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">`,
+    `<Worksheet ss:Name="Supply quote">`,
+    `<Table>`,
+    `<Column ss:Width="90"/><Column ss:Width="110"/><Column ss:Width="240"/><Column ss:Width="70"/>`,
+    `<Row>${headerCells}</Row>`,
+    body,
+    `</Table>`,
+    `</Worksheet>`,
+    `</Workbook>`,
+    "",
+  ].join("\n");
 }
 
 export function buildSupplyQuotePdf(quote) {
@@ -149,11 +211,10 @@ export function buildSupplyQuotePdf(quote) {
   doc.setTextColor(0);
   y += 22;
   const cols = [
-    { label: "Model", x: left, width: 120 },
-    { label: "Description", x: left + 120, width: 260 },
-    { label: "Qty", x: left + 400, width: 40 },
-    { label: "Unit", x: left + 440, width: 36 },
-    { label: "Category", x: left + 476, width: right - (left + 476) },
+    { label: "Device / equipment", x: left, width: 110 },
+    { label: "Model", x: left + 110, width: 110 },
+    { label: "Description", x: left + 220, width: 250 },
+    { label: "Qty", x: left + 470, width: right - (left + 470) },
   ];
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
@@ -163,19 +224,18 @@ export function buildSupplyQuotePdf(quote) {
   doc.line(left, y, right, y);
   y += 14;
   doc.setFont("helvetica", "normal");
-  const rows = quote.rows.length ? quote.rows : [{ model: "", description: "No takeoff devices", quantity: 0, unit: "EA", category: "" }];
+  const rows = quote.rows.length ? quote.rows : [{ device: "", model: "", description: "No takeoff devices", quantity: 0 }];
   for (const row of rows) {
-    const desc = doc.splitTextToSize(String(row.description || ""), 256);
+    const desc = doc.splitTextToSize(String(row.description || ""), 246);
     const height = Math.max(14, desc.length * 12);
     if (y + height > 740) {
       doc.addPage();
       y = 48;
     }
-    write(String(row.model || ""), cols[0].x, y);
-    write(desc, cols[1].x, y);
-    write(String(row.quantity ?? ""), cols[2].x, y);
-    write(String(row.unit || "EA"), cols[3].x, y);
-    write(String(row.category || ""), cols[4].x, y, { maxWidth: cols[4].width });
+    write(String(row.device || ""), cols[0].x, y, { maxWidth: cols[0].width });
+    write(String(row.model || ""), cols[1].x, y, { maxWidth: cols[1].width });
+    write(desc, cols[2].x, y);
+    write(String(row.quantity ?? ""), cols[3].x, y);
     y += height;
   }
   y += 8;
@@ -186,4 +246,8 @@ export function buildSupplyQuotePdf(quote) {
 
 export function supplyQuoteCsvFileName(quote) {
   return `${quote.fileBase}.csv`;
+}
+
+export function supplyQuoteExcelFileName(quote) {
+  return `${quote.fileBase}.xls`;
 }

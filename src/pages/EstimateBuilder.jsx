@@ -635,6 +635,70 @@ export default function EstimateBuilder() {
             </section>
 
             <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-bold">Conduit wire makeup</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">Calculated from conduit length, assigned circuits, poles, neutral requirement, conductor size, and one shared equipment grounding conductor per conduit.</p>
+                </div>
+                <div className="text-right text-xs text-muted-foreground">
+                  <div>{draft.trueTakeoff.analysis.conduitWireMakeup?.length || 0} conduit runs</div>
+                  <div>{(draft.trueTakeoff.analysis.wirePulling || []).reduce((sum, row) => sum + Number(row.feet || 0), 0).toFixed(0)} total conductor LF</div>
+                </div>
+              </div>
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[980px] text-xs">
+                  <thead className="border-b border-border text-left uppercase text-muted-foreground">
+                    <tr>
+                      <th className="p-2">C#</th>
+                      <th className="p-2">Sheet</th>
+                      <th className="p-2">Conduit</th>
+                      <th className="p-2 text-right">LF</th>
+                      <th className="p-2">Circuits / conductors</th>
+                      <th className="p-2">Ground</th>
+                      <th className="p-2 text-right">Total wire LF</th>
+                      <th className="p-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(draft.trueTakeoff.analysis.conduitWireMakeup || []).map((row) => (
+                      <tr key={row.conduitId} className={`border-b border-border ${row.status !== "ready" ? "bg-amber-50/70 dark:bg-amber-500/5" : ""}`}>
+                        <td className="p-2 font-bold">C{row.runNumber || "?"}</td>
+                        <td className="p-2">{row.sheet}</td>
+                        <td className="p-2">{[row.conduitSize, row.conduitMaterial].filter(Boolean).join(" ")}</td>
+                        <td className="p-2 text-right">{Number(row.lengthLf || 0).toFixed(1)}</td>
+                        <td className="p-2">
+                          {row.circuits.length ? row.circuits.map((circuit) => (
+                            <div key={circuit.circuit}>
+                              <strong>{circuit.circuit}</strong>: {circuit.hotCount} hot{circuit.neutralRequired ? " + 1 neutral" : ""} · {circuit.wireSize ? `#${circuit.wireSize}` : "size ?"} · {circuit.breakerAmps || "?"}A/{circuit.poles || "?"}P
+                            </div>
+                          )) : <span className="text-amber-700">No assigned circuits</span>}
+                        </td>
+                        <td className="p-2">{row.groundSize ? `#${row.groundSize} Cu` : "—"}</td>
+                        <td className="p-2 text-right font-semibold">{Number(row.totalConductorFeet || 0).toFixed(1)}</td>
+                        <td className="p-2">
+                          <span className={row.status === "ready" ? "text-emerald-700" : "text-amber-700"}>{row.status === "ready" ? "Ready" : "Review"}</span>
+                          {row.warnings.map((warning) => <div key={warning} className="mt-1 max-w-72 text-[10px] text-amber-700">{warning}</div>)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {(draft.trueTakeoff.analysis.wirePulling || []).length ? (
+                <div className="mt-4">
+                  <h4 className="text-sm font-bold">Wire pulling totals</h4>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {draft.trueTakeoff.analysis.wirePulling.map((wire) => (
+                      <div key={wire.size} className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+                        <strong>{wire.size.includes("GND") ? wire.size : `#${wire.size}`}</strong> · {Number(wire.feet || 0).toFixed(0)} LF
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </section>
+
+            <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
                   <h3 className="font-bold">Labor by work category</h3>

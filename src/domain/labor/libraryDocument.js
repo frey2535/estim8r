@@ -43,6 +43,19 @@ export const LABOR_LIBRARY_DOCUMENT = {
     { id: "flex", category: "Raceway", keywords: ["fmc", "lfmc", "flex", "liquidtight"], unit: "100 LF", per: 100, mh: 9 },
     { id: "mc", category: "Raceway", keywords: ["mc cable", "mc "], unit: "100 LF", per: 100, mh: 5.5 },
     { id: "conduit-gen", category: "Raceway", keywords: ["conduit", "circuit", "homerun"], unit: "100 LF", per: 100, mh: 8 },
+    { id: "wire-14", category: "Wire / Cable", keywords: ["#14", "14 awg", "14 cu"], unit: "1000 LF", per: 1000, mh: 9 },
+    { id: "wire-12", category: "Wire / Cable", keywords: ["#12", "12 awg", "12 cu"], unit: "1000 LF", per: 1000, mh: 10 },
+    { id: "wire-10", category: "Wire / Cable", keywords: ["#10", "10 awg", "10 cu"], unit: "1000 LF", per: 1000, mh: 11 },
+    { id: "wire-8", category: "Wire / Cable", keywords: ["#8", "8 awg", "8 cu"], unit: "1000 LF", per: 1000, mh: 13 },
+    { id: "wire-6", category: "Wire / Cable", keywords: ["#6", "6 awg", "6 cu"], unit: "1000 LF", per: 1000, mh: 15 },
+    { id: "wire-4", category: "Wire / Cable", keywords: ["#4", "4 awg", "4 cu"], unit: "1000 LF", per: 1000, mh: 18 },
+    { id: "wire-3", category: "Wire / Cable", keywords: ["#3", "3 awg", "3 cu"], unit: "1000 LF", per: 1000, mh: 20 },
+    { id: "wire-2", category: "Wire / Cable", keywords: ["#2", "2 awg", "2 cu"], unit: "1000 LF", per: 1000, mh: 21 },
+    { id: "wire-1", category: "Wire / Cable", keywords: ["#1", "1 awg", "1 cu"], unit: "1000 LF", per: 1000, mh: 23 },
+    { id: "wire-10x", category: "Wire / Cable", keywords: ["1/0"], unit: "1000 LF", per: 1000, mh: 27 },
+    { id: "wire-20x", category: "Wire / Cable", keywords: ["2/0"], unit: "1000 LF", per: 1000, mh: 30 },
+    { id: "wire-30x", category: "Wire / Cable", keywords: ["3/0"], unit: "1000 LF", per: 1000, mh: 34 },
+    { id: "wire-40x", category: "Wire / Cable", keywords: ["4/0"], unit: "1000 LF", per: 1000, mh: 38 },
   ],
   fallbacks: {
     Receptacles: { id: "fb-rec", unit: "EA", per: 1, mh: 0.55 },
@@ -52,6 +65,7 @@ export const LABOR_LIBRARY_DOCUMENT = {
     "Panels / MCC": { id: "fb-gear", unit: "EA", per: 1, mh: 12 },
     Equipment: { id: "fb-eq", unit: "EA", per: 1, mh: 2 },
     Raceway: { id: "fb-race", unit: "100 LF", per: 100, mh: 8 },
+    "Wire / Cable": { id: "fb-wire", unit: "1000 LF", per: 1000, mh: 12 },
     "Low Voltage": { id: "fb-lv", unit: "EA", per: 1, mh: 0.45 },
     "Fire Alarm": { id: "fb-fa", unit: "EA", per: 1, mh: 0.6 },
     "Access Control": { id: "fb-ac", unit: "EA", per: 1, mh: 0.75 },
@@ -108,8 +122,14 @@ export function assignLaborHours({ category, symbol, unit }) {
   const displayUnit = unit || (chosen.unit === "100 LF" ? "LF" : "EA");
   const mhPerUnit = displayUnit === "LF" && chosen.unit === "100 LF"
     ? chosen.mh / 100
-    : chosen.mh;
-  const basis = chosen.unit === "100 LF" ? `${chosen.mh} MH / 100 LF` : `${chosen.mh} MH each`;
+    : displayUnit === "LF" && chosen.unit === "1000 LF"
+      ? chosen.mh / 1000
+      : chosen.mh;
+  const basis = chosen.unit === "100 LF"
+    ? `${chosen.mh} MH / 100 LF`
+    : chosen.unit === "1000 LF"
+      ? `${chosen.mh} MH / 1000 LF`
+      : `${chosen.mh} MH each`;
   return {
     laborItemId: chosen.id,
     mhPerUnit: Math.round(mhPerUnit * 10000) / 10000,

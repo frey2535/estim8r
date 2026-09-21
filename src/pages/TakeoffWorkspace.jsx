@@ -73,9 +73,11 @@ import {
 } from "@/domain/takeoff/deviceStyles";
 import {
   buildConduitCircuitSchedulePdf,
+  buildConduitWireMakeupPdf,
   buildMarkedDrawingPdf,
 } from "@/domain/takeoff/markedDrawingPdf";
 import { conduitCircuitScheduleCsv } from "@/domain/takeoff/markupPages";
+import { conduitWireMakeupCsv } from "@/domain/takeoff/conduitWireMakeup";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -470,6 +472,30 @@ export default function TakeoffWorkspace() {
     const stem = (file.name || "electrical-takeoff").replace(/\.[^.]+$/, "");
     downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), `${stem}-conduit-circuit-schedule.csv`);
     setStatus("Conduit / circuit schedule CSV downloaded.");
+  }
+
+  function downloadWireMakeupPdf() {
+    if (!file) return;
+    const { doc, fileName, rows } = buildConduitWireMakeupPdf({
+      marks,
+      runs,
+      longCircuitRule: trueAnalysis?.longCircuitRule,
+      fileName: file.name,
+    });
+    downloadBlob(doc.output("blob"), fileName);
+    const reviewCount = rows.filter((row) => row.status !== "ready").length;
+    setStatus(reviewCount
+      ? `Downloaded ${fileName}; ${reviewCount} conduit run${reviewCount === 1 ? "" : "s"} still need wire-makeup review.`
+      : `Downloaded ${fileName}; all conduit wire-makeup rows are ready.`);
+  }
+
+  function downloadWireMakeupCsv() {
+    if (!file) return;
+    const rows = trueAnalysis?.conduitWireMakeup || [];
+    const csv = conduitWireMakeupCsv(rows);
+    const stem = (file.name || "electrical-takeoff").replace(/\.[^.]+$/, "");
+    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), `${stem}-conduit-wire-makeup.csv`);
+    setStatus("Conduit wire makeup CSV downloaded.");
   }
 
   function makeSupplyQuote(nextMarks = marks) {
@@ -1169,6 +1195,8 @@ export default function TakeoffWorkspace() {
           <button type="button" onClick={() => void downloadConduitRouteDrawings()} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Conduit Routes PDF</button>
           <button type="button" onClick={downloadConduitCircuitSchedule} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Conduit Schedule PDF</button>
           <button type="button" onClick={downloadConduitCircuitCsv} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Conduit Schedule CSV</button>
+          <button type="button" onClick={downloadWireMakeupPdf} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Wire Makeup PDF</button>
+          <button type="button" onClick={downloadWireMakeupCsv} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Wire Makeup CSV</button>
           <button type="button" onClick={openDrawingPicker} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Replace</button>
           <button type="button" onClick={closeDrawing} className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted"><X className="h-4 w-4" /> Close</button>
         </div>

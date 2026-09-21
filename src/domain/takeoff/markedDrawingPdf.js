@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import { getPdfDocument } from "@/lib/pdf-document";
 import { conduitCircuitSchedule } from "./markupPages";
+import { buildConduitWireMakeup } from "./conduitWireMakeup";
 
 function fileStem(name, fallback = "takeoff") {
   return String(name || fallback).replace(/\.[^.]+$/, "").replace(/[^a-z0-9._-]+/gi, "-");
@@ -196,5 +197,108 @@ export function buildConduitCircuitSchedulePdf({ marks = [], fileName } = {}) {
     doc,
     fileName: `${fileStem(fileName)}-conduit-circuit-schedule.pdf`,
     schedule,
+  };
+}
+
+
+export function buildConduitWireMakeupPdf({
+  marks = [],
+  runs = [],
+  longCircuitRule = null,
+  fileName,
+} = {}) {
+  const rows = buildConduitWireMakeup({ marks, runs, longCircuitRule });
+  const doc = new jsPDF({ unit: "pt", format: "letter", orientation: "landscape" });
+  const width = 792;
+  const left = 28;
+  const right = width - 28;
+  let y = 34;
+
+  const header = () => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(17);
+    doc.text("CONDUIT WIRE MAKEUP", left, y);
+    y += 16;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text(fileName || "Electrical takeoff", left, y);
+    y += 20;
+    doc.setFont("helvetica", "bold");
+    doc.text("C#", left, y);
+    doc.text("Sheet", left + 28, y);
+    doc.text("Conduit", left + 64, y);
+    doc.text("LF", left + 145, y, { align: "right" });
+    doc.text("Circuit", left + 170, y);
+    doc.text("A", left + 260, y, { align: "right" });
+    doc.text("P", left + 282, y, { align: "right" });
+    doc.text("Neutral", left + 300, y);
+    doc.text("Wire", left + 350, y);
+    doc.text("Cond.", left + 405, y, { align: "right" });
+    doc.text("Circuit LF", left + 470, y, { align: "right" });
+    doc.text("Ground", left + 510, y);
+    doc.text("Total Wire LF", left + 635, y, { align: "right" });
+    doc.text("Status", right, y, { align: "right" });
+    y += 9;
+    doc.line(left, y, right, y);
+    y += 12;
+  };
+
+  header();
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+
+  for (const row of rows) {
+    const circuits = row.circuits.length ? row.circuits : [null];
+    for (let i = 0; i < circuits.length; i += 1) {
+      const circuit = circuits[i];
+      if (y > 555) {
+        doc.addPage("letter", "landscape");
+        y = 34;
+        header();
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+      }
+      if (i === 0) {
+        doc.text(String(row.runNumber || "—"), left, y);
+        doc.text(String(row.sheet || ""), left + 28, y);
+        doc.text([row.conduitSize, row.conduitMaterial].filter(Boolean).join(" "), left + 64, y);
+        doc.text(row.lengthLf.toFixed(1), left + 145, y, { align: "right" });
+      }
+      if (circuit) {
+        doc.text(circuit.circuit || "", left + 170, y);
+        doc.text(circuit.breakerAmps ? String(circuit.breakerAmps) : "?", left + 260, y, { align: "right" });
+        doc.text(String(circuit.poles || "?"), left + 282, y, { align: "right" });
+        doc.text(circuit.neutralRequired ? "Yes" : "No", left + 300, y);
+        doc.text(circuit.wireSize ? "#" + circuit.wireSize : "?", left + 350, y);
+        doc.text(String(circuit.conductorCount || 0), left + 405, y, { align: "right" });
+        doc.text(circuit.conductorFeet.toFixed(1), left + 470, y, { align: "right" });
+      } else {
+        doc.text("UNASSIGNED", left + 170, y);
+      }
+      if (i === 0) {
+        doc.text(row.groundSize ? "#" + row.groundSize : "—", left + 510, y);
+        doc.text(row.totalConductorFeet.toFixed(1), left + 635, y, { align: "right" });
+        doc.text(row.status.toUpperCase(), right, y, { align: "right" });
+      }
+      y += 14;
+    }
+    if (row.warnings.length) {
+      const wrapped = doc.splitTextToSize("Review: " + row.warnings.join(" | "), right - left - 22);
+      doc.setTextColor(180, 100, 0);
+      doc.text(wrapped, left + 12, y);
+      doc.setTextColor(0, 0, 0);
+      y += wrapped.length * 10 + 4;
+    }
+    doc.setDrawColor(225);
+    doc.line(left, y, right, y);
+    y += 8;
+  }
+
+  if (!rows.length) doc.text("No conduit runs are available.", left, y);
+
+  return {
+    doc,
+    fileName: fileStem(fileName) + "-conduit-wire-makeup.pdf",
+    rows,
   };
 }

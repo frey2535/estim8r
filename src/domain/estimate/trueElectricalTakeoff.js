@@ -1,3 +1,4 @@
+import { buildConduitWireMakeup, aggregateWirePulling } from "../takeoff/conduitWireMakeup.js";
 import { assignLaborHours } from "../labor/libraryDocument.js";
 import { compositeWage, defaultCrew, journeymanWage } from "../labor/employeeClasses.js";
 
@@ -293,6 +294,8 @@ export function analyzeElectricalTakeoff({ drawingDocs, rollup, runs = [], marks
     confidence: run.calibrated ? "high" : "review",
     longCircuitUpgrade: Boolean(longCircuitRule && num(run.lf) > longCircuitRule.thresholdFeet),
   }));
+  const conduitWireMakeup = buildConduitWireMakeup({ marks, runs: measuredRuns, longCircuitRule });
+  const wirePulling = aggregateWirePulling(conduitWireMakeup);
   const unreviewedAi = (marks || []).filter((mark) => mark.source === "ai" && mark.reviewStatus !== "accepted" && mark.reviewStatus !== "rejected");
   const serviceMeasurement = measuredRuns.find((run) => /4"?\s*(?:pvc|conduit)|primary|service/i.test(String(run.type || "")));
   const warnings = [];
@@ -305,6 +308,8 @@ export function analyzeElectricalTakeoff({ drawingDocs, rollup, runs = [], marks
     warnings.push("No dedicated electrical specification sheet was identified. Verify Division 26, addenda, bonding, permits, testing, and approved manufacturers.");
   }
   if (panels.length || transformers.length) warnings.push("Major gear uses budget material allowances until vendor quotes replace them.");
+  const wireReview = conduitWireMakeup.filter((row) => row.status !== "ready");
+  if (wireReview.length) warnings.push(`${wireReview.length} conduit run${wireReview.length === 1 ? "" : "s"} need circuit/wire-makeup review before wire quantities are bid-ready.`);
   const coverage = {
     drawingText: Boolean(text.trim()),
     scaleCalibrated: Boolean(rollup?.calibrated),
@@ -333,6 +338,8 @@ export function analyzeElectricalTakeoff({ drawingDocs, rollup, runs = [], marks
     equipment,
     alternates,
     measuredRuns,
+    conduitWireMakeup,
+    wirePulling,
     coverage,
     warnings,
   };
@@ -539,6 +546,25 @@ export function buildTrueElectricalEstimateLines({
     }));
   }
 
+  for (const wire of analysis?.wirePulling || []) {
+    const isGround = /\s+GND$/i.test(wire.size);
+    const baseSize = String(wire.size || "").replace(/\s+GND$/i, "");
+    const review = (analysis?.conduitWireMakeup || []).some((row) => (
+      row.status !== "ready" && (row.wireTotals || []).some((entry) => entry.size === wire.size)
+    ));
+    lines.push(makeEstimateLine({
+      key: `true|wire|${slug(wire.size)}`,
+      category: "Wire / Cable",
+      description: `#${baseSize} Cu ${isGround ? "equipment grounding conductor" : "branch/feeder conductor"} pulling`,
+      quantity: wire.feet,
+      unit: "LF",
+      materialUnitCost: materialBaseline("Wire / Cable", `#${baseSize} Cu conductor`, "LF"),
+      laborRate,
+      confidence: review ? "review" : "high",
+      notes: `Calculated from assigned circuits and measured conduit lengths. ${review ? "One or more source runs still have wire-makeup warnings." : "All contributing runs passed wire-makeup checks."}`,
+    }));
+  }
+
   const rollupText = new Set((rollup?.rows || []).map((row) => slug(row.symbol || row.category)));
   const equipmentGroups = [
     ["Electric heater", analysis?.equipment?.heaters || [], 180],
@@ -658,6 +684,8 @@ export function buildTrueElectricalEstimateDraft(existing, {
       summary: calculateTrueBidSummary(lines, { ...settings, laborRate }),
       byScope: calculateBidByScope(lines, { ...settings, laborRate }),
       workCategories: calculateWorkCategoryBreakdown(lines),
+      conduitWireMakeup: analysis.conduitWireMakeup,
+      wirePulling: analysis.wirePulling,
       updatedAt: new Date().toISOString(),
     },
     separateFromTakeoff: true,

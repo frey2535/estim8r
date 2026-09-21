@@ -171,6 +171,7 @@ export default function TakeoffWorkspace() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [supplyQuote, setSupplyQuote] = useState(null);
   const [trueTakeoffResult, setTrueTakeoffResult] = useState(null);
+  const [conduitContextMenu, setConduitContextMenu] = useState(null);
   const calibration = calibrations[sheetMeta.page] || null;
   const setCalibration = (next) => {
     setCalibrations((current) => ({
@@ -858,6 +859,7 @@ export default function TakeoffWorkspace() {
   }
 
   function onDrawingClick(event) {
+    if (conduitContextMenu) setConduitContextMenu(null);
     if (!file || tool === "pan") return;
     const point = drawingPoint(event);
     if (!point) return;
@@ -1139,12 +1141,31 @@ export default function TakeoffWorkspace() {
     const hit = [...candidates].reverse().find((mark) => (
       hitTestMark(sizedMark(mark), point, sheetAspectRatio, markHitThreshold(mark, 3.8))
     ));
-    const conduit = hit || (selectedMark?.tool === "conduit" ? selectedMark : null);
-    if (!conduit) {
-      setStatus("Right-click directly on a conduit run to add a junction box.");
+    if (!hit) {
+      setConduitContextMenu(null);
+      setStatus("Right-click directly on a conduit run for conduit options.");
       return;
     }
+    const bounds = viewerRef.current?.getBoundingClientRect();
+    setSelectedId(hit.id);
+    setTool("select");
+    setConduitContextMenu({
+      conduitId: hit.id,
+      point,
+      left: Math.max(8, event.clientX - (bounds?.left || 0)),
+      top: Math.max(8, event.clientY - (bounds?.top || 0)),
+    });
+    setStatus(`Conduit ${hit.runNumber || ""} selected.`);
+  }
 
+  function addJunctionBoxFromContext() {
+    if (!conduitContextMenu) return;
+    const conduit = marks.find((mark) => mark.id === conduitContextMenu.conduitId);
+    if (!conduit) {
+      setConduitContextMenu(null);
+      return;
+    }
+    const point = conduitContextMenu.point;
     const junctionBox = {
       id: crypto.randomUUID(),
       sheet: conduit.sheet || sheetMeta.page || 1,
@@ -1167,6 +1188,7 @@ export default function TakeoffWorkspace() {
     };
     commitMarks([...marks, junctionBox], `Junction box added to conduit ${conduit.runNumber || ""}.`);
     setSelectedId(junctionBox.id);
+    setConduitContextMenu(null);
     setTool("select");
   }
 
@@ -1460,6 +1482,22 @@ export default function TakeoffWorkspace() {
                 ) : (
                   <div className="p-8 text-sm text-muted-foreground">Reading drawing…</div>
                 )}
+                {conduitContextMenu ? (
+                  <div
+                    className="absolute z-40 min-w-44 rounded-lg border border-border bg-background p-1 text-sm shadow-xl"
+                    style={{ left: conduitContextMenu.left, top: conduitContextMenu.top }}
+                    onClick={(event) => event.stopPropagation()}
+                    onContextMenu={(event) => event.preventDefault()}
+                  >
+                    <button
+                      type="button"
+                      onClick={addJunctionBoxFromContext}
+                      className="w-full rounded-md px-3 py-2 text-left font-semibold hover:bg-muted"
+                    >
+                      Add junction box
+                    </button>
+                  </div>
+                ) : null}
                 <MarkupOverlay
                   marks={overlayMarks}
                   draftPoints={draftPreview}

@@ -17,7 +17,7 @@ import ProductivityFactorEditor from "@/components/labor/ProductivityFactorEdito
 import NamedCrewPicker from "@/components/labor/NamedCrewPicker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DEFAULT_VISIBLE_TOTALS, resolveVisibleTotals, setAllLinesIncluded, TOTAL_OPTIONS } from "@/domain/estimate/presentation";
-import { calculateBidByScope } from "@/domain/estimate/trueElectricalTakeoff";
+import { calculateBidByScope, calculateWorkCategoryBreakdown } from "@/domain/estimate/trueElectricalTakeoff";
 
 const ITEM_TYPES = ["Material", "Labor", "Equipment", "Subcontract", "Allowance", "Fixture", "Device", "Conduit", "Wire", "Gear", "Other"];
 const UNITS = ["EA", "LF", "SF", "FT", "100 LF", "1000 LF", "HR", "DAY", "LOT"];
@@ -185,6 +185,10 @@ export default function EstimateBuilder() {
         })
       : {}
   ), [trueTakeoff, lines, contingency, overhead, profit, bondInsurance]);
+  const workCategoryTotals = useMemo(
+    () => calculateWorkCategoryBreakdown(lines),
+    [lines],
+  );
 
   function setHeaderField(key, value) {
     setHeader((current) => ({ ...current, [key]: value }));
@@ -620,6 +624,80 @@ export default function EstimateBuilder() {
                     </div>
                   ))}
                 </div>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <h3 className="font-bold">Labor by work category</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">Man-hours and labor dollars are rolled up from every included estimate line.</p>
+                </div>
+              </div>
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[720px] text-sm">
+                  <thead className="border-b border-border text-left text-xs uppercase text-muted-foreground">
+                    <tr>
+                      <th className="p-2">Category</th>
+                      <th className="p-2 text-right">Lines</th>
+                      <th className="p-2 text-right">Material</th>
+                      <th className="p-2 text-right">Man-hours</th>
+                      <th className="p-2 text-right">Labor</th>
+                      <th className="p-2 text-right">Direct</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {workCategoryTotals.map((row) => (
+                      <tr key={row.category} className={`border-b border-border ${row.category === "Other / Review" && row.lineCount ? "bg-amber-50/70 dark:bg-amber-500/5" : ""}`}>
+                        <td className="p-2 font-bold">{row.category}</td>
+                        <td className="p-2 text-right">{row.lineCount}</td>
+                        <td className="p-2 text-right">{`${row.material.toFixed(2)}`}</td>
+                        <td className="p-2 text-right font-bold">{row.hours.toFixed(2)}</td>
+                        <td className="p-2 text-right font-bold">{`${row.labor.toFixed(2)}`}</td>
+                        <td className="p-2 text-right">{`${row.direct.toFixed(2)}`}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+              <h3 className="font-bold">Complete takeoff</h3>
+              <p className="mt-1 text-xs text-muted-foreground">Every included estimate line with quantity, labor unit, total man-hours, labor dollars, and assigned work category.</p>
+              <div className="mt-4 max-h-[38rem] overflow-auto rounded-lg border border-border">
+                <table className="w-full min-w-[1050px] text-xs">
+                  <thead className="sticky top-0 bg-card text-left uppercase text-muted-foreground">
+                    <tr className="border-b border-border">
+                      <th className="p-2">Work category</th>
+                      <th className="p-2">Source category</th>
+                      <th className="p-2">Description</th>
+                      <th className="p-2 text-right">Qty</th>
+                      <th className="p-2">Unit</th>
+                      <th className="p-2 text-right">MH/unit</th>
+                      <th className="p-2 text-right">Man-hours</th>
+                      <th className="p-2 text-right">Labor rate</th>
+                      <th className="p-2 text-right">Labor</th>
+                      <th className="p-2 text-right">Material</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {workCategoryTotals.flatMap((group) => group.lines.map((line) => (
+                      <tr key={line.id || `${group.category}-${line.description}`} className="border-b border-border">
+                        <td className="p-2 font-semibold">{group.category}</td>
+                        <td className="p-2">{line.sourceCategory}</td>
+                        <td className="p-2">{line.description}</td>
+                        <td className="p-2 text-right">{line.quantity}</td>
+                        <td className="p-2">{line.unit}</td>
+                        <td className="p-2 text-right">{Number(lines.find((row) => row.id === line.id)?.laborMhPerUnit || 0).toFixed(3)}</td>
+                        <td className="p-2 text-right font-semibold">{line.hours.toFixed(2)}</td>
+                        <td className="p-2 text-right">{`${Number(lines.find((row) => row.id === line.id)?.laborRate || 0).toFixed(2)}`}</td>
+                        <td className="p-2 text-right">{`${line.labor.toFixed(2)}`}</td>
+                        <td className="p-2 text-right">{`${line.material.toFixed(2)}`}</td>
+                      </tr>
+                    )))}
+                  </tbody>
+                </table>
               </div>
             </section>
 

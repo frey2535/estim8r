@@ -77,6 +77,7 @@ export default function EstimateBuilder() {
   const [companyUnits, setCompanyUnits] = useState([]);
   const [customUnits, setCustomUnits] = useState([]);
   const [openSources, setOpenSources] = useState("");
+  const [trueTakeoff, setTrueTakeoff] = useState(null);
   const wage = compositeWage(crew);
 
   useEffect(() => {
@@ -95,6 +96,7 @@ export default function EstimateBuilder() {
       setFactors(stored.factors?.length ? stored.factors : defaultProductivityFactors());
       setNamedCrewId(stored.namedCrewId || "");
       setMeta({ fileName: stored.fileName || "", fileSize: stored.fileSize || 0, scopeEdited: Boolean(stored.scopeEdited) });
+      setTrueTakeoff(stored.trueTakeoff || null);
     } else {
       const nextCrew = defaultCrew();
       setHeader({ ...emptyHeader });
@@ -109,6 +111,7 @@ export default function EstimateBuilder() {
       setFactors(defaultProductivityFactors());
       setNamedCrewId("");
       setMeta({ fileName: "", fileSize: 0, scopeEdited: false });
+      setTrueTakeoff(null);
     }
     setReady(true);
   }, [openFile, openSize]);
@@ -141,8 +144,9 @@ export default function EstimateBuilder() {
       visibleTotals,
       separateFromTakeoff: true,
       scopeEdited: meta.scopeEdited,
+      trueTakeoff,
     });
-  }, [ready, header, crew, lines, contingency, overhead, profit, bondInsurance, itemized, visibleTotals, meta, factors, namedCrewId]);
+  }, [ready, header, crew, lines, contingency, overhead, profit, bondInsurance, itemized, visibleTotals, meta, factors, namedCrewId, trueTakeoff]);
 
   const draft = useMemo(() => ({
     version: 1,
@@ -161,7 +165,8 @@ export default function EstimateBuilder() {
     visibleTotals,
     separateFromTakeoff: true,
     scopeEdited: meta.scopeEdited,
-  }), [header, crew, factors, namedCrewId, contingency, overhead, profit, bondInsurance, lines, itemized, visibleTotals, meta]);
+    trueTakeoff,
+  }), [header, crew, factors, namedCrewId, contingency, overhead, profit, bondInsurance, lines, itemized, visibleTotals, meta, trueTakeoff]);
 
   const totals = useMemo(() => estimateGrandTotal(draft), [draft]);
   const cont = totals.contingency || 0;
@@ -635,4 +640,14 @@ function Sel({ value, vals, set }) {
 
 function Sum({ label, value }) {
   return <div className="flex justify-between border-b border-border py-2 text-sm"><span className="text-muted-foreground">{label}</span><strong>${value.toFixed(2)}</strong></div>;
+}
+
+
+function AuditStat({ label, value }) {
+  return (
+    <div className="rounded-xl border border-border bg-muted/30 p-4">
+      <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-1 text-xl font-black">{value}</div>
+    </div>
+  );
 }

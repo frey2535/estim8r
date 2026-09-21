@@ -17,7 +17,7 @@ import {
   hitTestMark, polylineLength, sheetAspect, widthPercentDistance,
 } from "@/domain/takeoff/geometry";
 import { conduitRuns, nextConduitRunNumber, quantitiesToCsv, rollupTakeoff, applyScheduleEdits, markLengthFeet } from "@/domain/takeoff/quantities";
-import { drawingSymbolsFromDocs, readDrawingDocuments } from "@/domain/takeoff/drawing-docs";
+import { drawingSymbolsFromDocs, printedScaleCalibration, readDrawingDocuments } from "@/domain/takeoff/drawing-docs";
 import { paletteForTrade, pageKindsFromDocs, symbolsOnDrawingForTrade, tradeById, conduitOptionsForTrade, findConduitOption, TRADES, DEFAULT_CONDUIT_ID } from "@/domain/takeoff/trades";
 import { buildAiMarks } from "@/domain/takeoff/aiTakeoff";
 import { readAiPages } from "@/domain/takeoff/aiPages";
@@ -150,7 +150,7 @@ export default function TakeoffWorkspace() {
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const [sheetMeta, setSheetMeta] = useState({ page: 1, pageCount: 1 });
-  const [calibration, setCalibration] = useState(null);
+  const [calibrations, setCalibrations] = useState({});
   const [selectedId, setSelectedId] = useState(null);
   const [measureLabel, setMeasureLabel] = useState("");
   const [thumbsOpen, setThumbsOpen] = useState(readThumbsOpen);
@@ -164,6 +164,13 @@ export default function TakeoffWorkspace() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [supplyQuote, setSupplyQuote] = useState(null);
   const [trueTakeoffResult, setTrueTakeoffResult] = useState(null);
+  const calibration = calibrations[sheetMeta.page] || null;
+  const setCalibration = (next) => {
+    setCalibrations((current) => ({
+      ...current,
+      [sheetMeta.page]: typeof next === "function" ? next(current[sheetMeta.page] || null) : next,
+    }));
+  };
 
   const isPdf = file?.type === "application/pdf" || file?.name?.toLowerCase().endsWith(".pdf");
   const drawingSymbols = useMemo(() => drawingSymbolsFromDocs(drawingDocs), [drawingDocs]);
@@ -221,13 +228,13 @@ export default function TakeoffWorkspace() {
     ? sheetAspect(viewerRef.current.clientWidth, viewerRef.current.clientHeight)
     : 1;
   const rollup = useMemo(
-    () => rollupTakeoff(marks, calibration, aspect),
-    [marks, calibration, aspect],
+    () => rollupTakeoff(marks, calibrations, aspect),
+    [marks, calibrations, aspect],
   );
   const editedRollup = useMemo(() => applyScheduleEdits(rollup, scheduleEdits), [rollup, scheduleEdits]);
   const runs = useMemo(
-    () => conduitRuns(marks, calibration, aspect, penThickness),
-    [marks, calibration, aspect, penThickness],
+    () => conduitRuns(marks, calibrations, aspect, penThickness),
+    [marks, calibrations, aspect, penThickness],
   );
   const trueAnalysis = useMemo(
     () => analyzeElectricalTakeoff({ drawingDocs, rollup: editedRollup, runs, marks }),
@@ -310,7 +317,7 @@ export default function TakeoffWorkspace() {
 
     const saved = loadSession(nextFile);
     setMarks(Array.isArray(saved?.marks) ? saved.marks : []);
-    setCalibration(saved?.calibration || null);
+    setCalibrations(saved?.calibrations || (saved?.calibration ? { [saved?.sheet || 1]: saved.calibration } : {}));
     setSavedAt(saved?.savedAt || "");
     if (saved?.symbolId) setSymbolId(saved.symbolId);
     if (saved?.category) setCategory(saved.category);
@@ -367,6 +374,7 @@ export default function TakeoffWorkspace() {
       fileSize: file?.size,
       marks,
       calibration,
+      calibrations,
       symbolId,
       category,
       trade,
@@ -452,7 +460,7 @@ export default function TakeoffWorkspace() {
     } catch {
       /* private mode */
     }
-  }, [file, marks, calibration, symbolId, category, sheetMeta.page]);
+  }, [file, marks, calibrations, symbolId, category, sheetMeta.page]);
 
   useEffect(() => {
     if (!isPdf || !fileBytes) {
@@ -463,6 +471,15 @@ export default function TakeoffWorkspace() {
     readDrawingDocuments(fileBytes).then((docs) => {
       if (cancelled) return;
       setDrawingDocs(docs);
+      setCalibrations((current) => {
+        const next = { ...current };
+        for (const page of docs.pages || []) {
+          if (next[page.page]?.feet) continue;
+          const auto = printedScaleCalibration(page);
+          if (auto) next[page.page] = auto;
+        }
+        return next;
+      });
       const found = (docs.symbols?.length || 0) + (docs.scheduleItems?.length || 0);
       if (found) {
         setStatus(`Read ${docs.symbols.length} legend symbols and ${docs.scheduleItems.length} schedule / spec types for matching. Device list uses types found on the plan.`);
@@ -554,6 +571,7 @@ export default function TakeoffWorkspace() {
     setMarks([]);
     setSupplyQuote(null);
     setTrueTakeoffResult(null);
+    setCalibrations({});
     setDraftPoints([]);
     setDrawingError("");
     setLoadingDrawing(false);
@@ -1072,7 +1090,7 @@ export default function TakeoffWorkspace() {
             <div className="truncate font-bold text-foreground">{file.name}</div>
             <div className="text-xs text-muted-foreground">
               {isPdf ? `PDF • ${sheetMeta.pageCount} sheet${sheetMeta.pageCount === 1 ? "" : "s"}` : "Drawing image"}
-              {calibration ? ` • scale ${calibration.feet} ft` : " • scale not set"}
+              {calibration ? ` • ${calibration.scaleLabel ? `scale ${calibration.scaleLabel}` : `calibrated ${calibration.feet} ft`}` : " • scale not set"}
               {zoom === 1 ? " • fitted to window" : ` • ${Math.round(zoom * 100)}%`}
               {savedAt ? ` • saved ${new Date(savedAt).toLocaleTimeString()}` : " • not saved yet"}
             </div>

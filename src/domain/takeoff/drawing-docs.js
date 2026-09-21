@@ -125,7 +125,7 @@ export async function readDrawingDocuments(fileBytes) {
     const rows = clusterTextRows(items);
     const text = rows.map((row) => row.text).join("\n");
     const kind = classifyPageText(text);
-    pages.push({ page: pageNumber, kind, textLength: text.length });
+    pages.push({ page: pageNumber, kind, textLength: text.length, text });
     const titleRows = titleBlockRowsFromItems(items, viewport);
     const titleText = titleRows.join("\n");
     if (pageNumber <= 3 || /title\s+sheet|cover\s+sheet/i.test(text) || /title\s+sheet|cover\s+sheet/i.test(titleText)) {

@@ -7,6 +7,7 @@ import {
   matchTradeSymbol,
   parseConduitCallout,
 } from "./aiTakeoff.js";
+import { CIRCUIT_COLOR, SCHEDULE_TYPE_COLORS } from "./deviceStyles.js";
 import { parseScheduleRows } from "./drawing-docs.js";
 import { paletteForTrade } from "./trades.js";
 
@@ -309,5 +310,37 @@ assert(planConduits.some((mark) => Number(mark.parallelRuns) === 4), "drawing ca
 assert(parseConduitCallout('(4) 4" PVC')?.parallelRuns === 4, "parses (4) 4\" PVC");
 assert(parseConduitCallout("3 runs of 3/4\" EMT")?.parallelRuns === 3, "parses 3 runs of 3/4\" EMT");
 assert(conduitRunLabel({ runNumber: 2, parallelRuns: 4, conduitSize: '4"', conduitMaterial: "PVC" }) === 'R2 · 4 runs · 4" · PVC', "run label shows count and size");
+
+const typed = buildAiMarks({
+  trade: "electrical",
+  symbols: electrical.symbols,
+  drawingSymbols: [
+    { abbr: "1", type: "1", label: "Type 1 2x4", takeoffCategory: "Lighting", category: "From drawing" },
+    { abbr: "1E", type: "1E", label: "Type 1E 2x4 emergency", takeoffCategory: "Lighting", category: "From drawing" },
+    { abbr: "F", type: "F", label: "Type F flood", takeoffCategory: "Lighting", category: "From drawing" },
+  ],
+  pages: [{
+    page: 1,
+    kind: "drawing",
+    tokens: [
+      { text: "ELECTRICAL LIGHTING PLAN", x: 80, y: 88 },
+      { text: "E1.01", x: 92, y: 94 },
+      { text: "1", x: 20, y: 30 },
+      { text: "1E", x: 28, y: 30 },
+      { text: "F", x: 36, y: 30 },
+      { text: "GFI", x: 50, y: 40 },
+      { text: "LP", x: 80, y: 20 },
+    ],
+  }],
+});
+const type1 = typed.marks.find((mark) => mark.type === "count" && mark.typeCode === "1");
+const type1e = typed.marks.find((mark) => mark.type === "count" && mark.typeCode === "1E");
+const typeF = typed.marks.find((mark) => mark.type === "count" && mark.typeCode === "F");
+const gfi = typed.marks.find((mark) => mark.symbol === "gfci");
+assert(type1?.color === SCHEDULE_TYPE_COLORS["1"], "AI type 1 is dark blue");
+assert(type1e?.color === SCHEDULE_TYPE_COLORS["1e"], "AI type 1E is light blue");
+assert(typeF?.color === SCHEDULE_TYPE_COLORS.f, "AI type F is distinct");
+assert(gfi && gfi.color !== type1.color, "receptacles on the same sheet use another color");
+assert(typed.marks.filter((mark) => mark.tool === "conduit").every((mark) => mark.color === CIRCUIT_COLOR), "circuit overlay stays off the device palette");
 
 if (!process.exitCode) console.log("trade and AI takeoff checks passed");

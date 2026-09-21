@@ -37,6 +37,17 @@ import {
   resolvedMarkerSize,
 } from "@/domain/takeoff/sizes";
 import { OVERLAY_FONT_SIZE, layoutOverlayCallouts } from "@/domain/takeoff/overlayLayout";
+import {
+  CIRCUIT_COLOR,
+  DEVICE_FILL_OPACITY,
+  applyDeviceTypeColors,
+  deviceOutline,
+  hitTestDeviceFill,
+  isCircuitMark,
+  isDeviceMark,
+  selectMarkAtPoint,
+  shortenCircuitPath,
+} from "@/domain/takeoff/deviceStyles";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -487,6 +498,17 @@ export default function TakeoffWorkspace() {
       conduitMaterial: isConduit ? conduitChoice.material : undefined,
       ...partial,
     };
+    if (isDeviceMark(mark)) {
+      mark.typeCode = mark.typeCode || device?.abbr || mark.abbr;
+      const colored = applyDeviceTypeColors([...marks.filter((item) => item.sheet === mark.sheet), mark]);
+      const next = colored.find((item) => item.id === mark.id) || mark;
+      mark.color = next.color;
+      mark.layer = "device";
+      mark.fillOpacity = DEVICE_FILL_OPACITY;
+    } else if (isCircuitMark(mark)) {
+      mark.color = CIRCUIT_COLOR;
+      mark.layer = "circuit";
+    }
     commitMarks([...marks, mark], message);
     return mark;
   }
@@ -560,9 +582,13 @@ export default function TakeoffWorkspace() {
     const sheetAspectRatio = currentAspect();
 
     if (tool === "select") {
-      const hit = [...sheetMarks].reverse().find((mark) => hitTestMark(sizedMark(mark), point, sheetAspectRatio, markHitThreshold(mark)));
+      const hit = selectMarkAtPoint(sheetMarks, point, {
+        aspect: sheetAspectRatio,
+        markerSize: penSize,
+        hitRoute: (mark, at, aspect) => hitTestMark(sizedMark(mark), at, aspect, markHitThreshold(mark)),
+      });
       setSelectedId(hit?.id || null);
-      setStatus(hit ? `Selected ${hit.symbolLabel || hit.type}.` : "Nothing selected.");
+      setStatus(hit ? `Selected ${hit.symbolLabel || hit.typeCode || hit.type}.` : "Nothing selected.");
       return;
     }
 
@@ -769,7 +795,11 @@ export default function TakeoffWorkspace() {
     const point = drawingPoint(event);
     if (tool === "select" && selectedId) {
       const mark = marks.find((item) => item.id === selectedId);
-      if (!mark || !hitTestMark(sizedMark(mark), point, currentAspect(), markHitThreshold(mark, 3.2))) return;
+      if (!mark) return;
+      const canDrag = isDeviceMark(mark)
+        ? hitTestDeviceFill(mark, point, penSize)
+        : hitTestMark(sizedMark(mark), point, currentAspect(), markHitThreshold(mark, 3.2));
+      if (!canDrag) return;
       const start = point;
       const origin = mark.points ? mark.points.map((item) => ({ ...item })) : { x: mark.x, y: mark.y };
       const move = (moveEvent) => {
@@ -1131,12 +1161,47 @@ function OverlayLabel({ label, fill }) {
   );
 }
 
+function DeviceFill({ mark, selected, markerSize }) {
+  const outline = deviceOutline(mark, markerSize);
+  const color = mark.color || "#1e3a8a";
+  const opacity = mark.fillOpacity ?? DEVICE_FILL_OPACITY;
+  const stroke = selected ? "#ea580c" : color;
+  if (outline.kind === "circle") {
+    return (
+      <circle
+        cx={mark.x}
+        cy={mark.y}
+        r={outline.r}
+        fill={color}
+        fillOpacity={opacity}
+        stroke={stroke}
+        strokeWidth={selected ? 0.28 : 0.12}
+        vectorEffect="non-scaling-stroke"
+      />
+    );
+  }
+  return (
+    <rect
+      x={mark.x - outline.w / 2}
+      y={mark.y - outline.h / 2}
+      width={outline.w}
+      height={outline.h}
+      rx={0.12}
+      fill={color}
+      fillOpacity={opacity}
+      stroke={stroke}
+      strokeWidth={selected ? 0.28 : 0.12}
+      vectorEffect="non-scaling-stroke"
+    />
+  );
+}
+
 function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, lengthFor, markerSize = DEFAULT_MARKER_SIZE, lineSize = DEFAULT_LINE_SIZE }) {
-  const routes = marks.filter((m) => m.points?.length);
-  const devices = marks.filter((m) => m.type === "count" || m.type === "drop");
-  const conduits = routes.filter((m) => m.tool === "conduit");
+  const otherRoutes = marks.filter((m) => m.points?.length && !isCircuitMark(m));
+  const devices = marks.filter((m) => isDeviceMark(m));
+  const circuits = marks.filter((m) => isCircuitMark(m) && m.points?.length);
   const callouts = layoutOverlayCallouts({
-    conduits,
+    conduits: circuits.filter((m) => m.tool === "conduit"),
     devices,
     selectedId,
     lengthTextFor: (mark) => {
@@ -1147,25 +1212,40 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
   const draftEnd = draftPoints[draftPoints.length - 1];
   return (
     <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-      {routes.map((mark) => {
+      {otherRoutes.map((mark) => {
         const points = mark.points.map((p) => `${p.x},${p.y}`).join(" ");
         const selected = mark.id === selectedId;
-        const color = mark.color || (mark.type === "cloud" ? "#dc2626" : mark.tool === "circuit" ? "#7c3aed" : mark.type === "homerun" ? "#0f766e" : "#2563eb");
+        const color = mark.color || (mark.type === "cloud" ? "#dc2626" : "#2563eb");
         const width = resolvedLineSize(mark, lineSize);
         if (mark.type === "area" || mark.type === "cloud") {
           return <polygon key={mark.id} points={points} fill={mark.type === "cloud" ? "none" : "rgba(37,99,235,0.12)"} stroke={color} strokeWidth={width} strokeDasharray={mark.type === "cloud" ? "1.2 0.8" : undefined} vectorEffect="non-scaling-stroke" />;
         }
-        const runLines = mark.tool === "conduit" ? conduitPolylines(mark) : [mark.points];
         return (
           <g key={mark.id}>
             {selected && <polyline points={points} fill="none" stroke="#ffffff" strokeWidth={width + 1.4} vectorEffect="non-scaling-stroke" />}
-            {runLines.map((line, index) => (
+            <polyline points={points} fill="none" stroke={color} strokeWidth={width} vectorEffect="non-scaling-stroke" />
+          </g>
+        );
+      })}
+      {circuits.map((mark) => {
+        const selected = mark.id === selectedId;
+        const color = CIRCUIT_COLOR;
+        const width = resolvedLineSize(mark, lineSize);
+        const path = mark.tool === "conduit" ? conduitPolylines({ ...mark, points: shortenCircuitPath(mark.points) }) : [shortenCircuitPath(mark.points)];
+        const dash = mark.tool === "circuit" || mark.type === "homerun" ? "0.9 0.65" : undefined;
+        return (
+          <g key={mark.id}>
+            {selected && path.map((line, index) => (
+              <polyline key={`${mark.id}-sel-${index}`} points={line.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#ffffff" strokeWidth={width + 1.2} vectorEffect="non-scaling-stroke" />
+            ))}
+            {path.map((line, index) => (
               <polyline
                 key={`${mark.id}-run-${index}`}
                 points={line.map((p) => `${p.x},${p.y}`).join(" ")}
                 fill="none"
                 stroke={color}
                 strokeWidth={width}
+                strokeDasharray={dash}
                 vectorEffect="non-scaling-stroke"
               />
             ))}
@@ -1176,19 +1256,14 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
       {draftEnd && draftFeet != null && (
         <text x={draftEnd.x} y={Math.max(2, draftEnd.y - 1.2)} fontSize={OVERLAY_FONT_SIZE} fontWeight="600" fill="#ea580c" stroke="#ffffff" strokeWidth="0.22" paintOrder="stroke">{formatFeet(draftFeet)}</text>
       )}
-      {devices.map((mark) => {
-        const radius = resolvedMarkerSize(mark, markerSize);
-        return (
-        <g key={mark.id}>
-          <circle cx={mark.x} cy={mark.y} r={radius} fill={mark.color || "#2563eb"} fillOpacity="0.92" stroke={mark.id === selectedId ? "#ea580c" : "white"} strokeWidth={mark.id === selectedId ? ".35" : ".16"} vectorEffect="non-scaling-stroke" />
-        </g>
-        );
-      })}
+      {devices.map((mark) => (
+        <DeviceFill key={mark.id} mark={mark} selected={mark.id === selectedId} markerSize={resolvedMarkerSize(mark, markerSize)} />
+      ))}
       {callouts.conduitLabels.map((label) => (
-        <OverlayLabel key={`conduit-${label.id}`} label={label} fill={label.selected ? "#1d4ed8" : "#1e3a8a"} />
+        <OverlayLabel key={`conduit-${label.id}`} label={label} fill={label.selected ? "#334155" : "#475569"} />
       ))}
       {callouts.deviceLabels.map((label) => (
-        <OverlayLabel key={`device-${label.id}`} label={label} fill="#1e3a8a" />
+        <OverlayLabel key={`device-${label.id}`} label={label} fill={devices.find((mark) => mark.id === label.id)?.color || "#1e3a8a"} />
       ))}
       {marks.filter((m) => m.type === "note").map((mark) => (
         <text key={mark.id} x={mark.x} y={mark.y} fontSize={OVERLAY_FONT_SIZE} fontWeight="600" fill={mark.color || (mark.id === selectedId ? "#ea580c" : "#dc2626")}>{mark.text}</text>

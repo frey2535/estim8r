@@ -17,7 +17,7 @@ import ProductivityFactorEditor from "@/components/labor/ProductivityFactorEdito
 import NamedCrewPicker from "@/components/labor/NamedCrewPicker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DEFAULT_VISIBLE_TOTALS, resolveVisibleTotals, setAllLinesIncluded, TOTAL_OPTIONS } from "@/domain/estimate/presentation";
-import { calculateBidByScope, calculateWorkCategoryBreakdown } from "@/domain/estimate/trueElectricalTakeoff";
+import { calculateBidByScope, calculateWorkCategoryBreakdown, WORK_CATEGORY_ORDER, workCategoryForEstimateLine } from "@/domain/estimate/trueElectricalTakeoff";
 
 const ITEM_TYPES = ["Material", "Labor", "Equipment", "Subcontract", "Allowance", "Fixture", "Device", "Conduit", "Wire", "Gear", "Other"];
 const UNITS = ["EA", "LF", "SF", "FT", "100 LF", "1000 LF", "HR", "DAY", "LOT"];
@@ -386,6 +386,13 @@ export default function EstimateBuilder() {
                 ) : null}
                 <Field label="Type"><Sel value={row.itemType} vals={ITEM_TYPES} set={(v) => patchLine(row.id, "itemType", v)} /></Field>
                 <Field label="Category"><Cell value={row.category} set={(v) => patchLine(row.id, "category", v)} /></Field>
+                <Field label="Work category">
+                  <Sel
+                    value={row.workCategory || workCategoryForEstimateLine(row)}
+                    vals={WORK_CATEGORY_ORDER}
+                    set={(v) => patchLine(row.id, "workCategory", v)}
+                  />
+                </Field>
                 <Field label="Item / description" className="min-[520px]:col-span-2"><Cell value={row.description} set={(v) => patchLine(row.id, "description", v)} placeholder="Item description" /></Field>
                 <Field label="Qty"><Cell type="number" value={row.quantity} set={(v) => patchLine(row.id, "quantity", v)} /></Field>
                 <Field label="Unit"><Sel value={row.unit} vals={UNITS} set={(v) => patchLine(row.id, "unit", v)} /></Field>

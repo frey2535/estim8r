@@ -37,7 +37,15 @@ import {
 } from "@/domain/takeoff/accuracyReview";
 import { getPdfDocument } from "@/lib/pdf-document";
 import { syncStoredEstimate } from "@/domain/estimate/estimateStore";
-import { putDrawingFile } from "@/domain/estimate/projectDocuments";
+import { downloadBlob, putDrawingFile } from "@/domain/estimate/projectDocuments";
+import {
+  buildSupplyQuote,
+  buildSupplyQuotePdf,
+  catalogForQuote,
+  pageKindsFromDocs,
+  supplyQuoteCsvFileName,
+  supplyQuoteToCsv,
+} from "@/domain/takeoff/supplyQuote";
 import {
   DEFAULT_LINE_SIZE,
   DEFAULT_MARKER_SIZE,
@@ -361,6 +369,34 @@ export default function TakeoffWorkspace() {
     link.click();
     URL.revokeObjectURL(url);
     setStatus("Takeoff JSON downloaded.");
+  }
+
+  function makeSupplyQuote() {
+    return buildSupplyQuote({
+      marks,
+      drawingSymbols,
+      catalog: catalogForQuote(),
+      pageKinds: pageKindsFromDocs(drawingDocs),
+      fileName: file?.name,
+      projectName: file?.name,
+    });
+  }
+
+  function downloadQuoteCsv() {
+    const quote = makeSupplyQuote();
+    downloadBlob(new Blob([supplyQuoteToCsv(quote)], { type: "text/csv;charset=utf-8" }), supplyQuoteCsvFileName(quote));
+    setStatus(quote.rows.length
+      ? `Downloaded ${supplyQuoteCsvFileName(quote)} for the supply house.`
+      : "No takeoff devices to quote yet.");
+  }
+
+  function downloadQuotePdf() {
+    const quote = makeSupplyQuote();
+    const { doc, fileName } = buildSupplyQuotePdf(quote);
+    downloadBlob(doc.output("blob"), fileName);
+    setStatus(quote.rows.length
+      ? `Downloaded ${fileName} for the supply house.`
+      : "No takeoff devices to quote yet.");
   }
 
   useEffect(() => {
@@ -963,6 +999,8 @@ export default function TakeoffWorkspace() {
             <Save className="h-4 w-4" /> Save
           </button>
           <Link to={file ? `/estimates/new?file=${encodeURIComponent(file.name)}&size=${file.size}` : "/estimates/new"} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Estimate</Link>
+          <button type="button" onClick={downloadQuoteCsv} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Quote Excel</button>
+          <button type="button" onClick={downloadQuotePdf} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Quote PDF</button>
           <button type="button" onClick={downloadTakeoff} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Export JSON</button>
           <button type="button" onClick={openDrawingPicker} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Replace</button>
           <button type="button" onClick={closeDrawing} className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted"><X className="h-4 w-4" /> Close</button>
@@ -1194,6 +1232,8 @@ export default function TakeoffWorkspace() {
           onRenameRow={renameScheduleRow}
           onSelectSheet={selectSheet}
           onCopy={copyQuantities}
+          onDownloadQuoteCsv={downloadQuoteCsv}
+          onDownloadQuotePdf={downloadQuotePdf}
           globalMarkerSize={penSize}
           globalLineSize={penThickness}
         />

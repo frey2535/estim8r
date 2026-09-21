@@ -1,4 +1,3 @@
-import { OPS } from "pdfjs-dist";
 import {
   applyCtm,
   boxFromExtents,
@@ -6,6 +5,15 @@ import {
   candidatesFromConstructedPaths,
   multiplyCtm,
 } from "./vectorSymbols.js";
+
+const OPS = {
+  save: 10,
+  restore: 11,
+  transform: 12,
+  paintFormXObjectBegin: 74,
+  paintFormXObjectEnd: 75,
+  constructPath: 91,
+};
 
 const IDENTITY = [1, 0, 0, 1, 0, 0];
 

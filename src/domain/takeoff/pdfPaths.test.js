@@ -1,6 +1,15 @@
-import { OPS } from "pdfjs-dist";
 import { DRAW_CLOSE, DRAW_LINE, DRAW_MOVE } from "./vectorSymbols.js";
 import { symbolPathsFromOperatorList } from "./pdfPaths.js";
+
+const OPS = {
+  save: 10,
+  restore: 11,
+  transform: 12,
+  stroke: 20,
+  paintFormXObjectBegin: 74,
+  paintFormXObjectEnd: 75,
+  constructPath: 91,
+};
 
 function assert(cond, message) {
   if (!cond) {

@@ -62,8 +62,10 @@ export default function EstimateBuilder() {
   const [header, setHeader] = useState(emptyHeader);
   const [crew, setCrew] = useState(() => defaultCrew());
   const [lines, setLines] = useState(() => [blankLine(68)]);
+  const [contingency, setContingency] = useState(0);
   const [overhead, setOverhead] = useState(10);
   const [profit, setProfit] = useState(10);
+  const [bondInsurance, setBondInsurance] = useState(0);
   const [itemized, setItemized] = useState(false);
   const [visibleTotals, setVisibleTotals] = useState(DEFAULT_VISIBLE_TOTALS);
   const [meta, setMeta] = useState({ fileName: "", fileSize: 0, scopeEdited: false });
@@ -84,8 +86,10 @@ export default function EstimateBuilder() {
       setHeader({ ...emptyHeader, ...stored.header });
       setCrew(nextCrew);
       setLines(stored.lines?.length ? stored.lines : [blankLine(compositeWage(nextCrew).rate)]);
+      setContingency(stored.contingency ?? 0);
       setOverhead(stored.overhead ?? 10);
       setProfit(stored.profit ?? 10);
+      setBondInsurance(stored.bondInsurance ?? 0);
       setItemized(Boolean(stored.itemized));
       setVisibleTotals(resolveVisibleTotals(stored));
       setFactors(stored.factors?.length ? stored.factors : defaultProductivityFactors());
@@ -96,8 +100,10 @@ export default function EstimateBuilder() {
       setHeader({ ...emptyHeader });
       setCrew(nextCrew);
       setLines([blankLine(compositeWage(nextCrew).rate)]);
+      setContingency(0);
       setOverhead(10);
       setProfit(10);
+      setBondInsurance(0);
       setItemized(false);
       setVisibleTotals(DEFAULT_VISIBLE_TOTALS);
       setFactors(defaultProductivityFactors());
@@ -126,15 +132,17 @@ export default function EstimateBuilder() {
       crew,
       factors,
       namedCrewId,
+      contingency: Number(contingency) || 0,
       overhead: Number(overhead) || 0,
       profit: Number(profit) || 0,
+      bondInsurance: Number(bondInsurance) || 0,
       lines,
       itemized,
       visibleTotals,
       separateFromTakeoff: true,
       scopeEdited: meta.scopeEdited,
     });
-  }, [ready, header, crew, lines, overhead, profit, itemized, visibleTotals, meta, factors, namedCrewId]);
+  }, [ready, header, crew, lines, contingency, overhead, profit, bondInsurance, itemized, visibleTotals, meta, factors, namedCrewId]);
 
   const draft = useMemo(() => ({
     version: 1,
@@ -144,18 +152,22 @@ export default function EstimateBuilder() {
     crew,
     factors,
     namedCrewId,
+    contingency: Number(contingency) || 0,
     overhead: Number(overhead) || 0,
     profit: Number(profit) || 0,
+    bondInsurance: Number(bondInsurance) || 0,
     lines,
     itemized,
     visibleTotals,
     separateFromTakeoff: true,
     scopeEdited: meta.scopeEdited,
-  }), [header, crew, factors, namedCrewId, overhead, profit, lines, itemized, visibleTotals, meta]);
+  }), [header, crew, factors, namedCrewId, contingency, overhead, profit, bondInsurance, lines, itemized, visibleTotals, meta]);
 
   const totals = useMemo(() => estimateGrandTotal(draft), [draft]);
+  const cont = totals.contingency || 0;
   const oh = totals.overhead;
   const prof = totals.profit;
+  const bond = totals.bondInsurance || 0;
   const grand = totals.total;
 
   function setHeaderField(key, value) {
@@ -194,6 +206,7 @@ export default function EstimateBuilder() {
         }
       }
       if (key === "laborRate") next.laborRateEdited = true;
+      if (key === "materialUnitCost") next.materialCostEdited = true;
       return next;
     }));
   }
@@ -281,6 +294,7 @@ export default function EstimateBuilder() {
         <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto bg-muted/70 p-1">
           <TabsTrigger value="estimate" className="px-4 py-2">Estimate</TabsTrigger>
           <TabsTrigger value="labor-markup" className="px-4 py-2">Labor &amp; markup</TabsTrigger>
+          {draft.trueTakeoff?.analysis ? <TabsTrigger value="audit" className="px-4 py-2">Takeoff Audit</TabsTrigger> : null}
         </TabsList>
 
         <TabsContent value="estimate" className="mt-4 space-y-5">
@@ -503,17 +517,21 @@ export default function EstimateBuilder() {
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,22rem)]">
         <div className="min-w-0 rounded-2xl border border-border bg-card p-4">
-          <h2 className="font-bold">Overhead &amp; profit</h2>
+          <h2 className="font-bold">Bid markups</h2>
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label="Contingency %" type="number" value={contingency} set={setContingency} />
             <Field label="Overhead %" type="number" value={overhead} set={setOverhead} />
             <Field label="Profit %" type="number" value={profit} set={setProfit} />
+            <Field label="Bond / insurance %" type="number" value={bondInsurance} set={setBondInsurance} />
           </div>
         </div>
         <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
           <Sum label="Material" value={totals.material} />
           <Sum label={`Labor (${totals.hours.toFixed(2)} hrs @ $${wage.rate.toFixed(2)})`} value={totals.labor} />
+          <Sum label={`Contingency (${Number(contingency) || 0}%)`} value={cont} />
           <Sum label={`Overhead (${Number(overhead) || 0}%)`} value={oh} />
           <Sum label={`Profit (${Number(profit) || 0}%)`} value={prof} />
+          <Sum label={`Bond / insurance (${Number(bondInsurance) || 0}%)`} value={bond} />
           <div className="mt-3 flex justify-between border-t border-border pt-4 text-xl font-black">
             <span>Estimate Total</span>
             <span className="text-blue-600 dark:text-orange-500">${grand.toFixed(2)}</span>
@@ -521,6 +539,73 @@ export default function EstimateBuilder() {
         </div>
       </section>
         </TabsContent>
+
+        {draft.trueTakeoff?.analysis ? (
+          <TabsContent value="audit" className="mt-4 space-y-5">
+            <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-emerald-600">True Electrical Takeoff</p>
+                  <h2 className="mt-1 text-xl font-black">Bid audit &amp; coverage</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">This is the scope intelligence generated from the drawing set, takeoff marks, scaled runs, panel/riser data, and mechanical equipment tags.</p>
+                </div>
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-50 px-4 py-3 text-right dark:bg-emerald-500/5">
+                  <div className="text-xs font-bold text-muted-foreground">Calculated bid</div>
+                  <div className="text-2xl font-black text-emerald-700 dark:text-emerald-300">{`${grand.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}</div>
+                </div>
+              </div>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <AuditStat label="Sheets read" value={draft.trueTakeoff.analysis.sheetCount} />
+                <AuditStat label="Devices counted" value={draft.trueTakeoff.analysis.totals.devices} />
+                <AuditStat label="Measured conduit" value={`${draft.trueTakeoff.analysis.totals.conduitLf.toFixed(1)} LF`} />
+                <AuditStat label="Bid-lock warnings" value={draft.trueTakeoff.analysis.warnings.length} />
+              </div>
+            </section>
+
+            <section className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <h3 className="font-bold">Service &amp; distribution</h3>
+                <div className="mt-3 space-y-2 text-sm">
+                  {draft.trueTakeoff.analysis.panels.map((panel) => (
+                    <div key={panel.name} className="flex justify-between border-b border-border py-2">
+                      <span>Panel {panel.name}</span><strong>{panel.amps}A {panel.volts}</strong>
+                    </div>
+                  ))}
+                  {draft.trueTakeoff.analysis.transformers.map((kva) => (
+                    <div key={kva} className="flex justify-between border-b border-border py-2">
+                      <span>Transformer</span><strong>{kva} kVA</strong>
+                    </div>
+                  ))}
+                  {draft.trueTakeoff.analysis.utility.utilityVault ? <div className="flex justify-between border-b border-border py-2"><span>Utility vault</span><strong>Required</strong></div> : null}
+                  {draft.trueTakeoff.analysis.utility.concreteEncasement ? <div className="flex justify-between border-b border-border py-2"><span>Concrete encasement</span><strong>Required</strong></div> : null}
+                  {draft.trueTakeoff.analysis.utility.contractorTrenching ? <div className="flex justify-between border-b border-border py-2"><span>Contractor trenching</span><strong>Required</strong></div> : null}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <h3 className="font-bold">Equipment found</h3>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                  {Object.entries(draft.trueTakeoff.analysis.equipment).map(([key, tags]) => (
+                    <div key={key} className="rounded-lg border border-border p-3">
+                      <div className="text-xs font-bold uppercase text-muted-foreground">{key.replace(/([A-Z])/g, " $1")}</div>
+                      <div className="mt-1 font-semibold">{tags.length ? tags.join(", ") : "None"}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+              <h3 className="font-bold">Bid-lock warnings</h3>
+              {draft.trueTakeoff.analysis.warnings.length ? (
+                <div className="mt-3 space-y-2">
+                  {draft.trueTakeoff.analysis.warnings.map((warning) => (
+                    <div key={warning} className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">{warning}</div>
+                  ))}
+                </div>
+              ) : <p className="mt-2 text-sm text-emerald-700">No unresolved bid-lock warnings.</p>}
+            </section>
+          </TabsContent>
+        ) : null}
       </Tabs>
     </div>
   );

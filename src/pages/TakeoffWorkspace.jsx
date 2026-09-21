@@ -1589,6 +1589,8 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
                 points={line.map((p) => `${p.x},${p.y}`).join(" ")}
                 fill="none"
                 stroke={color}
+                strokeOpacity={1}
+                opacity={1}
                 strokeWidth={width}
                 strokeDasharray={dash}
                 vectorEffect="non-scaling-stroke"

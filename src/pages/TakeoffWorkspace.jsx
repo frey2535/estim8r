@@ -71,6 +71,11 @@ import {
   selectMarkAtPoint,
   shortenCircuitPath,
 } from "@/domain/takeoff/deviceStyles";
+import {
+  buildConduitCircuitSchedulePdf,
+  buildMarkedDrawingPdf,
+} from "@/domain/takeoff/markedDrawingPdf";
+import { conduitCircuitScheduleCsv } from "@/domain/takeoff/markupPages";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -414,6 +419,57 @@ export default function TakeoffWorkspace() {
     link.click();
     URL.revokeObjectURL(url);
     setStatus("Takeoff JSON downloaded.");
+  }
+
+  async function downloadMarkedDeviceDrawings() {
+    if (!fileBytes || !file) return;
+    setStatus("Building counted-device drawing set…");
+    try {
+      const { doc, fileName } = await buildMarkedDrawingPdf({
+        fileBytes,
+        fileName: file.name,
+        marks,
+        mode: "devices",
+      });
+      downloadBlob(doc.output("blob"), fileName);
+      setStatus(`Downloaded ${fileName}.`);
+    } catch (error) {
+      setStatus(error?.message || "Could not build the counted-device drawing set.");
+    }
+  }
+
+  async function downloadConduitRouteDrawings() {
+    if (!fileBytes || !file) return;
+    setStatus("Building conduit-route drawing set…");
+    try {
+      const { doc, fileName } = await buildMarkedDrawingPdf({
+        fileBytes,
+        fileName: file.name,
+        marks,
+        mode: "routes",
+      });
+      downloadBlob(doc.output("blob"), fileName);
+      setStatus(`Downloaded ${fileName}.`);
+    } catch (error) {
+      setStatus(error?.message || "Could not build the conduit-route drawing set.");
+    }
+  }
+
+  function downloadConduitCircuitSchedule() {
+    if (!file) return;
+    const { doc, fileName, schedule } = buildConduitCircuitSchedulePdf({ marks, fileName: file.name });
+    downloadBlob(doc.output("blob"), fileName);
+    setStatus(schedule.length
+      ? `Downloaded ${fileName} with ${schedule.length} conduit run${schedule.length === 1 ? "" : "s"}.`
+      : "Conduit schedule created, but no conduit runs are assigned yet.");
+  }
+
+  function downloadConduitCircuitCsv() {
+    if (!file) return;
+    const csv = conduitCircuitScheduleCsv(marks);
+    const stem = (file.name || "electrical-takeoff").replace(/\.[^.]+$/, "");
+    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), `${stem}-conduit-circuit-schedule.csv`);
+    setStatus("Conduit / circuit schedule CSV downloaded.");
   }
 
   function makeSupplyQuote(nextMarks = marks) {
@@ -1109,6 +1165,10 @@ export default function TakeoffWorkspace() {
           <button type="button" onClick={downloadQuoteExcel} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Quote Excel</button>
           <button type="button" onClick={downloadQuotePdf} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Quote PDF</button>
           <button type="button" onClick={downloadTakeoff} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Export JSON</button>
+          <button type="button" onClick={() => void downloadMarkedDeviceDrawings()} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Counted Drawings PDF</button>
+          <button type="button" onClick={() => void downloadConduitRouteDrawings()} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Conduit Routes PDF</button>
+          <button type="button" onClick={downloadConduitCircuitSchedule} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Conduit Schedule PDF</button>
+          <button type="button" onClick={downloadConduitCircuitCsv} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Conduit Schedule CSV</button>
           <button type="button" onClick={openDrawingPicker} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Replace</button>
           <button type="button" onClick={closeDrawing} className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted"><X className="h-4 w-4" /> Close</button>
         </div>

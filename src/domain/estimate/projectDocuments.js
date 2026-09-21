@@ -295,6 +295,28 @@ export function estimateGrandTotal(estimate) {
   };
 }
 
-export function canSaveProjectDocuments({ fileName, projectName }) {
-  return Boolean(String(fileName || "").trim() && String(projectName || "").trim());
+export const STANDALONE_ESTIMATE_PREFIX = "standalone:";
+
+export function isDrawingFileName(fileName) {
+  const name = String(fileName || "").trim();
+  return Boolean(name) && !name.startsWith(STANDALONE_ESTIMATE_PREFIX);
+}
+
+export function standaloneEstimateFileName(projectName) {
+  const key = projectFolderKey(projectName);
+  return key ? `${STANDALONE_ESTIMATE_PREFIX}${key}` : "";
+}
+
+/** Storage identity for an estimate: keep a real drawing name, otherwise key by project. */
+export function estimateFileNameForSave({ fileName, projectName } = {}) {
+  if (isDrawingFileName(fileName)) return String(fileName).trim();
+  return standaloneEstimateFileName(projectName);
+}
+
+export function canSaveProjectDocuments({ projectName } = {}) {
+  return Boolean(String(projectName || "").trim());
+}
+
+export function saveRequiresProjectName({ projectName } = {}) {
+  return canSaveProjectDocuments({ projectName }) ? "" : "Enter a project name to save this estimate.";
 }

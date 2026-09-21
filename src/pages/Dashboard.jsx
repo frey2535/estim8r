@@ -8,6 +8,7 @@ import {
   deleteProjectFolder,
   downloadBlob,
   getDrawingFile,
+  isDrawingFileName,
   listProjectFolders,
 } from "@/domain/estimate/projectDocuments";
 import { activateEstimate, deleteStoredEstimate, readEstimate } from "@/domain/estimate/estimateStore";
@@ -30,6 +31,7 @@ function markupPath(folder) {
 
 function FolderDocs({ folder }) {
   const navigate = useNavigate();
+  const hasDrawing = isDrawingFileName(folder.fileName);
 
   async function downloadDrawing() {
     const file = await getDrawingFile(folder.fileName, folder.fileSize);
@@ -59,15 +61,19 @@ function FolderDocs({ folder }) {
 
   return (
     <div className="mt-3 flex flex-wrap gap-2">
-      <button type="button" onClick={() => void downloadDrawing()} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-muted">
-        <ImageIcon className="h-3.5 w-3.5" /> Drawing
-      </button>
+      {hasDrawing ? (
+        <button type="button" onClick={() => void downloadDrawing()} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-muted">
+          <ImageIcon className="h-3.5 w-3.5" /> Drawing
+        </button>
+      ) : null}
       <button type="button" onClick={downloadEstimate} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-muted">
         <FileText className="h-3.5 w-3.5" /> Estimate PDF
       </button>
-      <button type="button" onClick={openMarkup} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-muted">
-        <StickyNote className="h-3.5 w-3.5" /> Markup pages
-      </button>
+      {hasDrawing ? (
+        <button type="button" onClick={openMarkup} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-muted">
+          <StickyNote className="h-3.5 w-3.5" /> Markup pages
+        </button>
+      ) : null}
       <button type="button" onClick={openEstimate} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-muted">
         Open estimate
       </button>
@@ -124,14 +130,14 @@ export default function Dashboard() {
           <div className="min-w-0 flex-1">
             <h2 className="text-lg font-bold text-foreground">Estimates folder</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              After drawings are uploaded and an estimate is created, documents are stored under the project name.
-              If you do not have a Buildr account, they stay here with the project address under the name.
+              Saved estimates are stored under the project name. Drawings and takeoff are optional.
+              If a Buildr company is linked, the estimate also syncs to that project’s Estimate tab. Otherwise they stay here with the project address under the name.
             </p>
           </div>
         </div>
         {folders.length === 0 ? (
           <p className="mt-5 rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-            No saved project documents yet. Upload drawings on Takeoff, then create the estimate.
+            No saved estimates yet. Open New Estimate to write one, or upload drawings on Takeoff and save after the estimate is created.
           </p>
         ) : (
           <div className="mt-5 grid gap-3">

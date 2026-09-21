@@ -3,6 +3,10 @@ import {
   buildrSyncFromResult,
   canSaveProjectDocuments,
   decideSaveDestination,
+  estimateFileNameForSave,
+  isDrawingFileName,
+  saveRequiresProjectName,
+  standaloneEstimateFileName,
   deleteProjectFolder,
   estimateContentFingerprint,
   estimateGrandTotal,
@@ -63,8 +67,19 @@ assert(decideSaveDestination({
 }).project.id === "proj_1", "stored Buildr project id is reused");
 
 assert(canSaveProjectDocuments({ fileName: "plan.pdf", projectName: "Main Hospital" }) === true, "drawing plus project name can save");
-assert(canSaveProjectDocuments({ fileName: "", projectName: "Main Hospital" }) === false, "no drawing cannot save");
+assert(canSaveProjectDocuments({ fileName: "", projectName: "Main Hospital" }) === true, "a named estimate can save without a drawing");
+assert(canSaveProjectDocuments({ projectName: "Main Hospital" }) === true, "project name alone is enough to save");
 assert(canSaveProjectDocuments({ fileName: "plan.pdf", projectName: "" }) === false, "no project name cannot save");
+assert(canSaveProjectDocuments({ fileName: "", projectName: "" }) === false, "blank standalone estimate cannot save yet");
+assert(saveRequiresProjectName({ projectName: "" }) === "Enter a project name to save this estimate.", "missing name asks for a project name");
+assert(saveRequiresProjectName({ projectName: "Main Hospital" }) === "", "named estimate has no name error");
+assert(isDrawingFileName("plan.pdf") === true, "uploaded drawing is a drawing file");
+assert(isDrawingFileName("standalone:main hospital") === false, "standalone storage key is not a drawing");
+assert(isDrawingFileName("") === false, "empty file name is not a drawing");
+assert(standaloneEstimateFileName("  Main Hospital  ") === "standalone:main hospital", "standalone file name keys by project");
+assert(estimateFileNameForSave({ fileName: "plan.pdf", projectName: "Main Hospital" }) === "plan.pdf", "drawing estimates keep the drawing file name");
+assert(estimateFileNameForSave({ fileName: "", projectName: "Main Hospital" }) === "standalone:main hospital", "standalone estimates key by project name");
+assert(estimateFileNameForSave({ fileName: "", projectName: "" }) === "", "unnamed standalone estimate has no storage file");
 
 const markup = buildMarkupPages({
   fileName: "plan.pdf",
@@ -122,6 +137,14 @@ if (!memory) {
 }
 upsertProjectFolder({ projectName: "Delete Me", projectAddress: "1 Main", fileName: "gone.pdf", fileSize: 12 });
 assert(deleteProjectFolder({ id: "delete me" }).every((folder) => folder.projectName !== "Delete Me"), "folder delete removes the card");
+const namedOnly = upsertProjectFolder({
+  projectName: "Named Only",
+  projectAddress: "2 Main",
+  fileName: standaloneEstimateFileName("Named Only"),
+  fileSize: 0,
+});
+assert(namedOnly.fileName === "standalone:named only", "Estimates folder can store a standalone estimate");
+assert(namedOnly.projectName === "Named Only", "standalone folder keeps the project name");
 
 assert(parseEstim8rEstimateId("Imported from Estim8r\nEstim8r-id: est_abc") === "est_abc", "parse stored estimate id");
 assert(findInvoiceForEstim8r(

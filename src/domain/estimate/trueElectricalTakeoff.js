@@ -115,6 +115,10 @@ function parseUtilityRequirements(text) {
     minBurialDepth: Number(value.match(/MINIMUM\s+(\d+)"\s+DEPTH/i)?.[1] || 0) || null,
     futureFieldLighting: /FUTURE\s+(?:MUSCO\s+)?FIELD\s+LIGHTING/i.test(value),
     futureFoodTruck: /FUTURE\s+EXTERIOR\s+RECEPTACLES\s+FOR\s+FOOD\s+TRUCKS/i.test(value),
+    spd: /\bSPD\b|SURGE\s+PROTECTIVE\s+DEVICE/i.test(value),
+    meter: /\bMETER\b/i.test(value),
+    lightingContactor: /6\s+POLE[\s\S]{0,120}?LIGHTING\s+CONTACTOR/i.test(value),
+    photocell: /PHOTOCELL|PHOTOELECTRIC\s+CELL/i.test(value),
   };
 }
 
@@ -143,12 +147,12 @@ function alternateTags(text, tags) {
   return result;
 }
 
-function sourceConfidence(mark) {
-  if (!mark) return "medium";
-  if (mark.source === "manual") return "high";
-  if (mark.reviewStatus === "accepted") return "high";
-  if (mark.source === "ai") return "review";
-  return "medium";
+function scopeForTag(alternates, tag) {
+  if ((alternates?.alternate1 || []).includes(tag)) return "Alternate 1";
+  if ((alternates?.alternate2 || []).includes(tag)) return "Alternate 2";
+  if ((alternates?.alternate3 || []).includes(tag)) return "Alternate 3";
+  if ((alternates?.base || []).includes(tag)) return "Base";
+  return "Base/Common";
 }
 
 function materialBaseline(category, description, unit) {
@@ -425,7 +429,59 @@ export function buildTrueElectricalEstimateLines({
     }));
   }
 
-  const sourceText = wholeText({ pages: [] });
+  if (analysis?.utility?.spd) {
+    lines.push(makeEstimateLine({
+      key: "true|gear|spd",
+      category: "Panels / MCC",
+      description: "Surge protective device",
+      quantity: 1,
+      unit: "EA",
+      materialUnitCost: SERVICE_GEAR_BASELINES.spd,
+      laborRate,
+      confidence: "high",
+      notes: "SPD detected on electrical riser/schedule.",
+    }));
+  }
+  if (analysis?.utility?.meter) {
+    lines.push(makeEstimateLine({
+      key: "true|gear|meter-service",
+      category: "Panels / MCC",
+      description: "Meter / service equipment allowance",
+      quantity: 1,
+      unit: "EA",
+      materialUnitCost: SERVICE_GEAR_BASELINES.meter,
+      laborRate,
+      confidence: "medium",
+      notes: "Metering detected on service riser. Verify utility-furnished versus contractor-furnished equipment.",
+    }));
+  }
+  if (analysis?.utility?.lightingContactor) {
+    lines.push(makeEstimateLine({
+      key: "true|gear|lighting-contactor",
+      category: "Controls",
+      description: "6-pole lighting contactor",
+      quantity: 1,
+      unit: "EA",
+      materialUnitCost: SERVICE_GEAR_BASELINES.contactor,
+      laborRate,
+      confidence: "high",
+      notes: "Electrically held lighting contactor detected from riser note.",
+    }));
+  }
+  if (analysis?.utility?.photocell) {
+    lines.push(makeEstimateLine({
+      key: "true|controls|photocell",
+      category: "Switches",
+      description: "Exterior lighting photocell",
+      quantity: 1,
+      unit: "EA",
+      materialUnitCost: MATERIAL_BASELINES.sensor,
+      laborRate,
+      confidence: "high",
+      notes: "Photocell control detected from site/riser notes.",
+    }));
+  }
+
   if (analysis?.utility?.utilityVault) {
     lines.push(makeEstimateLine({
       key: "true|site|utility-vault",
@@ -503,6 +559,7 @@ export function buildTrueElectricalEstimateLines({
         unit: "EA",
         materialUnitCost: baseline,
         laborRate,
+        scope: scopeForTag(analysis?.alternates, tag),
         confidence: "high",
         notes: "Equipment tag detected from mechanical/electrical drawings; verify disconnect and conductor requirements against equipment schedule.",
       }));
@@ -538,6 +595,22 @@ export function calculateTrueBidSummary(lines, settings = DEFAULT_TRUE_BID_SETTI
     bondInsurance: money(bondInsurance),
     total: money(direct + contingency + overhead + profit + bondInsurance),
   };
+}
+
+
+export function calculateBidByScope(lines, settings = DEFAULT_TRUE_BID_SETTINGS) {
+  const grouped = {};
+  for (const line of lines || []) {
+    const scope = line.trueTakeoff?.scope || "Base/Common";
+    if (!grouped[scope]) grouped[scope] = [];
+    grouped[scope].push(line);
+  }
+  return Object.fromEntries(
+    Object.entries(grouped).map(([scope, scopedLines]) => [
+      scope,
+      calculateTrueBidSummary(scopedLines, settings),
+    ]),
+  );
 }
 
 export function buildTrueElectricalEstimateDraft(existing, {
@@ -583,6 +656,7 @@ export function buildTrueElectricalEstimateDraft(existing, {
       analysis,
       settings: { ...settings, laborRate },
       summary: calculateTrueBidSummary(lines, { ...settings, laborRate }),
+      byScope: calculateBidByScope(lines, { ...settings, laborRate }),
       updatedAt: new Date().toISOString(),
     },
     separateFromTakeoff: true,

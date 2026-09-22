@@ -57,10 +57,20 @@ export function textHasSize(text, size) {
   return haystack.includes(token);
 }
 
+function isLengthUnit(unit) {
+  return unit === "LF" || unit === "FT" || unit === "100 LF";
+}
+
+function canonicalLengthUnit(unit) {
+  if (unit === "FT") return "LF";
+  return unit;
+}
+
 function unitsCompatible(itemUnit, takeoffUnit) {
   if (!takeoffUnit) return true;
   if (itemUnit === takeoffUnit) return true;
-  return (itemUnit === "LF" && takeoffUnit === "100 LF") || (itemUnit === "100 LF" && takeoffUnit === "LF");
+  if (isLengthUnit(itemUnit) && isLengthUnit(takeoffUnit)) return true;
+  return false;
 }
 
 function categoriesCompatible(itemCategory, takeoffCategory) {
@@ -128,7 +138,7 @@ function scoreLibraryItem(row, text, category, unit) {
   if (!unitsCompatible(row.unit, unit)) return 0;
   if (row.size && !textHasSize(text, row.size)) return 0;
 
-  const nameTokens = tokens(`${row.item_name} ${row.material_type}`);
+  const nameTokens = [...new Set(tokens(`${row.item_name} ${row.material_type}`))];
   const textTokens = new Set(tokens(text));
   let shared = 0;
   let extra = 0;
@@ -147,16 +157,19 @@ function scoreLibraryItem(row, text, category, unit) {
 }
 
 function mhForDisplayUnit(itemUnit, takeoffUnit, mh) {
-  if (takeoffUnit === "100 LF" && itemUnit === "LF") return mh * 100;
-  if (takeoffUnit === "LF" && itemUnit === "100 LF") return mh / 100;
+  const display = canonicalLengthUnit(takeoffUnit);
+  const item = canonicalLengthUnit(itemUnit);
+  if (display === "100 LF" && item === "LF") return mh * 100;
+  if (display === "LF" && item === "100 LF") return mh / 100;
   return mh;
 }
 
-export function matchAuditedLaborHours({ category, symbol, unit }) {
+export function matchAuditedLaborHours({ category, symbol, unit, items, minScore = 0 } = {}) {
+  const catalog = items?.length ? items : AUDITED_LABOR_ITEMS;
   const text = `${category || ""} ${symbol || ""}`.toLowerCase();
   let best = null;
   let bestScore = 0;
-  for (const row of AUDITED_LABOR_ITEMS) {
+  for (const row of catalog) {
     const laborUnit = primaryUnit(row);
     if (!laborUnit || laborUnit.normal_mh == null) continue;
     const score = scoreLibraryItem(row, text, category, unit);
@@ -165,7 +178,7 @@ export function matchAuditedLaborHours({ category, symbol, unit }) {
       bestScore = score;
     }
   }
-  if (!best) return null;
+  if (!best || bestScore < minScore) return null;
 
   const mh = mhForDisplayUnit(best.row.unit, unit, best.laborUnit.normal_mh);
   const basis = best.row.unit === "LF" ? `${best.laborUnit.normal_mh} MH / LF` : `${best.laborUnit.normal_mh} MH each`;

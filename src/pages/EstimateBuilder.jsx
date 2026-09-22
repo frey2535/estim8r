@@ -18,6 +18,7 @@ import NamedCrewPicker from "@/components/labor/NamedCrewPicker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DEFAULT_VISIBLE_TOTALS, resolveVisibleTotals, setAllLinesIncluded, TOTAL_OPTIONS } from "@/domain/estimate/presentation";
 import { calculateBidByScope, calculateWorkCategoryBreakdown, WORK_CATEGORY_ORDER, workCategoryForEstimateLine } from "@/domain/estimate/trueElectricalTakeoff";
+import { applyManualLineLabor, hydrateManualLineLabor, isManualLaborLookupKey, shouldHydrateManualLabor } from "@/domain/estimate/manualLineLabor";
 
 const ITEM_TYPES = ["Material", "Labor", "Equipment", "Subcontract", "Allowance", "Fixture", "Device", "Conduit", "Wire", "Gear", "Other"];
 const UNITS = ["EA", "LF", "SF", "FT", "100 LF", "1000 LF", "HR", "DAY", "LOT"];
@@ -39,7 +40,8 @@ function blankLine(rate) {
     included: true,
     quantityEdited: true,
     laborRateEdited: false,
-    laborMhEdited: true,
+    laborMhEdited: false,
+    laborMatchStatus: "",
   };
 }
 
@@ -87,7 +89,12 @@ export default function EstimateBuilder() {
       const nextCrew = stored.crew?.length ? stored.crew : defaultCrew();
       setHeader({ ...emptyHeader, ...stored.header });
       setCrew(nextCrew);
-      setLines(stored.lines?.length ? stored.lines : [blankLine(compositeWage(nextCrew).rate)]);
+      setLines(stored.lines?.length
+        ? stored.lines.map((line) => hydrateManualLineLabor(line, {
+          factors: stored.factors?.length ? stored.factors : defaultProductivityFactors(),
+          rate: compositeWage(nextCrew).rate,
+        }))
+        : [blankLine(compositeWage(nextCrew).rate)]);
       setContingency(stored.contingency ?? 0);
       setOverhead(stored.overhead ?? 10);
       setProfit(stored.profit ?? 10);
@@ -123,6 +130,19 @@ export default function EstimateBuilder() {
     listCustomLabor().then(setCustomUnits).catch(() => setCustomUnits([]));
     listNamedCrews().then(setNamedCrews).catch(() => setNamedCrews([]));
   }, []);
+
+  useEffect(() => {
+    if (!ready || !library.length) return;
+    setLines((current) => {
+      let changed = false;
+      const next = current.map((line) => {
+        if (!shouldHydrateManualLabor(line)) return line;
+        changed = true;
+        return applyManualLineLabor(line, { items: library, factors, rate: wage.rate });
+      });
+      return changed ? next : current;
+    });
+  }, [ready, library]);
 
   const storageFileName = estimateFileNameForSave({ fileName: meta.fileName, projectName: header.projectName });
 
@@ -218,6 +238,7 @@ export default function EstimateBuilder() {
       if (key === "quantity" || key === "unit") next.quantityEdited = true;
       if (key === "laborMhPerUnit") {
         next.laborMhEdited = true;
+        next.laborMatchStatus = "overridden";
         if (next.laborSelection) {
           next.laborSelection = {
             ...next.laborSelection,
@@ -226,9 +247,13 @@ export default function EstimateBuilder() {
             effectiveMhPerUnit: Number(value) || 0,
           };
         }
+        return next;
       }
       if (key === "laborRate") next.laborRateEdited = true;
       if (key === "materialUnitCost") next.materialCostEdited = true;
+      if (isManualLaborLookupKey(key)) {
+        return applyManualLineLabor(next, { items: library, factors, rate: wage.rate });
+      }
       return next;
     }));
   }
@@ -345,7 +370,7 @@ export default function EstimateBuilder() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
           <div className="min-w-0">
             <h2 className="text-lg font-bold">Estimate Lines</h2>
-            <p className="text-xs text-muted-foreground">Add quantities here. If this estimate came from takeoff, those quantities stay editable and do not change the takeoff sheet. Man-hours come from the labor library. Labor rate follows the selected classes unless you edit a line.</p>
+            <p className="text-xs text-muted-foreground">Add quantities here. If this estimate came from takeoff, those quantities stay editable and do not change the takeoff sheet. Typing an item looks up MH/unit from the Labor tab library — the same source AI takeoff uses. Hours are quantity × MH/unit × productivity. Labor rate follows the selected classes unless you edit a line.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold">
@@ -399,7 +424,16 @@ export default function EstimateBuilder() {
                 <Field label="Qty"><Cell type="number" value={row.quantity} set={(v) => patchLine(row.id, "quantity", v)} /></Field>
                 <Field label="Unit"><Sel value={row.unit} vals={UNITS} set={(v) => patchLine(row.id, "unit", v)} /></Field>
                 <Field label="Material $/unit"><Cell type="number" value={row.materialUnitCost} set={(v) => patchLine(row.id, "materialUnitCost", v)} /></Field>
-                <Field label="MH/unit"><Cell type="number" value={row.laborMhPerUnit} set={(v) => patchLine(row.id, "laborMhPerUnit", v)} /></Field>
+                <Field label="MH/unit">
+                  <Cell type="number" value={row.laborMhPerUnit} set={(v) => patchLine(row.id, "laborMhPerUnit", v)} />
+                  {row.laborMatchStatus === "unmatched" && String(row.description || "").trim() ? (
+                    <p className="mt-1 text-xs font-semibold text-amber-700 dark:text-amber-300">No labor-library match. MH/unit left at 0 — enter hours or a more specific item. Not a NECA rate.</p>
+                  ) : row.laborMatchStatus === "matched" && row.laborSource ? (
+                    <p className="mt-1 text-xs text-muted-foreground">{row.laborSource}{row.laborSelection?.verificationStatus ? ` · ${row.laborSelection.verificationStatus}` : ""}</p>
+                  ) : row.laborMatchStatus === "overridden" ? (
+                    <p className="mt-1 text-xs text-muted-foreground">Estimator override. Labor $ still follows the selected class unless you edit Labor $/hr.</p>
+                  ) : null}
+                </Field>
                 <Field label="Labor $/hr"><Cell type="number" value={row.laborRate} set={(v) => patchLine(row.id, "laborRate", v)} /></Field>
                 <label className="min-w-0">
                   <span className="mb-1 block text-xs font-bold text-muted-foreground">Hours</span>

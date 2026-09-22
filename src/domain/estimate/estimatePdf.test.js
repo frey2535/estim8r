@@ -1,7 +1,10 @@
 import { estimateContentFingerprint } from "./projectDocuments.js";
 import {
   buildEstimatePdf,
+  createEstimatePdfPreview,
+  estimateHasPdfLines,
   estimatePdfFileName,
+  estimatePdfPreviewKey,
   estimatePresentation,
   presentationHasInternals,
 } from "./estimatePdf.js";
@@ -115,5 +118,37 @@ assert(overheadPdf.strings.includes("Overhead"), "opt-in overhead prints on the 
 const before = estimateContentFingerprint(estimate);
 const branded = { ...estimate };
 assert(estimateContentFingerprint(branded) === before, "branding is not part of the Buildr fingerprint");
+
+assert(!estimateHasPdfLines({ header: {}, lines: [{ quantity: 1, description: "" }] }), "a blank starter line is not previewable");
+assert(!estimateHasPdfLines({ itemized: true, lines: [{ ...estimate.lines[0], included: false }] }), "unchecked itemized lines are empty");
+assert(estimateHasPdfLines(estimate), "a filled estimate has preview lines");
+
+const emptyPreview = createEstimatePdfPreview({ header: { projectName: "Empty Job" }, lines: [{ quantity: 1 }] }, { companyName: "Current Flow Electric" });
+assert(emptyPreview.status === "empty", "preview is empty before lines exist");
+assert(!emptyPreview.blob, "empty preview does not invent a PDF blob");
+
+const branding = {
+  companyName: "Current Flow Electric",
+  companyAddress: "100 Trade St",
+  headerColor: "#7c2d12",
+};
+const preview = createEstimatePdfPreview(estimate, branding);
+const rebuilt = buildEstimatePdf(estimate, branding);
+assert(preview.status === "ready", "preview is ready when lines exist");
+assert(preview.fileName === rebuilt.fileName, "preview uses the download file name");
+assert(JSON.stringify(preview.strings) === JSON.stringify(rebuilt.strings), "preview is the same branded PDF as download");
+assert(preview.blob instanceof Blob, "ready preview exposes the download blob");
+
+const key = estimatePdfPreviewKey(estimate, branding);
+assert(key !== estimatePdfPreviewKey({
+  ...estimate,
+  lines: [{ ...estimate.lines[0], quantity: 24 }],
+}, branding), "preview key follows Estimate Line quantity");
+assert(key !== estimatePdfPreviewKey({
+  ...estimate,
+  header: { ...estimate.header, projectName: "Other Pavilion" },
+}, branding), "preview key follows the header");
+assert(key !== estimatePdfPreviewKey({ ...estimate, overhead: 25, profit: 20 }, branding), "preview key follows markup");
+assert(key !== estimatePdfPreviewKey(estimate, { ...branding, companyName: "Other Electric" }), "preview key follows branding");
 
 if (!process.exitCode) console.log("estimate PDF checks passed");

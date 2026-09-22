@@ -1,10 +1,14 @@
 import { paletteForTrade, symbolsOnDrawingForTrade } from "./trades.js";
-import { buildAiMarks, matchTradeSymbol } from "./aiTakeoff.js";
+import { buildAiMarks, legendDictionaryFromPages, matchTradeSymbol, shouldScan } from "./aiTakeoff.js";
 import { layoutOverlayCallouts } from "./overlayLayout.js";
 import { deviceOutline, hitTestDeviceFill } from "./deviceStyles.js";
 import {
   isCanDeviceText,
+  isLegendClusterToken,
   isReferenceCallout,
+  isScheduleNoteContext,
+  isTitleBlockLetter,
+  persistedPlanDeviceCount,
   shouldAcceptPlanToken,
 } from "./symbolDetection.js";
 import { candidatesFromConstructedPaths, DRAW_CLOSE, DRAW_CUBIC, DRAW_LINE, DRAW_MOVE } from "./vectorSymbols.js";
@@ -25,6 +29,27 @@ assert(!isReferenceCallout("GFI"), "GFI is a device");
 assert(!shouldAcceptPlanToken({ text: "R16.3", x: 20, y: 20 }), "reject R16.3 on the sheet");
 assert(!shouldAcceptPlanToken({ text: "3", x: 88, y: 12 }, [{ text: "R34", x: 86, y: 12 }]), "reject a digit hanging off R34.3");
 assert(shouldAcceptPlanToken({ text: "1E", x: 24, y: 40 }), "accept a real type 1E on the plan");
+assert(shouldAcceptPlanToken({ text: "R", x: 40, y: 50 }, [
+  { text: "R", x: 40, y: 50 },
+  { text: "GFI", x: 52, y: 48 },
+]), "a legend type R on the plan is not a revision prefix");
+assert(isTitleBlockLetter({ text: "E", x: 90, y: 90 }), "title-block E is chrome, not a device");
+assert(isTitleBlockLetter({ text: "R", x: 88, y: 10 }), "revision-band R is chrome");
+assert(!isTitleBlockLetter({ text: "LP", x: 72, y: 18 }), "a lighting panel on the plan is not title-block chrome");
+assert(isLegendClusterToken({ text: "R", x: 10, y: 82 }, [
+  { text: "LEGEND", x: 12, y: 78 },
+  { text: "R", x: 10, y: 82 },
+  { text: "DUPLEX", x: 16, y: 82 },
+]), "inset legend rows are not plan devices");
+assert(isScheduleNoteContext({ text: "1", x: 30, y: 10 }, [
+  { text: "SEE", x: 18, y: 10 },
+  { text: "TYPE", x: 24, y: 10 },
+  { text: "1", x: 30, y: 10 },
+  { text: "SCHEDULE", x: 38, y: 10 },
+]), "SEE TYPE 1 SCHEDULE is a note, not a fixture");
+assert(!isScheduleNoteContext({ text: "GFI", x: 40, y: 50 }, [{ text: "TYP", x: 44, y: 50 }]), "TYP next to a real device is not dropped");
+assert(!shouldScan({ kind: "legend", tokens: Array.from({ length: 120 }, (_, index) => ({ text: `R${index}` })) }, "electrical"), "large legends are never counted as plan sheets");
+assert(!shouldScan({ kind: "lighting-schedule", tokens: [{ text: "F1" }] }, "electrical"), "schedule sheets are never counted");
 assert(isCanDeviceText("Type 2 6\" can"), "can copy is detected");
 assert(isCanDeviceText("LED downlight"), "downlight copy is detected");
 assert(!isCanDeviceText("Type 1 2x4 LED troffer"), "a troffer is not a can");
@@ -191,5 +216,106 @@ assert(fanDropdown.some((item) => item.id === "vf") && fanDropdown.some((item) =
 assert(!fanDropdown.some((item) => item.id === "2x4" || item.id === "downlight"), "dropdown stays drawing-only and does not invent extra types");
 const fanOverlay = layoutOverlayCallouts({ devices: fanCounts, conduits: fanPlan.marks.filter((mark) => mark.tool === "conduit") });
 assert(fanOverlay.deviceLabels.length === 0, "fan markers do not draw type-code text");
+
+const glyphOps = [
+  DRAW_MOVE, 22.2, 36.2,
+  DRAW_LINE, 22.75, 36.2,
+  DRAW_LINE, 22.75, 36.85,
+  DRAW_LINE, 22.2, 36.85,
+  DRAW_CLOSE,
+];
+const bodyOps = [
+  DRAW_MOVE, 20, 36,
+  DRAW_LINE, 22.1, 36,
+  DRAW_LINE, 22.1, 37.05,
+  DRAW_LINE, 20, 37.05,
+  DRAW_CLOSE,
+];
+const mixedPaths = candidatesFromConstructedPaths([
+  { ctm: [1, 0, 0, 1, 0, 0], drawOps: glyphOps },
+  { ctm: [1, 0, 0, 1, 0, 0], drawOps: bodyOps },
+], (x, y) => ({ x, y }));
+const legendFirst = buildAiMarks({
+  trade: "electrical",
+  symbols: electrical.symbols,
+  drawingSymbols: [
+    { abbr: "R", type: "R", label: "Duplex receptacle", takeoffCategory: "Receptacles", category: "From drawing", source: "legend", page: 8 },
+    { abbr: "1E", type: "1E", label: "Type 1E 2x4 emergency", takeoffCategory: "Lighting", category: "From drawing", source: "legend", page: 8 },
+    { abbr: "E", type: "E", label: "Emergency light", takeoffCategory: "Lighting", category: "From drawing", source: "legend", page: 8 },
+  ],
+  pages: [
+    {
+      page: 2,
+      kind: "drawing",
+      tokens: [
+        { text: "ELECTRICAL LIGHTING PLAN", x: 80, y: 88 },
+        { text: "E1.01", x: 92, y: 94 },
+        { text: "E", x: 90, y: 90 },
+        { text: "R", x: 88, y: 12 },
+        { text: "SEE", x: 18, y: 12 },
+        { text: "TYPE", x: 24, y: 12 },
+        { text: "1E", x: 30, y: 12 },
+        { text: "SCHEDULE", x: 40, y: 12 },
+        { text: "1E", x: 22.4, y: 36.5 },
+        { text: "R", x: 40, y: 50 },
+        { text: "GFI", x: 52, y: 48 },
+        { text: "LEGEND", x: 10, y: 78 },
+        { text: "R", x: 10, y: 82 },
+        { text: "DUPLEX", x: 16, y: 82 },
+        { text: "RECEPTACLE", x: 24, y: 82 },
+        { text: "24", x: 48, y: 82 },
+      ],
+      paths: mixedPaths,
+    },
+    {
+      page: 8,
+      kind: "legend",
+      tokens: [
+        { text: "ELECTRICAL LEGEND", x: 20, y: 12 },
+        { text: "E0.01", x: 92, y: 94 },
+        { text: "R", x: 12, y: 20 },
+        { text: "DUPLEX", x: 18, y: 20 },
+        { text: "RECEPTACLE", x: 28, y: 20 },
+        { text: "24", x: 50, y: 20 },
+        { text: "1E", x: 12, y: 26 },
+        { text: "2x4", x: 18, y: 26 },
+        { text: "EMERGENCY", x: 26, y: 26 },
+        { text: "E", x: 12, y: 32 },
+        { text: "EMERGENCY", x: 18, y: 32 },
+        { text: "LIGHT", x: 30, y: 32 },
+        ...Array.from({ length: 90 }, (_, index) => ({ text: `NOTE ${index}`, x: 10, y: 10 + (index % 70) })),
+      ],
+    },
+  ],
+});
+const legendCounts = legendFirst.marks.filter((mark) => mark.type === "count");
+const type1e = legendCounts.filter((mark) => mark.typeCode === "1E");
+const planR = legendCounts.filter((mark) => mark.typeCode === "R");
+assert(!legendCounts.some((mark) => mark.sheet === 8), "legend rows and the printed qty 24 are not plan counts");
+assert(!legendCounts.some((mark) => mark.x >= 86 || (mark.x >= 78 && mark.y >= 78)), "title-block letters are not markers");
+assert(!legendCounts.some((mark) => mark.y <= 14 && /1E|2x4/i.test(`${mark.typeCode} ${mark.symbol}`)), "SEE TYPE 1E SCHEDULE is not a fixture");
+assert(!legendCounts.some((mark) => mark.y >= 78 && mark.x <= 30), "inset legend rows on the plan are not counted");
+assert(type1e.length === 1, `legend type 1E is found once on the plan, got ${type1e.length}`);
+const fixtureBody = [...mixedPaths].sort((a, b) => (b.w * b.h) - (a.w * a.h))[0];
+assert(Math.abs(type1e[0].x - fixtureBody.cx) < 0.08, "1E marker sits on the fixture geometry, not the type-tag glyph");
+assert(type1e[0].outlineSource === "vector", "legend-matched 1E uses extracted geometry");
+assert(planR.length === 1, `legend type R is found once on the plan, got ${planR.length}`);
+assert(legendCounts.some((mark) => mark.symbol === "gfci"), "catalog GFI on the plan still counts");
+assert(persistedPlanDeviceCount(legendFirst.marks, { 2: "drawing", 8: "legend" }) === legendCounts.length, "quote/estimate counts come from persisted plan detections");
+assert(legendFirst.deviceCount === legendCounts.length, "AI deviceCount is the persisted drawing count, not the legend total");
+assert(!/24/.test(legendFirst.summary) || legendFirst.deviceCount !== 24, "summary does not adopt the legend qty column");
+const legendDict = legendDictionaryFromPages([
+  { page: 8, kind: "legend", tokens: [{ text: "1E", x: 12, y: 26 }, { text: "2x4", x: 18, y: 26 }, { text: "R", x: 12, y: 20 }] },
+], [
+  { abbr: "1E", type: "1E", label: "Type 1E 2x4 emergency", takeoffCategory: "Lighting", category: "From drawing", source: "legend", page: 8 },
+  { abbr: "R", type: "R", label: "Duplex receptacle", takeoffCategory: "Receptacles", category: "From drawing", source: "legend", page: 8 },
+], electrical.symbols, "electrical");
+assert(legendDict.entries.some((item) => item.code === "1E"), "legend dictionary records type 1E before the plan scan");
+assert(legendDict.entries.some((item) => item.code === "R"), "legend dictionary records type R before the plan scan");
+const legendDropdown = symbolsOnDrawingForTrade("electrical", legendFirst.marks, { pageKinds: { 2: "drawing", 8: "legend" } });
+assert(legendDropdown.some((item) => item.id === "2x4" || item.id === "gfci"), "dropdown stays drawing-only");
+assert(!legendDropdown.some((item) => String(item.id).startsWith("legend:")), "dropdown does not list legend-only rows");
+assert(legendCounts.every((mark) => mark.trade === "electrical"), "counts stay on the selected trade");
+assert(layoutOverlayCallouts({ devices: legendCounts }).deviceLabels.length === 0, "markers still have no type-code text");
 
 if (!process.exitCode) console.log("symbol detection checks passed");

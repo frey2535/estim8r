@@ -262,6 +262,8 @@ const LEGEND_SHEET_KINDS = new Set([
   "device-schedule",
   "equipment-schedule",
   "spec",
+  "oneline",
+  "detail",
 ]);
 
 export function pageKindsFromDocs(docs) {

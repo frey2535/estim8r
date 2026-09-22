@@ -424,7 +424,7 @@ export default function EstimateBuilder() {
                 </button>
               </>
             ) : null}
-            <button type="button" onClick={() => setLines((current) => [...current, blankLine(wage.rate)])} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white dark:bg-orange-500">
+            <button type="button" data-testid="add-estimate-line" onClick={() => setLines((current) => [...current, blankLine(wage.rate)])} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white dark:bg-orange-500">
               <Plus className="h-4 w-4" />Add line
             </button>
           </div>

@@ -2,6 +2,7 @@ import { jsPDF } from "jspdf";
 import { brandingLayout, companyLines, normalizeBranding } from "./branding.js";
 import { estimateGrandTotal } from "./projectDocuments.js";
 import { includedLines, resolveVisibleTotals, TOTAL_OPTIONS } from "./presentation.js";
+import { estimateLineLaborCost } from "./manualLineLabor.js";
 
 const HIDDEN_LABELS = [
   "employee class",
@@ -44,7 +45,7 @@ export function estimatePresentation(estimate) {
   const lines = includedLines(estimate).map((line) => {
     const qty = Number(line.quantity) || 0;
     const material = qty * (Number(line.materialUnitCost) || 0);
-    const labor = qty * (Number(line.laborMhPerUnit) || 0) * (Number(line.laborRate) || 0);
+    const labor = estimateLineLaborCost(line);
     return {
       itemType: line.itemType || "",
       category: line.category || "",

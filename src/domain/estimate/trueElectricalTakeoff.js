@@ -1,6 +1,7 @@
 import { buildConduitWireMakeup, aggregateWirePulling } from "../takeoff/conduitWireMakeup.js";
 import { assignLaborHours } from "../labor/libraryDocument.js";
 import { compositeWage, defaultCrew, journeymanWage } from "../labor/employeeClasses.js";
+import { estimateLineHours, estimateLineLaborCost } from "./manualLineLabor.js";
 
 export const DEFAULT_TRUE_BID_SETTINGS = Object.freeze({
   laborRate: 72,
@@ -600,8 +601,8 @@ export function calculateTrueBidSummary(lines, settings = DEFAULT_TRUE_BID_SETTI
     if (line.included === false) return acc;
     const quantity = num(line.quantity);
     const material = quantity * num(line.materialUnitCost);
-    const hours = quantity * num(line.laborMhPerUnit);
-    const labor = hours * num(line.laborRate || settings.laborRate);
+    const hours = estimateLineHours(line);
+    const labor = estimateLineLaborCost({ ...line, laborRate: line.laborRate || settings.laborRate });
     acc.material += material;
     acc.hours += hours;
     acc.labor += labor;
@@ -707,8 +708,8 @@ export function trueTakeoffCsv(analysis, lines, summary) {
   ];
   for (const line of lines || []) {
     const qty = num(line.quantity);
-    const mh = qty * num(line.laborMhPerUnit);
-    const labor = mh * num(line.laborRate);
+    const mh = estimateLineHours(line);
+    const labor = estimateLineLaborCost(line);
     rows.push([
       workCategoryForEstimateLine(line),
       line.category,
@@ -810,8 +811,8 @@ export function calculateWorkCategoryBreakdown(lines) {
     const row = grouped[category];
     const quantity = num(line?.quantity);
     const material = quantity * num(line?.materialUnitCost);
-    const hours = quantity * num(line?.laborMhPerUnit);
-    const labor = hours * num(line?.laborRate);
+    const hours = estimateLineHours(line);
+    const labor = estimateLineLaborCost(line);
     row.lineCount += 1;
     row.quantity += quantity;
     row.material += material;

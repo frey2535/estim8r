@@ -54,7 +54,19 @@ export default function EstimateSupplyQuote({ quote, defaultOpen = true }) {
           </p>
           {quote.rows.length ? (
             <div className="max-h-64 overflow-auto rounded-md border border-border">
-              <table className="w-full min-w-[28rem] text-left text-xs">
+              <div className="space-y-2 p-2 sm:hidden">
+                {quote.rows.map((row) => (
+                  <div key={row.id} className="rounded-md border border-border bg-background px-2 py-1.5 text-xs">
+                    <div className="flex justify-between gap-2 font-semibold">
+                      <span>{row.device || "Line"}</span>
+                      <span>{row.quantity}{row.unit ? ` ${row.unit}` : ""}</span>
+                    </div>
+                    <p className="mt-0.5">{row.description}</p>
+                    <p className="text-[11px] text-muted-foreground">Model {row.model || "—"}</p>
+                  </div>
+                ))}
+              </div>
+              <table className="hidden w-full text-left text-xs sm:table">
                 <thead className="sticky top-0 bg-muted/80 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-2 py-1.5">Device / equipment</th>

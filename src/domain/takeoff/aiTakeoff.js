@@ -4,14 +4,17 @@ import {
   fixtureSizeFromWholeToken,
   isCanDeviceText,
   isNonPlanSheetKind,
+  isQuotedTypeMark,
   isReferenceCallout,
   isTitleBlockLetter,
+  normalizeTypeMark,
   persistedPlanDeviceCount,
   resolveCanSymbol,
   shouldAcceptPlanToken,
+  taggedEquipmentCode,
 } from "./symbolDetection.js";
 import { DETECT_SOURCE_ORIGINAL_PDF } from "./accuracyReview.js";
-import { associateGeometry, placeOnSymbolGeometry } from "./vectorSymbols.js";
+import { associateGeometry, assignExclusiveGeometry, placeOnSymbolGeometry, shapeHintFromLabel } from "./vectorSymbols.js";
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
 
 const STOP = new Set(["the", "and", "for", "with", "from", "this", "that", "sheet", "note", "see", "typ", "all", "new", "nic", "nts", "rev"]);
@@ -135,9 +138,12 @@ export function fixtureAliasesFromSchedules(pages, symbols, trade) {
       if (!symbol) continue;
       const taken = new Set((symbols || []).map((item) => normalizeTakeoffText(item.abbr)).filter((abbr) => abbr.length >= 2));
       for (const token of row.tokens) {
-        const code = String(token.text || "").trim().replace(/[.:]+$/g, "").replace(/^type\s+/i, "");
+        const typeAnchor = row.tokens.findIndex((item) => /^type$/i.test(String(item.text || "").trim()));
+        const codeToken = typeAnchor >= 0 ? row.tokens[typeAnchor + 1] : row.tokens[0];
+        if (!codeToken || token !== codeToken) continue;
+        const code = normalizeTypeMark(token.text);
         if (!TYPE_CODE.test(code) || fixtureSizeKey(code) === symbol.id) continue;
-        if (/^[A-Za-z]+$/.test(code) && code.length > 1) continue;
+        if (/^\d+W$/i.test(code)) continue;
         if (isLegendQuantityCode(code, row.tokens)) continue;
         if (taken.has(normalizeTakeoffText(code))) continue;
         const id = code.toUpperCase();
@@ -154,7 +160,7 @@ export function aliasesFromDrawingSymbols(drawingSymbols, catalogSymbols) {
   const aliases = [];
   const seen = new Set();
   for (const item of drawingSymbols || []) {
-    const code = String(item.abbr || item.type || "").trim().replace(/^type\s+/i, "");
+    const code = normalizeTypeMark(item.abbr || item.type || "");
     if (!code || !TYPE_CODE.test(code)) continue;
     const id = code.toUpperCase();
     if (seen.has(id)) continue;
@@ -215,13 +221,13 @@ export function legendDictionaryFromPages(pages, drawingSymbols, catalogSymbols,
   const entries = aliases.map((alias) => ({
     code: alias.code,
     symbol: alias.symbol,
-    shapeHint: null,
+    shapeHint: shapeHintFromLabel(`${alias.symbol?.label || ""} ${alias.symbol?.id || ""} ${alias.code || ""}`),
   }));
   for (const page of pages || []) {
     if (!isNonPlanSheetKind(page.kind)) continue;
     if (trade && !pageMatchesTrade(page, trade)) continue;
     for (const token of page.tokens || []) {
-      const code = String(token.text || "").trim().replace(/[.:]+$/g, "").replace(/^type\s+/i, "").toUpperCase();
+      const code = normalizeTypeMark(token.text).toUpperCase();
       const entry = entries.find((item) => item.code === code);
       if (!entry || entry.shapeHint) continue;
       const geometry = associateGeometry(token, page.paths || [], { radius: 4.2 });
@@ -237,10 +243,13 @@ export function legendDictionaryFromPages(pages, drawingSymbols, catalogSymbols,
 }
 
 function shapeHintForToken(text, dictionary) {
-  const compact = normalizeTakeoffText(String(text || "").replace(/^type\s+/i, ""));
+  const compact = normalizeTakeoffText(normalizeTypeMark(text));
   if (!compact) return null;
+  if (/^(gfi|gfiwp|os|vs)(?:\d+)?$/.test(compact)) return "circle";
+  if (/^(vf|ef)\d*$/.test(compact)) return "rect";
   const entry = (dictionary?.entries || []).find((item) => normalizeTakeoffText(item.code) === compact);
-  return entry?.shapeHint || null;
+  if (entry?.shapeHint) return entry.shapeHint;
+  return shapeHintFromLabel(`${entry?.symbol?.label || ""} ${text}`);
 }
 
 function placementAllowed(point) {
@@ -253,7 +262,9 @@ function phrasesFromTokens(tokens) {
   const phrases = [];
   for (const token of sorted) {
     const last = phrases[phrases.length - 1];
-    const close = last && Math.abs(last.y - token.y) < 0.9 && (token.x - last.xEnd) < 2.2;
+    const atomic = (text) => isQuotedTypeMark(text) || /^(GFI(?:\/WP)?|OS|VS|VF-?\d*|EF-?\d*)$/i.test(normalizeTypeMark(text));
+    const close = last && Math.abs(last.y - token.y) < 0.9 && token.x >= last.xEnd - 0.2 && (token.x - last.xEnd) < 2.2
+      && !atomic(last.text) && !atomic(token.text);
     if (close) {
       last.text += token.text;
       last.xEnd = token.x + 0.8;
@@ -321,25 +332,42 @@ export function findConduitSections(pages, trade) {
 
 export function matchTradeSymbol(text, symbols, aliases = [], options = {}) {
   const raw = String(text || "").trim().replace(/[.,;:()]+$/g, "").replace(/^[()]+/, "");
-  const token = raw.replace(/^type\s+/i, "");
+  const token = normalizeTypeMark(raw);
   const lower = token.toLowerCase();
   const compact = normalizeTakeoffText(token);
   if (!compact || STOP.has(lower) || isReferenceCallout(raw) || isReferenceCallout(token)) return null;
+  if (/^e\/m$/i.test(token) || (compact === "em" && /e\/m/i.test(raw))) return null;
+  if (!isQuotedTypeMark(raw) && (/^\d+['′](?:\s*-\s*\d+['′]?)?$/.test(raw) || /['"′]-/.test(raw) || /^-['"]/.test(raw))) return null;
   if (options.reject && options.reject({ text: raw })) return null;
+  const tagged = taggedEquipmentCode(token);
+  if (tagged) {
+    const equipment = (symbols || []).find((item) => item.id === tagged.toLowerCase() || normalizeTakeoffText(item.abbr) === tagged.toLowerCase());
+    if (equipment) return equipment;
+  }
+  if (/^gfi(?:\/?wp)?$/i.test(token) || compact === "gfiwp" || compact === "wpgfi") {
+    const gfi = (compact.includes("wp") && (symbols || []).find((item) => item.id === "wp-gfci"))
+      || (symbols || []).find((item) => item.id === "gfci");
+    if (gfi) return gfi;
+  }
   if (isCanDeviceText(token) || isCanDeviceText(options.nearbyText)) {
     const can = resolveCanSymbol(symbols);
     if (can) return can;
   }
   const fixture = findFixtureInText(symbols, token, { allowEmbedded: options.allowEmbedded });
   if (fixture) return fixture;
-  const synonym = findSynonym(symbols, token);
-  if (synonym) return synonym;
-  const label = findLabelMatch(symbols, token);
-  if (label) return label;
   if (options.sectionContext && /^[a-z]{1,2}$/.test(compact)) return null;
+  const words = token.split(/\s+/).filter(Boolean);
+  if (words.length < 5) {
+    const synonym = findSynonym(symbols, token);
+    if (synonym) return synonym;
+    const label = findLabelMatch(symbols, token);
+    if (label) return label;
+  }
   const alias = (aliases || []).find((item) => normalizeTakeoffText(item.code) === compact);
-  if (alias?.symbol) return alias.symbol;
-  if (compact.length > 18) return null;
+  if (alias?.symbol) {
+    if (options.sitePlan && isIndoorLightingAlias(alias) && /^[0-9A-Z]{1,3}$/i.test(token)) return null;
+    return alias.symbol;
+  }
   const hits = (symbols || []).filter((item) => (
     item.abbr
     && normalizeTakeoffText(item.abbr) === compact
@@ -597,8 +625,19 @@ function nearbyText(token, tokens) {
     .join(" ");
 }
 
+function isSitePlanPage(page) {
+  const blob = `${page?.title || ""} ${page?.sheetId || ""} ${(page?.tokens || []).map((token) => token.text).join(" ")}`;
+  return /\belectrical site plan\b|\bsite lighting\b/i.test(blob) && !/\bfloor plan\b/i.test(blob);
+}
+
+function isIndoorLightingAlias(alias) {
+  const blob = `${alias?.symbol?.id || ""} ${alias?.symbol?.label || ""} ${alias?.code || ""}`.toLowerCase();
+  if (/site|pole|area light|street|parking|flood/.test(blob)) return false;
+  return /troffer|downlight|strip|can light|2x4|2x2|1x4|recessed|surface/.test(blob);
+}
+
 function candidateKey(item) {
-  return `${normalizeTakeoffText(item.text)}|${Number(item.x || 0).toFixed(1)}|${Number(item.y || 0).toFixed(1)}`;
+  return `${normalizeTakeoffText(normalizeTypeMark(item.text))}|${Number(item.x || 0).toFixed(1)}|${Number(item.y || 0).toFixed(1)}`;
 }
 
 function collectMatchCandidates(page) {
@@ -622,6 +661,10 @@ function collectMatchCandidates(page) {
     });
   }
   for (const token of tokens) {
+    if (candidates.some((item) => (
+      normalizeTakeoffText(normalizeTypeMark(item.text)) === normalizeTakeoffText(normalizeTypeMark(token.text))
+      && Math.hypot((item.x || 0) - (token.x || 0), (item.y || 0) - (token.y || 0)) < 0.45
+    ))) continue;
     add({
       text: token.text,
       x: token.x,
@@ -652,19 +695,29 @@ export function buildAiMarks({
   const usedGeometry = new Set();
   for (const page of pages || []) {
     if (!shouldScan(page, trade)) continue;
-    for (const token of collectMatchCandidates(page)) {
-      let symbol = matchTradeSymbol(token.text, matchSymbols, aliases, {
+    const sitePlan = isSitePlanPage(page);
+    const pageCandidates = collectMatchCandidates(page);
+    const hits = [];
+    for (const token of pageCandidates) {
+      const symbol = matchTradeSymbol(token.text, matchSymbols, aliases, {
         sectionContext: token.sectionContext,
         nearbyText: token.nearbyText,
+        sitePlan,
         reject: (item) => !shouldAcceptPlanToken({ ...token, text: item.text }, page.tokens),
       });
       if (!symbol) continue;
-      const shapeHint = shapeHintForToken(token.text, dictionary);
-      const availablePaths = (page.paths || []).filter((item) => !usedGeometry.has(item));
-      const geometry = placeOnSymbolGeometry(token, availablePaths, { shapeHint });
-      if (geometry?.kind === "circle") {
-        symbol = resolveCanSymbol(matchSymbols) || symbol;
-      } else if (isCanDeviceText(token.text, token.nearbyText, symbol.label) && geometry?.kind !== "rect") {
+      hits.push({ token, symbol });
+    }
+    const assigned = assignExclusiveGeometry(hits.map((hit) => hit.token), page.paths || [], {
+      shapeHintFor: (token) => shapeHintForToken(token.text, dictionary),
+    });
+    for (const hit of hits) {
+      let { token, symbol } = hit;
+      const geometry = assigned.get(token) || placeOnSymbolGeometry(token, (page.paths || []).filter((item) => !usedGeometry.has(item)), {
+        shapeHint: shapeHintForToken(token.text, dictionary),
+        rivals: hits.map((other) => other.token).filter((other) => other !== token),
+      });
+      if (isCanDeviceText(token.text, token.nearbyText, symbol.label) && geometry?.kind !== "rect") {
         symbol = resolveCanSymbol(matchSymbols) || symbol;
       }
       const geometryPoint = geometry ? { x: geometry.cx, y: geometry.cy } : null;
@@ -675,10 +728,21 @@ export function buildAiMarks({
           : null;
       if (!placed) continue;
       const usedVector = Boolean(geometryPoint && placed.x === geometryPoint.x && placed.y === geometryPoint.y);
-      const near = seen.some((item) => item.sheet === page.page && item.symbol === symbol.id && distance(item, placed) < 1.2);
-      if (near) continue;
-      const compact = normalizeTakeoffText(String(token.text || "").replace(/^type\s+/i, ""));
+      const compact = normalizeTakeoffText(normalizeTypeMark(token.text));
       const fromLegend = aliases.some((alias) => normalizeTakeoffText(alias.code) === compact && alias.symbol?.id === symbol.id);
+      const typeCode = fromLegend
+        ? normalizeTypeMark(token.text).toUpperCase()
+        : (taggedEquipmentCode(token.text) || symbol.abbr || "").toUpperCase();
+      const near = seen.some((item) => {
+        if (item.sheet !== page.page) return false;
+        const sameType = item.typeCode === typeCode
+          || (typeCode === "GFI" && item.typeCode === "GFI/WP")
+          || (typeCode === "GFI/WP" && item.typeCode === "GFI");
+        if (!sameType) return false;
+        const tagDist = Math.hypot((item.tagX ?? item.x) - token.x, (item.tagY ?? item.y) - token.y);
+        return tagDist < 0.35 || (distance(item, placed) < 0.42 && tagDist < 0.9);
+      });
+      if (near) continue;
       const mark = {
         id: newId(),
         source: "ai",
@@ -691,9 +755,7 @@ export function buildAiMarks({
         symbol: symbol.id,
         symbolLabel: symbol.label,
         abbr: symbol.abbr,
-        typeCode: fromLegend
-          ? String(token.text || "").trim().replace(/^type\s+/i, "").toUpperCase()
-          : (symbol.abbr || "").toUpperCase(),
+        typeCode,
         color,
         matchedFrom: fromLegend ? "legend" : "drawing",
         outline: usedVector ? geometry.outline : null,
@@ -704,7 +766,7 @@ export function buildAiMarks({
         anchor: anchorIds.has(symbol.id),
       };
       counts.push(mark);
-      seen.push(mark);
+      seen.push({ ...mark, tagX: token.x, tagY: token.y });
       if (usedVector) usedGeometry.add(geometry);
     }
   }

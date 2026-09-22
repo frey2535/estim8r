@@ -2,6 +2,8 @@ const LEGEND_RE = /electrical\s+legend|lighting\s+legend|symbol\s+legend|\blegen
 const LIGHTING_SCHED_RE = /lighting\s+fixture\s+schedule|fixture\s+schedule|luminaire\s+schedule|lighting\s+schedule/i;
 const DEVICE_SCHED_RE = /device\s+schedule|receptacle\s+schedule|switch\s+schedule/i;
 const EQUIP_SCHED_RE = /equipment\s+schedule|mechanical\s+equipment|panel\s+schedule/i;
+const ONELINE_RE = /\briser\s+diagram\b|one[\s-]?line(?:\s+diagram)?|single[\s-]?line/i;
+const DETAIL_RE = /\b(?:electrical\s+)?(?:site\s+)?plan\s+details\b|\bsite\s+plan\s+details\b/i;
 const SPEC_RE = /specification|general\s+notes|electrical\s+notes|abbreviations/i;
 const SKIP = /^(symbol|symbols|description|type|manufacturer|model|remarks|notes|qty|quantity|mounting|voltage|watts|lamp|catalog)$/i;
 const TYPE_RE = /^(?:type\s*)?([a-z]{1,3}\d{0,3}[a-z]{0,2}|\d{1,3}[a-z]{0,3})$/i;
@@ -46,6 +48,8 @@ export function classifyPageText(text) {
   if (LIGHTING_SCHED_RE.test(blob)) return "lighting-schedule";
   if (DEVICE_SCHED_RE.test(blob)) return "device-schedule";
   if (EQUIP_SCHED_RE.test(blob)) return "equipment-schedule";
+  if (ONELINE_RE.test(blob)) return "oneline";
+  if (DETAIL_RE.test(blob)) return "detail";
   if (LEGEND_RE.test(blob)) return "legend";
   if (SPEC_RE.test(blob)) return "spec";
   return "drawing";
@@ -100,7 +104,7 @@ export function parseScheduleRows(rows, source) {
     if (!tokens.length) continue;
     let type = "";
     let rest = tokens;
-    const first = tokens[0].replace(/\.$/, "");
+    const first = tokens[0].replace(/\.$/, "").replace(/^['"‘’“”`]+|['"‘’“”`]+$/g, "");
     const typed = first.match(TYPE_RE);
     if (typed && !SKIP.test(first)) {
       type = typed[1].toUpperCase();

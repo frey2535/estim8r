@@ -4,9 +4,9 @@ export const DRAW_CUBIC = 2;
 export const DRAW_QUAD = 3;
 export const DRAW_CLOSE = 4;
 
-export const SYMBOL_MIN = 0.16;
+export const SYMBOL_MIN = 0.12;
 export const SYMBOL_MAX = 5.8;
-export const TAG_ASSOCIATE_RADIUS = 3.4;
+export const TAG_ASSOCIATE_RADIUS = 2.15;
 export const OVERLAP_IOU = 0.55;
 
 const IDENTITY = [1, 0, 0, 1, 0, 0];
@@ -318,39 +318,141 @@ export function looksLikeTextGlyph(candidate, token) {
   if (!candidate || !token) return false;
   const dist = distanceToCandidate(token, candidate);
   const size = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
-  const tokenLen = String(token.text || "").trim().length || 1;
+  const tokenLen = String(token.text || "").trim().replace(/^['"‘’“”`]+|['"‘’“”`]+$/g, "").length || 1;
   const expected = Math.max(0.35, tokenLen * 0.42);
-  return dist < 0.55 && size <= expected + 0.35 && size < 1.25;
+  return dist < 0.7 && size <= expected + 0.4 && size < 1.35;
+}
+
+export function shapeHintFromLabel(text) {
+  const blob = String(text || "").toLowerCase();
+  if (!blob.trim()) return null;
+  if (/\d\s*[x×]\s*\d|troffer|strip light|linear fixture/.test(blob) && !/downlight/.test(blob)) return "rect";
+  if (/exhaust fan|vent fan/.test(blob)) return "rect";
+  if (/downlight|recessed can|occup|sensor|recept|gfi|gfci|duplex|outlet|pendant|\bfan\b/.test(blob)) return "circle";
+  return null;
+}
+
+export function isJunkGeometry(candidate) {
+  if (!candidate) return true;
+  const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
+  const short = Math.min(Number(candidate.w) || 0, Number(candidate.h) || 0);
+  if (long < 0.18 || short < 0.09) return true;
+  if (long > 2.7 && short < 0.9) return true;
+  if (long / (short || 1e-9) > 6 && long > 1.8) return true;
+  return false;
+}
+
+export function isPlausibleSymbolForHint(candidate, hint) {
+  if (!candidate || isJunkGeometry(candidate)) return false;
+  const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
+  const short = Math.min(Number(candidate.w) || 0, Number(candidate.h) || 0);
+  const aspect = long / (short || 1e-9);
+  if (hint === "circle") {
+    return candidate.kind === "circle" && long <= 1.25 && aspect <= 1.45;
+  }
+  if (hint === "rect") return long >= 0.22 && long <= 2.3 && aspect <= 4.2;
+  return long <= 2.3 && aspect <= 4.5;
+}
+
+export function associateRadiusForHint(hint) {
+  if (hint === "circle") return 1.2;
+  if (hint === "rect") return 1.5;
+  return TAG_ASSOCIATE_RADIUS;
+}
+
+export function fixtureAssociationScore(token, candidate, options = {}) {
+  const dist = distanceToCandidate(token, candidate);
+  const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
+  const short = Math.min(Number(candidate.w) || 0, Number(candidate.h) || 0);
+  const aspect = long / (short || 1e-9);
+  const hint = options.shapeHint;
+  const inside = containsPoint(candidate, token);
+  let score = (3.4 - dist) + Math.min(long, 1.5) * 0.85;
+  if (long < 0.22) score -= 1.4;
+  if (long > 2.5 && aspect > 2.8) score -= 2.4;
+  if (hint === "circle") {
+    if (candidate.kind === "circle" || aspect <= 1.45) score += 0.75;
+    if (aspect > 1.8 || long > 1.1) score -= 1.2;
+    if (long >= 0.2 && long <= 0.7) score += 0.45;
+  } else if (hint === "rect") {
+    if (candidate.kind === "rect") score += 0.45;
+    if (long >= 0.4 && long <= 1.8) score += 0.7;
+    if (long < 0.28) score -= 0.9;
+  }
+  if (inside && long <= 2.2) score += 0.55;
+  else if (!inside && dist > 0.28 && dist < 1.6) score += 0.3;
+  return score;
 }
 
 export function associateGeometry(token, candidates = [], options = {}) {
   let best = null;
   let bestScore = -Infinity;
   const hint = options.shapeHint;
-  const radius = Number(options.radius) > 0 ? Number(options.radius) : TAG_ASSOCIATE_RADIUS;
+  const radius = Number(options.radius) > 0 ? Number(options.radius) : associateRadiusForHint(hint);
+  const rivals = options.rivals || [];
   for (const candidate of candidates || []) {
     if (looksLikeTextGlyph(candidate, token)) continue;
+    if (!isPlausibleSymbolForHint(candidate, hint)) continue;
     const dist = distanceToCandidate(token, candidate);
-    if (dist > radius) continue;
     const inside = containsPoint(candidate, token);
+    if (dist > radius && !(inside && Math.max(candidate.w, candidate.h) <= 2.3)) continue;
+    if (hint === "rect" && !inside && (Math.max(candidate.w, candidate.h) < 0.55 || candidate.w * candidate.h < 0.28)) continue;
+    if (rivals.some((rival) => distanceToCandidate(rival, candidate) + 0.12 < dist)) continue;
     if (inside && Math.max(candidate.w, candidate.h) > 2.4) continue;
-    const offsetBonus = (!inside && dist > 0.35 && dist < 2.2) ? 0.35 : 0;
-    const hintBonus = hint && candidate.kind === hint ? 0.45 : 0;
-    const score = (inside ? 1.1 : 0) + (3.2 - dist) + (candidate.kind === "circle" ? 0.15 : 0) + offsetBonus + hintBonus;
+    const score = fixtureAssociationScore(token, candidate, { shapeHint: hint });
     if (score > bestScore) {
       best = candidate;
       bestScore = score;
     }
   }
-  return best;
+  return bestScore >= 1.35 ? best : null;
 }
 
 export function placeOnSymbolGeometry(token, candidates = [], options = {}) {
-  const near = associateGeometry(token, candidates, options);
+  const hint = options.shapeHint;
+  const radius = Number(options.radius) > 0 ? Number(options.radius) : associateRadiusForHint(hint);
+  const near = associateGeometry(token, candidates, { ...options, radius });
   if (near) return near;
-  const farRadius = Number(options.farRadius) > 0 ? Number(options.farRadius) : 5.2;
-  if (farRadius <= (Number(options.radius) > 0 ? Number(options.radius) : TAG_ASSOCIATE_RADIUS)) return null;
-  return associateGeometry(token, candidates, { ...options, radius: farRadius });
+  if (hint === "circle") return null;
+  const farRadius = Number(options.farRadius) > 0
+    ? Number(options.farRadius)
+    : (hint === "rect" ? 1.45 : 2.85);
+  if (farRadius <= radius) return null;
+  const far = associateGeometry(token, candidates, { ...options, radius: farRadius });
+  if (!far) return null;
+  const long = Math.max(Number(far.w) || 0, Number(far.h) || 0);
+  if (hint === "rect" && (long < 0.45 || long > 1.8)) return null;
+  return far;
+}
+
+export function assignExclusiveGeometry(tokens = [], candidates = [], options = {}) {
+  const pairs = [];
+  for (const token of tokens || []) {
+    const hint = options.shapeHintFor?.(token);
+    const maxDist = associateRadiusForHint(hint);
+    for (const candidate of candidates || []) {
+      if (looksLikeTextGlyph(candidate, token)) continue;
+      if (!isPlausibleSymbolForHint(candidate, hint)) continue;
+      const dist = distanceToCandidate(token, candidate);
+      const inside = containsPoint(candidate, token);
+      if (dist > maxDist && !(inside && Math.max(candidate.w, candidate.h) <= 2.3)) continue;
+      if (hint === "rect" && !inside && (Math.max(candidate.w, candidate.h) < 0.55 || candidate.w * candidate.h < 0.28)) continue;
+      const score = fixtureAssociationScore(token, candidate, { shapeHint: hint });
+      if (score < 1.35) continue;
+      pairs.push({ token, candidate, dist, score });
+    }
+  }
+  pairs.sort((a, b) => b.score - a.score || a.dist - b.dist);
+  const usedTokens = new Set();
+  const usedCandidates = new Set();
+  const assigned = new Map();
+  for (const pair of pairs) {
+    if (usedTokens.has(pair.token) || usedCandidates.has(pair.candidate)) continue;
+    usedTokens.add(pair.token);
+    usedCandidates.add(pair.candidate);
+    assigned.set(pair.token, pair.candidate);
+  }
+  return assigned;
 }
 
 export function scaleOutline(outline, factor, origin) {

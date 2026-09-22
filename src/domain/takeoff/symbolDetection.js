@@ -3,7 +3,23 @@ const CAN_RE = /downlight|can\s*light|recessed\s*can|\bdl\b|\bcan-?\d|\d\s*["”
 const BARE_TYPE_RE = /^(?:\d{1,2}[a-z]?|[a-z])$/i;
 const LEGEND_HEADER_RE = /^(?:electrical\s+|lighting\s+|power\s+|device\s+|symbol\s+)?legend$|^abbreviations?$/i;
 const NOTE_WORD_RE = /^(see|schedule|sched|title|qty|quantity|refer)$/i;
-const NON_PLAN_KIND_RE = /legend|schedule|^spec$/i;
+const NON_PLAN_KIND_RE = /legend|schedule|^spec$|oneline|riser|detail/i;
+const CIRCUIT_TAG_RE = /^(?:LN|LP|PP|RP|H|P|L|EM)\d{1,2}$/i;
+const TAGGED_EQUIP_RE = /^(VF|EF)(?:[- ]?\d+)?$/i;
+
+export function normalizeTypeMark(text) {
+  return String(text || "")
+    .trim()
+    .replace(/^['"‘’“”`]+|['"‘’“”`]+$/g, "")
+    .replace(/^type\s+/i, "")
+    .replace(/[.,;:()]+$/g, "")
+    .replace(/^[()]+/, "");
+}
+
+export function taggedEquipmentCode(text) {
+  const match = normalizeTypeMark(text).match(TAGGED_EQUIP_RE);
+  return match ? match[1].toUpperCase() : "";
+}
 
 export function isReferenceCallout(text) {
   const raw = String(text || "").trim();
@@ -21,7 +37,30 @@ export function isPlanInterior(token) {
   const x = Number(token?.x);
   const y = Number(token?.y);
   if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+  if (y >= 64 && x <= 28) return false;
   return x >= 7 && x <= 76 && y >= 10 && y <= 88;
+}
+
+export function isZoneNoteContext(token, tokens = []) {
+  if (isQuotedTypeMark(token?.text)) return false;
+  if (!isBareTypeCode(token?.text) && !/^\d{1,2}$/.test(normalizeTypeMark(token?.text))) return false;
+  return (tokens || []).some((other) => {
+    if (other === token) return false;
+    const dx = Math.abs((Number(other.x) || 0) - (Number(token?.x) || 0));
+    const dy = Math.abs((Number(other.y) || 0) - (Number(token?.y) || 0));
+    if (dx > 10 || dy > 0.85) return false;
+    return /^(all|work|this|zone|designated|alternate|base|bid)$/i.test(normalizeTypeMark(other.text));
+  });
+}
+
+export function isNotesClusterToken(token, tokens = []) {
+  return (tokens || []).some((other) => {
+    if (other === token) return false;
+    if (!/^(?:notes?|general)$/i.test(normalizeTypeMark(other.text))) return false;
+    const dx = (Number(token?.x) || 0) - (Number(other.x) || 0);
+    const dy = (Number(token?.y) || 0) - (Number(other.y) || 0);
+    return dx >= -4 && dx <= 24 && dy >= -2 && dy <= 36;
+  });
 }
 
 export function hasReferenceNeighbor(token, tokens = []) {
@@ -39,8 +78,47 @@ export function hasReferenceNeighbor(token, tokens = []) {
 }
 
 export function isBareTypeCode(text) {
-  const compact = String(text || "").trim().replace(/^type\s+/i, "");
-  return BARE_TYPE_RE.test(compact);
+  return BARE_TYPE_RE.test(normalizeTypeMark(text));
+}
+
+export function isQuotedTypeMark(text) {
+  return /^['"‘’“”`].+['"‘’“”`]$/.test(String(text || "").trim());
+}
+
+export function isUnquotedCircuitBesideQuotedType(token, tokens = []) {
+  if (isQuotedTypeMark(token?.text)) return false;
+  const code = normalizeTypeMark(token?.text);
+  if (!/^\d{1,2}[A-Z]?$/i.test(code)) return false;
+  return (tokens || []).some((other) => {
+    if (!isQuotedTypeMark(other.text)) return false;
+    if (normalizeTypeMark(other.text).toUpperCase() !== code.toUpperCase()) return false;
+    const dist = Math.hypot((Number(other.x) || 0) - (Number(token?.x) || 0), (Number(other.y) || 0) - (Number(token?.y) || 0));
+    return dist > 0.35 && dist < 8;
+  });
+}
+
+export function isCircuitCalloutToken(token, tokens = []) {
+  const text = normalizeTypeMark(token?.text);
+  if (!text) return false;
+  if (isQuotedTypeMark(token?.text)) return false;
+  if (CIRCUIT_TAG_RE.test(text) && !TAGGED_EQUIP_RE.test(text)) return true;
+  if (!/^\d{1,2}[A-Z]?$/i.test(text)) return false;
+  return (tokens || []).some((other) => {
+    if (other === token) return false;
+    const dx = Math.abs((Number(other.x) || 0) - (Number(token?.x) || 0));
+    const dy = Math.abs((Number(other.y) || 0) - (Number(token?.y) || 0));
+    if (dx > 2.4 || dy > 1.2) return false;
+    const nearby = normalizeTypeMark(other.text);
+    return CIRCUIT_TAG_RE.test(nearby) || nearby === "-";
+  });
+}
+
+export function isSheetGridTick(token) {
+  const text = normalizeTypeMark(token?.text);
+  if (!/^(?:[A-Z]|\d{1,2})$/i.test(text)) return false;
+  const x = Number(token?.x) || 0;
+  const y = Number(token?.y) || 0;
+  return x <= 6.6 || y <= 9.2 || (x >= 64.2 && x <= 68.2 && y <= 56);
 }
 
 export function isTitleBlockLetter(token) {
@@ -98,12 +176,24 @@ export function persistedPlanDeviceCount(marks, pageKinds = {}) {
 
 export function shouldAcceptPlanToken(token, tokens = []) {
   if (!token) return false;
-  if (isReferenceCallout(token.text)) return false;
-  if (hasReferenceNeighbor(token, tokens)) return false;
-  if (isTitleBlockLetter(token)) return false;
-  if (isLegendClusterToken(token, tokens)) return false;
-  if (isScheduleNoteContext(token, tokens)) return false;
-  if (isBareTypeCode(token.text) && !isPlanInterior(token)) return false;
+  const marked = { ...token, text: normalizeTypeMark(token.text) };
+  if (!marked.text) return false;
+  if (isReferenceCallout(marked.text) || isReferenceCallout(token.text)) return false;
+  if (hasReferenceNeighbor(token, tokens) || hasReferenceNeighbor(marked, tokens)) return false;
+  if (isTitleBlockLetter(token) || isTitleBlockLetter(marked)) return false;
+  if (isLegendClusterToken(token, tokens) || isLegendClusterToken(marked, tokens)) return false;
+  if (isScheduleNoteContext(token, tokens) || isScheduleNoteContext(marked, tokens)) return false;
+  if (isCircuitCalloutToken(token, tokens)) return false;
+  if (isSheetGridTick(token)) return false;
+  if (isNotesClusterToken(token, tokens)) return false;
+  if (isZoneNoteContext(token, tokens)) return false;
+  if (isUnquotedCircuitBesideQuotedType(token, tokens)) return false;
+  if (/^EM$/i.test(marked.text) && (tokens || []).some((other) => {
+    const dx = Math.abs((Number(other.x) || 0) - (Number(token?.x) || 0));
+    const dy = Math.abs((Number(other.y) || 0) - (Number(token?.y) || 0));
+    return dx < 4 && dy < 2.2 && /^(?:E\/M|1E|2E|3E|EMERGENCY)$/i.test(normalizeTypeMark(other.text));
+  })) return false;
+  if (isBareTypeCode(marked.text) && !isPlanInterior(token)) return false;
   return true;
 }
 

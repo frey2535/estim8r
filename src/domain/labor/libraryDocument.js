@@ -92,8 +92,8 @@ function scoreItem(item, text, category) {
   return score;
 }
 
-export function assignLaborHours({ category, symbol, unit }) {
-  const audited = matchAuditedLaborHours({ category, symbol, unit });
+export function assignLaborHours({ category, symbol, unit, items, minScore = 0, allowCategoryFallback = true } = {}) {
+  const audited = matchAuditedLaborHours({ category, symbol, unit, items, minScore });
   if (audited) return audited;
 
   const text = textOf(category, symbol);
@@ -107,7 +107,8 @@ export function assignLaborHours({ category, symbol, unit }) {
     }
   }
   const fallback = LABOR_LIBRARY_DOCUMENT.fallbacks[category];
-  const chosen = best || (unit === "LF" || unit === "100 LF" ? LABOR_LIBRARY_DOCUMENT.fallbacks.Raceway : fallback);
+  const lengthFallback = unit === "LF" || unit === "FT" || unit === "100 LF";
+  const chosen = best || (allowCategoryFallback && lengthFallback ? LABOR_LIBRARY_DOCUMENT.fallbacks.Raceway : allowCategoryFallback ? fallback : null);
   if (!chosen) {
     return {
       laborItemId: "",
@@ -119,7 +120,7 @@ export function assignLaborHours({ category, symbol, unit }) {
       note: "No labor-library match. Enter man-hours.",
     };
   }
-  const displayUnit = unit || (chosen.unit === "100 LF" ? "LF" : "EA");
+  const displayUnit = unit === "FT" ? "LF" : (unit || (chosen.unit === "100 LF" ? "LF" : "EA"));
   const mhPerUnit = displayUnit === "LF" && chosen.unit === "100 LF"
     ? chosen.mh / 100
     : displayUnit === "LF" && chosen.unit === "1000 LF"

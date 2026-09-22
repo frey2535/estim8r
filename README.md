@@ -86,6 +86,7 @@ node src/domain/labor/auditedLibrary.test.js
 node src/domain/labor/architecture.test.js
 node src/domain/estimate/fromDrawings.test.js
 node src/domain/estimate/fromTakeoff.test.js
+node src/domain/estimate/manualLineLabor.test.js
 node src/domain/estimate/estimateStore.test.js
 node src/domain/estimate/branding.test.js
 node src/domain/estimate/estimatePdf.test.js

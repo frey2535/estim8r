@@ -34,6 +34,12 @@ assert(emt1?.mhPerUnit === 0.055, `1 in EMT mh ${emt1?.mhPerUnit}`);
 const half = matchAuditedLaborHours({ category: "Raceway", symbol: "EMT 1/2", unit: "LF" });
 assert(half?.laborItemId === "EL-00039" && half.mhPerUnit === 0.038, `1/2 EMT uses model baseline ${half?.laborItemId} ${half?.mhPerUnit}`);
 
+const halfFt = matchAuditedLaborHours({ symbol: '1/2" EMT', unit: "FT" });
+assert(halfFt?.laborItemId === "EL-00039" && halfFt.mhPerUnit === 0.038, `FT uses the same 1/2 EMT MH as LF, got ${halfFt?.laborItemId} ${halfFt?.mhPerUnit}`);
+
+const pvc = matchAuditedLaborHours({ symbol: '3/4" PVC', unit: "LF" });
+assert(pvc?.mhPerUnit > 0 && /pvc/i.test(`${pvc.item.item_name} ${pvc.item.material_type}`), `3/4 PVC maps to a PVC library row, got ${pvc?.laborItemId} ${pvc?.item?.item_name}`);
+
 const connector = matchAuditedLaborHours({ category: "Raceways", symbol: "EMT connector 3/4 in", unit: "EA" });
 assert(connector?.laborItemId === "EL-00051" && connector.mhPerUnit === 0.1, "connector uses EL-00051");
 

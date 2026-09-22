@@ -46,11 +46,10 @@ const pvcItem = AUDITED_LABOR_ITEMS.find((row) => row.id === "EL-00576");
 const floodItem = AUDITED_LABOR_ITEMS.find((row) => row.id === "EL-01527");
 assert(emtItem && pvcItem && floodItem, "workbook still has EMT, PVC, and flood light rows");
 
-assert(filterLaborLibrary(AUDITED_LABOR_ITEMS, "1/2 emt").some((row) => row.id === "EL-00039"), "typeahead finds 1/2 EMT");
-assert(filterLaborLibrary(AUDITED_LABOR_ITEMS, "3/4 pvc").some((row) => row.id === "EL-00576"), "typeahead finds 3/4 PVC");
-assert(filterLaborLibrary(AUDITED_LABOR_ITEMS, "flood light").some((row) => row.id === "EL-01527"), "typeahead finds flood light");
-assert(filterLaborLibrary(AUDITED_LABOR_ITEMS, "fixture").some((row) => row.category === "Lighting"), "typeahead finds fixture-install rows");
-assert(filterLaborLibrary(AUDITED_LABOR_ITEMS, "xyzzy-no-such-item").length === 0, "empty search is unmatched, not invented");
+assert(filterLaborLibrary(AUDITED_LABOR_ITEMS, "1/2", { itemType: "Conduit", category: "EMT conduit" }).some((row) => row.id === "EL-00039"), "typeahead finds 1/2 EMT in EMT conduit");
+assert(filterLaborLibrary(AUDITED_LABOR_ITEMS, "3/4", { itemType: "Conduit", category: "PVC conduit" }).some((row) => row.id === "EL-00576"), "typeahead finds 3/4 PVC in PVC conduit");
+assert(filterLaborLibrary(AUDITED_LABOR_ITEMS, "flood", { itemType: "Fixture", category: "Lighting" }).some((row) => row.id === "EL-01527"), "typeahead finds flood light in Lighting");
+assert(filterLaborLibrary(AUDITED_LABOR_ITEMS, "xyzzy-no-such-item", { itemType: "Conduit", category: "EMT conduit" }).length === 0, "empty search is unmatched, not invented");
 
 const emt = applyLibraryItemToLine(line({ quantity: 10, unit: "FT" }), emtItem);
 assert(emt.laborItemId === "EL-00039", `1/2 EMT pick is EL-00039, got ${emt.laborItemId}`);

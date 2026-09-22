@@ -102,7 +102,8 @@ export default function EstimatePdfPreview({ estimate }) {
         setBlob(null);
         setPages([]);
         setStatus("error");
-        setError(nextError?.message || "Could not create the estimate PDF.");
+        console.error("Estimate PDF preview failed", nextError);
+        setError("Could not create the estimate PDF.");
       }
     }, 180);
 

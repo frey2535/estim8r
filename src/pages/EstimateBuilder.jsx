@@ -18,10 +18,10 @@ import NamedCrewPicker from "@/components/labor/NamedCrewPicker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DEFAULT_VISIBLE_TOTALS, resolveVisibleTotals, setAllLinesIncluded, TOTAL_OPTIONS } from "@/domain/estimate/presentation";
 import { calculateBidByScope, calculateWorkCategoryBreakdown, WORK_CATEGORY_ORDER, workCategoryForEstimateLine } from "@/domain/estimate/trueElectricalTakeoff";
-import { applyLibraryItemToLine, applyManualLineLabor, conduitQtyHint, estimateLineHours, estimateLineLaborCost, findLibraryItem, hydrateManualLineLabor, shouldHydrateManualLabor } from "@/domain/estimate/manualLineLabor";
+import { applyLibraryItemToLine, applyManualLineLabor, clearLaborPick, conduitQtyHint, estimateLineHours, estimateLineLaborCost, findLibraryItem, hydrateManualLineLabor, laborPickStillMatches, shouldHydrateManualLabor } from "@/domain/estimate/manualLineLabor";
+import { categoriesForType, defaultCategoryForType, laborPickerPlaceholder, LINE_TYPES } from "@/domain/estimate/lineLaborCatalog";
 import LaborItemPicker from "@/components/estimate/LaborItemPicker";
 
-const ITEM_TYPES = ["Material", "Labor", "Equipment", "Subcontract", "Allowance", "Fixture", "Device", "Conduit", "Wire", "Gear", "Other"];
 const UNITS = ["STICK", "EA", "LF", "SF", "FT", "100 LF", "1000 LF", "HR", "DAY", "LOT"];
 
 function blankLine(rate) {
@@ -29,7 +29,7 @@ function blankLine(rate) {
     id: crypto.randomUUID(),
     takeoffKey: "",
     source: "manual",
-    itemType: "Material",
+    itemType: "",
     category: "",
     description: "",
     quantity: 1,
@@ -252,6 +252,16 @@ export default function EstimateBuilder() {
       }
       if (key === "laborRate") next.laborRateEdited = true;
       if (key === "materialUnitCost") next.materialCostEdited = true;
+      if (key === "itemType") {
+        const options = categoriesForType(value);
+        next.category = options.includes(next.category) ? next.category : defaultCategoryForType(value);
+        if (!laborPickStillMatches(next, library)) return clearLaborPick(next);
+        return next;
+      }
+      if (key === "category") {
+        if (!laborPickStillMatches(next, library)) return clearLaborPick(next);
+        return next;
+      }
       if (key === "unit" && next.laborItemId) {
         next.quantityBasis = (value === "LF" || value === "100 LF" || value === "1000 LF") ? "feet" : next.quantityBasis;
         return applyManualLineLabor(next, { items: library, factors, rate: wage.rate });
@@ -378,7 +388,7 @@ export default function EstimateBuilder() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
           <div className="min-w-0">
             <h2 className="text-lg font-bold">Estimate Lines</h2>
-            <p className="text-xs text-muted-foreground">Pick a Labor tab library row for each line — the same source AI takeoff uses. MH/unit and Hours fill from that row as quantity changes. Conduit qty is stick count (× 10') unless the unit is LF. Quantities stay editable and do not change the takeoff sheet. Labor rate follows the selected classes unless you edit a line.</p>
+            <p className="text-xs text-muted-foreground">Choose Type and Category first. The Labor item list shows only associated Labor tab rows — EMT conduit does not list THHN or fixtures. MH/unit and Hours fill from the picked row. Conduit qty is stick count (× 10') unless the unit is LF. Quantities stay editable and do not change the takeoff sheet.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold">
@@ -421,8 +431,15 @@ export default function EstimateBuilder() {
                     Include
                   </label>
                 ) : null}
-                <Field label="Type"><Sel value={row.itemType} vals={ITEM_TYPES} set={(v) => patchLine(row.id, "itemType", v)} /></Field>
-                <Field label="Category"><Cell value={row.category} set={(v) => patchLine(row.id, "category", v)} /></Field>
+                <Field label="Type"><Sel value={row.itemType} vals={LINE_TYPES} set={(v) => patchLine(row.id, "itemType", v)} placeholder="Select type" /></Field>
+                <Field label="Category">
+                  <Sel
+                    value={row.category}
+                    vals={categoriesForType(row.itemType)}
+                    set={(v) => patchLine(row.id, "category", v)}
+                    placeholder={row.itemType ? "Select category" : "Select type first"}
+                  />
+                </Field>
                 <Field label="Work category">
                   <Sel
                     value={row.workCategory || workCategoryForEstimateLine(row)}
@@ -432,7 +449,14 @@ export default function EstimateBuilder() {
                 </Field>
                 <div className="min-w-0 min-[520px]:col-span-2">
                   <span className="mb-1 block text-xs font-bold text-muted-foreground">Labor item</span>
-                  <LaborItemPicker items={library} value={row.laborItemId} onSelect={(item) => pickLaborItem(row, item)} />
+                  <LaborItemPicker
+                    items={library}
+                    value={row.laborItemId}
+                    itemType={row.itemType}
+                    category={row.category}
+                    placeholder={laborPickerPlaceholder(row)}
+                    onSelect={(item) => pickLaborItem(row, item)}
+                  />
                 </div>
                 <Field label="Item / description" className="min-[520px]:col-span-2"><Cell value={row.description} set={(v) => patchLine(row.id, "description", v)} placeholder="Job description (does not change labor)" /></Field>
                 <Field label="Qty">
@@ -860,10 +884,11 @@ function Cell({ value, set, type = "text", placeholder = "" }) {
   return <input type={type} step={type === "number" ? "0.01" : undefined} value={value} placeholder={placeholder} onChange={(e) => set(e.target.value)} className="w-full min-w-0 rounded-md border border-input bg-background px-2 py-2" />;
 }
 
-function Sel({ value, vals, set }) {
+function Sel({ value, vals, set, placeholder = "" }) {
   const options = vals.includes(value) || !value ? vals : [value, ...vals];
   return (
     <select value={value} onChange={(e) => set(e.target.value)} className="w-full min-w-0 rounded-md border border-input bg-background px-2 py-2">
+      {placeholder ? <option value="">{placeholder}</option> : null}
       {options.map((option) => <option key={option}>{option}</option>)}
     </select>
   );

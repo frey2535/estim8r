@@ -1,6 +1,7 @@
 import { applySelectionToLine, makeLaborSelection } from "../labor/selection.js";
 import { defaultProductivityFactors } from "../labor/productivity.js";
 import { EXPERIMENTAL_LABOR_SOURCE } from "../labor/sources.js";
+import { laborItemMatchesLine, laborItemsForLine } from "./lineLaborCatalog.js";
 
 export const UNMATCHED_LABOR_NOTE = "No labor-library match. Enter man-hours.";
 export const CONDUIT_STICK_FEET = 10;
@@ -20,11 +21,13 @@ export function laborItemSearchText(item) {
     .toLowerCase();
 }
 
-export function filterLaborLibrary(items = [], query = "", { limit = 40 } = {}) {
+export function filterLaborLibrary(items = [], query = "", { limit = 80, itemType, category } = {}) {
+  const scoped = (itemType || category)
+    ? laborItemsForLine(items, { itemType, category })
+    : [];
   const words = String(query || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
   const rows = [];
-  for (const item of items) {
-    if (item?.active === false) continue;
+  for (const item of scoped) {
     const blob = laborItemSearchText(item);
     if (words.length && !words.every((word) => blob.includes(word))) continue;
     rows.push(item);
@@ -138,8 +141,8 @@ export function applyLibraryItemToLine(line, item, { factors, rate } = {}) {
   const keepDescription = Boolean(String(line.description || "").trim());
   const applied = applySelectionToLine({
     ...line,
-    category: item.category || line.category || "",
-    itemType: itemTypeFor(item),
+    category: line.category || "",
+    itemType: line.itemType || itemTypeFor(item),
     unit: displayUnitFor(line, item),
     quantityBasis: quantityBasisFor(line, item),
     description: keepDescription ? line.description : laborItemLabel(item),
@@ -203,4 +206,21 @@ export function conduitQtyHint(line, item) {
   const install = laborInstallQuantity(line, item);
   if (quantityIsFeet(line)) return `${install} LF entered as feet`;
   return `${qty} stick${qty === 1 ? "" : "s"} × ${CONDUIT_STICK_FEET}' = ${install} LF for labor`;
+}
+
+export function laborPickStillMatches(line, items) {
+  const item = findLibraryItem(items, line);
+  if (!item) return !line?.laborItemId;
+  return laborItemMatchesLine(item, line);
+}
+
+export function clearLaborPick(line) {
+  return {
+    ...line,
+    laborItemId: "",
+    laborSource: "",
+    laborSelection: null,
+    laborMhPerUnit: line.laborMhEdited ? line.laborMhPerUnit : 0,
+    laborMatchStatus: "",
+  };
 }

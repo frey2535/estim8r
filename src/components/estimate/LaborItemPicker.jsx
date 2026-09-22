@@ -4,11 +4,22 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { filterLaborLibrary, laborItemLabel } from "@/domain/estimate/manualLineLabor";
 
-export default function LaborItemPicker({ items = [], value, onSelect, placeholder = "Search the Labor tab library…" }) {
+export default function LaborItemPicker({
+  items = [],
+  value,
+  onSelect,
+  itemType = "",
+  category = "",
+  placeholder = "Select Type and Category first",
+}) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const selected = items.find((item) => item.id === value) || null;
-  const results = useMemo(() => filterLaborLibrary(items, query), [items, query]);
+  const results = useMemo(
+    () => filterLaborLibrary(items, query, { itemType, category }),
+    [items, query, itemType, category],
+  );
+  const canSearch = Boolean(itemType);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -31,10 +42,14 @@ export default function LaborItemPicker({ items = [], value, onSelect, placehold
           <CommandInput
             value={query}
             onValueChange={setQuery}
-            placeholder="Type 1/2 EMT, 3/4 PVC, flood light…"
+            placeholder={canSearch ? `Search ${category || itemType}…` : "Select Type and Category first"}
           />
           <CommandList>
-            <CommandEmpty>Nothing in the labor library fits that search. MH/unit stays 0 — this is not a NECA rate.</CommandEmpty>
+            <CommandEmpty>
+              {canSearch
+                ? "Nothing in the labor library fits this Type and Category. MH/unit stays 0 — this is not a NECA rate."
+                : "Select Type and Category to see associated labor rows."}
+            </CommandEmpty>
             <CommandGroup>
               {results.map((item) => {
                 const mh = item.labor_units?.find((unit) => unit.normal_mh != null)?.normal_mh;

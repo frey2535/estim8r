@@ -3,6 +3,7 @@ import { compositeWage, defaultCrew, journeymanWage } from "../labor/employeeCla
 import { defaultProductivityFactors } from "../labor/productivity.js";
 import { makeLaborSelection } from "../labor/selection.js";
 import { fillEmptyHeader, headerFromDrawings } from "./fromDrawings.js";
+import { applySavedLineOrder } from "./lineOrder.js";
 
 export function estimateStorageKey(fileName, fileSize) {
   return `estim8r.estimate.v1:${fileName || "drawing"}:${fileSize || 0}`;
@@ -150,7 +151,7 @@ export function mergeEstimate(existing, incomingLines) {
     }
     next.push(line);
   }
-  return next;
+  return applySavedLineOrder(next, (existing?.lines || []).map((line) => line.id));
 }
 
 export function buildEstimateDraft({ fileName, fileSize, drawingDocs, rollup, pageCount, wageBook, markup }) {

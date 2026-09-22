@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ChevronDown, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, GripVertical, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -25,9 +25,14 @@ export default function EstimateLineCard({
   itemized = false,
   sourcesOpen = false,
   canDelete = true,
+  canMoveUp = false,
+  canMoveDown = false,
+  dragHandleProps,
   sourceOptions = [],
   onPatch,
   onPickLabor,
+  onMoveUp,
+  onMoveDown,
   onToggleSources,
   onDelete,
   onSelectSource,
@@ -52,7 +57,34 @@ export default function EstimateLineCard({
   return (
     <Card data-testid="estimate-line-card" className={`overflow-hidden shadow-sm ${omitted ? "opacity-60" : ""}`}>
       <div className="flex">
-        <div className="w-1 shrink-0 bg-blue-600 dark:bg-orange-500" aria-hidden />
+        <div className="flex shrink-0 flex-col items-center gap-0.5 self-stretch bg-blue-600/10 px-0.5 py-1 dark:bg-orange-500/10">
+          <button
+            type="button"
+            className="cursor-grab rounded-md p-1 text-muted-foreground hover:bg-muted active:cursor-grabbing"
+            aria-label={`Drag line ${index + 1} to reorder`}
+            {...dragHandleProps}
+          >
+            <GripVertical className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={onMoveUp}
+            disabled={!canMoveUp}
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30"
+            aria-label={`Move line ${index + 1} up`}
+          >
+            <ChevronUp className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={onMoveDown}
+            disabled={!canMoveDown}
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30"
+            aria-label={`Move line ${index + 1} down`}
+          >
+            <ChevronDown className="h-3.5 w-3.5" />
+          </button>
+        </div>
         <div className="min-w-0 flex-1 p-2.5 sm:p-3">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">

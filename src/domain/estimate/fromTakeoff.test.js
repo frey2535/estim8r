@@ -51,6 +51,10 @@ assert(edited[0].laborMhPerUnit === 9.99, "existing estimate man-hours are not o
 assert(edited[0].laborSelection === undefined, "legacy estimate lines keep their stored labor basis");
 assert(edited[1].quantity === 200, "new takeoff line is added");
 
+const reorderedExisting = { lines: [lines[1], { ...lines[0], quantity: 99, quantityEdited: true }] };
+const keptOrder = mergeEstimate(reorderedExisting, lines);
+assert(keptOrder[0].id === lines[1].id && keptOrder[1].id === lines[0].id, "takeoff sync keeps the estimator's line order");
+
 const draft = syncEstimateDraft(null, {
   fileName: "level-1.pdf",
   fileSize: 10,

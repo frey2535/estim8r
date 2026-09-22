@@ -20,6 +20,8 @@ import { calculateBidByScope, calculateWorkCategoryBreakdown } from "@/domain/es
 import { applyLibraryItemToLine, applyManualLineLabor, clearLaborPick, hydrateManualLineLabor, laborPickStillMatches, shouldHydrateManualLabor } from "@/domain/estimate/manualLineLabor";
 import { categoriesForType, defaultCategoryForType } from "@/domain/estimate/lineLaborCatalog";
 import EstimateLineCard from "@/components/estimate/EstimateLineCard";
+import EstimateSupplyQuote from "@/components/estimate/EstimateSupplyQuote";
+import { buildEstimateSupplyQuote } from "@/domain/estimate/estimateSupplyQuote";
 
 function blankLine(rate) {
   return {
@@ -29,6 +31,7 @@ function blankLine(rate) {
     itemType: "",
     category: "",
     description: "",
+    model: "",
     quantity: 1,
     unit: "EA",
     materialUnitCost: 0,
@@ -188,6 +191,14 @@ export default function EstimateBuilder() {
     scopeEdited: meta.scopeEdited,
     trueTakeoff,
   }), [header, crew, factors, namedCrewId, contingency, overhead, profit, bondInsurance, lines, itemized, visibleTotals, meta, trueTakeoff, storageFileName]);
+
+  const supplyQuote = useMemo(() => buildEstimateSupplyQuote({
+    lines,
+    itemized,
+    library,
+    projectName: header.projectName,
+    fileName: storageFileName,
+  }), [lines, itemized, library, header.projectName, storageFileName]);
 
   const totals = useMemo(() => estimateGrandTotal(draft), [draft]);
   const cont = totals.contingency || 0;
@@ -385,7 +396,7 @@ export default function EstimateBuilder() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
           <div className="min-w-0">
             <h2 className="text-lg font-bold">Estimate Lines</h2>
-            <p className="text-xs text-muted-foreground">Choose Type and Category first. The Labor item list shows only associated Labor tab rows — EMT conduit does not list THHN or fixtures. MH/unit and Hours fill from the picked row. Conduit qty is stick count (× 10') unless the unit is LF. Quantities stay editable and do not change the takeoff sheet.</p>
+            <p className="text-xs text-muted-foreground">Choose Type and Category first. Labor item, MH/unit, and Hours follow the picked row. Conduit qty is stick count (× 10') unless the unit is LF. The supply-house sheet updates as you type.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold">
@@ -407,7 +418,8 @@ export default function EstimateBuilder() {
             </button>
           </div>
         </div>
-        <div className="space-y-4 bg-muted/20 p-4">
+        <div className="space-y-3 bg-muted/20 p-3">
+          <EstimateSupplyQuote quote={supplyQuote} />
           {lines.map((row, index) => (
             <EstimateLineCard
               key={row.id}

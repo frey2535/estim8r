@@ -47,7 +47,7 @@ export default function EstimateLineCard({
   const includeLabel = title === "New line" ? "line" : title;
 
   return (
-    <Card className={`overflow-hidden shadow-sm ${omitted ? "opacity-60" : ""}`}>
+    <Card data-testid="estimate-line-card" className={`overflow-hidden shadow-sm ${omitted ? "opacity-60" : ""}`}>
       <div className="flex">
         <div className="w-1.5 shrink-0 bg-blue-600 dark:bg-orange-500" aria-hidden />
         <div className="min-w-0 flex-1">

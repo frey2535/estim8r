@@ -1,5 +1,6 @@
 import { buildReviewMarkupPages } from "../takeoff/markupPages.js";
 import { includedLines } from "./presentation.js";
+import { estimateLineHours, estimateLineLaborCost } from "./manualLineLabor.js";
 
 export const PROJECT_FOLDER_INDEX_KEY = "estim8r.projectDocs.v1";
 
@@ -268,8 +269,8 @@ export function estimateTotals(estimate) {
   return lines.reduce((acc, line) => {
     const qty = Number(line.quantity) || 0;
     acc.material += qty * (Number(line.materialUnitCost) || 0);
-    acc.hours += qty * (Number(line.laborMhPerUnit) || 0);
-    acc.labor += qty * (Number(line.laborMhPerUnit) || 0) * (Number(line.laborRate) || 0);
+    acc.hours += estimateLineHours(line);
+    acc.labor += estimateLineLaborCost(line);
     return acc;
   }, { material: 0, hours: 0, labor: 0 });
 }

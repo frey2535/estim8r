@@ -3,12 +3,15 @@ import { isSheetChrome, pageDiscipline, pageMatchesTrade } from "./sheetDiscipli
 import {
   fixtureSizeFromWholeToken,
   isCanDeviceText,
+  isNonPlanSheetKind,
   isReferenceCallout,
+  isTitleBlockLetter,
+  persistedPlanDeviceCount,
   resolveCanSymbol,
   shouldAcceptPlanToken,
 } from "./symbolDetection.js";
 import { DETECT_SOURCE_ORIGINAL_PDF } from "./accuracyReview.js";
-import { associateGeometry } from "./vectorSymbols.js";
+import { associateGeometry, placeOnSymbolGeometry } from "./vectorSymbols.js";
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
 
 const STOP = new Set(["the", "and", "for", "with", "from", "this", "that", "sheet", "note", "see", "typ", "all", "new", "nic", "nts", "rev"]);
@@ -135,6 +138,7 @@ export function fixtureAliasesFromSchedules(pages, symbols, trade) {
         const code = String(token.text || "").trim().replace(/[.:]+$/g, "").replace(/^type\s+/i, "");
         if (!TYPE_CODE.test(code) || fixtureSizeKey(code) === symbol.id) continue;
         if (/^[A-Za-z]+$/.test(code) && code.length > 1) continue;
+        if (isLegendQuantityCode(code, row.tokens)) continue;
         if (taken.has(normalizeTakeoffText(code))) continue;
         const id = code.toUpperCase();
         if (seen.has(id)) continue;
@@ -172,6 +176,14 @@ export function aliasesFromDrawingSymbols(drawingSymbols, catalogSymbols) {
   return aliases;
 }
 
+function isLegendQuantityCode(code, rowTokens = []) {
+  if (!/^\d{2,3}$/.test(code)) return false;
+  return (rowTokens || []).some((token) => {
+    const text = String(token.text || "").trim().replace(/^type\s+/i, "");
+    return TYPE_CODE.test(text) && !/^\d+$/.test(text);
+  });
+}
+
 function mergeAliases(...lists) {
   const seen = new Set();
   const merged = [];
@@ -184,6 +196,56 @@ function mergeAliases(...lists) {
     }
   }
   return merged;
+}
+
+function usableDrawingSymbols(drawingSymbols, pages, trade) {
+  return (drawingSymbols || []).filter((item) => {
+    if (!item.page) return true;
+    const source = (pages || []).find((page) => page.page === item.page);
+    return !source || pageMatchesTrade(source, trade);
+  });
+}
+
+export function legendDictionaryFromPages(pages, drawingSymbols, catalogSymbols, trade) {
+  const usableDrawing = usableDrawingSymbols(drawingSymbols, pages, trade);
+  const aliases = mergeAliases(
+    fixtureAliasesFromSchedules(pages, catalogSymbols, trade),
+    aliasesFromDrawingSymbols(usableDrawing, catalogSymbols),
+  );
+  const entries = aliases.map((alias) => ({
+    code: alias.code,
+    symbol: alias.symbol,
+    shapeHint: null,
+  }));
+  for (const page of pages || []) {
+    if (!isNonPlanSheetKind(page.kind)) continue;
+    if (trade && !pageMatchesTrade(page, trade)) continue;
+    for (const token of page.tokens || []) {
+      const code = String(token.text || "").trim().replace(/[.:]+$/g, "").replace(/^type\s+/i, "").toUpperCase();
+      const entry = entries.find((item) => item.code === code);
+      if (!entry || entry.shapeHint) continue;
+      const geometry = associateGeometry(token, page.paths || [], { radius: 4.2 });
+      if (geometry?.kind) entry.shapeHint = geometry.kind;
+    }
+  }
+  return {
+    aliases,
+    entries,
+    hasLegend: entries.length > 0,
+    usableDrawing,
+  };
+}
+
+function shapeHintForToken(text, dictionary) {
+  const compact = normalizeTakeoffText(String(text || "").replace(/^type\s+/i, ""));
+  if (!compact) return null;
+  const entry = (dictionary?.entries || []).find((item) => normalizeTakeoffText(item.code) === compact);
+  return entry?.shapeHint || null;
+}
+
+function placementAllowed(point) {
+  if (!point) return false;
+  return !isSheetChrome(point) && !isTitleBlockLetter(point);
 }
 
 function phrasesFromTokens(tokens) {
@@ -205,8 +267,7 @@ function phrasesFromTokens(tokens) {
 
 export function shouldScan(page, trade) {
   if (!page) return false;
-  if (page.kind === "spec" || String(page.kind).endsWith("schedule")) return false;
-  if (page.kind === "legend" && (page.tokens?.length || 0) < 80) return false;
+  if (isNonPlanSheetKind(page.kind) || page.kind === "spec") return false;
   if (trade && !pageMatchesTrade(page, trade)) return false;
   return true;
 }
@@ -536,18 +597,32 @@ function nearbyText(token, tokens) {
     .join(" ");
 }
 
+function candidateKey(item) {
+  return `${normalizeTakeoffText(item.text)}|${Number(item.x || 0).toFixed(1)}|${Number(item.y || 0).toFixed(1)}`;
+}
+
 function collectMatchCandidates(page) {
   const tokens = (page.tokens || []).filter((token) => !isSheetChrome(token) && shouldAcceptPlanToken(token, page.tokens));
   const phrases = phrasesFromTokens(tokens).filter((phrase) => shouldAcceptPlanToken(phrase, page.tokens));
-  const candidates = phrases.map((phrase) => ({
-    text: phrase.text,
-    x: phrase.x,
-    y: phrase.y,
-    nearbyText: phrase.parts.map((part) => part.text).join(" "),
-    sectionContext: phrase.parts.some((part) => isSectionContext(part, tokens)) || SECTION_PHRASE.test(phrase.text),
-  }));
+  const candidates = [];
+  const seen = new Set();
+  const add = (item) => {
+    const key = candidateKey(item);
+    if (seen.has(key)) return;
+    seen.add(key);
+    candidates.push(item);
+  };
+  for (const phrase of phrases) {
+    add({
+      text: phrase.text,
+      x: phrase.x,
+      y: phrase.y,
+      nearbyText: phrase.parts.map((part) => part.text).join(" "),
+      sectionContext: phrase.parts.some((part) => isSectionContext(part, tokens)) || SECTION_PHRASE.test(phrase.text),
+    });
+  }
   for (const token of tokens) {
-    candidates.push({
+    add({
       text: token.text,
       x: token.x,
       y: token.y,
@@ -568,18 +643,13 @@ export function buildAiMarks({
   color = "#2563eb",
 }) {
   const anchorIds = new Set(ANCHOR_SYMBOL_IDS[trade] || []);
-  const usableDrawing = (drawingSymbols || []).filter((item) => {
-    if (!item.page) return true;
-    const source = (pages || []).find((page) => page.page === item.page);
-    return !source || pageMatchesTrade(source, trade);
-  });
-  const aliases = mergeAliases(
-    fixtureAliasesFromSchedules(pages, symbols, trade),
-    aliasesFromDrawingSymbols(usableDrawing, symbols),
-  );
+  const dictionary = legendDictionaryFromPages(pages, drawingSymbols, symbols, trade);
+  const aliases = dictionary.aliases;
+  const usableDrawing = dictionary.usableDrawing;
   const matchSymbols = [...(symbols || []), ...usableDrawing];
   const counts = [];
   const seen = [];
+  const usedGeometry = new Set();
   for (const page of pages || []) {
     if (!shouldScan(page, trade)) continue;
     for (const token of collectMatchCandidates(page)) {
@@ -589,19 +659,26 @@ export function buildAiMarks({
         reject: (item) => !shouldAcceptPlanToken({ ...token, text: item.text }, page.tokens),
       });
       if (!symbol) continue;
-      const geometry = associateGeometry(token, page.paths || []);
+      const shapeHint = shapeHintForToken(token.text, dictionary);
+      const availablePaths = (page.paths || []).filter((item) => !usedGeometry.has(item));
+      const geometry = placeOnSymbolGeometry(token, availablePaths, { shapeHint });
       if (geometry?.kind === "circle") {
         symbol = resolveCanSymbol(matchSymbols) || symbol;
       } else if (isCanDeviceText(token.text, token.nearbyText, symbol.label) && geometry?.kind !== "rect") {
         symbol = resolveCanSymbol(matchSymbols) || symbol;
       }
-      const placed = geometry
-        ? { x: geometry.cx, y: geometry.cy }
-        : { x: token.x, y: token.y };
+      const geometryPoint = geometry ? { x: geometry.cx, y: geometry.cy } : null;
+      const placed = geometryPoint && placementAllowed(geometryPoint)
+        ? geometryPoint
+        : placementAllowed(token)
+          ? { x: token.x, y: token.y }
+          : null;
+      if (!placed) continue;
+      const usedVector = Boolean(geometryPoint && placed.x === geometryPoint.x && placed.y === geometryPoint.y);
       const near = seen.some((item) => item.sheet === page.page && item.symbol === symbol.id && distance(item, placed) < 1.2);
       if (near) continue;
       const compact = normalizeTakeoffText(String(token.text || "").replace(/^type\s+/i, ""));
-      const fromSchedule = aliases.some((alias) => normalizeTakeoffText(alias.code) === compact && alias.symbol?.id === symbol.id);
+      const fromLegend = aliases.some((alias) => normalizeTakeoffText(alias.code) === compact && alias.symbol?.id === symbol.id);
       const mark = {
         id: newId(),
         source: "ai",
@@ -614,20 +691,21 @@ export function buildAiMarks({
         symbol: symbol.id,
         symbolLabel: symbol.label,
         abbr: symbol.abbr,
-        typeCode: fromSchedule
+        typeCode: fromLegend
           ? String(token.text || "").trim().replace(/^type\s+/i, "").toUpperCase()
           : (symbol.abbr || "").toUpperCase(),
         color,
-        matchedFrom: fromSchedule ? "schedule" : "drawing",
-        outline: geometry?.outline || null,
-        outlineSource: geometry ? "vector" : "text",
+        matchedFrom: fromLegend ? "legend" : "drawing",
+        outline: usedVector ? geometry.outline : null,
+        outlineSource: usedVector ? "vector" : "text",
         detectSource: DETECT_SOURCE_ORIGINAL_PDF,
-        confidence: geometry ? "high" : "low",
+        confidence: usedVector ? "high" : "low",
         reviewStatus: "pending",
         anchor: anchorIds.has(symbol.id),
       };
       counts.push(mark);
       seen.push(mark);
+      if (usedVector) usedGeometry.add(geometry);
     }
   }
   const anchors = counts.filter((mark) => mark.anchor);
@@ -662,7 +740,9 @@ export function buildAiMarks({
   const callouts = findConduitRunCallouts(pages, trade);
   conduits.push(...applyConduitCallouts(conduits, callouts, anchors, conduits.length, trade, color));
   const cap = Math.max(1, Number(maxHomeruns) || DEFAULT_MAX_HOMERUNS);
-  const scheduleHits = counts.filter((mark) => mark.matchedFrom === "schedule").length;
+  const pageKinds = Object.fromEntries((pages || []).filter((page) => page?.page).map((page) => [page.page, page.kind]));
+  const persistedCount = persistedPlanDeviceCount(counts, pageKinds);
+  const legendHits = counts.filter((mark) => mark.matchedFrom === "legend").length;
   const skipped = (pages || []).filter((page) => !pageMatchesTrade(page, trade));
   const skippedTrades = [...new Set(skipped.map((page) => pageDiscipline(page)))].filter((item) => item && item !== "unknown");
   const skipNote = skipped.length
@@ -673,10 +753,10 @@ export function buildAiMarks({
       ...counts.map(({ anchor, matchedFrom, ...mark }) => mark),
       ...conduits,
     ]),
-    summary: counts.length
-      ? `AI ${trade} takeoff: ${counts.length} devices${scheduleHits ? ` (${scheduleHits} from schedule types)` : ""}, ${conduits.length} conduit runs on ${trade} sheets showing run count and path, max ${cap} homeruns per conduit.${skipNote}`
+    summary: persistedCount
+      ? `AI ${trade} takeoff: ${persistedCount} devices from the drawing${legendHits ? ` (${legendHits} matched from the legend)` : ""}, ${conduits.length} conduit runs on ${trade} sheets showing run count and path, max ${cap} homeruns per conduit.${skipNote}`
       : `No ${trade} symbols were found on ${trade} sheets.${skipNote || " Counts stay empty until that trade is labeled on the sheets."}`,
-    deviceCount: counts.length,
+    deviceCount: persistedCount,
     conduitCount: conduits.length,
   };
 }

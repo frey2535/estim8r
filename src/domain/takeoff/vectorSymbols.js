@@ -314,21 +314,43 @@ export function distanceToCandidate(token, candidate) {
   return Math.hypot((token?.x || 0) - candidate.cx, (token?.y || 0) - candidate.cy);
 }
 
-export function associateGeometry(token, candidates = []) {
+export function looksLikeTextGlyph(candidate, token) {
+  if (!candidate || !token) return false;
+  const dist = distanceToCandidate(token, candidate);
+  const size = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
+  const tokenLen = String(token.text || "").trim().length || 1;
+  const expected = Math.max(0.35, tokenLen * 0.42);
+  return dist < 0.55 && size <= expected + 0.35 && size < 1.25;
+}
+
+export function associateGeometry(token, candidates = [], options = {}) {
   let best = null;
   let bestScore = -Infinity;
+  const hint = options.shapeHint;
+  const radius = Number(options.radius) > 0 ? Number(options.radius) : TAG_ASSOCIATE_RADIUS;
   for (const candidate of candidates || []) {
+    if (looksLikeTextGlyph(candidate, token)) continue;
     const dist = distanceToCandidate(token, candidate);
-    if (dist > TAG_ASSOCIATE_RADIUS) continue;
+    if (dist > radius) continue;
     const inside = containsPoint(candidate, token);
     if (inside && Math.max(candidate.w, candidate.h) > 2.4) continue;
-    const score = (inside ? 1.4 : 0) + (3.2 - dist) + (candidate.kind === "circle" ? 0.15 : 0);
+    const offsetBonus = (!inside && dist > 0.35 && dist < 2.2) ? 0.35 : 0;
+    const hintBonus = hint && candidate.kind === hint ? 0.45 : 0;
+    const score = (inside ? 1.1 : 0) + (3.2 - dist) + (candidate.kind === "circle" ? 0.15 : 0) + offsetBonus + hintBonus;
     if (score > bestScore) {
       best = candidate;
       bestScore = score;
     }
   }
   return best;
+}
+
+export function placeOnSymbolGeometry(token, candidates = [], options = {}) {
+  const near = associateGeometry(token, candidates, options);
+  if (near) return near;
+  const farRadius = Number(options.farRadius) > 0 ? Number(options.farRadius) : 5.2;
+  if (farRadius <= (Number(options.radius) > 0 ? Number(options.radius) : TAG_ASSOCIATE_RADIUS)) return null;
+  return associateGeometry(token, candidates, { ...options, radius: farRadius });
 }
 
 export function scaleOutline(outline, factor, origin) {

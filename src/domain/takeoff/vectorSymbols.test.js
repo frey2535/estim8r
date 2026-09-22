@@ -7,8 +7,10 @@ import {
   candidatesFromConstructedPaths,
   classifySymbolGeometry,
   isSymbolSized,
+  looksLikeTextGlyph,
   mergeOverlappingCandidates,
   parseDrawOps,
+  placeOnSymbolGeometry,
   pointHitsOutline,
   scaleOutline,
 } from "./vectorSymbols.js";
@@ -71,6 +73,28 @@ assert(wall == null || !isSymbolSized({ w: wall.w, h: wall.h, cx: wall.cx, cy: w
 const tagged = associateGeometry({ x: 12.6, y: 10.5 }, rectCandidates);
 assert(tagged && tagged.kind === "rect", "type tag binds to the nearby extracted rectangle");
 assert(associateGeometry({ x: 80, y: 80 }, rectCandidates) == null, "a far tag does not steal geometry");
+
+const glyph = {
+  kind: "path",
+  cx: 12.6,
+  cy: 10.5,
+  w: 0.55,
+  h: 0.7,
+  r: 0.35,
+  points: [
+    { x: 12.32, y: 10.15 },
+    { x: 12.88, y: 10.15 },
+    { x: 12.88, y: 10.85 },
+    { x: 12.32, y: 10.85 },
+  ],
+  outline: { kind: "path", source: "vector", w: 0.55, h: 0.7, points: [] },
+};
+assert(looksLikeTextGlyph(glyph, { text: "1E", x: 12.6, y: 10.5 }), "a letter-sized path on the tag is a text glyph");
+const snapped = placeOnSymbolGeometry({ text: "1E", x: 12.6, y: 10.5 }, [glyph, ...rectCandidates]);
+assert(snapped && snapped.kind === "rect", "placement skips the text glyph and lands on the fixture body");
+assert(Math.abs(snapped.cx - rectCandidates[0].cx) < 0.05, "marker center is the extracted symbol, not the type tag");
+const farSnap = placeOnSymbolGeometry({ text: "1E", x: 15.8, y: 10.6 }, rectCandidates);
+assert(farSnap && farSnap.kind === "rect", "a slightly farther type tag still binds to the symbol body");
 
 const merged = mergeOverlappingCandidates([
   ...rectCandidates,

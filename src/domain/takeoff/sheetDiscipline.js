@@ -114,5 +114,10 @@ export function pageMatchesTrade(page, trade) {
 export function isSheetChrome(token) {
   const x = Number(token?.x) || 0;
   const y = Number(token?.y) || 0;
-  return (x >= 78 && y >= 78) || (x >= 86 && y <= 14) || y >= 97 || x <= 1.5;
+  return (x >= 78 && y >= 78)
+    || (x >= 88 && y >= 60)
+    || (x >= 86 && y <= 14)
+    || y >= 97
+    || y <= 3.5
+    || x <= 1.5;
 }

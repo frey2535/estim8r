@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus } from "lucide-react";
 import { compositeWage, defaultCrew } from "@/domain/labor/employeeClasses";
 import { openEstimateSession, writeEstimate, writeWageBook } from "@/domain/estimate/estimateStore";
 import { estimateFileNameForSave, estimateGrandTotal, isDrawingFileName } from "@/domain/estimate/projectDocuments";
@@ -12,17 +12,14 @@ import { applySelectionToLine, buildLaborSourceOptions, makeLaborSelection } fro
 import { findCustomLabor } from "@/domain/labor/customLabor";
 import { crewFromNamed, namedFromCrew } from "@/domain/labor/crews";
 import { defaultLaborRates } from "@/domain/labor/rates";
-import LaborSourceSelector from "@/components/labor/LaborSourceSelector";
 import ProductivityFactorEditor from "@/components/labor/ProductivityFactorEditor";
 import NamedCrewPicker from "@/components/labor/NamedCrewPicker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DEFAULT_VISIBLE_TOTALS, resolveVisibleTotals, setAllLinesIncluded, TOTAL_OPTIONS } from "@/domain/estimate/presentation";
-import { calculateBidByScope, calculateWorkCategoryBreakdown, WORK_CATEGORY_ORDER, workCategoryForEstimateLine } from "@/domain/estimate/trueElectricalTakeoff";
-import { applyLibraryItemToLine, applyManualLineLabor, clearLaborPick, conduitQtyHint, estimateLineHours, estimateLineLaborCost, findLibraryItem, hydrateManualLineLabor, laborPickStillMatches, shouldHydrateManualLabor } from "@/domain/estimate/manualLineLabor";
-import { categoriesForType, defaultCategoryForType, laborPickerPlaceholder, LINE_TYPES } from "@/domain/estimate/lineLaborCatalog";
-import LaborItemPicker from "@/components/estimate/LaborItemPicker";
-
-const UNITS = ["STICK", "EA", "LF", "SF", "FT", "100 LF", "1000 LF", "HR", "DAY", "LOT"];
+import { calculateBidByScope, calculateWorkCategoryBreakdown } from "@/domain/estimate/trueElectricalTakeoff";
+import { applyLibraryItemToLine, applyManualLineLabor, clearLaborPick, hydrateManualLineLabor, laborPickStillMatches, shouldHydrateManualLabor } from "@/domain/estimate/manualLineLabor";
+import { categoriesForType, defaultCategoryForType } from "@/domain/estimate/lineLaborCatalog";
+import EstimateLineCard from "@/components/estimate/EstimateLineCard";
 
 function blankLine(rate) {
   return {
@@ -410,109 +407,25 @@ export default function EstimateBuilder() {
             </button>
           </div>
         </div>
-        <div className="divide-y divide-border">
-          {lines.map((row) => {
-            const qty = Number(row.quantity) || 0;
-            const laborItem = findLibraryItem(library, row);
-            const mat = qty * (Number(row.materialUnitCost) || 0);
-            const hours = estimateLineHours(row, laborItem);
-            const lab = estimateLineLaborCost(row, laborItem);
-            const qtyHint = conduitQtyHint(row, laborItem);
-            return (
-              <div key={row.id} className={`grid grid-cols-1 gap-2 p-3 min-[520px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 ${itemized && row.included === false ? "opacity-60" : ""}`}>
-                {itemized ? (
-                  <label className="flex items-center gap-2 text-xs font-semibold">
-                    <input
-                      type="checkbox"
-                      checked={row.included !== false}
-                      onChange={(e) => patchLine(row.id, "included", e.target.checked)}
-                      aria-label={`Include ${row.description || "line"}`}
-                    />
-                    Include
-                  </label>
-                ) : null}
-                <Field label="Type"><Sel value={row.itemType} vals={LINE_TYPES} set={(v) => patchLine(row.id, "itemType", v)} placeholder="Select type" /></Field>
-                <Field label="Category">
-                  <Sel
-                    value={row.category}
-                    vals={categoriesForType(row.itemType)}
-                    set={(v) => patchLine(row.id, "category", v)}
-                    placeholder={row.itemType ? "Select category" : "Select type first"}
-                  />
-                </Field>
-                <Field label="Work category">
-                  <Sel
-                    value={row.workCategory || workCategoryForEstimateLine(row)}
-                    vals={WORK_CATEGORY_ORDER}
-                    set={(v) => patchLine(row.id, "workCategory", v)}
-                  />
-                </Field>
-                <div className="min-w-0 min-[520px]:col-span-2">
-                  <span className="mb-1 block text-xs font-bold text-muted-foreground">Labor item</span>
-                  <LaborItemPicker
-                    items={library}
-                    value={row.laborItemId}
-                    itemType={row.itemType}
-                    category={row.category}
-                    placeholder={laborPickerPlaceholder(row)}
-                    onSelect={(item) => pickLaborItem(row, item)}
-                  />
-                </div>
-                <Field label="Item / description" className="min-[520px]:col-span-2"><Cell value={row.description} set={(v) => patchLine(row.id, "description", v)} placeholder="Job description (does not change labor)" /></Field>
-                <Field label="Qty">
-                  <Cell type="number" value={row.quantity} set={(v) => patchLine(row.id, "quantity", v)} />
-                  {qtyHint ? <p className="mt-1 text-xs text-muted-foreground">{qtyHint}</p> : null}
-                </Field>
-                <Field label="Unit"><Sel value={row.unit} vals={UNITS} set={(v) => patchLine(row.id, "unit", v)} /></Field>
-                <Field label="Material $/unit"><Cell type="number" value={row.materialUnitCost} set={(v) => patchLine(row.id, "materialUnitCost", v)} /></Field>
-                <Field label="MH/unit">
-                  <Cell type="number" value={row.laborMhPerUnit} set={(v) => patchLine(row.id, "laborMhPerUnit", v)} />
-                  {row.laborMatchStatus === "unmatched" ? (
-                    <p className="mt-1 text-xs font-semibold text-amber-700 dark:text-amber-300">Nothing in the labor library fits this pick. MH/unit left at 0. Not a NECA rate.</p>
-                  ) : row.laborMatchStatus === "matched" && row.laborSource ? (
-                    <p className="mt-1 text-xs text-muted-foreground">{row.laborSource}{row.laborSelection?.verificationStatus ? ` · ${row.laborSelection.verificationStatus}` : ""}</p>
-                  ) : row.laborMatchStatus === "overridden" ? (
-                    <p className="mt-1 text-xs text-muted-foreground">Estimator override. Labor $ still follows the selected class unless you edit Labor $/hr.</p>
-                  ) : !row.laborItemId ? (
-                    <p className="mt-1 text-xs text-muted-foreground">Pick a Labor tab item to fill MH/unit. Job descriptions do not invent hours.</p>
-                  ) : null}
-                </Field>
-                <Field label="Labor $/hr"><Cell type="number" value={row.laborRate} set={(v) => patchLine(row.id, "laborRate", v)} /></Field>
-                <label className="min-w-0">
-                  <span className="mb-1 block text-xs font-bold text-muted-foreground">Hours</span>
-                  <div className="rounded-lg border border-transparent px-3 py-2.5 font-semibold">{hours.toFixed(2)}</div>
-                </label>
-                <label className="min-w-0">
-                  <span className="mb-1 block text-xs font-bold text-muted-foreground">Material</span>
-                  <div className="rounded-lg border border-transparent px-3 py-2.5 font-semibold">${mat.toFixed(2)}</div>
-                </label>
-                <label className="min-w-0">
-                  <span className="mb-1 block text-xs font-bold text-muted-foreground">Labor</span>
-                  <div className="rounded-lg border border-transparent px-3 py-2.5 font-semibold">${lab.toFixed(2)}</div>
-                </label>
-                <Field label="Notes" className="min-[520px]:col-span-2"><Cell value={row.notes} set={(v) => patchLine(row.id, "notes", v)} /></Field>
-                <div className="flex items-end gap-2">
-                  <button type="button" onClick={() => setOpenSources((current) => current === row.id ? "" : row.id)} className="rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-muted">
-                    {openSources === row.id ? "Hide sources" : "Labor source"}
-                  </button>
-                  <button type="button" onClick={() => setLines((current) => (current.length === 1 ? current : current.filter((item) => item.id !== row.id)))} className="p-2 text-destructive" aria-label="Delete line">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-                {openSources === row.id ? (
-                  <div className="min-[520px]:col-span-2 md:col-span-3 xl:col-span-4 2xl:col-span-6">
-                    <LaborSourceSelector
-                      options={lineOptions(row)}
-                      selectedSource={row.laborSelection?.selectedSource}
-                      acknowledged={row.laborSelection?.acknowledgedUnverified}
-                      onSelect={(option) => selectSource(row, option)}
-                      onAcknowledge={(value) => acknowledgeLine(row, value)}
-                    />
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
+        <div className="space-y-4 bg-muted/20 p-4">
+          {lines.map((row, index) => (
+            <EstimateLineCard
+              key={row.id}
+              row={row}
+              index={index}
+              library={library}
+              itemized={itemized}
+              sourcesOpen={openSources === row.id}
+              canDelete={lines.length > 1}
+              sourceOptions={lineOptions(row)}
+              onPatch={patchLine}
+              onPickLabor={pickLaborItem}
+              onToggleSources={() => setOpenSources((current) => (current === row.id ? "" : row.id))}
+              onDelete={() => setLines((current) => (current.length === 1 ? current : current.filter((item) => item.id !== row.id)))}
+              onSelectSource={(option) => selectSource(row, option)}
+              onAcknowledge={(value) => acknowledgeLine(row, value)}
+            />
+          ))}
         </div>
       </section>
 

@@ -138,7 +138,7 @@ const QUOTE_HEADERS = ["Device / equipment", "Model", "Description", "Quantity"]
 function quoteExportRows(quote) {
   const rows = quote.rows.length
     ? quote.rows
-    : [{ device: "", model: "", description: "No takeoff devices", quantity: 0 }];
+    : [{ device: "", model: "", description: quote.emptyDescription || "No takeoff devices", quantity: 0 }];
   return [
     ...rows,
     { device: "", model: "", description: "TOTAL", quantity: quote.totals.quantity },
@@ -207,7 +207,7 @@ export function buildSupplyQuotePdf(quote) {
   write(quote.projectName, left, y);
   y += 14;
   doc.setTextColor(90);
-  write("For a material quote. Model numbers are only listed when the drawing or catalog has them.", left, y);
+  write(quote.modelNote || "For a material quote. Model numbers are only listed when the drawing or catalog has them.", left, y);
   doc.setTextColor(0);
   y += 22;
   const cols = [
@@ -224,7 +224,7 @@ export function buildSupplyQuotePdf(quote) {
   doc.line(left, y, right, y);
   y += 14;
   doc.setFont("helvetica", "normal");
-  const rows = quote.rows.length ? quote.rows : [{ device: "", model: "", description: "No takeoff devices", quantity: 0 }];
+  const rows = quote.rows.length ? quote.rows : [{ device: "", model: "", description: quote.emptyDescription || "No takeoff devices", quantity: 0 }];
   for (const row of rows) {
     const desc = doc.splitTextToSize(String(row.description || ""), 246);
     const height = Math.max(14, desc.length * 12);
@@ -240,7 +240,7 @@ export function buildSupplyQuotePdf(quote) {
   }
   y += 8;
   doc.setFont("helvetica", "bold");
-  write(`Total ${quote.totals.quantity} EA`, left, y);
+  write(quote.totalLabel || `Total ${quote.totals.quantity} EA`, left, y);
   return { doc, fileName: `${quote.fileBase}.pdf`, strings };
 }
 

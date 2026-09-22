@@ -29,7 +29,7 @@ export default function LaborItemPicker({
           role="combobox"
           aria-expanded={open}
           aria-label="Labor library item"
-          className="flex w-full min-w-0 items-center justify-between gap-2 rounded-md border border-input bg-background px-2 py-2 text-left text-sm"
+          className="flex w-full min-w-0 items-center justify-between gap-2 rounded-md border border-input bg-background px-2 py-1.5 text-left text-sm"
         >
           <span className={selected ? "truncate font-medium" : "truncate text-muted-foreground"}>
             {selected ? laborItemLabel(selected) : placeholder}

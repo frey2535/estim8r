@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { DragDropContext, Draggable, Droppable } from "@hello-pangea/dnd";
 import { Plus } from "lucide-react";
 import { compositeWage, defaultCrew } from "@/domain/labor/employeeClasses";
 import { openEstimateSession, writeEstimate, writeWageBook } from "@/domain/estimate/estimateStore";
@@ -22,6 +23,7 @@ import { categoriesForType, defaultCategoryForType } from "@/domain/estimate/lin
 import EstimateLineCard from "@/components/estimate/EstimateLineCard";
 import EstimateSupplyQuote from "@/components/estimate/EstimateSupplyQuote";
 import { buildEstimateSupplyQuote } from "@/domain/estimate/estimateSupplyQuote";
+import { moveEstimateLine } from "@/domain/estimate/lineOrder";
 
 function blankLine(rate) {
   return {
@@ -284,6 +286,15 @@ export default function EstimateBuilder() {
     )));
   }
 
+  function moveLine(fromIndex, toIndex) {
+    setLines((current) => moveEstimateLine(current, fromIndex, toIndex));
+  }
+
+  function onDragEnd(result) {
+    if (!result.destination) return;
+    moveLine(result.source.index, result.destination.index);
+  }
+
   function lineOptions(line) {
     const item = library.find((row) => row.id === line.laborItemId)
       || library.find((row) => row.item_name === line.description && (!line.unit || row.unit === line.unit));
@@ -420,24 +431,43 @@ export default function EstimateBuilder() {
         </div>
         <div className="space-y-3 bg-muted/20 p-3">
           <EstimateSupplyQuote quote={supplyQuote} />
-          {lines.map((row, index) => (
-            <EstimateLineCard
-              key={row.id}
-              row={row}
-              index={index}
-              library={library}
-              itemized={itemized}
-              sourcesOpen={openSources === row.id}
-              canDelete={lines.length > 1}
-              sourceOptions={lineOptions(row)}
-              onPatch={patchLine}
-              onPickLabor={pickLaborItem}
-              onToggleSources={() => setOpenSources((current) => (current === row.id ? "" : row.id))}
-              onDelete={() => setLines((current) => (current.length === 1 ? current : current.filter((item) => item.id !== row.id)))}
-              onSelectSource={(option) => selectSource(row, option)}
-              onAcknowledge={(value) => acknowledgeLine(row, value)}
-            />
-          ))}
+          <DragDropContext onDragEnd={onDragEnd}>
+            <Droppable droppableId="estimate-lines">
+              {(provided) => (
+                <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-3">
+                  {lines.map((row, index) => (
+                    <Draggable key={row.id} draggableId={String(row.id)} index={index}>
+                      {(drag) => (
+                        <div ref={drag.innerRef} {...drag.draggableProps}>
+                          <EstimateLineCard
+                            row={row}
+                            index={index}
+                            library={library}
+                            itemized={itemized}
+                            sourcesOpen={openSources === row.id}
+                            canDelete={lines.length > 1}
+                            canMoveUp={index > 0}
+                            canMoveDown={index < lines.length - 1}
+                            dragHandleProps={drag.dragHandleProps}
+                            sourceOptions={lineOptions(row)}
+                            onPatch={patchLine}
+                            onPickLabor={pickLaborItem}
+                            onMoveUp={() => moveLine(index, index - 1)}
+                            onMoveDown={() => moveLine(index, index + 1)}
+                            onToggleSources={() => setOpenSources((current) => (current === row.id ? "" : row.id))}
+                            onDelete={() => setLines((current) => (current.length === 1 ? current : current.filter((item) => item.id !== row.id)))}
+                            onSelectSource={(option) => selectSource(row, option)}
+                            onAcknowledge={(value) => acknowledgeLine(row, value)}
+                          />
+                        </div>
+                      )}
+                    </Draggable>
+                  ))}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          </DragDropContext>
         </div>
       </section>
 

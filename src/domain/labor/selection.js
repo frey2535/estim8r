@@ -1,5 +1,5 @@
 import { calculateEffectiveMhPerUnit, calculateEstimatedHours } from "./laborEngine.js";
-import { conditionMh, isExperimentalSource, isProductionSafeLabor, SOURCE_LABELS } from "./sources.js";
+import { conditionMh, findVerifiedMarketReference, isExperimentalSource, isProductionSafeLabor, SOURCE_LABELS } from "./sources.js";
 import { productivitySummary } from "./productivity.js";
 
 export function emptyPublishedReference() {
@@ -12,7 +12,10 @@ export function emptyPublishedReference() {
     confidenceLevel: null,
     verificationStatus: "unverified",
     productionAllowed: false,
-    warning: "No published reference labor is on file. NECA values are not populated.",
+    sourceName: "",
+    sourceYear: "",
+    badges: ["UNVERIFIED"],
+    warning: "No verified market reference. NECA values are not populated.",
   };
 }
 
@@ -24,9 +27,27 @@ export function buildLaborSourceOptions({
 } = {}) {
   const experimentalUnit = (laborItem?.labor_units || []).find((unit) => (
     isExperimentalSource(unit.source_type) && unit.normal_mh != null
-  )) || (laborItem?.labor_units || [])[0] || null;
+  )) || (laborItem?.labor_units || []).find((unit) => isExperimentalSource(unit.source_type)) || null;
 
-  const published = emptyPublishedReference();
+  const publishedUnit = findVerifiedMarketReference(laborItem);
+  const published = publishedUnit
+    ? {
+        sourceType: "published_reference",
+        label: SOURCE_LABELS.published_reference,
+        available: conditionMh(publishedUnit, condition) != null,
+        mh: conditionMh(publishedUnit, condition),
+        sampleSize: null,
+        confidenceLevel: null,
+        verificationStatus: "verified",
+        productionAllowed: true,
+        sourceRecordId: publishedUnit.id,
+        sourceName: publishedUnit.source_name,
+        sourceYear: publishedUnit.source_year || "",
+        badges: ["REFERENCE"],
+        warning: `${publishedUnit.source_name} ${publishedUnit.source_year || ""}`.trim(),
+        unit: publishedUnit,
+      }
+    : emptyPublishedReference();
 
   const company = companyUnit
     ? {
@@ -40,6 +61,8 @@ export function buildLaborSourceOptions({
         productionAllowed: Boolean(companyUnit.approved_at || companyUnit.approvedAt),
         sourceRecordId: companyUnit.id,
         sourceName: "Company historical labor",
+        sourceYear: "",
+        badges: companyUnit.approved_at || companyUnit.approvedAt ? ["COMPANY"] : ["COMPANY", "UNVERIFIED"],
         warning: null,
       }
     : {
@@ -51,6 +74,7 @@ export function buildLaborSourceOptions({
         confidenceLevel: 0,
         verificationStatus: "unverified",
         productionAllowed: false,
+        badges: ["COMPANY", "UNVERIFIED"],
         warning: "No company historical labor for this item yet.",
       };
 
@@ -66,6 +90,8 @@ export function buildLaborSourceOptions({
         productionAllowed: false,
         sourceRecordId: experimentalUnit.id,
         sourceName: experimentalUnit.source_name,
+        sourceYear: experimentalUnit.source_year || "",
+        badges: ["ESTIM8R", "UNVERIFIED"],
         warning: "Experimental / unverified. Requires acknowledgement before treating as bid labor.",
         unit: experimentalUnit,
       }
@@ -74,6 +100,7 @@ export function buildLaborSourceOptions({
         label: SOURCE_LABELS.experimental,
         available: false,
         mh: null,
+        badges: ["ESTIM8R", "UNVERIFIED"],
         warning: "No experimental imported labor for this item.",
       };
 
@@ -89,6 +116,8 @@ export function buildLaborSourceOptions({
         productionAllowed: false,
         sourceRecordId: customUnit.id,
         sourceName: "Custom labor",
+        sourceYear: "",
+        badges: ["CUSTOM", "UNVERIFIED"],
         warning: "Estimator-entered custom labor.",
       }
     : {
@@ -96,6 +125,7 @@ export function buildLaborSourceOptions({
         label: SOURCE_LABELS.custom,
         available: false,
         mh: null,
+        badges: ["CUSTOM", "UNVERIFIED"],
         warning: "No custom labor saved for this item. Enter hours to create one.",
       };
 
@@ -124,6 +154,7 @@ export function makeLaborSelection({
     sourceRecordId: option?.sourceRecordId || "",
     overrideReason,
     sourceName: option?.sourceName || SOURCE_LABELS[option?.sourceType] || "",
+    sourceYear: option?.sourceYear || "",
     verificationStatus: option?.verificationStatus || "unverified",
     acknowledgedUnverified,
     notes: option?.warning || "",

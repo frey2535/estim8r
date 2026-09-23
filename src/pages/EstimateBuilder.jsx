@@ -22,6 +22,8 @@ import { applyLibraryItemToLine, applyManualLineLabor, clearLaborPick, hydrateMa
 import { categoriesForType, defaultCategoryForType } from "@/domain/estimate/lineLaborCatalog";
 import EstimateLineCard from "@/components/estimate/EstimateLineCard";
 import EstimateSupplyQuote from "@/components/estimate/EstimateSupplyQuote";
+import LaborMarketCompare from "@/components/labor/LaborMarketCompare";
+import { compareEstimateToMarket } from "@/domain/labor/marketCompare";
 import { buildEstimateSupplyQuote } from "@/domain/estimate/estimateSupplyQuote";
 import { moveEstimateLine } from "@/domain/estimate/lineOrder";
 
@@ -221,6 +223,10 @@ export default function EstimateBuilder() {
   const workCategoryTotals = useMemo(
     () => calculateWorkCategoryBreakdown(lines),
     [lines],
+  );
+  const marketCompare = useMemo(
+    () => compareEstimateToMarket(draft, library),
+    [draft, library],
   );
 
   function setHeaderField(key, value) {
@@ -507,6 +513,9 @@ export default function EstimateBuilder() {
             ) : null}
           </div>
         </div>
+        <div className="lg:col-span-2">
+          <LaborMarketCompare comparison={marketCompare} />
+        </div>
       </section>
         </TabsContent>
 
@@ -597,6 +606,9 @@ export default function EstimateBuilder() {
             <span>Estimate Total</span>
             <span className="text-blue-600 dark:text-orange-500">${grand.toFixed(2)}</span>
           </div>
+        </div>
+        <div className="lg:col-span-2">
+          <LaborMarketCompare comparison={marketCompare} />
         </div>
       </section>
         </TabsContent>

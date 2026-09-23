@@ -15,10 +15,55 @@ export const SOURCE_LABELS = {
   government: "Government",
 };
 
+export const SOURCE_BADGES = {
+  published_reference: "REFERENCE",
+  manufacturer: "REFERENCE",
+  government: "REFERENCE",
+  estim8r_standard: "ESTIM8R",
+  experimental: "ESTIM8R",
+  company_history: "COMPANY",
+  custom: "CUSTOM",
+};
+
+/** Published labor_units (equivalent of labor_reference_units). Never treat experimental as these. */
+export const PUBLISHED_REFERENCE_TYPES = new Set(["published_reference", "manufacturer", "government"]);
+
+/** Named publisher families a verified reference may claim. NECA is listed but never populated unless licensed. */
+export const ALLOWED_REFERENCE_FAMILIES = [
+  "NECA",
+  "RSMeans",
+  "Craftsman",
+  "Manufacturer",
+  "Government",
+  "Published Study",
+  "Other",
+];
+
 const PRODUCTION_SOURCES = new Set(["published_reference", "company_history", "manufacturer", "government"]);
 
 export function isExperimentalSource(sourceType) {
   return sourceType === "experimental" || sourceType === "estim8r_standard";
+}
+
+export function isPublishedReferenceType(sourceType) {
+  return PUBLISHED_REFERENCE_TYPES.has(sourceType);
+}
+
+export function sourceBadges({ sourceType, verificationStatus } = {}) {
+  const verified = verificationStatus === "verified";
+  if (isPublishedReferenceType(sourceType)) {
+    return verified ? ["REFERENCE"] : ["UNVERIFIED"];
+  }
+  if (sourceType === "company_history") {
+    return verified ? ["COMPANY"] : ["COMPANY", "UNVERIFIED"];
+  }
+  if (sourceType === "custom") {
+    return ["CUSTOM", "UNVERIFIED"];
+  }
+  if (isExperimentalSource(sourceType)) {
+    return ["ESTIM8R", "UNVERIFIED"];
+  }
+  return ["UNVERIFIED"];
 }
 
 export function isProductionSafeLabor({ verificationStatus, productionAllowed, sourceType } = {}) {
@@ -73,4 +118,52 @@ export function conditionMh(unit, condition = "normal") {
   if (condition === "difficult") return row.difficult_mh;
   if (condition === "very_difficult") return row.very_difficult_mh;
   return row.normal_mh;
+}
+
+const LICENSED_NECA = false;
+
+function unitText(value) {
+  return String(value || "").trim();
+}
+
+export function isLicensedNeca() {
+  return LICENSED_NECA;
+}
+
+export function referenceEdition(unit) {
+  return unitText(unit?.source_year || unit?.sourceYear || unit?.edition);
+}
+
+export function referenceSourceName(unit) {
+  return unitText(unit?.source_name || unit?.sourceName);
+}
+
+/**
+ * Market/reference = labor_units rows that stand in for labor_reference_units:
+ * named source, edition/year, and verification_status === verified.
+ * Experimental imported hours never qualify. NECA is rejected unless licensed.
+ */
+export function isVerifiedMarketReference(unit, { licensedNeca = LICENSED_NECA } = {}) {
+  const row = laborUnitSnake(unit);
+  if (!row) return false;
+  if (isExperimentalSource(row.source_type)) return false;
+  if (!isPublishedReferenceType(row.source_type)) return false;
+  if (row.verification_status !== "verified") return false;
+  if (!row.production_allowed) return false;
+  if (!referenceSourceName(row)) return false;
+  if (!referenceEdition(row)) return false;
+  if (/neca/i.test(`${referenceSourceName(row)} ${row.source_reference} ${row.source_type}`) && !licensedNeca) {
+    return false;
+  }
+  return row.normal_mh != null || row.difficult_mh != null || row.very_difficult_mh != null;
+}
+
+export function findVerifiedMarketReferences(laborItem, options) {
+  return (laborItem?.labor_units || [])
+    .map(laborUnitSnake)
+    .filter((unit) => isVerifiedMarketReference(unit, options));
+}
+
+export function findVerifiedMarketReference(laborItem, options) {
+  return findVerifiedMarketReferences(laborItem, options)[0] || null;
 }

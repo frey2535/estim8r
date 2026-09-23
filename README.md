@@ -72,6 +72,7 @@ The Estimates folder **Markup pages** button opens `/markup`, where AI builds re
 
 - **Taxonomy** — `labor_items` (trade / category / subcategory / item / size / unit)
 - **Sources** — experimental imported units, company history, custom labor, empty published/reference slot
+- **Market comparison** — hours and labor dollars vs a verified published reference only (`labor_units` with named source, edition/year, and `verification_status = verified`). The 1,921 imported rows never become a market average. If no verified reference exists, the estimate says so. NECA is not populated unless licensed.
 - **Verification** — imported rows are unverified and `production_allowed = false`
 - **Custom labor** — company-isolated hours the estimator enters
 - **Estimate selector** — side-by-side sources, MH × productivity factors × crew rate

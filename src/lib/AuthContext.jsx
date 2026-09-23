@@ -1,8 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { supabase } from "@/api/supabaseClient";
+import { isLocalAuthFallbackEnabled, supabase } from "@/api/supabaseClient";
 import { entitlementGrantsAccess, getProductEntitlement } from "@/api/entitlementRepository";
 import { hasPlatformAccess } from "@/lib/platformIdentity";
+import { isDrawingPickerOpen } from "@/domain/takeoff/drawingUpload";
 
 const AuthContext = createContext();
 const AUTH_STARTUP_TIMEOUT_MS = 10000;
@@ -27,6 +28,25 @@ export const AuthProvider = ({ children }) => {
     const silent = Boolean(options?.silent);
     // A full refresh flips loading flags and ProtectedRoute unmounts /takeoff.
     // The native file picker blurs the window; a loading remount drops the selected File.
+    if (isLocalAuthFallbackEnabled) {
+      setUser({
+        email: "local@localhost",
+        full_name: "Local estimator",
+        org_name: "Local",
+        org_role: "owner",
+        access_type: "trial",
+        access_status: "trial",
+      });
+      setIsAuthenticated(true);
+      setHasProductAccess(true);
+      setProductEntitlement({ status: "trial" });
+      setEntitlementChecked(true);
+      setAuthChecked(true);
+      setIsLoadingAuth(false);
+      setIsLoadingPublicSettings(false);
+      setAuthError(null);
+      return;
+    }
     if (!silent) {
       setAuthError(null);
       setIsLoadingAuth(true);
@@ -77,17 +97,20 @@ export const AuthProvider = ({ children }) => {
     if (!supabase) return undefined;
     const { data } = supabase.auth.onAuthStateChange((event) => {
       if (event === "INITIAL_SESSION") return;
-      if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
-        checkAppState({ silent: true });
+      if (event === "SIGNED_OUT") {
+        checkAppState();
         return;
       }
-      checkAppState();
+      // iOS/Android file pickers blur the PWA and can replay SIGNED_IN.
+      // Keep the takeoff tree mounted so FileList is not destroyed.
+      checkAppState({ silent: true });
     });
     return () => data.subscription.unsubscribe();
   }, [checkAppState]);
 
   useEffect(() => {
     const refresh = () => {
+      if (isDrawingPickerOpen()) return;
       if (document.visibilityState && document.visibilityState !== "visible") return;
       checkAppState({ silent: true });
     };

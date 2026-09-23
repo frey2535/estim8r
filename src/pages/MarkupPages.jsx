@@ -37,6 +37,7 @@ import {
 } from "@/domain/takeoff/accuracyReview";
 import { DEFAULT_LINE_SIZE, DEFAULT_MARKER_SIZE, resolvedLineSize } from "@/domain/takeoff/sizes";
 import { OVERLAY_FONT_SIZE, layoutOverlayCallouts } from "@/domain/takeoff/overlayLayout";
+import { isSheetPanDrag, pointerDistance, sheetPanOffset, sheetPinchZoom } from "@/lib/sheetViewport";
 import {
   CIRCUIT_COLOR,
   DEVICE_FILL_OPACITY,
@@ -80,6 +81,14 @@ export default function MarkupPages() {
   const [pageId, setPageId] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const panRef = useRef(pan);
+  const zoomRef = useRef(zoom);
+  const pannedRef = useRef(false);
+  const pointersRef = useRef(new Map());
+  const pinchRef = useRef(null);
+  panRef.current = pan;
+  zoomRef.current = zoom;
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [drawingSymbols, setDrawingSymbols] = useState([]);
   const [pageKinds, setPageKinds] = useState({});
@@ -142,6 +151,11 @@ export default function MarkupPages() {
       setPageId(reviewPages[0].id);
     }
   }, [reviewPages, pageId]);
+
+  useEffect(() => {
+    setPan({ x: 0, y: 0 });
+    pannedRef.current = false;
+  }, [activePage?.id]);
 
   useEffect(() => {
     const el = viewportRef.current;
@@ -328,7 +342,65 @@ export default function MarkupPages() {
     reader.readAsText(file);
   }
 
+  function onPanPointerDown(event) {
+    if (event.button > 0) return;
+    const target = event.currentTarget;
+    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pointersRef.current.size >= 2) {
+      const points = [...pointersRef.current.values()];
+      pinchRef.current = {
+        distance: pointerDistance(points[0], points[1]) || 1,
+        zoom: zoomRef.current,
+      };
+    }
+
+    const pointerId = event.pointerId;
+    const origin = { x: event.clientX, y: event.clientY };
+    const start = { ...panRef.current };
+    let dragged = false;
+    let pinched = pointersRef.current.size >= 2;
+
+    const move = (moveEvent) => {
+      if (pointersRef.current.has(moveEvent.pointerId)) {
+        pointersRef.current.set(moveEvent.pointerId, { x: moveEvent.clientX, y: moveEvent.clientY });
+      }
+      if (pointersRef.current.size >= 2) {
+        pinched = true;
+        const points = [...pointersRef.current.values()];
+        const startPinch = pinchRef.current;
+        if (startPinch) {
+          setZoom(sheetPinchZoom(startPinch.zoom, startPinch.distance, pointerDistance(points[0], points[1])));
+        }
+        return;
+      }
+      if (pinched || moveEvent.pointerId !== pointerId) return;
+      const current = { x: moveEvent.clientX, y: moveEvent.clientY };
+      if (!dragged && !isSheetPanDrag(origin, current)) return;
+      dragged = true;
+      pannedRef.current = true;
+      try { target.setPointerCapture(pointerId); } catch { /* capture already released */ }
+      setPan(sheetPanOffset(start, origin, current));
+    };
+
+    const up = (upEvent) => {
+      pointersRef.current.delete(upEvent.pointerId);
+      if (pointersRef.current.size < 2) pinchRef.current = null;
+      if (upEvent.pointerId !== pointerId) return;
+      target.removeEventListener("pointermove", move);
+      target.removeEventListener("pointerup", up);
+      target.removeEventListener("pointercancel", up);
+    };
+
+    target.addEventListener("pointermove", move);
+    target.addEventListener("pointerup", up);
+    target.addEventListener("pointercancel", up);
+  }
+
   function onOverlayClick(event) {
+    if (pannedRef.current) {
+      pannedRef.current = false;
+      return;
+    }
     if (!viewerRef.current || !activePage) return;
     const rect = viewerRef.current.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
@@ -416,7 +488,15 @@ export default function MarkupPages() {
               Review{accuracyTotals.pending ? ` ${accuracyTotals.pending}` : ""}
             </button>
           </div>
-          <div ref={viewportRef} className="min-h-[20rem] min-w-0 flex-1 overflow-hidden bg-neutral-400/40 dark:bg-neutral-950">
+          <div
+            ref={viewportRef}
+            onPointerDown={activePage?.kind === "reconciliation" || activePage?.kind === "skipped" ? undefined : onPanPointerDown}
+            data-testid="markup-sheet-viewport"
+            className={cn(
+              "min-h-[20rem] min-w-0 flex-1 overflow-hidden bg-neutral-400/40 dark:bg-neutral-950",
+              activePage?.kind !== "reconciliation" && activePage?.kind !== "skipped" && "cursor-grab touch-none",
+            )}
+          >
             {activePage?.kind === "reconciliation" ? (
               <div className="h-full overflow-auto p-4" data-testid="markup-reconciliation">
                 <h3 className="text-base font-bold">Plan counts versus printed schedule</h3>
@@ -437,7 +517,12 @@ export default function MarkupPages() {
               </div>
             ) : (
               <div className="flex h-full w-full items-center justify-center p-2">
-                <div ref={viewerRef} onClick={onOverlayClick} className="relative bg-white shadow-xl">
+                <div
+                  ref={viewerRef}
+                  onClick={onOverlayClick}
+                  style={{ transform: `translate(${pan.x}px, ${pan.y}px)` }}
+                  className="relative cursor-grab select-none bg-white shadow-xl"
+                >
                   {fileBytes ? (
                     <PdfSheet
                       fileBytes={fileBytes}

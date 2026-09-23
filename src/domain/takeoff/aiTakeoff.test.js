@@ -274,6 +274,7 @@ const foreign = buildAiMarks({
   ],
 });
 assert(foreign.marks.length === 0, `electrical AI must not mark plumbing/structural/CM sheets, got ${foreign.marks.length}`);
+assert(foreign.skippedSheets?.length === 5, "skipped sheet list is persisted for markup review");
 assert(/Skipped 5/.test(foreign.summary), `summary mentions skipped foreign sheets: ${foreign.summary}`);
 
 const electricalPlan = buildAiMarks({

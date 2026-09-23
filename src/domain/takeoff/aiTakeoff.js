@@ -14,6 +14,8 @@ import {
   taggedEquipmentCode,
 } from "./symbolDetection.js";
 import { DETECT_SOURCE_ORIGINAL_PDF } from "./accuracyReview.js";
+import { describeReconciliation, reconcilePlanToSchedule } from "./countReconciliation.js";
+import { extractSheetNotes, notesToMarks } from "./sheetNotes.js";
 import { associateGeometry, assignExclusiveGeometry, placeOnSymbolGeometry, shapeHintFromLabel } from "./vectorSymbols.js";
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
 
@@ -806,19 +808,38 @@ export function buildAiMarks({
   const persistedCount = persistedPlanDeviceCount(counts, pageKinds);
   const legendHits = counts.filter((mark) => mark.matchedFrom === "legend").length;
   const skipped = (pages || []).filter((page) => !pageMatchesTrade(page, trade));
-  const skippedTrades = [...new Set(skipped.map((page) => pageDiscipline(page)))].filter((item) => item && item !== "unknown");
+  const skippedSheets = skipped.map((page) => ({
+    page: page.page,
+    kind: page.kind || "drawing",
+    discipline: pageDiscipline(page),
+    sheetId: page.sheetId || "",
+    title: page.title || "",
+  }));
+  const skippedTrades = [...new Set(skippedSheets.map((page) => page.discipline))].filter((item) => item && item !== "unknown");
   const skipNote = skipped.length
     ? ` Skipped ${skipped.length} non-${trade} sheet(s)${skippedTrades.length ? ` (${skippedTrades.join(", ")})` : ""}.`
     : "";
+  const noteMarks = notesToMarks(extractSheetNotes(pages, trade), trade);
+  const reconciliation = reconcilePlanToSchedule({
+    marks: counts,
+    pages,
+    pageKinds,
+    trade,
+  });
   return {
     marks: applyDeviceTypeColors([
       ...counts.map(({ anchor, matchedFrom, ...mark }) => mark),
       ...conduits,
+      ...noteMarks,
     ]),
     summary: persistedCount
       ? `AI ${trade} takeoff: ${persistedCount} devices from the drawing${legendHits ? ` (${legendHits} matched from the legend)` : ""}, ${conduits.length} conduit runs on ${trade} sheets showing run count and path, max ${cap} homeruns per conduit.${skipNote}`
       : `No ${trade} symbols were found on ${trade} sheets.${skipNote || " Counts stay empty until that trade is labeled on the sheets."}`,
     deviceCount: persistedCount,
     conduitCount: conduits.length,
+    noteCount: noteMarks.length,
+    skippedSheets,
+    reconciliation,
+    reconciliationNote: describeReconciliation(reconciliation),
   };
 }

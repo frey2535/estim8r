@@ -107,7 +107,7 @@ export function buildrSyncFromResult(result, estimateId) {
   };
 }
 
-export function buildMarkupPages({ fileName, pageCount, marks, calibration, titleBlock }) {
+export function buildMarkupPages({ fileName, pageCount, marks, calibration, titleBlock, reconciliation, skippedSheets }) {
   const count = Math.max(1, Number(pageCount) || 1);
   const pages = [];
   for (let page = 1; page <= count; page += 1) {
@@ -124,7 +124,7 @@ export function buildMarkupPages({ fileName, pageCount, marks, calibration, titl
     pages,
   };
   if (titleBlock && typeof titleBlock === "object") markup.titleBlock = titleBlock;
-  markup.reviewPages = buildReviewMarkupPages({ marks });
+  markup.reviewPages = buildReviewMarkupPages({ marks, reconciliation, skippedSheets });
   return markup;
 }
 

@@ -17,10 +17,24 @@ import {
 import { hitTestMark, sheetAspect } from "@/domain/takeoff/geometry";
 import { rollupTakeoff } from "@/domain/takeoff/quantities";
 import { paletteForTrade, pageKindsFromDocs, findConduitOption, symbolPatchFromCatalog, DEFAULT_CONDUIT_ID } from "@/domain/takeoff/trades";
+import { pageDiscipline, pageMatchesTrade } from "@/domain/takeoff/sheetDiscipline";
 import TradeSymbolSelect from "@/components/takeoff/TradeSymbolSelect";
+import AccuracyPopout from "@/components/takeoff/AccuracyPopout";
+import ReconciliationPanel from "@/components/takeoff/ReconciliationPanel";
 import { buildAiMarks } from "@/domain/takeoff/aiTakeoff";
 import { readAiPages } from "@/domain/takeoff/aiPages";
 import { drawingSymbolsFromDocs, readDrawingDocuments } from "@/domain/takeoff/drawing-docs";
+import { describeReconciliation, reconcilePlanToSchedule } from "@/domain/takeoff/countReconciliation";
+import { isNoteMark, mergeExtractedNotes } from "@/domain/takeoff/sheetNotes";
+import {
+  applyReviewDecision,
+  isUncertainDetection,
+  neighborReviewId,
+  needsAccuracyReview,
+  reviewQueue,
+  reviewSummary,
+  typeInstanceCount,
+} from "@/domain/takeoff/accuracyReview";
 import { DEFAULT_LINE_SIZE, DEFAULT_MARKER_SIZE, resolvedLineSize } from "@/domain/takeoff/sizes";
 import { OVERLAY_FONT_SIZE, layoutOverlayCallouts } from "@/domain/takeoff/overlayLayout";
 import {
@@ -69,14 +83,48 @@ export default function MarkupPages() {
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [drawingSymbols, setDrawingSymbols] = useState([]);
   const [pageKinds, setPageKinds] = useState({});
+  const [aiPages, setAiPages] = useState([]);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const folders = useMemo(() => listProjectFolders(), []);
   const trade = session?.trade || "electrical";
 
   const calibration = session?.calibration || null;
-  const reviewPages = useMemo(() => buildReviewMarkupPages({ marks }), [marks]);
+  const reconciliation = useMemo(() => (
+    reconcilePlanToSchedule({
+      marks,
+      scheduleItems: drawingSymbols,
+      pages: aiPages,
+      pageKinds,
+      trade,
+    })
+  ), [marks, drawingSymbols, aiPages, pageKinds, trade]);
+  const skippedSheets = useMemo(() => {
+    if (session?.skippedSheets?.length) return session.skippedSheets;
+    return (aiPages || [])
+      .filter((page) => trade && !pageMatchesTrade(page, trade))
+      .map((page) => ({
+        page: page.page,
+        kind: page.kind || "drawing",
+        discipline: pageDiscipline(page),
+        sheetId: page.sheetId || "",
+        title: page.title || "",
+      }));
+  }, [session?.skippedSheets, aiPages, trade]);
+  const reviewPages = useMemo(
+    () => buildReviewMarkupPages({ marks, reconciliation, skippedSheets }),
+    [marks, reconciliation, skippedSheets],
+  );
   const activePage = reviewPages.find((page) => page.id === pageId) || reviewPages[0] || null;
   const selected = marks.find((mark) => mark.id === selectedId) || null;
   const groups = activePage?.kind === "circuits" ? activePage.groups : [];
+  const sheetReview = useMemo(
+    () => reviewQueue(marks, activePage?.sourcePage),
+    [marks, activePage?.sourcePage],
+  );
+  const accuracyTotals = useMemo(
+    () => reviewSummary(marks, activePage?.sourcePage),
+    [marks, activePage?.sourcePage],
+  );
 
   useEffect(() => {
     if (!fileName) return;
@@ -119,9 +167,18 @@ export default function MarkupPages() {
         const docs = await readDrawingDocuments(bytes);
         setDrawingSymbols(drawingSymbolsFromDocs(docs));
         setPageKinds(pageKindsFromDocs(docs));
+        const pages = await readAiPages(bytes);
+        setAiPages(pages);
+        if ((stored?.marks || []).length) {
+          const next = mergeExtractedNotes(stored.marks, pages, stored?.trade || "electrical");
+          if (next.length !== stored.marks.length) {
+            persistMarks(next, { ...stored, skippedSheets: stored.skippedSheets || [] }, "Added printed drawing notes to the markup pages.");
+          }
+        }
       } catch {
         setDrawingSymbols([]);
         setPageKinds({});
+        setAiPages([]);
       }
     }
     if (!(stored?.marks || []).length && (file.type === "application/pdf" || /\.pdf$/i.test(file.name || name))) {
@@ -149,12 +206,15 @@ export default function MarkupPages() {
         maxHomeruns: stored?.maxHomeruns || 3,
         conduit: findConduitOption(stored?.conduitId || DEFAULT_CONDUIT_ID, stored?.trade || "electrical"),
       });
+      setAiPages(pages);
       persistMarks(planned.marks, {
         ...(stored || {}),
         fileName: name,
         fileSize: size,
         pageCount: pages.length,
         marks: planned.marks,
+        skippedSheets: planned.skippedSheets || [],
+        reconciliation: planned.reconciliation,
       }, planned.summary);
     } catch (error) {
       setStatus(error?.message || "AI could not create markup pages from this drawing.");
@@ -174,6 +234,8 @@ export default function MarkupPages() {
       trade: nextSession?.trade || "electrical",
       sheet: activePage?.sourcePage || nextSession?.sheet || 1,
       pageCount: pageCountFrom(nextMarks, nextSession),
+      skippedSheets: nextSession?.skippedSheets || skippedSheets,
+      reconciliation: nextSession?.reconciliation || reconciliation,
     };
     setMarks(nextMarks);
     setSession(payload);
@@ -205,6 +267,27 @@ export default function MarkupPages() {
 
   function reassignCircuit(deviceId, conduitId) {
     persistMarks(assignDeviceToConduit(marks, deviceId, conduitId), session, "Circuit grouping updated.");
+  }
+
+  function openAccuracyReview() {
+    const pending = sheetReview.find((mark) => needsAccuracyReview(mark, marks, activePage?.sourcePage)) || sheetReview[0];
+    if (pending) setSelectedId(pending.id);
+    setReviewOpen(true);
+    setStatus(`Accuracy review ${accuracyTotals.typesPending} type(s) · ${accuracyTotals.uncertainPending} uncertain. Do not treat this as bid-ready until review is finished.`);
+  }
+
+  function stepAccuracyReview(direction) {
+    const nextId = neighborReviewId(marks, selectedId, direction, activePage?.sourcePage);
+    if (nextId) setSelectedId(nextId);
+    setReviewOpen(true);
+  }
+
+  function setReviewStatus(status) {
+    const current = marks.find((mark) => mark.id === selectedId);
+    if (!current) return;
+    persistMarks(applyReviewDecision(marks, current, status), session, status === "accepted" ? "Accepted that detection." : "Rejected that detection. It stays visible for audit.");
+    const nextId = neighborReviewId(applyReviewDecision(marks, current, status), selectedId, 1, activePage?.sourcePage);
+    if (nextId && nextId !== selectedId) setSelectedId(nextId);
   }
 
   function downloadMarkup() {
@@ -265,7 +348,7 @@ export default function MarkupPages() {
           <p className="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-orange-500">Markup pages</p>
           <h1 className="text-2xl font-black">Review AI takeoff</h1>
           <p className="text-sm text-muted-foreground">
-            Each device type is its own drawing. Conduit runs and circuit groups are separate pages. Edit a mark to correct the takeoff.
+            Devices, notes, conduit, and circuits each get their own page. Plan counts stay on the takeoff — legend totals are a check only.
             {drawingName ? ` Drawing: ${drawingName}.` : ""}
           </p>
         </div>
@@ -284,16 +367,18 @@ export default function MarkupPages() {
         <aside className="min-h-0 overflow-auto border-b border-border p-3 lg:border-b-0 lg:border-r">
           <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">AI pages</h2>
           {!fileName && !marks.length ? (
-            <div className="mt-3 space-y-2">
+            <div className="mt-3 space-y-2" data-testid="markup-empty">
               <p className="text-sm text-muted-foreground">Pick a saved project or import the markup JSON.</p>
-              {folders.map((folder) => (
+              {folders.length ? folders.map((folder) => (
                 <Link key={folder.id} to={`/markup?file=${encodeURIComponent(folder.fileName || "")}&size=${folder.fileSize || 0}`} className="block rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-muted">
                   {folder.projectName}
                 </Link>
-              ))}
+              )) : (
+                <p className="rounded-lg border border-dashed border-border px-3 py-6 text-sm text-muted-foreground">No saved estimates yet. Run takeoff first, or import markup JSON.</p>
+              )}
             </div>
           ) : null}
-          {busy ? <p className="mt-3 text-sm font-semibold">Creating markup pages…</p> : null}
+          {busy ? <p className="mt-3 text-sm font-semibold" data-testid="markup-loading">Creating markup pages…</p> : null}
           <div className="mt-3 grid gap-2">
             {reviewPages.map((page) => (
               <button
@@ -310,7 +395,9 @@ export default function MarkupPages() {
               </button>
             ))}
             {!reviewPages.length && !busy ? (
-              <p className="rounded-lg border border-dashed border-border px-3 py-6 text-sm text-muted-foreground">No conduit or device marks yet.</p>
+              <p className="rounded-lg border border-dashed border-border px-3 py-6 text-sm text-muted-foreground" data-testid="markup-no-pages">
+                No electrical devices, notes, or conduit on scanned sheets.
+              </p>
             ) : null}
           </div>
         </aside>
@@ -325,29 +412,56 @@ export default function MarkupPages() {
                 <Trash2 className="h-3.5 w-3.5" /> Delete mark
               </button>
             ) : null}
+            <button type="button" onClick={openAccuracyReview} className="rounded-lg border border-border px-2 py-1 text-xs font-semibold hover:bg-muted">
+              Review{accuracyTotals.pending ? ` ${accuracyTotals.pending}` : ""}
+            </button>
           </div>
           <div ref={viewportRef} className="min-h-[20rem] min-w-0 flex-1 overflow-hidden bg-neutral-400/40 dark:bg-neutral-950">
-            <div className="flex h-full w-full items-center justify-center p-2">
-              <div ref={viewerRef} onClick={onOverlayClick} className="relative bg-white shadow-xl">
-                {fileBytes ? (
-                  <PdfSheet
-                    fileBytes={fileBytes}
-                    fileName={drawingName}
-                    zoom={zoom}
-                    pageNumber={activePage?.sourcePage || 1}
-                    viewportWidth={viewportSize.width}
-                    viewportHeight={viewportSize.height}
-                  />
-                ) : (
-                  <div className="flex h-[28rem] w-[36rem] max-w-full items-center justify-center bg-white text-sm text-muted-foreground">
-                    {activePage ? "Drawing file is not on this device. Marks still show on the sheet grid." : "Select a markup page."}
-                  </div>
-                )}
-                <ReviewOverlay marks={activePage?.marks || []} selectedId={selectedId} groups={groups} />
+            {activePage?.kind === "reconciliation" ? (
+              <div className="h-full overflow-auto p-4" data-testid="markup-reconciliation">
+                <h3 className="text-base font-bold">Plan counts versus printed schedule</h3>
+                <div className="mt-3"><ReconciliationPanel reconciliation={reconciliation} /></div>
               </div>
-            </div>
+            ) : activePage?.kind === "skipped" ? (
+              <div className="h-full overflow-auto p-4" data-testid="markup-skipped">
+                <h3 className="text-base font-bold">Sheets skipped for this trade</h3>
+                <p className="mt-2 text-sm text-muted-foreground">Non-electrical drawings are not counted. Open them only if the title block is wrong.</p>
+                <ul className="mt-3 space-y-2">
+                  {(activePage.skippedSheets || []).map((sheet) => (
+                    <li key={`${sheet.page}-${sheet.sheetId}`} className="rounded-lg border border-border px-3 py-2 text-sm">
+                      <div className="font-semibold">Sheet {sheet.page}{sheet.sheetId ? ` · ${sheet.sheetId}` : ""}</div>
+                      <div className="text-xs text-muted-foreground">{sheet.discipline || "unknown"} · {String(sheet.kind || "drawing").replace("-", " ")}</div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <div className="flex h-full w-full items-center justify-center p-2">
+                <div ref={viewerRef} onClick={onOverlayClick} className="relative bg-white shadow-xl">
+                  {fileBytes ? (
+                    <PdfSheet
+                      fileBytes={fileBytes}
+                      fileName={drawingName}
+                      zoom={zoom}
+                      pageNumber={activePage?.sourcePage || 1}
+                      viewportWidth={viewportSize.width}
+                      viewportHeight={viewportSize.height}
+                    />
+                  ) : (
+                    <div className="flex h-[22rem] w-full max-w-xl items-center justify-center bg-white px-6 text-center text-sm text-muted-foreground" data-testid="markup-missing-drawing">
+                      {activePage ? "Drawing file is not on this device. Marks still show on the sheet grid." : "Select a markup page or import markup JSON."}
+                    </div>
+                  )}
+                  <ReviewOverlay marks={activePage?.marks || []} selectedId={selectedId} groups={groups} />
+                </div>
+              </div>
+            )}
           </div>
-          <div className="shrink-0 border-t border-border px-3 py-1.5 text-xs text-muted-foreground">{status}</div>
+          {/could not|is not markup/i.test(status) ? (
+            <div role="alert" className="shrink-0 border-t border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" data-testid="markup-error">{status}</div>
+          ) : (
+            <div className="shrink-0 border-t border-border px-3 py-1.5 text-xs text-muted-foreground">{status}</div>
+          )}
         </section>
 
         <aside className="min-h-0 overflow-auto border-t border-border p-3 lg:border-l lg:border-t-0">
@@ -376,6 +490,11 @@ export default function MarkupPages() {
               <label className="block text-xs font-bold text-muted-foreground">Marker
                 <input className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm" value={selected.abbr || ""} onChange={(e) => updateMark(selected.id, { abbr: e.target.value })} />
               </label>
+              {selected.type === "note" ? (
+                <label className="block text-xs font-bold text-muted-foreground">Note
+                  <textarea className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm" rows={3} value={selected.text || ""} onChange={(e) => updateMark(selected.id, { text: e.target.value, symbolLabel: e.target.value })} />
+                </label>
+              ) : null}
               {selected.type === "count" || selected.type === "drop" ? (
                 <label className="block text-xs font-bold text-muted-foreground">Conduit group
                   <select
@@ -390,10 +509,16 @@ export default function MarkupPages() {
                   </select>
                 </label>
               ) : null}
+              {isDeviceMark(selected) ? (
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setReviewStatus("accepted")} className="rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-800">Accept</button>
+                  <button type="button" onClick={() => setReviewStatus("rejected")} className="rounded-lg border border-destructive px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10">Reject</button>
+                </div>
+              ) : null}
               <p className="text-xs text-muted-foreground">Review category: {reviewCategoryForMark(selected)}</p>
             </div>
           ) : (
-            <p className="mt-3 text-sm text-muted-foreground">Click a mark on the drawing to edit or delete it.</p>
+            <p className="mt-3 text-sm text-muted-foreground">Click a mark on the drawing to edit, accept, reject, or delete it.</p>
           )}
           {activePage?.kind === "circuits" ? (
             <div className="mt-4 space-y-2">
@@ -412,8 +537,29 @@ export default function MarkupPages() {
           {activePage?.kind === "conduit" ? (
             <p className="mt-4 text-sm text-muted-foreground">Every conduit run on this sheet. Open Circuits per conduit to see how devices are grouped.</p>
           ) : null}
+          {activePage?.kind === "notes" ? (
+            <p className="mt-4 text-sm text-muted-foreground">Printed drawing notes on this sheet. Edit the text if the extractor missed a word — do not invent notes.</p>
+          ) : null}
+          <div className="mt-4">
+            <h3 className="text-sm font-bold">Plan vs schedule</h3>
+            <p className="mt-1 text-[11px] text-muted-foreground">{describeReconciliation(reconciliation)}</p>
+          </div>
         </aside>
       </div>
+      <AccuracyPopout
+        open={reviewOpen && Boolean(selected && isDeviceMark(selected))}
+        onOpenChange={setReviewOpen}
+        mark={selected && isDeviceMark(selected) ? selected : null}
+        fileBytes={fileBytes}
+        index={Math.max(0, sheetReview.findIndex((mark) => mark.id === selectedId))}
+        total={sheetReview.length}
+        instanceOnly={Boolean(selected && isUncertainDetection(selected))}
+        typeCount={selected ? typeInstanceCount(marks, selected) : 1}
+        onAccept={() => setReviewStatus("accepted")}
+        onReject={() => setReviewStatus("rejected")}
+        onPrev={() => stepAccuracyReview(-1)}
+        onNext={() => stepAccuracyReview(1)}
+      />
     </div>
   );
 }
@@ -421,6 +567,7 @@ export default function MarkupPages() {
 function ReviewOverlay({ marks, selectedId }) {
   const styled = applyDeviceTypeColors(marks);
   const devices = styled.filter((mark) => isDeviceMark(mark));
+  const notes = styled.filter((mark) => isNoteMark(mark));
   const circuits = styled.filter((mark) => isCircuitMark(mark) && mark.points?.length);
   const callouts = layoutOverlayCallouts({
     conduits: circuits.filter((mark) => mark.tool === "conduit"),
@@ -458,6 +605,21 @@ function ReviewOverlay({ marks, selectedId }) {
           <rect key={mark.id} x={mark.x - outline.w / 2} y={mark.y - outline.h / 2} width={outline.w} height={outline.h} rx={0.12} fill={color} fillOpacity={DEVICE_FILL_OPACITY} stroke={stroke} strokeWidth={selected ? 0.28 : 0.12} vectorEffect="non-scaling-stroke" />
         );
       })}
+      {notes.map((mark) => (
+        <g key={mark.id}>
+          <rect
+            x={(mark.x || 8) - 0.7}
+            y={(mark.y || 16) - 0.7}
+            width="1.4"
+            height="1.4"
+            fill={mark.id === selectedId ? "#ea580c" : "#ca8a04"}
+            fillOpacity="0.85"
+            stroke="#ffffff"
+            strokeWidth="0.12"
+            vectorEffect="non-scaling-stroke"
+          />
+        </g>
+      ))}
       {callouts.conduitLabels.map((label) => (
         <text
           key={`${label.id}-${label.text}`}

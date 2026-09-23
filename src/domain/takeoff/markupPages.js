@@ -1,3 +1,5 @@
+import { isNoteMark } from "./sheetNotes.js";
+
 export const DEVICE_PAGE_ORDER = [
   "Lighting",
   "Receptacles",
@@ -100,13 +102,50 @@ export function associateDevicesToConduits(marks) {
   return groups;
 }
 
-export function buildReviewMarkupPages({ marks } = {}) {
+export function buildReviewMarkupPages({ marks, reconciliation, skippedSheets } = {}) {
   const list = marks || [];
   const sheets = [...new Set(list.map((mark) => Number(mark.sheet) || 1))].sort((a, b) => a - b);
   const reviewPages = [];
 
+  if (reconciliation?.rows?.length) {
+    reviewPages.push({
+      id: "reconciliation",
+      kind: "reconciliation",
+      title: "Plan counts vs schedule",
+      sourcePage: sheets[0] || 1,
+      marks: [],
+      reconciliation,
+      summary: reconciliation.discrepancyCount
+        ? `${reconciliation.discrepancyCount} type${reconciliation.discrepancyCount === 1 ? "" : "s"} differ — takeoff keeps plan counts`
+        : `${reconciliation.persistedCount} plan count${reconciliation.persistedCount === 1 ? "" : "s"} (schedule is a check only)`,
+    });
+  }
+
+  if ((skippedSheets || []).length) {
+    reviewPages.push({
+      id: "skipped-sheets",
+      kind: "skipped",
+      title: "Skipped sheets",
+      sourcePage: skippedSheets[0]?.page || 1,
+      marks: [],
+      skippedSheets,
+      summary: `${skippedSheets.length} non-electrical sheet${skippedSheets.length === 1 ? "" : "s"} were not counted`,
+    });
+  }
+
   for (const sheet of sheets) {
     const sheetMarks = list.filter((mark) => (Number(mark.sheet) || 1) === sheet);
+    const notes = sheetMarks.filter(isNoteMark);
+    if (notes.length) {
+      reviewPages.push({
+        id: `notes-${sheet}`,
+        kind: "notes",
+        title: `Sheet ${sheet} — Notes`,
+        sourcePage: sheet,
+        marks: notes,
+        summary: `${notes.length} note${notes.length === 1 ? "" : "s"}`,
+      });
+    }
     const conduits = sheetMarks.filter(isConduitMark);
     if (conduits.length) {
       reviewPages.push({

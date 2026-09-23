@@ -303,6 +303,8 @@ assert(planR.length === 1, `legend type R is found once on the plan, got ${planR
 assert(legendCounts.some((mark) => mark.symbol === "gfci"), "catalog GFI on the plan still counts");
 assert(persistedPlanDeviceCount(legendFirst.marks, { 2: "drawing", 8: "legend" }) === legendCounts.length, "quote/estimate counts come from persisted plan detections");
 assert(legendFirst.deviceCount === legendCounts.length, "AI deviceCount is the persisted drawing count, not the legend total");
+assert(legendFirst.reconciliation.persistedCount === legendCounts.length, "reconciliation also keeps the plan count");
+assert(!legendFirst.marks.some((mark) => mark.type === "count" && mark.sheet === 8), "legend qty 24 never becomes a persisted count mark");
 assert(!/24/.test(legendFirst.summary) || legendFirst.deviceCount !== 24, "summary does not adopt the legend qty column");
 const legendDict = legendDictionaryFromPages([
   { page: 8, kind: "legend", tokens: [{ text: "1E", x: 12, y: 26 }, { text: "2x4", x: 18, y: 26 }, { text: "R", x: 12, y: 20 }] },

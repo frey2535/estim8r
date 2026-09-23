@@ -4,7 +4,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import LaborItemPicker from "@/components/estimate/LaborItemPicker";
+import { LineMarketCompare } from "@/components/labor/LaborMarketCompare";
 import LaborSourceSelector from "@/components/labor/LaborSourceSelector";
+import SourceBadges from "@/components/labor/SourceBadges";
 import { categoriesForType, laborPickerPlaceholder, LINE_TYPES } from "@/domain/estimate/lineLaborCatalog";
 import {
   conduitQtyHint,
@@ -14,6 +16,7 @@ import {
   laborItemLabel,
 } from "@/domain/estimate/manualLineLabor";
 import { estimateLineLaborNotice, estimateLineTitle } from "@/domain/estimate/linePresentation";
+import { compareLineToMarket } from "@/domain/labor/marketCompare";
 import { WORK_CATEGORY_ORDER, workCategoryForEstimateLine } from "@/domain/estimate/trueElectricalTakeoff";
 
 const UNITS = ["STICK", "EA", "LF", "SF", "FT", "100 LF", "1000 LF", "HR", "DAY", "LOT"];
@@ -50,6 +53,7 @@ export default function EstimateLineCard({
   const description = String(row.description || "").trim();
   const subtitle = pickLabel && description && description !== pickLabel ? description : "";
   const notice = estimateLineLaborNotice(row);
+  const market = compareLineToMarket(row, laborItem);
   const omitted = itemized && row.included === false;
   const includeLabel = title === "New line" ? "line" : title;
   const showNoticeText = notice && (notice.tone === "unmatched" || detailsOpen);
@@ -105,6 +109,7 @@ export default function EstimateLineCard({
                     {notice.badge}
                   </Badge>
                 ) : null}
+                <SourceBadges badges={market.source.badges} />
               </div>
             </div>
             <div className="flex shrink-0 items-start gap-2">
@@ -176,6 +181,9 @@ export default function EstimateLineCard({
             </Field>
           </div>
           {qtyHint ? <p className="mt-1 text-[11px] text-muted-foreground">{qtyHint}</p> : null}
+          <div className="mt-2">
+            <LineMarketCompare comparison={market} />
+          </div>
 
           <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen} className="mt-2">
             <CollapsibleTrigger className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground">

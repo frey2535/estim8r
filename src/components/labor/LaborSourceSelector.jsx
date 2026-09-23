@@ -1,14 +1,22 @@
 import React from "react";
 import { ShieldAlert, ShieldCheck } from "lucide-react";
-import { SOURCE_LABELS } from "@/domain/labor/sources";
+import SourceBadges from "@/components/labor/SourceBadges";
+import { SOURCE_LABELS, sourceBadges } from "@/domain/labor/sources";
 
 export default function LaborSourceSelector({ options = [], selectedSource, acknowledged, onSelect, onAcknowledge }) {
+  const availableCount = options.filter((option) => option.available).length;
   return (
     <div className="space-y-2">
+      <p className="text-[11px] text-muted-foreground">
+        {availableCount > 1
+          ? "Side-by-side sources. Market comparison uses only a verified published reference."
+          : "Published / reference is the only market average. Empty means no verified reference is on file."}
+      </p>
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         {options.map((option) => {
           const selected = selectedSource === option.sourceType;
           const ready = option.productionAllowed && option.verificationStatus === "verified";
+          const badges = option.badges || sourceBadges(option);
           return (
             <button
               key={option.sourceType}
@@ -27,7 +35,13 @@ export default function LaborSourceSelector({ options = [], selectedSource, ackn
                 <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{option.label || SOURCE_LABELS[option.sourceType]}</p>
                 {ready ? <ShieldCheck className="h-4 w-4 text-emerald-500" /> : <ShieldAlert className="h-4 w-4 text-amber-500" />}
               </div>
+              <div className="mt-1">
+                <SourceBadges badges={badges} />
+              </div>
               <p className="mt-2 text-lg font-black">{option.mh == null ? "—" : `${option.mh} MH`}</p>
+              {option.sourceName && option.sourceType === "published_reference" && option.available ? (
+                <p className="text-xs font-semibold">{option.sourceName}{option.sourceYear ? ` · ${option.sourceYear}` : ""}</p>
+              ) : null}
               {option.sampleSize != null && option.sourceType === "company_history" ? (
                 <p className="text-xs text-muted-foreground">n={option.sampleSize} · confidence {Math.round((option.confidenceLevel || 0) * 100)}%</p>
               ) : null}

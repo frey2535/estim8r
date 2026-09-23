@@ -6,7 +6,8 @@ import { defaultCrew, compositeWage } from "./employeeClasses.js";
 import { defaultLaborRates, applyRatesToCrew } from "./rates.js";
 import { defaultProductivityFactors, setFactorMultiplier, productivitySummary } from "./productivity.js";
 import { buildLaborSourceOptions, makeLaborSelection, applySelectionToLine } from "./selection.js";
-import { EXPERIMENTAL_LABOR_SOURCE, isProductionSafeLabor } from "./sources.js";
+import { EXPERIMENTAL_LABOR_SOURCE, isProductionSafeLabor, isVerifiedMarketReference } from "./sources.js";
+import { NO_VERIFIED_MARKET_REFERENCE, compareLineToMarket } from "./marketCompare.js";
 
 function assert(cond, message) {
   if (!cond) {
@@ -84,5 +85,7 @@ assert(compositeWage(restored).count === 2, "named crew restores composition");
 
 assert(productivitySummary(defaultProductivityFactors()).multiplier === 1, "default factors do not invent a multiplier");
 assert(!isProductionSafeLabor({ sourceType: "experimental", verificationStatus: "unverified", productionAllowed: false }), "gate blocks experimental");
+assert(!isVerifiedMarketReference(item.labor_units[0]), "imported EL-00050 is not a market reference");
+assert(compareLineToMarket({ quantity: 200, unit: "LF", laborMhPerUnit: 0.05, laborRate: 68, laborItemId: item.id }, item).message === NO_VERIFIED_MARKET_REFERENCE, "estimate line without published labor says no verified market reference");
 
 if (!process.exitCode) console.log("labor architecture checks passed");

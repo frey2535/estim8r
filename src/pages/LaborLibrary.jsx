@@ -90,8 +90,9 @@ export default function LaborLibrary() {
         <p className="text-sm font-semibold uppercase tracking-widest text-blue-600 dark:text-orange-500">Labor Intelligence</p>
         <h1 className="text-3xl font-black">Master Labor Library</h1>
         <p className="mt-2 max-w-3xl text-muted-foreground">
-          Taxonomy is separate from labor authority. The 1,921 imported rows are experimental / unverified.
-          Published NECA hours are not on file.
+          Taxonomy is separate from labor authority. The 1,921 imported rows are Estim8r Experimental / UNVERIFIED
+          and are never a market average. Market comparison uses only a verified published labor unit with a named
+          source and edition. NECA is not populated.
         </p>
       </div>
 

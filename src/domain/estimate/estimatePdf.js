@@ -83,6 +83,40 @@ export function presentationHasInternals(presentation) {
   return HIDDEN_LABELS.some((label) => blob.includes(label));
 }
 
+export function estimateHasPdfLines(estimate) {
+  return includedLines(estimate).some((line) => {
+    const label = String(line?.description || line?.itemType || line?.category || line?.notes || "").trim();
+    const qty = Number(line?.quantity) || 0;
+    const material = qty * (Number(line?.materialUnitCost) || 0);
+    const labor = estimateLineLaborCost(line);
+    return Boolean(label || material || labor);
+  });
+}
+
+export function estimatePdfPreviewKey(estimate, brandingInput) {
+  return JSON.stringify({
+    presentation: estimatePresentation(estimate),
+    fileName: estimatePdfFileName(estimate),
+    branding: normalizeBranding(brandingInput),
+  });
+}
+
+export function createEstimatePdfPreview(estimate, brandingInput) {
+  const fileName = estimatePdfFileName(estimate);
+  const presentation = estimatePresentation(estimate);
+  if (!estimateHasPdfLines(estimate)) {
+    return { status: "empty", fileName, presentation, blob: null, strings: [] };
+  }
+  const built = estimatePdfBlob(estimate, brandingInput);
+  return {
+    status: "ready",
+    fileName: built.fileName,
+    presentation: built.presentation,
+    blob: built.blob,
+    strings: built.strings,
+  };
+}
+
 function logoFormat(dataUrl) {
   if (/^data:image\/jpe?g/i.test(dataUrl)) return "JPEG";
   if (/^data:image\/webp/i.test(dataUrl)) return "WEBP";

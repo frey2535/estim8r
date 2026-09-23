@@ -474,7 +474,7 @@ export default function EstimateBuilder() {
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,22rem)]">
         <div className="min-w-0 rounded-2xl border border-border bg-card p-4">
           <h2 className="font-bold">Estimate PDF</h2>
-          <p className="mt-1 text-xs text-muted-foreground">Download or print the customer estimate. Company branding is set in Settings.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Preview the branded customer PDF on screen, then download or print. Company branding is set in Settings.</p>
           <div className="mt-3">
             <EstimatePdfActions estimate={draft} />
           </div>

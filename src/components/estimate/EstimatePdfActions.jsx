@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { Download, Printer } from "lucide-react";
+import EstimatePdfPreview from "@/components/estimate/EstimatePdfPreview";
 import { readCompanyBranding } from "@/domain/estimate/branding";
 import { buildEstimatePdf, printEstimatePdf } from "@/domain/estimate/estimatePdf";
 import { downloadBlob } from "@/domain/estimate/projectDocuments";
@@ -40,7 +41,8 @@ export default function EstimatePdfActions({ estimate }) {
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={downloadPdf} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white dark:bg-orange-500">
+        <EstimatePdfPreview estimate={estimate} />
+        <button type="button" data-testid="download-estimate-pdf" onClick={downloadPdf} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white dark:bg-orange-500">
           <Download className="h-4 w-4" /> Download PDF
         </button>
         <button type="button" onClick={printPdf} className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-bold hover:bg-muted">

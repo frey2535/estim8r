@@ -64,9 +64,18 @@ Employee class and wage, productivity factors, overhead %, and profit % live on 
 
 The estimate saves as a downloadable, printable PDF from the Estimate tab and from the Estimates folder. Company branding for that PDF lives in **Settings → Estimate PDF branding**: logo, company information, colors, text color, font, header size/color, card size/color, and related controls.
 
-## Markup pages
+## Takeoff and markup
 
-The Estimates folder **Markup pages** button opens `/markup`, where AI builds review drawings for conduit runs, each device type (Lighting, receptacles, equipment, HVAC, Fire Alarm, and the rest), and how circuits are grouped per conduit. Marks can be edited or deleted; those edits write back to the takeoff.
+Takeoff (`/takeoff`) and markup (`/markup`) are the bid-critical drawing tools.
+
+- Legend types are read first and used to classify plan symbols. Markers sit on extracted fixture geometry when the PDF has it.
+- Quantities persisted to the estimate are **plan detections**, not the legend/schedule qty column. A plan-vs-schedule table shows mismatches for review.
+- Markup pages split **notes**, **devices by type**, **conduit runs**, and **circuits per conduit**. Conduit stays off device-count sheets.
+- Non-electrical sheets are skipped. VF/EF count as electrical equipment. Device dropdowns stay on the selected trade and only list types found on the plan. Markers do not print type codes. Model numbers are only listed when the drawing or catalog already has them.
+- Accuracy is measured on the Soccer Pavilion fixture (`node src/domain/takeoff/soccerPavilionAccuracy.test.js`). The UI shows pending/accepted/rejected review counts and does not claim 99% without those numbers.
+- Empty, loading, and error states are shown on desktop and phone. Local development without Supabase uses a localhost estimator so `/takeoff` and `/markup` can be exercised.
+
+The Estimates folder **Markup pages** button opens `/markup`. Edits write back to the takeoff.
 
 ## Labor architecture (Phase 1–2)
 

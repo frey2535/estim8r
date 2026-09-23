@@ -86,6 +86,7 @@ import {
 } from "@/domain/takeoff/markedDrawingPdf";
 import { conduitCircuitScheduleCsv } from "@/domain/takeoff/markupPages";
 import { conduitWireMakeupCsv } from "@/domain/takeoff/conduitWireMakeup";
+import { reconcilePlanToSchedule } from "@/domain/takeoff/countReconciliation";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -237,6 +238,12 @@ export default function TakeoffWorkspace() {
     [marks, sheetMeta.page],
   );
   const accuracyTotals = useMemo(() => reviewSummary(marks, sheetMeta.page), [marks, sheetMeta.page]);
+  const reconciliation = useMemo(() => reconcilePlanToSchedule({
+    marks,
+    scheduleItems: drawingSymbols,
+    pageKinds,
+    trade,
+  }), [marks, drawingSymbols, pageKinds, trade]);
   const selectedMark = marks.find((mark) => mark.id === selectedId) || null;
   const reviewIndex = Math.max(0, sheetReview.findIndex((mark) => mark.id === selectedId));
   const aspect = viewerRef.current
@@ -865,8 +872,8 @@ export default function TakeoffWorkspace() {
       });
       const quote = persistSupplyQuote(nextMarks);
       setStatus(quote.rows.length
-        ? `${planned.summary} Supply quote ready (${quote.totals.quantity} plan devices).`
-        : `${planned.summary} Supply quote has no plan devices yet.`);
+        ? `${planned.summary} ${planned.reconciliationNote || ""} Supply quote ready (${quote.totals.quantity} plan devices).`
+        : `${planned.summary} ${planned.reconciliationNote || ""} Supply quote has no plan devices yet.`);
     } catch (error) {
       setStatus(error?.message || "AI takeoff could not read this drawing.");
     } finally {
@@ -1282,6 +1289,7 @@ export default function TakeoffWorkspace() {
           <button type="button" onClick={() => buildAndSaveTrueElectricalEstimate()} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-emerald-700">True Takeoff</button>
           <button type="button" onClick={() => buildAndSaveTrueElectricalEstimate({ download: true })} className="rounded-lg border border-emerald-600 px-3 py-1.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300">Takeoff CSV</button>
           <Link to={file ? `/estimates/new?file=${encodeURIComponent(file.name)}&size=${file.size}` : "/estimates/new"} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Estimate</Link>
+          <Link to={file ? `/markup?file=${encodeURIComponent(file.name)}&size=${file.size}` : "/markup"} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Markup pages</Link>
           <button type="button" onClick={downloadQuoteExcel} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Quote Excel</button>
           <button type="button" onClick={downloadQuotePdf} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Quote PDF</button>
           <button type="button" onClick={downloadTakeoff} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Export JSON</button>
@@ -1546,6 +1554,8 @@ export default function TakeoffWorkspace() {
           trueAnalysis={trueAnalysis}
           trueTakeoffResult={trueTakeoffResult}
           onBuildTrueTakeoff={() => buildAndSaveTrueElectricalEstimate()}
+          reconciliation={reconciliation}
+          reviewSummary={accuracyTotals}
         />
       </div>
       <AccuracyPopout

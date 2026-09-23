@@ -89,7 +89,29 @@ assert(reviewCategoryForMark({
   abbr: "EF",
 }) === "Equipment", "exhaust fans stay electrical equipment, not HVAC");
 
-const pages = buildReviewMarkupPages({ marks: [lighting, receptacle, hvac, fire, conduit] });
+const note = {
+  id: "note-1",
+  type: "note",
+  tool: "markup",
+  sheet: 9,
+  x: 8,
+  y: 16,
+  text: "1. Provide GFCI where shown.",
+  symbolLabel: "1. Provide GFCI where shown.",
+  category: "Notes",
+};
+const pages = buildReviewMarkupPages({
+  marks: [lighting, receptacle, hvac, fire, conduit, note],
+  reconciliation: {
+    rows: [{ type: "R", planCount: 1, scheduleQty: 24, persistedCount: 1, status: "short" }],
+    persistedCount: 1,
+    discrepancyCount: 1,
+  },
+  skippedSheets: [{ page: 1, kind: "drawing", discipline: "plumbing", sheetId: "P1.01" }],
+});
+assert(pages.some((page) => page.kind === "notes" && page.sourcePage === 9 && page.marks.every((mark) => mark.type === "note")), "notes have their own markup page");
+assert(pages.some((page) => page.kind === "reconciliation" && page.reconciliation.persistedCount === 1), "plan-vs-schedule review does not adopt the legend total");
+assert(pages.some((page) => page.kind === "skipped" && page.skippedSheets[0].sheetId === "P1.01"), "skipped non-electrical sheets are listed");
 assert(pages.some((page) => page.kind === "conduit" && page.sourcePage === 9), "conduit runs get a page");
 assert(pages.some((page) => page.kind === "devices" && page.category === "Lighting" && page.marks.length === 1), "lighting has its own drawing");
 assert(pages.some((page) => page.kind === "devices" && page.category === "Receptacles"), "receptacles have their own drawing");

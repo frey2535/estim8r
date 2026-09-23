@@ -76,8 +76,9 @@ export function clusterTextRows(items, yTolerance = 3.5) {
   }).filter((row) => row.text);
 }
 
-export function parseLegendRows(rows) {
+export function parseLegendRows(rows, options = {}) {
   const symbols = [];
+  const hasQtyColumn = Boolean(options.hasQtyColumn || (rows || []).some((row) => /\bqty\b|\bquantity\b/i.test(row.text || "")));
   for (const row of rows) {
     const tokens = row.tokens;
     if (tokens.length < 2) continue;
@@ -85,6 +86,7 @@ export function parseLegendRows(rows) {
     if (SKIP.test(abbr) || abbr.length > 12) continue;
     const label = tokens.slice(1).join(" ").replace(/\s+/g, " ").trim();
     if (label.length < 4 || SKIP.test(label)) continue;
+    const scheduleQty = scheduleQuantityFromTokens(tokens, { hasQtyColumn, kind: "legend" });
     symbols.push({
       id: `legend:${slug(abbr)}:${slug(label).slice(0, 40)}`,
       category: guessCategory(label),
@@ -92,13 +94,37 @@ export function parseLegendRows(rows) {
       label,
       abbr: abbr.slice(0, 10),
       source: "legend",
+      ...(scheduleQty != null ? { scheduleQty } : {}),
     });
   }
   return uniqueById(symbols);
 }
 
-export function parseScheduleRows(rows, source) {
+const VOLTAGE = new Set(["120", "208", "240", "277", "347", "480", "600"]);
+
+export function scheduleQuantityFromTokens(tokens = [], options = {}) {
+  const list = (tokens || []).map((token) => String(token || "").trim()).filter(Boolean);
+  const qtyIndex = list.findIndex((token) => /^(qty|quantity)$/i.test(token));
+  if (qtyIndex >= 0) {
+    const parsed = parsePrintedQty(list[qtyIndex + 1]);
+    if (parsed != null) return parsed;
+  }
+  if (!options.hasQtyColumn && options.kind !== "legend") return null;
+  return parsePrintedQty(list[list.length - 1]);
+}
+
+function parsePrintedQty(text) {
+  const raw = String(text || "").trim();
+  if (!/^\d{1,3}$/.test(raw)) return null;
+  if (VOLTAGE.has(raw)) return null;
+  const value = Number(raw);
+  if (value < 1 || value > 500) return null;
+  return value;
+}
+
+export function parseScheduleRows(rows, source, options = {}) {
   const items = [];
+  const hasQtyColumn = Boolean(options.hasQtyColumn || (rows || []).some((row) => /\bqty\b|\bquantity\b/i.test(row.text || "")));
   for (const row of rows) {
     const tokens = row.tokens;
     if (!tokens.length) continue;
@@ -116,6 +142,7 @@ export function parseScheduleRows(rows, source) {
     if (!type) continue;
     const label = rest.join(" ").replace(/\s+/g, " ").trim();
     if (!label || SKIP.test(label) || label.length < 3) continue;
+    const scheduleQty = scheduleQuantityFromTokens(tokens, { hasQtyColumn, kind: options.kind || source });
     items.push({
       id: `sched:${source}:${type}:${slug(label).slice(0, 40)}`,
       category: guessCategory(label) || (source === "equipment-schedule" ? "Equipment" : source === "device-schedule" ? "Receptacles" : "Lighting"),
@@ -124,6 +151,7 @@ export function parseScheduleRows(rows, source) {
       abbr: type,
       type,
       source,
+      ...(scheduleQty != null ? { scheduleQty } : {}),
     });
   }
   return uniqueById(items);
@@ -176,7 +204,7 @@ export async function readDrawingDocuments(fileBytes) {
       notes.push(`Sheet ${pageNumber} looks like a ${kind.replaceAll("-", " ")} but has no extractable text layer. Type devices in manually — Estim8r will not invent them.`);
       continue;
     }
-    if (kind === "legend") symbols.push(...parseLegendRows(rows).map((item) => ({ ...item, page: pageNumber })));
+    if (kind === "legend") symbols.push(...parseLegendRows(rows, { hasQtyColumn: rows.some((row) => /\bqty\b|\bquantity\b/i.test(row.text)) }).map((item) => ({ ...item, page: pageNumber })));
     if (kind === "lighting-schedule" || kind === "device-schedule" || kind === "equipment-schedule" || kind === "spec") {
       scheduleItems.push(...parseScheduleRows(rows, kind).map((item) => ({ ...item, page: pageNumber })));
       if (kind === "spec" || kind === "legend") {

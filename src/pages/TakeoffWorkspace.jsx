@@ -39,6 +39,14 @@ import { getPdfDocument } from "@/lib/pdf-document";
 import { readEstimate, syncStoredEstimate, writeEstimate } from "@/domain/estimate/estimateStore";
 import { downloadBlob, putDrawingFile } from "@/domain/estimate/projectDocuments";
 import {
+  DRAWING_INPUT_ID,
+  captureFileList,
+  clearPendingDrawing,
+  snapshotDrawingFile,
+  subscribeDrawingUpload,
+  validateDrawingFile,
+} from "@/domain/takeoff/drawingUpload";
+import {
   analyzeElectricalTakeoff,
   buildTrueElectricalEstimateDraft,
   trueTakeoffCsv,
@@ -98,7 +106,7 @@ const TOOL_ICONS = {
   cloud: Cloud,
 };
 
-let pendingDrawingFile = null;
+let applyIncomingDrawing = null;
 
 function fitSheetSize(sheetW, sheetH, viewW, viewH, zoom) {
   if (!sheetW || !sheetH || !viewW || !viewH) return { width: 0, height: 0 };
@@ -125,7 +133,6 @@ function loadSession(file) {
 }
 
 export default function TakeoffWorkspace() {
-  const inputRef = useRef(null);
   const viewerRef = useRef(null);
   const viewportRef = useRef(null);
   const fileUrlRef = useRef("");
@@ -294,27 +301,23 @@ export default function TakeoffWorkspace() {
     }
   }, [category, symbolId, symbols]);
 
-  async function chooseFile(nextFile) {
+  async function chooseFile(nextFile, preparedBytes) {
     if (!nextFile) {
-      setStatus("No drawing selected.");
+      setDrawingError("No drawing selected.");
+      setStatus("Drawing import failed.");
       return;
     }
-    const allowed = nextFile.type === "application/pdf"
-      || nextFile.type.startsWith("image/")
-      || /\.(pdf|png|jpe?g|webp)$/i.test(nextFile.name || "");
-    if (!allowed) {
-      pendingDrawingFile = null;
-      setDrawingError("Unsupported file. Choose a PDF, PNG, JPG, JPEG, or WEBP drawing.");
+    const typeError = validateDrawingFile(nextFile);
+    if (typeError) {
+      setDrawingError(typeError);
       setStatus("Drawing import failed.");
       return;
     }
 
-    pendingDrawingFile = nextFile;
-    void putDrawingFile(nextFile);
     setFile(nextFile);
     setLoadingDrawing(true);
     setDrawingError("");
-    setStatus(`Importing ${nextFile.name}…`);
+    setStatus(`Importing ${nextFile.name || "drawing"}…`);
     setDraftPoints([]);
     setZoom(1);
     setPan({ x: 0, y: 0 });
@@ -340,17 +343,29 @@ export default function TakeoffWorkspace() {
     setSupplyQuote(saved?.supplyQuote || null);
 
     try {
-      const bytes = await nextFile.arrayBuffer();
-      if (!bytes?.byteLength) throw new Error("The selected file is empty or could not be read.");
+      let file = nextFile;
+      let bytes = preparedBytes;
+      if (!bytes?.byteLength) {
+        const snap = await snapshotDrawingFile(nextFile);
+        file = snap.file;
+        bytes = snap.bytes;
+        setFile(file);
+      }
+      try {
+        await putDrawingFile(file);
+      } catch (storageError) {
+        console.error("Drawing store failed", storageError);
+        setDrawingError(storageError?.message || "The drawing opened, but Estim8r could not store it on this device.");
+      }
       if (fileUrlRef.current) URL.revokeObjectURL(fileUrlRef.current);
-      const url = URL.createObjectURL(nextFile);
+      const url = URL.createObjectURL(file);
       fileUrlRef.current = url;
       setFileUrl(url);
       setFileBytes(bytes);
-      setStatus(`${nextFile.name} imported. Calibrate scale, then take off the sheet.`);
+      setStatus(`${file.name} imported. Calibrate scale, then take off the sheet.`);
     } catch (error) {
       console.error("Drawing import failed", error);
-      pendingDrawingFile = null;
+      clearPendingDrawing();
       setFile(null);
       setFileUrl("");
       setFileBytes(null);
@@ -361,9 +376,17 @@ export default function TakeoffWorkspace() {
       setLoadingDrawing(false);
     }
   }
+  applyIncomingDrawing = chooseFile;
 
   useEffect(() => {
-    if (pendingDrawingFile) void chooseFile(pendingDrawingFile);
+    return subscribeDrawingUpload((payload) => {
+      if (payload.error) {
+        setDrawingError(payload.error);
+        setStatus("Drawing import failed.");
+        return;
+      }
+      if (payload.file) void applyIncomingDrawing?.(payload.file, payload.bytes);
+    });
   }, []);
 
   useEffect(() => {
@@ -631,21 +654,9 @@ export default function TakeoffWorkspace() {
     if (message) setStatus(message);
   }
 
-  function openDrawingPicker() {
-    const input = inputRef.current;
-    if (!input) return;
-    input.value = "";
-    input.click();
-  }
-
-  function handleInputChange(event) {
-    void chooseFile(event.target.files?.[0]);
-    event.target.value = "";
-  }
-
   function closeDrawing() {
     if (marks.length && !window.confirm("Close this drawing? Takeoff marks stay on this browser for this file.")) return;
-    pendingDrawingFile = null;
+    clearPendingDrawing();
     if (fileUrlRef.current) URL.revokeObjectURL(fileUrlRef.current);
     fileUrlRef.current = "";
     setFile(null);
@@ -685,9 +696,14 @@ export default function TakeoffWorkspace() {
   function handleDrop(event) {
     event.preventDefault();
     event.stopPropagation();
-    const droppedFile = event.dataTransfer?.files?.[0]
+    const droppedFile = captureFileList(event.dataTransfer?.files)
       || [...(event.dataTransfer?.items || [])].find((item) => item.kind === "file")?.getAsFile();
-    chooseFile(droppedFile);
+    if (!droppedFile) {
+      setDrawingError("No drawing selected.");
+      setStatus("Drawing import failed.");
+      return;
+    }
+    void chooseFile(droppedFile);
   }
 
   function drawingPoint(event) {
@@ -1202,18 +1218,6 @@ export default function TakeoffWorkspace() {
     }
   }
 
-  const fileInput = (
-    <input
-      id="takeoff-drawing-input"
-      ref={inputRef}
-      type="file"
-      accept="application/pdf,image/png,image/jpeg,image/webp,.pdf,.png,.jpg,.jpeg,.webp"
-      className="pointer-events-none absolute h-px w-px opacity-0"
-      tabIndex={-1}
-      onChange={handleInputChange}
-    />
-  );
-
   if (!file) {
     return (
       <div className="mx-auto max-w-5xl space-y-4 p-4">
@@ -1223,22 +1227,26 @@ export default function TakeoffWorkspace() {
           <p className="mt-1 text-sm text-muted-foreground">Calibrated counts, conduit LF, circuit traces, areas, and a quantity schedule on the live drawing. Upload a PDF or image to start.</p>
         </section>
         <section className="relative rounded-2xl border border-border bg-card p-4 shadow-sm">
-          {fileInput}
           <div
             onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
             onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; }}
             onDrop={handleDrop}
-            className="flex min-h-52 w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-blue-300 bg-blue-50/50 p-8 text-center dark:border-orange-500/30 dark:bg-orange-500/5"
           >
-            <FileUp className="mb-3 h-10 w-10 text-blue-600 dark:text-orange-500" />
-            <span className="text-lg font-bold text-foreground">Upload electrical drawings</span>
-            <span className="mt-1 text-sm text-muted-foreground">PDF, PNG, JPG, JPEG, or WEBP — full sheet fits the window</span>
-            <button type="button" onClick={openDrawingPicker} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-bold text-white dark:bg-orange-500">
-              <Upload className="h-4 w-4" /> Choose drawing
-            </button>
+            <label
+              htmlFor={DRAWING_INPUT_ID}
+              className="flex min-h-52 w-full cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-blue-300 bg-blue-50/50 p-8 text-center dark:border-orange-500/30 dark:bg-orange-500/5"
+            >
+              <FileUp className="mb-3 h-10 w-10 text-blue-600 dark:text-orange-500" />
+              <span className="text-lg font-bold text-foreground">Upload electrical drawings</span>
+              <span className="mt-1 text-sm text-muted-foreground">PDF, PNG, JPG, JPEG, or WEBP — full sheet fits the window</span>
+              <span className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-bold text-white dark:bg-orange-500">
+                <Upload className="h-4 w-4" /> Choose drawing
+              </span>
+            </label>
           </div>
           <div className="mt-2 text-xs text-muted-foreground">{status}</div>
-          {drawingError && <div className="mt-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{drawingError}</div>}
+          {loadingDrawing && <div className="mt-2 text-sm font-semibold text-foreground">Reading drawing…</div>}
+          {drawingError && <div role="alert" className="mt-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{drawingError}</div>}
         </section>
       </div>
     );
@@ -1246,7 +1254,6 @@ export default function TakeoffWorkspace() {
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col bg-background">
-      {fileInput}
       <div
         onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; }}
@@ -1284,7 +1291,7 @@ export default function TakeoffWorkspace() {
           <button type="button" onClick={downloadConduitCircuitCsv} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Conduit Schedule CSV</button>
           <button type="button" onClick={downloadWireMakeupPdf} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Wire Makeup PDF</button>
           <button type="button" onClick={downloadWireMakeupCsv} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Wire Makeup CSV</button>
-          <button type="button" onClick={openDrawingPicker} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Replace</button>
+          <label htmlFor={DRAWING_INPUT_ID} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Replace</label>
           <button type="button" onClick={closeDrawing} className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted"><X className="h-4 w-4" /> Close</button>
         </div>
       </div>

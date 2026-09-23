@@ -8,6 +8,7 @@ import { useTheme } from "@/lib/ThemeContext";
 import AppLogo from "@/components/branding/AppLogo";
 import AppSwitcher from "@/components/platform/AppSwitcher";
 import GoogleSignInButton from "@/components/platform/GoogleSignInButton";
+import DrawingFileInput from "@/components/takeoff/DrawingFileInput";
 import { Button } from "@/components/ui/button";
 
 const TABS = [
@@ -95,6 +96,8 @@ export default function AppLayout() {
           </div>
         </div>
       </header>
+
+      <DrawingFileInput />
 
       <main className={cn(
         "flex min-h-0 w-full flex-1 flex-col",

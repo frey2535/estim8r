@@ -26,6 +26,8 @@ import LaborMarketCompare from "@/components/labor/LaborMarketCompare";
 import { compareEstimateToMarket } from "@/domain/labor/marketCompare";
 import { buildEstimateSupplyQuote } from "@/domain/estimate/estimateSupplyQuote";
 import { moveEstimateLine } from "@/domain/estimate/lineOrder";
+import { defaultCompletenessChecklist } from "@/domain/estimate/estimatingIntelligence";
+import EstimateReadinessPanel from "@/components/estimate/EstimateReadinessPanel";
 
 function blankLine(rate) {
   return {
@@ -86,6 +88,7 @@ export default function EstimateBuilder() {
   const [customUnits, setCustomUnits] = useState([]);
   const [openSources, setOpenSources] = useState("");
   const [trueTakeoff, setTrueTakeoff] = useState(null);
+  const [completenessChecklist, setCompletenessChecklist] = useState(() => defaultCompletenessChecklist());
   const wage = compositeWage(crew);
 
   useEffect(() => {
@@ -110,6 +113,7 @@ export default function EstimateBuilder() {
       setNamedCrewId(stored.namedCrewId || "");
       setMeta({ fileName: stored.fileName || "", fileSize: stored.fileSize || 0, scopeEdited: Boolean(stored.scopeEdited) });
       setTrueTakeoff(stored.trueTakeoff || null);
+      setCompletenessChecklist(stored.completenessChecklist?.length ? stored.completenessChecklist : defaultCompletenessChecklist());
     } else {
       const nextCrew = defaultCrew();
       setHeader({ ...emptyHeader });
@@ -125,6 +129,7 @@ export default function EstimateBuilder() {
       setNamedCrewId("");
       setMeta({ fileName: "", fileSize: 0, scopeEdited: false });
       setTrueTakeoff(null);
+      setCompletenessChecklist(defaultCompletenessChecklist());
     }
     setReady(true);
   }, [openFile, openSize]);
@@ -173,8 +178,9 @@ export default function EstimateBuilder() {
       separateFromTakeoff: true,
       scopeEdited: meta.scopeEdited,
       trueTakeoff,
+      completenessChecklist,
     });
-  }, [ready, header, crew, lines, contingency, overhead, profit, bondInsurance, itemized, visibleTotals, meta, factors, namedCrewId, trueTakeoff, storageFileName]);
+  }, [ready, header, crew, lines, contingency, overhead, profit, bondInsurance, itemized, visibleTotals, meta, factors, namedCrewId, trueTakeoff, completenessChecklist, storageFileName]);
 
   const draft = useMemo(() => ({
     version: 1,
@@ -194,7 +200,8 @@ export default function EstimateBuilder() {
     separateFromTakeoff: true,
     scopeEdited: meta.scopeEdited,
     trueTakeoff,
-  }), [header, crew, factors, namedCrewId, contingency, overhead, profit, bondInsurance, lines, itemized, visibleTotals, meta, trueTakeoff, storageFileName]);
+    completenessChecklist,
+  }), [header, crew, factors, namedCrewId, contingency, overhead, profit, bondInsurance, lines, itemized, visibleTotals, meta, trueTakeoff, completenessChecklist, storageFileName]);
 
   const supplyQuote = useMemo(() => buildEstimateSupplyQuote({
     lines,
@@ -476,6 +483,8 @@ export default function EstimateBuilder() {
           </DragDropContext>
         </div>
       </section>
+
+      <EstimateReadinessPanel checklist={completenessChecklist} onChange={setCompletenessChecklist} />
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,22rem)]">
         <div className="min-w-0 rounded-2xl border border-border bg-card p-4">

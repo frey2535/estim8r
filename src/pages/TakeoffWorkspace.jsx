@@ -1713,15 +1713,17 @@ function OverlayLabel({ label, fill }) {
   );
 }
 
-function DeviceFill({ mark, selected, markerSize }) {
+function DeviceFill({ mark, selected, markerSize, focus = false }) {
   const outline = deviceOutline(mark, markerSize, { selected });
   const color = mark.color || "#1e3a8a";
-  const opacity = mark.fillOpacity ?? DEVICE_FILL_OPACITY;
+  const opacity = focus ? 0.92 : (mark.fillOpacity ?? DEVICE_FILL_OPACITY);
   const stroke = selected ? "#ea580c" : color;
-  const strokeWidth = selected ? 0.28 : 0.12;
+  const strokeWidth = focus ? 0.55 : selected ? 0.28 : 0.12;
+  const transform = focus ? `translate(${mark.x} ${mark.y}) scale(1.8) translate(${-mark.x} ${-mark.y})` : undefined;
   if (outline.kind === "path" && outline.points?.length >= 3) {
     return (
       <polygon
+        transform={transform}
         points={outline.points.map((point) => `${point.x},${point.y}`).join(" ")}
         fill={color}
         fillOpacity={opacity}
@@ -1734,6 +1736,7 @@ function DeviceFill({ mark, selected, markerSize }) {
   if (outline.kind === "circle") {
     return (
       <circle
+        transform={transform}
         cx={mark.x}
         cy={mark.y}
         r={outline.r}
@@ -1747,6 +1750,7 @@ function DeviceFill({ mark, selected, markerSize }) {
   }
   return (
     <rect
+      transform={transform}
       x={mark.x - outline.w / 2}
       y={mark.y - outline.h / 2}
       width={outline.w}
@@ -1842,8 +1846,10 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
         <DeviceFill key={mark.id} mark={mark} selected={false} markerSize={resolvedMarkerSize(mark, markerSize)} />
       ))}
       {devices.filter((mark) => mark.id === selectedId).map((mark) => (
-        <g key={mark.id} style={{ filter: "drop-shadow(0 0 1.1px rgba(234,88,12,0.95))" }}>
-          <DeviceFill mark={mark} selected markerSize={resolvedMarkerSize(mark, markerSize) * 1.35} />
+        <g key={mark.id} style={{ filter: "drop-shadow(0 0 3px rgba(0,0,0,0.85)) drop-shadow(0 0 1.5px rgba(234,88,12,1))" }}>
+          <circle cx={mark.x} cy={mark.y} r={Math.max(1.15, resolvedMarkerSize(mark, markerSize) * 1.8)} fill="white" fillOpacity="0.96" stroke="#ea580c" strokeWidth="0.38" vectorEffect="non-scaling-stroke" />
+          <DeviceFill mark={mark} selected focus markerSize={resolvedMarkerSize(mark, markerSize)} />
+          <text x={mark.x} y={mark.y - Math.max(1.65, resolvedMarkerSize(mark, markerSize) * 2.25)} textAnchor="middle" fontSize="1.15" fontWeight="800" fill="#ea580c" stroke="#ffffff" strokeWidth="0.32" paintOrder="stroke">SELECTED</text>
         </g>
       ))}
       {callouts.conduitLabels.map((label) => (

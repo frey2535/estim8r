@@ -188,14 +188,10 @@ export function buildEstimatePdf(estimate, brandingInput) {
     const logoPosition = ["left", "center", "right"].includes(design.logoPosition) ? design.logoPosition : "left";
     const logoOffsetX = Math.max(-180, Math.min(180, Number(design.logoOffsetX) || 0));
     const logoOffsetY = Math.max(-30, Math.min(30, Number(design.logoOffsetY) || 0));
-    let logoX = pad;
-    if (logoPosition === "center") logoX = (page.width - branding.logo) / 2;
-    if (logoPosition === "right") logoX = page.width - pad - branding.logo;
-    logoX = Math.max(0, Math.min(page.width - branding.logo, logoX + logoOffsetX));
-    const logoY = Math.max(y, Math.min(y + branding.headerHeight - branding.logo, y + (branding.headerHeight - branding.logo) / 2 + logoOffsetY));
+    const logoSize = Number(design.logoSizePt) > 0 ? Math.max(16, Math.min(140, Number(design.logoSizePt))) : branding.logo;\n    let logoX = pad;\n    if (logoPosition === "center") logoX = (page.width - logoSize) / 2;\n    if (logoPosition === "right") logoX = page.width - pad - logoSize;\n    logoX = Math.max(0, Math.min(page.width - logoSize, logoX + logoOffsetX));\n    const logoY = Math.max(y, Math.min(y + branding.headerHeight - logoSize, y + (branding.headerHeight - logoSize) / 2 + logoOffsetY));
     if (branding.logoDataUrl) {
       try {
-        doc.addImage(branding.logoDataUrl, logoFormat(branding.logoDataUrl), logoX, logoY, branding.logo, branding.logo);
+        doc.addImage(branding.logoDataUrl, logoFormat(branding.logoDataUrl), logoX, logoY, logoSize, logoSize);
       } catch {
         /* skip a broken logo rather than failing the PDF */
       }
@@ -204,19 +200,15 @@ export function buildEstimatePdf(estimate, brandingInput) {
     const align = ["left", "center", "right"].includes(design.headerCompanyAlign) ? design.headerCompanyAlign : "left";
     const textX = align === "center" ? page.width / 2 : align === "right" ? page.width - pad : pad;
     const textOptions = align === "left" ? undefined : { align };
-    const leftLogoGap = branding.logoDataUrl && logoPosition === "left" && align === "left" ? branding.logo + 12 : 0;
+    const leftLogoGap = branding.logoDataUrl && logoPosition === "left" && align === "left" ? logoSize + 12 : 0;
     const companyX = textX + leftLogoGap;
     doc.setFont(branding.font, "bold");
     doc.setFontSize(branding.headerSize === "small" ? 14 : branding.headerSize === "large" ? 22 : 18);
     ink(branding.headerTextColor);
-    write(branding.companyName || "Estimate", companyX, y + 28, textOptions);
+    const headerTitle = String(design.headerTitle || "").trim() || branding.companyName || "Estimate";\n    if (!design.hideHeaderTitle) write(headerTitle, companyX, y + 28, textOptions);
     doc.setFont(branding.font, "normal");
     doc.setFontSize(Number(design.bodySize) || 9);
-    let lineY = y + 44;
-    for (const line of companyLines(branding)) {
-      write(line, companyX, lineY, textOptions);
-      lineY += 12;
-    }
+    let lineY = y + 44;\n    const customDetails = String(design.headerDetails || "").trim();\n    const detailLines = customDetails ? customDetails.split(/\\r?\\n/).map((line) => line.trim()).filter(Boolean) : companyLines(branding);\n    if (!design.hideHeaderDetails) {\n      for (const line of detailLines) {\n        write(line, companyX, lineY, textOptions);\n        lineY += 12;\n      }\n    }
     return y + branding.headerHeight;
   }
 

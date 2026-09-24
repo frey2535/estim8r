@@ -30,6 +30,8 @@ import { defaultCompletenessChecklist } from "@/domain/estimate/estimatingIntell
 import EstimateReadinessPanel from "@/components/estimate/EstimateReadinessPanel";
 import AssemblyLibrary from "@/components/estimate/AssemblyLibrary";
 import { assemblyToEstimateLines } from "@/domain/estimate/assemblies";
+import { defaultInstallationConditions } from "@/domain/labor/installationConditions";
+import InstallationConditionEditor from "@/components/labor/InstallationConditionEditor";
 
 function blankLine(rate) {
   return {
@@ -92,6 +94,7 @@ export default function EstimateBuilder() {
   const [trueTakeoff, setTrueTakeoff] = useState(null);
   const [completenessChecklist, setCompletenessChecklist] = useState(() => defaultCompletenessChecklist());
   const [assemblies, setAssemblies] = useState([]);
+  const [installationConditions, setInstallationConditions] = useState(() => defaultInstallationConditions());
   const wage = compositeWage(crew);
 
   useEffect(() => {
@@ -118,6 +121,7 @@ export default function EstimateBuilder() {
       setTrueTakeoff(stored.trueTakeoff || null);
       setCompletenessChecklist(stored.completenessChecklist?.length ? stored.completenessChecklist : defaultCompletenessChecklist());
       setAssemblies(stored.assemblies || []);
+      setInstallationConditions(stored.installationConditions?.length ? stored.installationConditions : defaultInstallationConditions());
     } else {
       const nextCrew = defaultCrew();
       setHeader({ ...emptyHeader });
@@ -135,6 +139,7 @@ export default function EstimateBuilder() {
       setTrueTakeoff(null);
       setCompletenessChecklist(defaultCompletenessChecklist());
       setAssemblies([]);
+      setInstallationConditions(defaultInstallationConditions());
     }
     setReady(true);
   }, [openFile, openSize]);
@@ -185,8 +190,9 @@ export default function EstimateBuilder() {
       trueTakeoff,
       completenessChecklist,
       assemblies,
+      installationConditions,
     });
-  }, [ready, header, crew, lines, contingency, overhead, profit, bondInsurance, itemized, visibleTotals, meta, factors, namedCrewId, trueTakeoff, completenessChecklist, assemblies, storageFileName]);
+  }, [ready, header, crew, lines, contingency, overhead, profit, bondInsurance, itemized, visibleTotals, meta, factors, namedCrewId, trueTakeoff, completenessChecklist, assemblies, installationConditions, storageFileName]);
 
   const draft = useMemo(() => ({
     version: 1,
@@ -208,7 +214,8 @@ export default function EstimateBuilder() {
     trueTakeoff,
     completenessChecklist,
     assemblies,
-  }), [header, crew, factors, namedCrewId, contingency, overhead, profit, bondInsurance, lines, itemized, visibleTotals, meta, trueTakeoff, completenessChecklist, assemblies, storageFileName]);
+    installationConditions,
+  }), [header, crew, factors, namedCrewId, contingency, overhead, profit, bondInsurance, lines, itemized, visibleTotals, meta, trueTakeoff, completenessChecklist, assemblies, installationConditions, storageFileName]);
 
   const supplyQuote = useMemo(() => buildEstimateSupplyQuote({
     lines,
@@ -611,6 +618,7 @@ export default function EstimateBuilder() {
 
       <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
         <ProductivityFactorEditor factors={factors} onChange={changeFactor} />
+        <div className="mt-6 border-t border-border pt-5"><InstallationConditionEditor conditions={installationConditions} onChange={setInstallationConditions} /></div>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,22rem)]">

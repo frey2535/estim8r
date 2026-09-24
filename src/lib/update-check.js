@@ -30,7 +30,7 @@ export function applyEstim8rUpdate(targetSha) {
   const sha = targetSha || currentBuildSha();
   markUpdateIntent(sha);
   try { if (sha && sha !== "local") localStorage.setItem(APPLIED_KEY, sha); } catch { /* private mode */ }
-  try { if ("caches" in window) caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key))).catch(() => undefined); } catch { /* best effort */ }
+  try { if ("caches" in window) caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key)))).catch(() => undefined); } catch { /* best effort */ }
   const next = new URL(window.location.href);
   next.searchParams.set("t", String(Date.now()));
   if (sha && sha !== "local") next.searchParams.set("build", sha);

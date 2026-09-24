@@ -54,8 +54,8 @@ function previewWidth() {
   return Math.min(720, Math.max(280, window.innerWidth - gutter));
 }
 
-export default function EstimatePdfPreview({ estimate }) {
-  const [open, setOpen] = useState(false);
+export default function EstimatePdfPreview({ estimate, live = false, embedded = false }) {
+  const [open, setOpen] = useState(Boolean(live || embedded));
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
   const [fileName, setFileName] = useState("");
@@ -67,7 +67,7 @@ export default function EstimatePdfPreview({ estimate }) {
   const previewKey = estimatePdfPreviewKey(estimate, readCompanyBranding());
 
   useEffect(() => {
-    if (!open) {
+    if (!open && !embedded) {
       setStatus("idle");
       setError("");
       setPages([]);
@@ -111,11 +111,22 @@ export default function EstimatePdfPreview({ estimate }) {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [open, previewKey, estimate, retry]);
+  }, [open, embedded, previewKey, estimate, retry]);
 
   function downloadPreview() {
     if (!blob) return;
     downloadBlob(blob, fileName || "estimate.pdf");
+  }
+
+  if (embedded) {
+    return <div className="flex h-full min-h-[40rem] flex-col overflow-hidden rounded-lg">
+      <div className="min-h-0 flex-1 overflow-auto p-2">
+        {status === "loading" || status === "idle" ? <div className="mx-auto w-full max-w-[45rem]"><Skeleton className="aspect-[612/792] w-full" /></div> : null}
+        {status === "error" ? <Alert variant="destructive"><AlertTitle>PDF preview failed</AlertTitle><AlertDescription>{error}</AlertDescription></Alert> : null}
+        {status === "empty" ? <div className="p-8 text-center text-sm text-muted-foreground">Add estimate lines to preview the PDF.</div> : null}
+        {status === "ready" ? <div className="mx-auto flex w-full max-w-[46rem] flex-col gap-4">{pages.map((page)=><img key={page.pageNumber} src={page.src} alt={`Live PDF page ${page.pageNumber}`} className="h-auto w-full border border-border bg-white shadow-md"/>)}</div> : null}
+      </div>
+    </div>;
   }
 
   return (

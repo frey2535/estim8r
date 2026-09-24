@@ -33,6 +33,7 @@ import { assemblyToEstimateLines } from "@/domain/estimate/assemblies";
 import { defaultInstallationConditions } from "@/domain/labor/installationConditions";
 import InstallationConditionEditor from "@/components/labor/InstallationConditionEditor";
 import TakeoffSourceAudit from "@/components/estimate/TakeoffSourceAudit";
+import SupplierPriceIntelligence from "@/components/estimate/SupplierPriceIntelligence";
 
 function blankLine(rate) {
   return {
@@ -96,6 +97,7 @@ export default function EstimateBuilder() {
   const [completenessChecklist, setCompletenessChecklist] = useState(() => defaultCompletenessChecklist());
   const [assemblies, setAssemblies] = useState([]);
   const [installationConditions, setInstallationConditions] = useState(() => defaultInstallationConditions());
+  const [supplierPriceBooks, setSupplierPriceBooks] = useState([]);
   const wage = compositeWage(crew);
 
   useEffect(() => {
@@ -123,6 +125,7 @@ export default function EstimateBuilder() {
       setCompletenessChecklist(stored.completenessChecklist?.length ? stored.completenessChecklist : defaultCompletenessChecklist());
       setAssemblies(stored.assemblies || []);
       setInstallationConditions(stored.installationConditions?.length ? stored.installationConditions : defaultInstallationConditions());
+      setSupplierPriceBooks(stored.supplierPriceBooks || []);
     } else {
       const nextCrew = defaultCrew();
       setHeader({ ...emptyHeader });
@@ -141,6 +144,7 @@ export default function EstimateBuilder() {
       setCompletenessChecklist(defaultCompletenessChecklist());
       setAssemblies([]);
       setInstallationConditions(defaultInstallationConditions());
+      setSupplierPriceBooks([]);
     }
     setReady(true);
   }, [openFile, openSize]);
@@ -192,8 +196,9 @@ export default function EstimateBuilder() {
       completenessChecklist,
       assemblies,
       installationConditions,
+      supplierPriceBooks,
     });
-  }, [ready, header, crew, lines, contingency, overhead, profit, bondInsurance, itemized, visibleTotals, meta, factors, namedCrewId, trueTakeoff, completenessChecklist, assemblies, installationConditions, storageFileName]);
+  }, [ready, header, crew, lines, contingency, overhead, profit, bondInsurance, itemized, visibleTotals, meta, factors, namedCrewId, trueTakeoff, completenessChecklist, assemblies, installationConditions, supplierPriceBooks, storageFileName]);
 
   const draft = useMemo(() => ({
     version: 1,
@@ -216,7 +221,8 @@ export default function EstimateBuilder() {
     completenessChecklist,
     assemblies,
     installationConditions,
-  }), [header, crew, factors, namedCrewId, contingency, overhead, profit, bondInsurance, lines, itemized, visibleTotals, meta, trueTakeoff, completenessChecklist, assemblies, installationConditions, storageFileName]);
+    supplierPriceBooks,
+  }), [header, crew, factors, namedCrewId, contingency, overhead, profit, bondInsurance, lines, itemized, visibleTotals, meta, trueTakeoff, completenessChecklist, assemblies, installationConditions, supplierPriceBooks, storageFileName]);
 
   const supplyQuote = useMemo(() => buildEstimateSupplyQuote({
     lines,
@@ -407,6 +413,7 @@ export default function EstimateBuilder() {
           <TabsTrigger value="estimate" className="px-4 py-2">Estimate</TabsTrigger>
           <TabsTrigger value="labor-markup" className="px-4 py-2">Labor &amp; markup</TabsTrigger>
           <TabsTrigger value="assemblies" className="px-4 py-2">Assemblies</TabsTrigger>
+          <TabsTrigger value="supplier-prices" className="px-4 py-2">Supplier Prices</TabsTrigger>
           {draft.trueTakeoff?.analysis ? <TabsTrigger value="audit" className="px-4 py-2">Takeoff Audit</TabsTrigger> : null}
         </TabsList>
 
@@ -542,6 +549,25 @@ export default function EstimateBuilder() {
           <LaborMarketCompare comparison={marketCompare} />
         </div>
       </section>
+        </TabsContent>
+
+        <TabsContent value="supplier-prices" className="mt-4 space-y-5">
+          <SupplierPriceIntelligence
+            lines={lines}
+            books={supplierPriceBooks}
+            onChange={setSupplierPriceBooks}
+            onApplyPrice={(line, match) => setLines((current) => current.map((row) => row.id === line.id ? {
+              ...row,
+              materialUnitCost: match.unitCost,
+              materialPriceMeta: {
+                sourceType: "Supplier quote",
+                supplier: match.supplier || "",
+                reference: match.reference || "",
+                effectiveDate: match.effectiveDate || "",
+                capturedAt: new Date().toISOString(),
+              },
+            } : row))}
+          />
         </TabsContent>
 
         <TabsContent value="assemblies" className="mt-4 space-y-5">

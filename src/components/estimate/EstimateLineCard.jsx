@@ -18,7 +18,8 @@ import {
 import { estimateLineLaborNotice, estimateLineTitle } from "@/domain/estimate/linePresentation";
 import { compareLineToMarket } from "@/domain/labor/marketCompare";
 import { WORK_CATEGORY_ORDER, workCategoryForEstimateLine } from "@/domain/estimate/trueElectricalTakeoff";
-import { MATERIAL_PRICE_SOURCES, materialPriceStatus } from "@/domain/estimate/materialPricing";
+import { MATERIAL_PRICE_SOURCES, appendMaterialPriceHistory, materialPriceStatus } from "@/domain/estimate/materialPricing";
+import MaterialPriceHistory from "@/components/estimate/MaterialPriceHistory";
 
 const UNITS = ["STICK", "EA", "LF", "SF", "FT", "100 LF", "1000 LF", "HR", "DAY", "LOT"];
 
@@ -225,6 +226,11 @@ export default function EstimateLineCard({
                 <Field label="Price date">
                   <Cell type="date" value={row.materialPriceMeta?.effectiveDate || ""} set={(v) => onPatch?.(row.id, "materialPriceMeta", { ...(row.materialPriceMeta || {}), effectiveDate: v })} />
                 </Field>
+                <div className="col-span-2 sm:col-span-4 flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={() => onPatch?.(row.id, "materialPriceHistory", appendMaterialPriceHistory(row.materialPriceHistory || [], row))} className="rounded-md border border-border px-2 py-1 text-[11px] font-semibold hover:bg-muted">Save current price to history</button>
+                  <span className="text-[11px] text-muted-foreground">{row.materialPriceHistory?.length || 0} historical price records</span>
+                </div>
+                <div className="col-span-2 sm:col-span-4"><MaterialPriceHistory currentUnitCost={row.materialUnitCost} history={row.materialPriceHistory || []} /></div>
                 <div className="col-span-2 sm:col-span-4 text-[11px]">
                   <span className={priceStatus.state === "current" ? "font-semibold text-emerald-700" : priceStatus.state === "stale" ? "font-semibold text-amber-700" : "font-semibold text-muted-foreground"}>{priceStatus.label}</span>
                 </div>

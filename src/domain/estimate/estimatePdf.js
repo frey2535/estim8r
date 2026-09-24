@@ -40,6 +40,7 @@ export function estimatePdfFileName(estimate) {
 
 export function estimatePresentation(estimate) {
   const header = estimate?.header || {};
+  const design = estimate?.pdfDesign || {};
   const moneyTotals = estimateGrandTotal(estimate);
   const visible = resolveVisibleTotals(estimate);
   const lines = includedLines(estimate).map((line) => {
@@ -60,6 +61,8 @@ export function estimatePresentation(estimate) {
   });
   return {
     title: header.projectName || "Electrical Estimate",
+    documentTitle: design.documentTitle || "Electrical Estimate",
+    subtitle: design.subtitle || "",
     estimateNumber: header.estimateNumber || "",
     projectAddress: header.projectAddress || "",
     customerCompany: header.customerCompany || "",
@@ -98,6 +101,7 @@ export function estimatePdfPreviewKey(estimate, brandingInput) {
     presentation: estimatePresentation(estimate),
     fileName: estimatePdfFileName(estimate),
     branding: normalizeBranding(brandingInput),
+    pdfDesign: estimate?.pdfDesign || {},
   });
 }
 
@@ -132,8 +136,10 @@ function wrap(doc, value, width) {
 export function buildEstimatePdf(estimate, brandingInput) {
   const branding = brandingLayout(normalizeBranding(brandingInput));
   const presentation = estimatePresentation(estimate);
+  const design = { showProjectCard: true, showScope: true, showDescription: true, showQuantity: true, showUnit: true, showMaterial: true, showLabor: true, showAmount: true, showNotes: true, showPageNumbers: true, tableStyle: "grid", density: "comfortable", titleSize: 18, bodySize: 9, margin: 40, footerText: "", ...(estimate?.pdfDesign || {}) };
   const doc = new jsPDF({ unit: "pt", format: "letter" });
-  const page = { width: 612, height: 792, left: 40, right: 572 };
+  const margin = Math.max(20, Math.min(72, Number(design.margin) || 40));
+  const page = { width: 612, height: 792, left: margin, right: 612 - margin };
   const strings = [];
   const color = (hex) => hexRgb(hex);
 
@@ -179,7 +185,7 @@ export function buildEstimatePdf(estimate, brandingInput) {
     ink(branding.headerTextColor);
     write(branding.companyName || "Estimate", x, y + 28);
     doc.setFont(branding.font, "normal");
-    doc.setFontSize(9);
+    doc.setFontSize(Number(design.bodySize) || 9);
     let lineY = y + 44;
     for (const line of companyLines(branding)) {
       write(line, x, lineY);
@@ -196,6 +202,13 @@ export function buildEstimatePdf(estimate, brandingInput) {
   pageBackground();
   let cursor = headerBar(0) + 18;
   const cardWidth = page.right - page.left;
+  doc.setFont(branding.font, "bold");
+  doc.setFontSize(Number(design.titleSize) || 18);
+  ink(branding.secondaryColor);
+  write(presentation.documentTitle, page.left, cursor);
+  cursor += (Number(design.titleSize) || 18) + 4;
+  if (presentation.subtitle) { doc.setFont(branding.font, "normal"); doc.setFontSize(Number(design.bodySize) || 9); write(presentation.subtitle, page.left, cursor); cursor += 16; }
+
   const infoLines = [
     ["Project", presentation.title, "Estimate #", presentation.estimateNumber],
     ["Address", presentation.projectAddress, "Customer", presentation.customerCompany],
@@ -205,11 +218,11 @@ export function buildEstimatePdf(estimate, brandingInput) {
   ].filter((row) => row[1] || row[3]);
   const noteLines = wrap(doc, presentation.scopeNotes, cardWidth - branding.cardPad * 2);
   const infoHeight = branding.cardPad * 2 + infoLines.length * 28 + (noteLines.length ? noteLines.length * 12 + 18 : 0);
-  card(page.left, cursor, cardWidth, Math.max(72, infoHeight));
+  if (design.showProjectCard) card(page.left, cursor, cardWidth, Math.max(72, infoHeight));
   doc.setFont(branding.font, "bold");
   doc.setFontSize(11);
   ink(branding.secondaryColor);
-  write("Project & customer", page.left + branding.cardPad, cursor + 16);
+  if (design.showProjectCard) write("Project & customer", page.left + branding.cardPad, cursor + 16);
   let infoY = cursor + 36;
   doc.setFontSize(9);
   for (const [leftLabel, leftValue, rightLabel, rightValue] of infoLines) {
@@ -223,7 +236,7 @@ export function buildEstimatePdf(estimate, brandingInput) {
     if (rightLabel) write(rightValue || "—", page.left + cardWidth / 2, infoY + 12);
     infoY += 28;
   }
-  if (noteLines.length) {
+  if (design.showScope && noteLines.length) {
     doc.setFont(branding.font, "bold");
     ink(branding.secondaryColor);
     write("Scope", page.left + branding.cardPad, infoY);
@@ -233,14 +246,19 @@ export function buildEstimatePdf(estimate, brandingInput) {
   }
   cursor += Math.max(72, infoHeight) + 18;
 
-  const columns = [
-    { key: "description", label: "Item", width: 186, align: "left" },
-    { key: "quantity", label: "Qty", width: 46, align: "right" },
-    { key: "unit", label: "Unit", width: 40, align: "left" },
-    { key: "material", label: "Material", width: 80, align: "right" },
-    { key: "labor", label: "Labor", width: 80, align: "right" },
-    { key: "amount", label: "Amount", width: 80, align: "right" },
-  ];
+  const availableWidth = page.right - page.left;
+  const requestedColumns = [
+    design.showItemType ? { key: "itemType", label: "Type", weight: 1.0, align: "left" } : null,
+    design.showCategory ? { key: "category", label: "Category", weight: 1.0, align: "left" } : null,
+    design.showDescription !== false ? { key: "description", label: "Item", weight: 2.5, align: "left" } : null,
+    design.showQuantity !== false ? { key: "quantity", label: "Qty", weight: 0.65, align: "right" } : null,
+    design.showUnit !== false ? { key: "unit", label: "Unit", weight: 0.65, align: "left" } : null,
+    design.showMaterial !== false ? { key: "material", label: "Material", weight: 1.0, align: "right" } : null,
+    design.showLabor !== false ? { key: "labor", label: "Labor", weight: 1.0, align: "right" } : null,
+    design.showAmount !== false ? { key: "amount", label: "Amount", weight: 1.0, align: "right" } : null,
+  ].filter(Boolean);
+  const weightTotal = requestedColumns.reduce((sum, column) => sum + column.weight, 0) || 1;
+  const columns = requestedColumns.map((column) => ({ ...column, width: availableWidth * column.weight / weightTotal }));
 
   function ensureSpace(needed) {
     if (cursor + needed < 750) return;

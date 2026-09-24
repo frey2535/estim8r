@@ -270,9 +270,9 @@ export function buildEstimatePdf(estimate, brandingInput) {
   const preparedInfoLines = infoLines.map(([leftLabel, leftValue, rightLabel, rightValue]) => {
     const leftLines = wrap(doc, leftValue || "—", infoColWidth);
     const rightLines = rightLabel ? wrap(doc, rightValue || "—", infoColWidth) : [];
-    return { leftLabel, leftLines, rightLabel, rightLines, height: 18 + Math.max(leftLines.length, rightLines.length, 1) * 11 };
+    return { leftLabel, leftLines, rightLabel, rightLines, height: 13 + Math.max(leftLines.length, rightLines.length, 1) * 10 };
   });
-  const infoHeight = branding.cardPad * 2 + preparedInfoLines.reduce((sum, row) => sum + row.height, 0) + 10;
+  const infoHeight = Math.max(62, 14 + preparedInfoLines.reduce((sum, row) => sum + row.height, 0) + 10);
   if (design.showProjectCard) card(page.left, cursor, cardWidth, Math.max(72, infoHeight));
   doc.setFont(branding.font, "bold");
   doc.setFontSize(11);
@@ -287,11 +287,11 @@ export function buildEstimatePdf(estimate, brandingInput) {
     if (row.rightLabel) write(row.rightLabel, page.left + cardWidth / 2, infoY);
     doc.setFont(branding.font, "normal");
     ink(branding.textColor);
-    row.leftLines.forEach((part, index) => write(part, page.left + branding.cardPad, infoY + 12 + index * 11));
-    row.rightLines.forEach((part, index) => write(part, page.left + cardWidth / 2, infoY + 12 + index * 11));
+    row.leftLines.forEach((part, index) => write(part, page.left + branding.cardPad, infoY + 10 + index * 10));
+    row.rightLines.forEach((part, index) => write(part, page.left + cardWidth / 2, infoY + 10 + index * 10));
     infoY += row.height;
   }
-  cursor += Math.max(72, infoHeight) + 14;
+  cursor += infoHeight + 9;
 
   if (design.showCompanyCard !== false) {
     const employee = [
@@ -301,14 +301,14 @@ export function buildEstimatePdf(estimate, brandingInput) {
       ["Phone", design.companyEmployeePhone || ""],
     ].filter((row) => row[1]);
     if (employee.length) {
-      const employeeHeight = branding.cardPad * 2 + 18 + employee.length * 18;
+      const employeeHeight = 28 + employee.length * 14;
       ensureSpace(employeeHeight + 14);
       card(page.left, cursor, cardWidth, employeeHeight);
       doc.setFont(branding.font, "bold");
       doc.setFontSize(11);
       ink(branding.secondaryColor);
       write("Company contact", page.left + branding.cardPad, cursor + branding.cardPad);
-      let employeeY = cursor + branding.cardPad + 18;
+      let employeeY = cursor + branding.cardPad + 16;
       doc.setFontSize(Number(design.bodySize) || 9);
       employee.forEach(([label, value]) => {
         doc.setFont(branding.font, "bold");
@@ -317,9 +317,9 @@ export function buildEstimatePdf(estimate, brandingInput) {
         ink(branding.textColor);
         fitWrite(value, page.left + 90, employeeY, cardWidth - 110, { minSize: 7 });
         ink(branding.secondaryColor);
-        employeeY += 18;
+        employeeY += 14;
       });
-      cursor += employeeHeight + 14;
+      cursor += employeeHeight + 9;
     }
   }
 
@@ -438,10 +438,12 @@ export function buildEstimatePdf(estimate, brandingInput) {
     fitWrite(money(presentation.totals[option.key]), page.right - 16, y, 120, { minSize: 8, textOptions: { align: "right" } });
   });
 
+  cursor += totalsHeight;
+
   if (design.showSignatures !== false) {
     const signatureHeight = 88;
-    ensureSpace(signatureHeight + 18);
-    cursor += 18;
+    ensureSpace(signatureHeight + 10);
+    cursor += 8;
     const gap = 28;
     const sigWidth = (cardWidth - gap) / 2;
     doc.setDrawColor(...Object.values(color(branding.textColor)));

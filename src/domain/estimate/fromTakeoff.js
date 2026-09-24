@@ -4,6 +4,7 @@ import { defaultProductivityFactors } from "../labor/productivity.js";
 import { makeLaborSelection } from "../labor/selection.js";
 import { fillEmptyHeader, headerFromDrawings } from "./fromDrawings.js";
 import { applySavedLineOrder } from "./lineOrder.js";
+import { sourcesForRollupRow, summarizeLineSources } from "./takeoffSourceAudit.js";
 
 export function estimateStorageKey(fileName, fileSize) {
   return `estim8r.estimate.v1:${fileName || "drawing"}:${fileSize || 0}`;
@@ -64,15 +65,17 @@ function makeLine({ takeoffKey, source, category, description, quantity, unit, r
   };
 }
 
-export function linesFromRollup(rollup, rate) {
+export function linesFromRollup(rollup, rate, sourceContext = {}) {
   const lines = [];
   for (const row of rollup?.rows || []) {
     const parts = [];
     if (row.count > 0) parts.push({ quantity: row.count, unit: "EA" });
     if (row.hasLength && row.lf > 0) parts.push({ quantity: row.lf, unit: "LF" });
     if (row.hasArea && row.sf > 0) parts.push({ quantity: row.sf, unit: "SF" });
+    const takeoffSources = sourcesForRollupRow(row, sourceContext.marks, sourceContext.runs);
+    const sourceAudit = summarizeLineSources(takeoffSources);
     for (const part of parts) {
-      lines.push(makeLine({
+      const line = makeLine({
         takeoffKey: `${row.category}|${row.symbol}|${part.unit}`.toLowerCase(),
         source: "takeoff",
         category: row.category,
@@ -80,7 +83,10 @@ export function linesFromRollup(rollup, rate) {
         quantity: part.quantity,
         unit: part.unit,
         rate,
-      }));
+      });
+      line.takeoffSources = takeoffSources;
+      line.sourceAudit = sourceAudit;
+      lines.push(line);
     }
   }
   return lines;
@@ -154,10 +160,10 @@ export function mergeEstimate(existing, incomingLines) {
   return applySavedLineOrder(next, (existing?.lines || []).map((line) => line.id));
 }
 
-export function buildEstimateDraft({ fileName, fileSize, drawingDocs, rollup, pageCount, wageBook, markup }) {
+export function buildEstimateDraft({ fileName, fileSize, drawingDocs, rollup, pageCount, wageBook, markup, marks = [], runs = [] }) {
   const crew = defaultCrew(wageBook);
   const rate = compositeWage(crew).rate || journeymanWage(crew);
-  const takeoffLines = linesFromRollup(rollup, rate);
+  const takeoffLines = linesFromRollup(rollup, rate, { marks, runs });
   const drawingLines = takeoffLines.length ? [] : linesFromDrawing(drawingDocs, rate);
   const base = fileName ? String(fileName).replace(/\.[^.]+$/, "") : "Drawing estimate";
   const fromDrawings = headerFromDrawings({ fileName, drawingDocs, markup });
@@ -194,7 +200,7 @@ export function syncEstimateDraft(existing, input) {
   const wageBook = input.wageBook || {};
   const crew = existing?.crew?.length ? existing.crew : defaultCrew(wageBook);
   const rate = compositeWage(crew).rate || journeymanWage(crew);
-  const takeoffLines = linesFromRollup(input.rollup, rate).map((line) => applyRate(line, rate));
+  const takeoffLines = linesFromRollup(input.rollup, rate, { marks: input.marks || [], runs: input.runs || [] }).map((line) => applyRate(line, rate));
   const drawingLines = takeoffLines.length ? [] : linesFromDrawing(input.drawingDocs, rate).map((line) => applyRate(line, rate));
   const incoming = [...takeoffLines, ...drawingLines];
   if (!existing) return buildEstimateDraft(input);

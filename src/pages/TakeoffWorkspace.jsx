@@ -37,7 +37,7 @@ import {
 } from "@/domain/takeoff/accuracyReview";
 import { getPdfDocument } from "@/lib/pdf-document";
 import { readEstimate, syncStoredEstimate, writeEstimate } from "@/domain/estimate/estimateStore";
-import { downloadBlob, putDrawingFile } from "@/domain/estimate/projectDocuments";
+import { downloadBlob, getDrawingFile, putDrawingFile } from "@/domain/estimate/projectDocuments";
 import {
   DRAWING_INPUT_ID,
   captureFileList,
@@ -124,6 +124,8 @@ function storageKey(file) {
   return `estim8r.takeoff.v1:${file?.name || "drawing"}:${file?.size || 0}`;
 }
 
+const ACTIVE_DRAWING_KEY = "estim8r.activeDrawing.v1";
+
 function loadSession(file) {
   try {
     const raw = localStorage.getItem(storageKey(file));
@@ -131,6 +133,17 @@ function loadSession(file) {
   } catch {
     return null;
   }
+}
+
+
+function rememberActiveDrawing(file, page = 1) {
+  try {
+    if (!file) return;
+    localStorage.setItem(ACTIVE_DRAWING_KEY, JSON.stringify({ name: file.name, size: file.size, type: file.type || "", page, savedAt: new Date().toISOString() }));
+  } catch { /* best effort */ }
+}
+function readActiveDrawing() {
+  try { const raw = localStorage.getItem(ACTIVE_DRAWING_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
 }
 
 export default function TakeoffWorkspace() {
@@ -383,6 +396,41 @@ export default function TakeoffWorkspace() {
     }
   }
   applyIncomingDrawing = chooseFile;
+
+  useEffect(() => {
+    let cancelled = false;
+    const restore = async () => {
+      if (file) return;
+      const active = readActiveDrawing();
+      if (!active?.name || !active?.size) return;
+      try {
+        const stored = await getDrawingFile(active.name, active.size);
+        if (!cancelled && stored) {
+          await chooseFile(stored);
+          if (active.page) setSheetMeta((current) => ({ ...current, page: active.page }));
+          setStatus(`${stored.name} restored after update.`);
+        }
+      } catch (error) {
+        if (!cancelled) console.error("Could not restore active drawing", error);
+      }
+    };
+    void restore();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (file) rememberActiveDrawing(file, sheetMeta.page);
+  }, [file, sheetMeta.page]);
+
+  useEffect(() => {
+    const preserveForUpdate = () => {
+      if (!file) return;
+      saveTakeoff(true);
+      rememberActiveDrawing(file, sheetMeta.page);
+    };
+    window.addEventListener("estim8r-before-update", preserveForUpdate);
+    return () => window.removeEventListener("estim8r-before-update", preserveForUpdate);
+  }, [file, marks, calibrations, scheduleEdits, sheetMeta.page, supplyQuote, trade, category, symbolId, conduitId, maxHomeruns, penColor, penThickness, penSize]);
 
   useEffect(() => {
     return subscribeDrawingUpload((payload) => {
@@ -663,6 +711,7 @@ export default function TakeoffWorkspace() {
   function closeDrawing() {
     if (marks.length && !window.confirm("Close this drawing? Takeoff marks stay on this browser for this file.")) return;
     clearPendingDrawing();
+    try { localStorage.removeItem(ACTIVE_DRAWING_KEY); } catch { /* best effort */ }
     if (fileUrlRef.current) URL.revokeObjectURL(fileUrlRef.current);
     fileUrlRef.current = "";
     setFile(null);

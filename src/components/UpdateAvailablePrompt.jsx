@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 
+const PREPARE_EVENT = "estim8r-before-update";
+
 export default function UpdateAvailablePrompt() {
   const [update, setUpdate] = useState(null);
   const [applying, setApplying] = useState(false);
@@ -18,6 +20,8 @@ export default function UpdateAvailablePrompt() {
     if (applying) return;
     setApplying(true);
     try {
+      window.dispatchEvent(new CustomEvent(PREPARE_EVENT, { detail: { targetSha: update?.targetSha || "" } }));
+      await new Promise((resolve) => window.setTimeout(resolve, 80));
       if (typeof update?.applyUpdate === "function") {
         await update.applyUpdate();
         return;
@@ -49,7 +53,7 @@ export default function UpdateAvailablePrompt() {
           <div className="min-w-0 flex-1">
             <p id="estim8r-update-title" className="text-base font-bold text-foreground">Update available</p>
             <p className="text-sm text-muted-foreground mt-1">
-              A newer version of Estim8r is ready. Update now to load the latest takeoff tools and fixes.
+              A newer version of Estim8r is ready. Your active work is saved before the update and restored when Estim8r reloads.
             </p>
             <button
               type="button"

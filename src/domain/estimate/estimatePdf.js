@@ -302,8 +302,10 @@ export function buildEstimatePdf(estimate, brandingInput) {
     : [{ description: "No line items yet", quantity: 0, unit: "", material: 0, labor: 0, amount: 0 }];
 
   rows.forEach((line, index) => {
-    const desc = wrap(doc, line.description || line.category || line.itemType || "Item", columns[0].width - 10);
-    const height = Math.max(22, desc.length * 12 + 10);
+    const firstColumn = columns[0];
+    const firstValue = firstColumn ? cellValue(line, firstColumn.key) : "";
+    const firstLines = wrap(doc, firstValue || "Item", Math.max(30, (firstColumn?.width || cardWidth) - 10));
+    const height = Math.max(22, firstLines.length * 12 + 10);
     ensureSpace(height + 8);
     if (index % 2 === 0) {
       fill(branding.cardColor);
@@ -313,8 +315,8 @@ export function buildEstimatePdf(estimate, brandingInput) {
     doc.setFontSize(8);
     ink(branding.textColor);
     let x = page.left + 8;
-    desc.forEach((part, partIndex) => write(part, x, cursor + 14 + partIndex * 12));
-    x += columns[0].width;
+    firstLines.forEach((part, partIndex) => write(part, x, cursor + 14 + partIndex * 12));
+    x += firstColumn?.width || 0;
     for (const column of columns.slice(1)) {
       write(cellValue(line, column.key), column.align === "right" ? x + column.width - 4 : x, cursor + 14, {
         align: column.align === "right" ? "right" : "left",

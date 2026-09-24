@@ -34,3 +34,35 @@ export function snapshotMaterialPrice(line) {
     ...normalizeMaterialPriceMeta(line?.materialPriceMeta),
   };
 }
+
+
+export function appendMaterialPriceHistory(history = [], line, capturedAt = new Date().toISOString()) {
+  const snapshot = { ...snapshotMaterialPrice(line), capturedAt };
+  if (!(snapshot.unitCost >= 0)) return history;
+  const duplicate = history.some((row) =>
+    Number(row.unitCost) === snapshot.unitCost &&
+    row.sourceType === snapshot.sourceType &&
+    row.supplier === snapshot.supplier &&
+    row.reference === snapshot.reference &&
+    row.effectiveDate === snapshot.effectiveDate
+  );
+  return duplicate ? history : [snapshot, ...history].slice(0, 100);
+}
+
+export function compareMaterialPrices(currentUnitCost, history = []) {
+  const current = Number(currentUnitCost) || 0;
+  const valid = history.filter((row) => Number.isFinite(Number(row.unitCost)) && Number(row.unitCost) >= 0);
+  if (!valid.length) return { current, previous: null, change: null, changePct: null, low: null, high: null, average: null };
+  const prices = valid.map((row) => Number(row.unitCost));
+  const previous = prices[0];
+  const change = current - previous;
+  return {
+    current,
+    previous,
+    change,
+    changePct: previous > 0 ? (change / previous) * 100 : null,
+    low: Math.min(...prices),
+    high: Math.max(...prices),
+    average: prices.reduce((sum, value) => sum + value, 0) / prices.length,
+  };
+}

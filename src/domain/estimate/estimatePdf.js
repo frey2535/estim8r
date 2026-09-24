@@ -43,22 +43,36 @@ export function estimatePresentation(estimate) {
   const design = estimate?.pdfDesign || {};
   const moneyTotals = estimateGrandTotal(estimate);
   const visible = resolveVisibleTotals(estimate);
-  const lines = includedLines(estimate).map((line) => {
-    const qty = Number(line.quantity) || 0;
-    const material = qty * (Number(line.materialUnitCost) || 0);
-    const labor = estimateLineLaborCost(line);
-    return {
-      itemType: line.itemType || "",
-      category: line.category || "",
-      description: line.description || "",
-      quantity: qty,
-      unit: line.unit || "",
-      material,
-      labor,
-      amount: material + labor,
-      notes: line.notes || "",
-    };
-  });
+  const sourceLines = includedLines(estimate);
+  const itemized = Boolean(estimate?.itemized);
+  const lines = itemized
+    ? sourceLines.map((line) => {
+        const qty = Number(line.quantity) || 0;
+        const material = qty * (Number(line.materialUnitCost) || 0);
+        const labor = estimateLineLaborCost(line);
+        return {
+          itemType: line.itemType || "",
+          category: line.category || "",
+          description: line.description || "",
+          quantity: qty,
+          unit: line.unit || "",
+          material,
+          labor,
+          amount: material + labor,
+          notes: line.notes || "",
+        };
+      })
+    : [{
+        itemType: "",
+        category: "",
+        description: "Materials and labor",
+        quantity: 1,
+        unit: "LS",
+        material: 0,
+        labor: 0,
+        amount: moneyTotals.total,
+        notes: "",
+      }];
   return {
     title: header.projectName || "Electrical Estimate",
     documentTitle: design.documentTitle || "Electrical Estimate",
@@ -247,16 +261,21 @@ export function buildEstimatePdf(estimate, brandingInput) {
   cursor += Math.max(72, infoHeight) + 18;
 
   const availableWidth = page.right - page.left;
-  const requestedColumns = [
-    design.showItemType ? { key: "itemType", label: "Type", weight: 1.0, align: "left" } : null,
-    design.showCategory ? { key: "category", label: "Category", weight: 1.0, align: "left" } : null,
-    design.showDescription !== false ? { key: "description", label: "Item", weight: 2.5, align: "left" } : null,
-    design.showQuantity !== false ? { key: "quantity", label: "Qty", weight: 0.65, align: "right" } : null,
-    design.showUnit !== false ? { key: "unit", label: "Unit", weight: 0.65, align: "left" } : null,
-    design.showMaterial !== false ? { key: "material", label: "Material", weight: 1.0, align: "right" } : null,
-    design.showLabor !== false ? { key: "labor", label: "Labor", weight: 1.0, align: "right" } : null,
-    design.showAmount !== false ? { key: "amount", label: "Amount", weight: 1.0, align: "right" } : null,
-  ].filter(Boolean);
+  const requestedColumns = estimate?.itemized === false
+    ? [
+        { key: "description", label: "Description", weight: 3.5, align: "left" },
+        { key: "amount", label: "Total", weight: 1.0, align: "right" },
+      ]
+    : [
+        design.showItemType ? { key: "itemType", label: "Type", weight: 1.0, align: "left" } : null,
+        design.showCategory ? { key: "category", label: "Category", weight: 1.0, align: "left" } : null,
+        design.showDescription !== false ? { key: "description", label: "Item", weight: 2.5, align: "left" } : null,
+        design.showQuantity !== false ? { key: "quantity", label: "Qty", weight: 0.65, align: "right" } : null,
+        design.showUnit !== false ? { key: "unit", label: "Unit", weight: 0.65, align: "left" } : null,
+        design.showMaterial !== false ? { key: "material", label: "Material", weight: 1.0, align: "right" } : null,
+        design.showLabor !== false ? { key: "labor", label: "Labor", weight: 1.0, align: "right" } : null,
+        design.showAmount !== false ? { key: "amount", label: "Amount", weight: 1.0, align: "right" } : null,
+      ].filter(Boolean);
   const weightTotal = requestedColumns.reduce((sum, column) => sum + column.weight, 0) || 1;
   const columns = requestedColumns.map((column) => ({ ...column, width: availableWidth * column.weight / weightTotal }));
 

@@ -904,7 +904,17 @@ export default function TakeoffWorkspace() {
       try {
         const pages = await readAiPages(fileBytes);
         if (cancelled) return;
-        const objects = buildDrawingObjectLayer({ pages, detectedMarks: marks, trade });
+        const detected = buildAiMarks({
+          pages,
+          trade: "electrical",
+          symbols: paletteForTrade("electrical", drawingSymbolsFromDocs(drawingDocs)).symbols,
+          drawingSymbols: drawingSymbolsFromDocs(drawingDocs),
+          maxHomeruns,
+          conduit: findConduitOption(conduitId, "electrical"),
+          color: penColor,
+        });
+        const detectedDevices = (detected.marks || []).filter((mark) => isDeviceMark(mark));
+        const objects = buildDrawingObjectLayer({ pages, detectedMarks: detectedDevices, trade: "electrical" });
         setDrawingObjects(objects);
       } catch (error) {
         if (!cancelled) console.error("Drawing object layer failed", error);
@@ -912,7 +922,7 @@ export default function TakeoffWorkspace() {
     };
     void objectize();
     return () => { cancelled = true; };
-  }, [fileBytes, isPdf, trade]);
+  }, [fileBytes, isPdf, drawingDocs, maxHomeruns, conduitId, penColor]);
 
   async function runAiTakeoff() {
     if (!isPdf || !fileBytes) {

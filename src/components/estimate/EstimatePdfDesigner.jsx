@@ -28,6 +28,11 @@ export const DEFAULT_PDF_DESIGN = {
   logoPosition: "left",
   logoOffsetX: 0,
   logoOffsetY: 0,
+  logoSizePt: 0,
+  headerTitle: "",
+  headerDetails: "",
+  hideHeaderTitle: false,
+  hideHeaderDetails: false,
 };
 
 export function normalizePdfDesign(value = {}) {
@@ -52,7 +57,7 @@ export default function EstimatePdfDesigner({ estimate, design, onChange }) {
           <Text label="Subtitle" value={value.subtitle} set={(v)=>patch("subtitle",v)} />
           <Text label="Footer text" value={value.footerText} set={(v)=>patch("footerText",v)} />
         </Group>
-        <Group title="Header">\n          <Toggle label="Show header" value={value.showHeader !== false} set={(v)=>patch("showHeader",v)} />\n          <Select label="Company text alignment" value={value.headerCompanyAlign || "left"} set={(v)=>patch("headerCompanyAlign",v)} options={[["left","Left"],["center","Center"],["right","Right"]]} />\n          <Select label="Logo position" value={value.logoPosition || "left"} set={(v)=>patch("logoPosition",v)} options={[["left","Left"],["center","Center"],["right","Right"]]} />\n          <Range label={"Logo horizontal · "+(value.logoOffsetX || 0)+" pt"} min={-180} max={180} value={value.logoOffsetX || 0} set={(v)=>patch("logoOffsetX",Number(v))} />\n          <Range label={"Logo vertical · "+(value.logoOffsetY || 0)+" pt"} min={-30} max={30} value={value.logoOffsetY || 0} set={(v)=>patch("logoOffsetY",Number(v))} />\n        </Group>\n        <Group title="Sections">
+        <Group title="Header">\n          <Toggle label="Show header" value={value.showHeader !== false} set={(v)=>patch("showHeader",v)} />\n          <Text label="Header title override" value={value.headerTitle} set={(v)=>patch("headerTitle",v)} />\n          <Toggle label="Show header title" value={!value.hideHeaderTitle} set={(v)=>patch("hideHeaderTitle",!v)} />\n          <Text label="Header details override" value={value.headerDetails} set={(v)=>patch("headerDetails",v)} />\n          <Toggle label="Show header details" value={!value.hideHeaderDetails} set={(v)=>patch("hideHeaderDetails",!v)} />\n          <Select label="Company text alignment" value={value.headerCompanyAlign || "left"} set={(v)=>patch("headerCompanyAlign",v)} options={[["left","Left"],["center","Center"],["right","Right"]]} />\n          <Select label="Logo position" value={value.logoPosition || "left"} set={(v)=>patch("logoPosition",v)} options={[["left","Left"],["center","Center"],["right","Right"]]} />\n          <Range label={"Logo size · "+(value.logoSizePt || 0)+" pt"+(value.logoSizePt ? "" : " (company default)")} min={0} max={140} value={value.logoSizePt || 0} set={(v)=>patch("logoSizePt",Number(v))} />\n          <Range label={"Logo horizontal · "+(value.logoOffsetX || 0)+" pt"} min={-180} max={180} value={value.logoOffsetX || 0} set={(v)=>patch("logoOffsetX",Number(v))} />\n          <Range label={"Logo vertical · "+(value.logoOffsetY || 0)+" pt"} min={-30} max={30} value={value.logoOffsetY || 0} set={(v)=>patch("logoOffsetY",Number(v))} />\n        </Group>\n        <Group title="Sections">
           <Toggle label="Project & customer card" value={value.showProjectCard} set={(v)=>patch("showProjectCard",v)} />
           <Toggle label="Scope notes" value={value.showScope} set={(v)=>patch("showScope",v)} />
           <Toggle label="Line notes" value={value.showNotes} set={(v)=>patch("showNotes",v)} />

@@ -18,6 +18,7 @@ import {
 import { estimateLineLaborNotice, estimateLineTitle } from "@/domain/estimate/linePresentation";
 import { compareLineToMarket } from "@/domain/labor/marketCompare";
 import { WORK_CATEGORY_ORDER, workCategoryForEstimateLine } from "@/domain/estimate/trueElectricalTakeoff";
+import { MATERIAL_PRICE_SOURCES, materialPriceStatus } from "@/domain/estimate/materialPricing";
 
 const UNITS = ["STICK", "EA", "LF", "SF", "FT", "100 LF", "1000 LF", "HR", "DAY", "LOT"];
 
@@ -57,6 +58,7 @@ export default function EstimateLineCard({
   const omitted = itemized && row.included === false;
   const includeLabel = title === "New line" ? "line" : title;
   const showNoticeText = notice && (notice.tone === "unmatched" || detailsOpen);
+  const priceStatus = materialPriceStatus(row.materialPriceMeta);
 
   return (
     <Card data-testid="estimate-line-card" className={`overflow-hidden shadow-sm ${omitted ? "opacity-60" : ""}`}>
@@ -211,6 +213,21 @@ export default function EstimateLineCard({
                 <Field label="Material $/unit">
                   <Cell type="number" value={row.materialUnitCost} set={(v) => onPatch?.(row.id, "materialUnitCost", v)} />
                 </Field>
+                <Field label="Price source">
+                  <Sel value={row.materialPriceMeta?.sourceType || ""} vals={MATERIAL_PRICE_SOURCES} set={(v) => onPatch?.(row.id, "materialPriceMeta", { ...(row.materialPriceMeta || {}), sourceType: v })} placeholder="Source" />
+                </Field>
+                <Field label="Supplier">
+                  <Cell value={row.materialPriceMeta?.supplier || ""} set={(v) => onPatch?.(row.id, "materialPriceMeta", { ...(row.materialPriceMeta || {}), supplier: v })} placeholder="Supplier / vendor" />
+                </Field>
+                <Field label="Quote / reference">
+                  <Cell value={row.materialPriceMeta?.reference || ""} set={(v) => onPatch?.(row.id, "materialPriceMeta", { ...(row.materialPriceMeta || {}), reference: v })} placeholder="Quote, catalog, source" />
+                </Field>
+                <Field label="Price date">
+                  <Cell type="date" value={row.materialPriceMeta?.effectiveDate || ""} set={(v) => onPatch?.(row.id, "materialPriceMeta", { ...(row.materialPriceMeta || {}), effectiveDate: v })} />
+                </Field>
+                <div className="col-span-2 sm:col-span-4 text-[11px]">
+                  <span className={priceStatus.state === "current" ? "font-semibold text-emerald-700" : priceStatus.state === "stale" ? "font-semibold text-amber-700" : "font-semibold text-muted-foreground"}>{priceStatus.label}</span>
+                </div>
                 <Readout label="Hours" value={hours.toFixed(2)} />
                 <Readout label="Material" value={`$${material.toFixed(2)}`} />
                 <Readout label="Labor" value={`$${labor.toFixed(2)}`} />

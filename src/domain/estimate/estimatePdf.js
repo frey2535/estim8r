@@ -203,7 +203,14 @@ export function buildEstimatePdf(estimate, brandingInput) {
     const logoPosition = ["left", "center", "right"].includes(design.logoPosition) ? design.logoPosition : "left";
     const logoOffsetX = Math.max(-180, Math.min(180, Number(design.logoOffsetX) || 0));
     const logoOffsetY = Math.max(-30, Math.min(30, Number(design.logoOffsetY) || 0));
-    const logoSize = Number(design.logoSizePt) > 0 ? Math.max(16, Math.min(140, Number(design.logoSizePt))) : branding.logo;\n    const logoWidth = Number(design.logoWidthPt) > 0 ? Math.max(16, Math.min(220, Number(design.logoWidthPt))) : logoSize;\n    const logoHeight = Number(design.logoHeightPt) > 0 ? Math.max(16, Math.min(140, Number(design.logoHeightPt))) : logoSize;\n    let logoX = pad;\n    if (logoPosition === "center") logoX = (page.width - logoWidth) / 2;\n    if (logoPosition === "right") logoX = page.width - pad - logoWidth;\n    logoX = Math.max(0, Math.min(page.width - logoWidth, logoX + logoOffsetX));\n    const logoY = Math.max(y, Math.min(y + branding.headerHeight - logoHeight, y + (branding.headerHeight - logoHeight) / 2 + logoOffsetY));
+    const logoSize = Number(design.logoSizePt) > 0 ? Math.max(16, Math.min(140, Number(design.logoSizePt))) : branding.logo;
+    const logoWidth = Number(design.logoWidthPt) > 0 ? Math.max(16, Math.min(220, Number(design.logoWidthPt))) : logoSize;
+    const logoHeight = Number(design.logoHeightPt) > 0 ? Math.max(16, Math.min(140, Number(design.logoHeightPt))) : logoSize;
+    let logoX = pad;
+    if (logoPosition === "center") logoX = (page.width - logoWidth) / 2;
+    if (logoPosition === "right") logoX = page.width - pad - logoWidth;
+    logoX = Math.max(0, Math.min(page.width - logoWidth, logoX + logoOffsetX));
+    const logoY = Math.max(y, Math.min(y + branding.headerHeight - logoHeight, y + (branding.headerHeight - logoHeight) / 2 + logoOffsetY));
     if (branding.logoDataUrl) {
       try {
         doc.addImage(branding.logoDataUrl, logoFormat(branding.logoDataUrl), logoX, logoY, logoWidth, logoHeight);

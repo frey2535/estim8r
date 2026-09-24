@@ -167,6 +167,7 @@ export default function TakeoffWorkspace() {
   const [sheetMeta, setSheetMeta] = useState({ page: 1, pageCount: 1 });
   const [calibrations, setCalibrations] = useState({});
   const [selectedId, setSelectedId] = useState(null);
+  const [isolationMode, setIsolationMode] = useState(false);
   const [measureLabel, setMeasureLabel] = useState("");
   const [thumbsOpen, setThumbsOpen] = useState(readThumbsOpen);
   const [savedAt, setSavedAt] = useState("");
@@ -228,6 +229,7 @@ export default function TakeoffWorkspace() {
     [marks, sheetMeta.page],
   );
   const overlayMarks = useMemo(() => planOverlayMarks(sheetMarks), [sheetMarks]);
+  const visibleOverlayMarks = useMemo(() => isolationMode && selectedId ? overlayMarks.filter((mark) => mark.id === selectedId) : overlayMarks, [overlayMarks, isolationMode, selectedId]);
   const sheetReview = useMemo(
     () => reviewQueue(marks, sheetMeta.page),
     [marks, sheetMeta.page],
@@ -892,6 +894,7 @@ export default function TakeoffWorkspace() {
         hitRoute: (mark, at, aspect) => hitTestMark(sizedMark(mark), at, aspect, markHitThreshold(mark)),
       });
       setSelectedId(hit?.id || null);
+      if (!hit) setIsolationMode(false);
       setReviewOpen(Boolean(hit && isDeviceMark(hit) && needsAccuracyReview(hit, marks, sheetMeta.page)));
       setStatus(hit ? `Selected ${hit.symbolLabel || hit.typeCode || hit.type}.` : "Nothing selected.");
       return;
@@ -1519,7 +1522,7 @@ export default function TakeoffWorkspace() {
                   </div>
                 ) : null}
                 <MarkupOverlay
-                  marks={overlayMarks}
+                  marks={visibleOverlayMarks}
                   draftPoints={draftPreview}
                   draftFeet={["conduit", "polyline", "linear", "homerun"].includes(tool) ? draftFeet : null}
                   selectedId={selectedId}
@@ -1548,6 +1551,8 @@ export default function TakeoffWorkspace() {
           scheduleEdits={scheduleEdits}
           onSelectRun={(id) => { setSelectedId(id); setTool("select"); }}
           onUpdateMark={updateMark}
+          isolationMode={isolationMode}
+          onIsolationMode={setIsolationMode}
           onEditRow={editScheduleRow}
           onRenameRow={renameScheduleRow}
           onSelectSheet={selectSheet}

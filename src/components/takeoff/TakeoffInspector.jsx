@@ -52,6 +52,8 @@ export default function TakeoffInspector({
   onBuildTrueTakeoff,
   reconciliation,
   reviewSummary,
+  isolationMode = false,
+  onIsolationMode,
 }) {
   const selectedIsLine = isLineMark(selected);
   const selectedIsMarker = isMarkerMark(selected);
@@ -62,6 +64,12 @@ export default function TakeoffInspector({
       {selected && (
         <div className="mb-3 space-y-2 rounded-lg border border-border p-2">
           <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Selected item</div>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => onIsolationMode?.(!isolationMode)} className={isolationMode ? "rounded-md bg-orange-600 px-2 py-1 text-[11px] font-bold text-white" : "rounded-md border border-border px-2 py-1 text-[11px] font-bold hover:bg-muted"}>
+              {isolationMode ? "Exit isolation" : "Isolate selected"}
+            </button>
+            <span className="text-[10px] text-muted-foreground">{isolationMode ? "Only this item is shown for focused editing." : "Selected item is brought forward and editable below."}</span>
+          </div>
           {selectedIsConduit || selectedIsNote ? (
             <Field label="Name">
               <input className={inputClass} value={selected.symbolLabel || ""} onChange={(e) => onUpdateMark(selected.id, { symbolLabel: e.target.value })} />

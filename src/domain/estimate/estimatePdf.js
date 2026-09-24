@@ -165,6 +165,21 @@ export function buildEstimatePdf(estimate, brandingInput) {
     return doc.getTextDimensions(value).h;
   }
 
+  function fitWrite(text, x, y, maxWidth, options = {}) {
+    const value = String(text ?? "");
+    if (!value) return 0;
+    const minSize = Number(options.minSize) || 6.5;
+    const originalSize = doc.getFontSize();
+    let size = originalSize;
+    while (size > minSize && doc.getTextWidth(value) > maxWidth) {
+      size = Math.max(minSize, size - 0.5);
+      doc.setFontSize(size);
+    }
+    write(value, x, y, options.textOptions);
+    doc.setFontSize(originalSize);
+    return size;
+  }
+
   function fill(hex) {
     const rgb = color(hex);
     doc.setFillColor(rgb.r, rgb.g, rgb.b);
@@ -188,7 +203,12 @@ export function buildEstimatePdf(estimate, brandingInput) {
     const logoPosition = ["left", "center", "right"].includes(design.logoPosition) ? design.logoPosition : "left";
     const logoOffsetX = Math.max(-180, Math.min(180, Number(design.logoOffsetX) || 0));
     const logoOffsetY = Math.max(-30, Math.min(30, Number(design.logoOffsetY) || 0));
-    const logoSize = Number(design.logoSizePt) > 0 ? Math.max(16, Math.min(140, Number(design.logoSizePt))) : branding.logo;\n    let logoX = pad;\n    if (logoPosition === "center") logoX = (page.width - logoSize) / 2;\n    if (logoPosition === "right") logoX = page.width - pad - logoSize;\n    logoX = Math.max(0, Math.min(page.width - logoSize, logoX + logoOffsetX));\n    const logoY = Math.max(y, Math.min(y + branding.headerHeight - logoSize, y + (branding.headerHeight - logoSize) / 2 + logoOffsetY));
+    const logoSize = Number(design.logoSizePt) > 0 ? Math.max(16, Math.min(140, Number(design.logoSizePt))) : branding.logo;
+    let logoX = pad;
+    if (logoPosition === "center") logoX = (page.width - logoSize) / 2;
+    if (logoPosition === "right") logoX = page.width - pad - logoSize;
+    logoX = Math.max(0, Math.min(page.width - logoSize, logoX + logoOffsetX));
+    const logoY = Math.max(y, Math.min(y + branding.headerHeight - logoSize, y + (branding.headerHeight - logoSize) / 2 + logoOffsetY));
     if (branding.logoDataUrl) {
       try {
         doc.addImage(branding.logoDataUrl, logoFormat(branding.logoDataUrl), logoX, logoY, logoSize, logoSize);
@@ -205,10 +225,19 @@ export function buildEstimatePdf(estimate, brandingInput) {
     doc.setFont(branding.font, "bold");
     doc.setFontSize(branding.headerSize === "small" ? 14 : branding.headerSize === "large" ? 22 : 18);
     ink(branding.headerTextColor);
-    const headerTitle = String(design.headerTitle || "").trim() || branding.companyName || "Estimate";\n    if (!design.hideHeaderTitle) write(headerTitle, companyX, y + 28, textOptions);
+    const headerTitle = String(design.headerTitle || "").trim() || branding.companyName || "Estimate";
+    if (!design.hideHeaderTitle) write(headerTitle, companyX, y + 28, textOptions);
     doc.setFont(branding.font, "normal");
     doc.setFontSize(Number(design.bodySize) || 9);
-    let lineY = y + 44;\n    const customDetails = String(design.headerDetails || "").trim();\n    const detailLines = customDetails ? customDetails.split(/\\r?\\n/).map((line) => line.trim()).filter(Boolean) : companyLines(branding);\n    if (!design.hideHeaderDetails) {\n      for (const line of detailLines) {\n        write(line, companyX, lineY, textOptions);\n        lineY += 12;\n      }\n    }
+    let lineY = y + 44;
+    const customDetails = String(design.headerDetails || "").trim();
+    const detailLines = customDetails ? customDetails.split(/\\r?\\n/).map((line) => line.trim()).filter(Boolean) : companyLines(branding);
+    if (!design.hideHeaderDetails) {
+      for (const line of detailLines) {
+        write(line, companyX, lineY, textOptions);
+        lineY += 12;
+      }
+    }
     return y + branding.headerHeight;
   }
 
@@ -235,7 +264,13 @@ export function buildEstimatePdf(estimate, brandingInput) {
     ["Bid due", presentation.bidDue, "", ""],
   ].filter((row) => row[1] || row[3]);
   const noteLines = wrap(doc, presentation.scopeNotes, cardWidth - branding.cardPad * 2);
-  const infoHeight = branding.cardPad * 2 + infoLines.length * 28;
+  const infoColWidth = cardWidth / 2 - branding.cardPad - 14;
+  const preparedInfoLines = infoLines.map(([leftLabel, leftValue, rightLabel, rightValue]) => {
+    const leftLines = wrap(doc, leftValue || "—", infoColWidth);
+    const rightLines = rightLabel ? wrap(doc, rightValue || "—", infoColWidth) : [];
+    return { leftLabel, leftLines, rightLabel, rightLines, height: 18 + Math.max(leftLines.length, rightLines.length, 1) * 11 };
+  });
+  const infoHeight = branding.cardPad * 2 + preparedInfoLines.reduce((sum, row) => sum + row.height, 0) + 10;
   if (design.showProjectCard) card(page.left, cursor, cardWidth, Math.max(72, infoHeight));
   doc.setFont(branding.font, "bold");
   doc.setFontSize(11);
@@ -243,16 +278,16 @@ export function buildEstimatePdf(estimate, brandingInput) {
   if (design.showProjectCard) write("Project & customer", page.left + branding.cardPad, cursor + 16);
   let infoY = cursor + 36;
   doc.setFontSize(9);
-  for (const [leftLabel, leftValue, rightLabel, rightValue] of infoLines) {
+  for (const row of preparedInfoLines) {
     doc.setFont(branding.font, "bold");
     ink(branding.secondaryColor);
-    write(leftLabel, page.left + branding.cardPad, infoY);
-    if (rightLabel) write(rightLabel, page.left + cardWidth / 2, infoY);
+    write(row.leftLabel, page.left + branding.cardPad, infoY);
+    if (row.rightLabel) write(row.rightLabel, page.left + cardWidth / 2, infoY);
     doc.setFont(branding.font, "normal");
     ink(branding.textColor);
-    write(leftValue || "—", page.left + branding.cardPad, infoY + 12);
-    if (rightLabel) write(rightValue || "—", page.left + cardWidth / 2, infoY + 12);
-    infoY += 28;
+    row.leftLines.forEach((part, index) => write(part, page.left + branding.cardPad, infoY + 12 + index * 11));
+    row.rightLines.forEach((part, index) => write(part, page.left + cardWidth / 2, infoY + 12 + index * 11));
+    infoY += row.height;
   }
   cursor += Math.max(72, infoHeight) + 14;
 
@@ -310,9 +345,9 @@ export function buildEstimatePdf(estimate, brandingInput) {
     doc.setFont(branding.font, "bold");
     doc.setFontSize(8);
     ink(branding.headerTextColor);
-    let x = page.left + 8;
+    let x = page.left;
     for (const column of columns) {
-      write(column.label, column.align === "right" ? x + column.width - 4 : x, cursor + 15, {
+      write(column.label, column.align === "right" ? x + column.width - 8 : x + 8, cursor + 15, {
         align: column.align === "right" ? "right" : "left",
       });
       x += column.width;
@@ -333,10 +368,9 @@ export function buildEstimatePdf(estimate, brandingInput) {
     : [{ description: "No line items yet", quantity: 0, unit: "", material: 0, labor: 0, amount: 0 }];
 
   rows.forEach((line, index) => {
-    const firstColumn = columns[0];
-    const firstValue = firstColumn ? cellValue(line, firstColumn.key) : "";
-    const firstLines = wrap(doc, firstValue || "Item", Math.max(30, (firstColumn?.width || cardWidth) - 10));
-    const height = Math.max(22, firstLines.length * 12 + 10);
+    const cellLines = columns.map((column) => wrap(doc, cellValue(line, column.key) || (column === columns[0] ? "Item" : ""), Math.max(24, column.width - 16)));
+    const maxLines = Math.max(1, ...cellLines.map((parts) => parts.length));
+    const height = Math.max(22, maxLines * 11 + 10);
     ensureSpace(height + 8);
     if (index % 2 === 0) {
       fill(branding.cardColor);
@@ -345,15 +379,15 @@ export function buildEstimatePdf(estimate, brandingInput) {
     doc.setFont(branding.font, "normal");
     doc.setFontSize(8);
     ink(branding.textColor);
-    let x = page.left + 8;
-    firstLines.forEach((part, partIndex) => write(part, x, cursor + 14 + partIndex * 12));
-    x += firstColumn?.width || 0;
-    for (const column of columns.slice(1)) {
-      write(cellValue(line, column.key), column.align === "right" ? x + column.width - 4 : x, cursor + 14, {
+    let x = page.left;
+    columns.forEach((column, columnIndex) => {
+      const parts = cellLines[columnIndex];
+      const textX = column.align === "right" ? x + column.width - 8 : x + 8;
+      parts.forEach((part, partIndex) => write(part, textX, cursor + 14 + partIndex * 11, {
         align: column.align === "right" ? "right" : "left",
-      });
+      }));
       x += column.width;
-    }
+    });
     cursor += height;
   });
 
@@ -369,7 +403,7 @@ export function buildEstimatePdf(estimate, brandingInput) {
     doc.setFontSize(last ? 12 : 10);
     ink(last ? branding.accentColor : branding.textColor);
     write(option.label, page.right - 228, y);
-    write(money(presentation.totals[option.key]), page.right - 16, y, { align: "right" });
+    fitWrite(money(presentation.totals[option.key]), page.right - 16, y, 120, { minSize: 8, textOptions: { align: "right" } });
   });
 
   return {

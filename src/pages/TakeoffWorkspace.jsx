@@ -1749,8 +1749,13 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
       {draftEnd && draftFeet != null && (
         <text x={draftEnd.x} y={Math.max(2, draftEnd.y - 1.2)} fontSize={OVERLAY_FONT_SIZE} fontWeight="600" fill="#ea580c" stroke="#ffffff" strokeWidth="0.22" paintOrder="stroke">{formatFeet(draftFeet)}</text>
       )}
-      {devices.map((mark) => (
-        <DeviceFill key={mark.id} mark={mark} selected={mark.id === selectedId} markerSize={resolvedMarkerSize(mark, markerSize)} />
+      {devices.filter((mark) => mark.id !== selectedId).map((mark) => (
+        <DeviceFill key={mark.id} mark={mark} selected={false} markerSize={resolvedMarkerSize(mark, markerSize)} />
+      ))}
+      {devices.filter((mark) => mark.id === selectedId).map((mark) => (
+        <g key={mark.id} style={{ filter: "drop-shadow(0 0 1.1px rgba(234,88,12,0.95))" }}>
+          <DeviceFill mark={mark} selected markerSize={resolvedMarkerSize(mark, markerSize) * 1.35} />
+        </g>
       ))}
       {callouts.conduitLabels.map((label) => (
         <OverlayLabel key={`conduit-${label.id}`} label={label} fill={label.selected ? "#334155" : "#475569"} />

@@ -286,6 +286,8 @@ export default function TakeoffWorkspace() {
           drawingDocs,
           rollup: editedRollup,
           pageCount: sheetMeta.pageCount,
+          marks,
+          runs,
         });
       }
     } catch {

@@ -28,6 +28,8 @@ import { buildEstimateSupplyQuote } from "@/domain/estimate/estimateSupplyQuote"
 import { moveEstimateLine } from "@/domain/estimate/lineOrder";
 import { defaultCompletenessChecklist } from "@/domain/estimate/estimatingIntelligence";
 import EstimateReadinessPanel from "@/components/estimate/EstimateReadinessPanel";
+import AssemblyLibrary from "@/components/estimate/AssemblyLibrary";
+import { assemblyToEstimateLines } from "@/domain/estimate/assemblies";
 
 function blankLine(rate) {
   return {
@@ -89,6 +91,7 @@ export default function EstimateBuilder() {
   const [openSources, setOpenSources] = useState("");
   const [trueTakeoff, setTrueTakeoff] = useState(null);
   const [completenessChecklist, setCompletenessChecklist] = useState(() => defaultCompletenessChecklist());
+  const [assemblies, setAssemblies] = useState([]);
   const wage = compositeWage(crew);
 
   useEffect(() => {
@@ -114,6 +117,7 @@ export default function EstimateBuilder() {
       setMeta({ fileName: stored.fileName || "", fileSize: stored.fileSize || 0, scopeEdited: Boolean(stored.scopeEdited) });
       setTrueTakeoff(stored.trueTakeoff || null);
       setCompletenessChecklist(stored.completenessChecklist?.length ? stored.completenessChecklist : defaultCompletenessChecklist());
+      setAssemblies(stored.assemblies || []);
     } else {
       const nextCrew = defaultCrew();
       setHeader({ ...emptyHeader });
@@ -130,6 +134,7 @@ export default function EstimateBuilder() {
       setMeta({ fileName: "", fileSize: 0, scopeEdited: false });
       setTrueTakeoff(null);
       setCompletenessChecklist(defaultCompletenessChecklist());
+      setAssemblies([]);
     }
     setReady(true);
   }, [openFile, openSize]);
@@ -179,8 +184,9 @@ export default function EstimateBuilder() {
       scopeEdited: meta.scopeEdited,
       trueTakeoff,
       completenessChecklist,
+      assemblies,
     });
-  }, [ready, header, crew, lines, contingency, overhead, profit, bondInsurance, itemized, visibleTotals, meta, factors, namedCrewId, trueTakeoff, completenessChecklist, storageFileName]);
+  }, [ready, header, crew, lines, contingency, overhead, profit, bondInsurance, itemized, visibleTotals, meta, factors, namedCrewId, trueTakeoff, completenessChecklist, assemblies, storageFileName]);
 
   const draft = useMemo(() => ({
     version: 1,
@@ -201,7 +207,8 @@ export default function EstimateBuilder() {
     scopeEdited: meta.scopeEdited,
     trueTakeoff,
     completenessChecklist,
-  }), [header, crew, factors, namedCrewId, contingency, overhead, profit, bondInsurance, lines, itemized, visibleTotals, meta, trueTakeoff, completenessChecklist, storageFileName]);
+    assemblies,
+  }), [header, crew, factors, namedCrewId, contingency, overhead, profit, bondInsurance, lines, itemized, visibleTotals, meta, trueTakeoff, completenessChecklist, assemblies, storageFileName]);
 
   const supplyQuote = useMemo(() => buildEstimateSupplyQuote({
     lines,
@@ -391,6 +398,7 @@ export default function EstimateBuilder() {
         <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto bg-muted/70 p-1">
           <TabsTrigger value="estimate" className="px-4 py-2">Estimate</TabsTrigger>
           <TabsTrigger value="labor-markup" className="px-4 py-2">Labor &amp; markup</TabsTrigger>
+          <TabsTrigger value="assemblies" className="px-4 py-2">Assemblies</TabsTrigger>
           {draft.trueTakeoff?.analysis ? <TabsTrigger value="audit" className="px-4 py-2">Takeoff Audit</TabsTrigger> : null}
         </TabsList>
 
@@ -526,6 +534,17 @@ export default function EstimateBuilder() {
           <LaborMarketCompare comparison={marketCompare} />
         </div>
       </section>
+        </TabsContent>
+
+        <TabsContent value="assemblies" className="mt-4 space-y-5">
+          <AssemblyLibrary
+            assemblies={assemblies}
+            onChange={setAssemblies}
+            onInsert={(assembly, quantity) => setLines((current) => [
+              ...current,
+              ...assemblyToEstimateLines(assembly, quantity, wage.rate),
+            ])}
+          />
         </TabsContent>
 
         <TabsContent value="labor-markup" className="mt-4 space-y-5">

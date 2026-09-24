@@ -203,15 +203,10 @@ export function buildEstimatePdf(estimate, brandingInput) {
     const logoPosition = ["left", "center", "right"].includes(design.logoPosition) ? design.logoPosition : "left";
     const logoOffsetX = Math.max(-180, Math.min(180, Number(design.logoOffsetX) || 0));
     const logoOffsetY = Math.max(-30, Math.min(30, Number(design.logoOffsetY) || 0));
-    const logoSize = Number(design.logoSizePt) > 0 ? Math.max(16, Math.min(140, Number(design.logoSizePt))) : branding.logo;
-    let logoX = pad;
-    if (logoPosition === "center") logoX = (page.width - logoSize) / 2;
-    if (logoPosition === "right") logoX = page.width - pad - logoSize;
-    logoX = Math.max(0, Math.min(page.width - logoSize, logoX + logoOffsetX));
-    const logoY = Math.max(y, Math.min(y + branding.headerHeight - logoSize, y + (branding.headerHeight - logoSize) / 2 + logoOffsetY));
+    const logoSize = Number(design.logoSizePt) > 0 ? Math.max(16, Math.min(140, Number(design.logoSizePt))) : branding.logo;\n    const logoWidth = Number(design.logoWidthPt) > 0 ? Math.max(16, Math.min(220, Number(design.logoWidthPt))) : logoSize;\n    const logoHeight = Number(design.logoHeightPt) > 0 ? Math.max(16, Math.min(140, Number(design.logoHeightPt))) : logoSize;\n    let logoX = pad;\n    if (logoPosition === "center") logoX = (page.width - logoWidth) / 2;\n    if (logoPosition === "right") logoX = page.width - pad - logoWidth;\n    logoX = Math.max(0, Math.min(page.width - logoWidth, logoX + logoOffsetX));\n    const logoY = Math.max(y, Math.min(y + branding.headerHeight - logoHeight, y + (branding.headerHeight - logoHeight) / 2 + logoOffsetY));
     if (branding.logoDataUrl) {
       try {
-        doc.addImage(branding.logoDataUrl, logoFormat(branding.logoDataUrl), logoX, logoY, logoSize, logoSize);
+        doc.addImage(branding.logoDataUrl, logoFormat(branding.logoDataUrl), logoX, logoY, logoWidth, logoHeight);
       } catch {
         /* skip a broken logo rather than failing the PDF */
       }
@@ -220,7 +215,7 @@ export function buildEstimatePdf(estimate, brandingInput) {
     const align = ["left", "center", "right"].includes(design.headerCompanyAlign) ? design.headerCompanyAlign : "left";
     const textX = align === "center" ? page.width / 2 : align === "right" ? page.width - pad : pad;
     const textOptions = align === "left" ? undefined : { align };
-    const leftLogoGap = branding.logoDataUrl && logoPosition === "left" && align === "left" ? logoSize + 12 : 0;
+    const leftLogoGap = branding.logoDataUrl && logoPosition === "left" && align === "left" ? logoWidth + 12 : 0;
     const companyX = textX + leftLogoGap;
     doc.setFont(branding.font, "bold");
     doc.setFontSize(branding.headerSize === "small" ? 14 : branding.headerSize === "large" ? 22 : 18);
@@ -290,6 +285,36 @@ export function buildEstimatePdf(estimate, brandingInput) {
     infoY += row.height;
   }
   cursor += Math.max(72, infoHeight) + 14;
+
+  if (design.showCompanyCard !== false) {
+    const employee = [
+      ["Name", design.companyEmployeeName || presentation.estimatorName || ""],
+      ["Title", design.companyEmployeeTitle || ""],
+      ["Email", design.companyEmployeeEmail || ""],
+      ["Phone", design.companyEmployeePhone || ""],
+    ].filter((row) => row[1]);
+    if (employee.length) {
+      const employeeHeight = branding.cardPad * 2 + 18 + employee.length * 18;
+      ensureSpace(employeeHeight + 14);
+      card(page.left, cursor, cardWidth, employeeHeight);
+      doc.setFont(branding.font, "bold");
+      doc.setFontSize(11);
+      ink(branding.secondaryColor);
+      write("Company contact", page.left + branding.cardPad, cursor + branding.cardPad);
+      let employeeY = cursor + branding.cardPad + 18;
+      doc.setFontSize(Number(design.bodySize) || 9);
+      employee.forEach(([label, value]) => {
+        doc.setFont(branding.font, "bold");
+        write(label, page.left + branding.cardPad, employeeY);
+        doc.setFont(branding.font, "normal");
+        ink(branding.textColor);
+        fitWrite(value, page.left + 90, employeeY, cardWidth - 110, { minSize: 7 });
+        ink(branding.secondaryColor);
+        employeeY += 18;
+      });
+      cursor += employeeHeight + 14;
+    }
+  }
 
   if (design.showScope && noteLines.length) {
     const scopeHeight = branding.cardPad * 2 + 18 + noteLines.length * 12;
@@ -405,6 +430,29 @@ export function buildEstimatePdf(estimate, brandingInput) {
     write(option.label, page.right - 228, y);
     fitWrite(money(presentation.totals[option.key]), page.right - 16, y, 120, { minSize: 8, textOptions: { align: "right" } });
   });
+
+  if (design.showSignatures !== false) {
+    const signatureHeight = 88;
+    ensureSpace(signatureHeight + 18);
+    cursor += 18;
+    const gap = 28;
+    const sigWidth = (cardWidth - gap) / 2;
+    doc.setDrawColor(...Object.values(color(branding.textColor)));
+    doc.setLineWidth(0.7);
+    doc.line(page.left, cursor + 34, page.left + sigWidth, cursor + 34);
+    doc.line(page.left + sigWidth + gap, cursor + 34, page.right, cursor + 34);
+    doc.setFont(branding.font, "normal");
+    doc.setFontSize(8);
+    ink(branding.textColor);
+    write("Contractor signature", page.left, cursor + 47);
+    write("Customer signature", page.left + sigWidth + gap, cursor + 47);
+    const dateWidth = 90;
+    doc.line(page.left, cursor + 72, page.left + dateWidth, cursor + 72);
+    doc.line(page.left + sigWidth + gap, cursor + 72, page.left + sigWidth + gap + dateWidth, cursor + 72);
+    write("Date", page.left, cursor + 84);
+    write("Date", page.left + sigWidth + gap, cursor + 84);
+    cursor += signatureHeight;
+  }
 
   return {
     doc,

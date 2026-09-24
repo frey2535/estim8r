@@ -997,18 +997,29 @@ export default function TakeoffWorkspace() {
       return;
     }
 
-    if (tool === "linear" || tool === "homerun") {
+    if (["linear", "homerun", "conduit"].includes(tool)) {
       if (draftPoints.length === 0) {
         setDraftPoints([point]);
-        setStatus(tool === "homerun" ? "Homerun started. Click the panel or destination." : "Linear started. Click the end point.");
+        const label = tool === "homerun" ? "Homerun" : tool === "conduit" ? "Conduit" : "Linear";
+        setStatus(`${label} started. Click the end point.`);
         return;
       }
       const points = [draftPoints[0], point];
       const feet = feetFromPercent(polylineLength(points, sheetAspectRatio), calibration);
+      const runNumber = tool === "conduit" ? nextConduitRunNumber(marks) : undefined;
       addMark(
-        { type: tool === "homerun" ? "homerun" : "line", tool, points },
-        feet == null ? `${tool === "homerun" ? "Homerun" : "Linear"} added. Calibrate scale to read LF.` : `${tool === "homerun" ? "Homerun" : "Linear"} ${formatFeet(feet)}.`,
+        {
+          type: tool === "homerun" ? "homerun" : tool === "conduit" ? "route" : "line",
+          tool,
+          points,
+          runNumber,
+          storedFeet: feet,
+        },
+        tool === "conduit"
+          ? (feet == null ? `Conduit run ${runNumber} added. Calibrate scale to read LF.` : `Conduit run ${runNumber}: ${formatFeet(feet)}.`)
+          : (feet == null ? `${tool === "homerun" ? "Homerun" : "Linear"} added. Calibrate scale to read LF.` : `${tool === "homerun" ? "Homerun" : "Linear"} ${formatFeet(feet)}.`),
       );
+      if (tool === "conduit") setMeasureLabel(feet == null ? `Run ${runNumber} stored. Calibrate to total LF.` : `Run ${runNumber}: ${formatFeet(feet)}`);
       setDraftPoints([]);
       return;
     }
@@ -1028,21 +1039,15 @@ export default function TakeoffWorkspace() {
       return;
     }
 
-    if (["polyline", "area", "conduit", "circuit"].includes(tool)) {
+    if (["polyline", "area", "circuit"].includes(tool)) {
       const next = [...draftPoints, point];
       setDraftPoints(next);
-      if (tool === "conduit") {
-        const feet = feetFromPercent(polylineLength(next, sheetAspectRatio), calibration);
-        setMeasureLabel(feet == null ? "Conduit run in progress. Calibrate to read LF." : `Run in progress: ${formatFeet(feet)}`);
-        setStatus(feet == null ? "Conduit vertex added. Double-click to finish the run." : `Conduit run ${formatFeet(feet)}. Double-click to finish.`);
-      } else {
-        setStatus(`${activeTool.label} in progress. Double-click to finish.`);
-      }
+      setStatus(`${activeTool.label} in progress. Double-click to finish.`);
     }
   }
 
   function finishPath(event) {
-    if (!["polyline", "area", "conduit", "circuit"].includes(tool) || draftPoints.length < 2) return;
+    if (!["polyline", "area", "circuit"].includes(tool) || draftPoints.length < 2) return;
     event.preventDefault();
     const sheetAspectRatio = currentAspect();
     if (tool === "area") {

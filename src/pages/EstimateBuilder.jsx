@@ -7,6 +7,7 @@ import { openEstimateSession, writeEstimate, writeWageBook } from "@/domain/esti
 import { estimateFileNameForSave, estimateGrandTotal, isDrawingFileName } from "@/domain/estimate/projectDocuments";
 import SaveProjectDocuments from "@/components/estimate/SaveProjectDocuments";
 import EstimatePdfActions from "@/components/estimate/EstimatePdfActions";
+import EstimatePdfDesigner, { DEFAULT_PDF_DESIGN, normalizePdfDesign } from "@/components/estimate/EstimatePdfDesigner";
 import { listCompanyLaborUnits, listCustomLabor, listLaborLibrary, listNamedCrews, saveLaborRates, saveNamedCrew } from "@/api/laborRepository";
 import { defaultProductivityFactors, setFactorMultiplier } from "@/domain/labor/productivity";
 import { applySelectionToLine, buildLaborSourceOptions, makeLaborSelection } from "@/domain/labor/selection";
@@ -99,6 +100,7 @@ export default function EstimateBuilder() {
   const [assemblies, setAssemblies] = useState([]);
   const [installationConditions, setInstallationConditions] = useState(() => defaultInstallationConditions());
   const [supplierPriceBooks, setSupplierPriceBooks] = useState([]);
+  const [pdfDesign, setPdfDesign] = useState(DEFAULT_PDF_DESIGN);
   const wage = compositeWage(crew);
 
   useEffect(() => {
@@ -127,6 +129,7 @@ export default function EstimateBuilder() {
       setAssemblies(stored.assemblies || []);
       setInstallationConditions(stored.installationConditions?.length ? stored.installationConditions : defaultInstallationConditions());
       setSupplierPriceBooks(stored.supplierPriceBooks || []);
+      setPdfDesign(normalizePdfDesign(stored.pdfDesign));
     } else {
       const nextCrew = defaultCrew();
       setHeader({ ...emptyHeader });
@@ -146,6 +149,7 @@ export default function EstimateBuilder() {
       setAssemblies([]);
       setInstallationConditions(defaultInstallationConditions());
       setSupplierPriceBooks([]);
+      setPdfDesign(DEFAULT_PDF_DESIGN);
     }
     setReady(true);
   }, [openFile, openSize]);
@@ -198,8 +202,9 @@ export default function EstimateBuilder() {
       assemblies,
       installationConditions,
       supplierPriceBooks,
+      pdfDesign,
     });
-  }, [ready, header, crew, lines, contingency, overhead, profit, bondInsurance, itemized, visibleTotals, meta, factors, namedCrewId, trueTakeoff, completenessChecklist, assemblies, installationConditions, supplierPriceBooks, storageFileName]);
+  }, [ready, header, crew, lines, contingency, overhead, profit, bondInsurance, itemized, visibleTotals, meta, factors, namedCrewId, trueTakeoff, completenessChecklist, assemblies, installationConditions, supplierPriceBooks, pdfDesign, storageFileName]);
 
   const draft = useMemo(() => ({
     version: 1,
@@ -223,7 +228,8 @@ export default function EstimateBuilder() {
     assemblies,
     installationConditions,
     supplierPriceBooks,
-  }), [header, crew, factors, namedCrewId, contingency, overhead, profit, bondInsurance, lines, itemized, visibleTotals, meta, trueTakeoff, completenessChecklist, assemblies, installationConditions, supplierPriceBooks, storageFileName]);
+    pdfDesign,
+  }), [header, crew, factors, namedCrewId, contingency, overhead, profit, bondInsurance, lines, itemized, visibleTotals, meta, trueTakeoff, completenessChecklist, assemblies, installationConditions, supplierPriceBooks, pdfDesign, storageFileName]);
 
   const supplyQuote = useMemo(() => buildEstimateSupplyQuote({
     lines,
@@ -415,6 +421,7 @@ export default function EstimateBuilder() {
           <TabsTrigger value="labor-markup" className="px-4 py-2">Labor &amp; markup</TabsTrigger>
           <TabsTrigger value="assemblies" className="px-4 py-2">Assemblies</TabsTrigger>
           <TabsTrigger value="supplier-prices" className="px-4 py-2">Supplier Prices</TabsTrigger>
+          <TabsTrigger value="pdf-designer" className="px-4 py-2">PDF Designer</TabsTrigger>
           {draft.trueTakeoff?.analysis ? <TabsTrigger value="audit" className="px-4 py-2">Takeoff Audit</TabsTrigger> : null}
         </TabsList>
 
@@ -552,6 +559,10 @@ export default function EstimateBuilder() {
           <LaborMarketCompare comparison={marketCompare} />
         </div>
       </section>
+        </TabsContent>
+
+        <TabsContent value="pdf-designer" className="mt-4 space-y-5">
+          <EstimatePdfDesigner estimate={draft} design={pdfDesign} onChange={setPdfDesign} />
         </TabsContent>
 
         <TabsContent value="supplier-prices" className="mt-4 space-y-5">

@@ -21,6 +21,7 @@ import { drawingSymbolsFromDocs, printedScaleCalibration, readDrawingDocuments }
 import { paletteForTrade, pageKindsFromDocs, symbolsOnDrawingForTrade, tradeById, conduitOptionsForTrade, findConduitOption, TRADES, DEFAULT_CONDUIT_ID } from "@/domain/takeoff/trades";
 import { buildAiMarks } from "@/domain/takeoff/aiTakeoff";
 import { readAiPages } from "@/domain/takeoff/aiPages";
+import { buildDrawingObjectLayer, hitDrawingObject, materializeDrawingObject } from "@/domain/takeoff/drawingObjectLayer";
 import SheetThumbnailPanel, { readThumbsOpen, writeThumbsOpen } from "@/components/takeoff/SheetThumbnailPanel";
 import DevicePicker from "@/components/takeoff/DevicePicker";
 import TakeoffInspector from "@/components/takeoff/TakeoffInspector";
@@ -165,6 +166,7 @@ export default function TakeoffWorkspace() {
   const [maxHomeruns, setMaxHomeruns] = useState(3);
   const [scheduleEdits, setScheduleEdits] = useState({});
   const [aiBusy, setAiBusy] = useState(false);
+  const [drawingObjects, setDrawingObjects] = useState([]);
   const [tool, setTool] = useState("count");
   const [category, setCategory] = useState("Receptacles");
   const [symbolId, setSymbolId] = useState("duplex");
@@ -343,6 +345,7 @@ export default function TakeoffWorkspace() {
     setImageSize({ width: 0, height: 0 });
     setSheetMeta({ page: 1, pageCount: 1 });
     setSelectedId(null);
+    setDrawingObjects([]);
     setMeasureLabel("");
 
     const saved = loadSession(nextFile);
@@ -891,6 +894,26 @@ export default function TakeoffWorkspace() {
     });
   }
 
+  useEffect(() => {
+    if (!fileBytes?.byteLength || !isPdf) {
+      setDrawingObjects([]);
+      return;
+    }
+    let cancelled = false;
+    const objectize = async () => {
+      try {
+        const pages = await readAiPages(fileBytes);
+        if (cancelled) return;
+        const objects = buildDrawingObjectLayer({ pages, detectedMarks: marks, trade });
+        setDrawingObjects(objects);
+      } catch (error) {
+        if (!cancelled) console.error("Drawing object layer failed", error);
+      }
+    };
+    void objectize();
+    return () => { cancelled = true; };
+  }, [fileBytes, isPdf, trade]);
+
   async function runAiTakeoff() {
     if (!isPdf || !fileBytes) {
       setStatus("AI takeoff needs a PDF with a text layer. Image drawings stay manual for the selected trade.");
@@ -937,15 +960,27 @@ export default function TakeoffWorkspace() {
     const sheetAspectRatio = currentAspect();
 
     if (tool === "select") {
-      const hit = selectMarkAtPoint(overlayMarks, point, {
+      let hit = selectMarkAtPoint(overlayMarks, point, {
         aspect: sheetAspectRatio,
         markerSize: penSize,
         hitRoute: (mark, at, aspect) => hitTestMark(sizedMark(mark), at, aspect, markHitThreshold(mark)),
       });
+      if (!hit) {
+        const drawingObject = hitDrawingObject(drawingObjects, point, sheetMeta.page);
+        if (drawingObject) {
+          const materialized = materializeDrawingObject(drawingObject, marks);
+          hit = materialized?.mark || null;
+          if (hit && !materialized.existing) {
+            const nextMarks = applyDeviceTypeColors([...marks, hit]);
+            setMarks(nextMarks);
+            persistTakeoff(nextMarks);
+          }
+        }
+      }
       setSelectedId(hit?.id || null);
       if (!hit) setIsolationMode(false);
       setReviewOpen(Boolean(hit && isDeviceMark(hit) && needsAccuracyReview(hit, marks, sheetMeta.page)));
-      setStatus(hit ? `Selected ${hit.symbolLabel || hit.typeCode || hit.type}.` : "Nothing selected.");
+      setStatus(hit ? `Selected ${hit.symbolLabel || hit.typeCode || hit.type}. Edit it in the inspector.` : "No selectable electrical device found here.");
       return;
     }
 

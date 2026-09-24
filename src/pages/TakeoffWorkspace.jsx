@@ -1863,8 +1863,9 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
   );
 }
 
-function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber, viewportWidth, viewportHeight, onPageInfo }) {
+function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber, viewportWidth, viewportHeight, onPageInfo, selectedMark }) {
   const canvasRef = useRef(null);
+  const focusCanvasRef = useRef(null);
   const pdfRef = useRef(null);
   const bytesRef = useRef(null);
   const onPageInfoRef = useRef(onPageInfo);
@@ -1936,11 +1937,32 @@ function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber, viewp
     };
   }, [fileBytes, pageNumber, zoom, viewportWidth, viewportHeight]);
 
+  useEffect(() => {
+    const source = canvasRef.current;
+    const focus = focusCanvasRef.current;
+    if (!source || !focus || !selectedMark || (selectedMark.sheet || 1) !== pageNumber || !displaySize.width || !displaySize.height || rendering) return;
+    const ctx = focus.getContext("2d");
+    const outputScaleX = source.width / displaySize.width;
+    const outputScaleY = source.height / displaySize.height;
+    const centerX = (Number(selectedMark.x) / 100) * source.width;
+    const centerY = (Number(selectedMark.y) / 100) * source.height;
+    const sourceCssSize = 42;
+    const sw = sourceCssSize * outputScaleX;
+    const sh = sourceCssSize * outputScaleY;
+    focus.width = 112;
+    focus.height = 112;
+    ctx.clearRect(0, 0, focus.width, focus.height);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, focus.width, focus.height);
+    ctx.drawImage(source, centerX - sw / 2, centerY - sh / 2, sw, sh, 0, 0, focus.width, focus.height);
+  }, [selectedMark, pageNumber, displaySize, rendering]);
+
   return (
     <div className="relative bg-white" style={displaySize.width ? { width: displaySize.width, height: displaySize.height } : undefined}>
       {rendering && <div className="absolute inset-x-0 top-2 z-10 mx-auto w-fit rounded-lg bg-background/90 px-3 py-2 text-xs font-semibold shadow">Rendering {fileName}…</div>}
       {error && <div className="absolute inset-x-4 top-16 z-10 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">{error}</div>}
       <canvas ref={canvasRef} className="block bg-white" />
+      {selectedMark && (selectedMark.sheet || 1) === pageNumber ? <div className="pointer-events-none absolute z-30" style={{ left: `${selectedMark.x}%`, top: `${selectedMark.y}%`, transform: "translate(-50%, -50%)" }}><div className="relative rounded-xl border-4 border-orange-600 bg-white p-1 shadow-2xl"><canvas ref={focusCanvasRef} className="block h-28 w-28 bg-white" /><div className="absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-orange-600 px-2 py-1 text-[10px] font-black text-white shadow">SELECTED DEVICE</div></div></div> : null}
     </div>
   );
 }

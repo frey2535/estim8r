@@ -221,12 +221,7 @@ export default function TakeoffWorkspace() {
     }
   }, [trade, conduitChoices, conduitId]);
 
-  useEffect(() => {
-    if (mode !== "ai" && mode !== "hybrid") return undefined;
-    if (!fileBytes || !isPdf) return undefined;
-    const timer = setTimeout(() => { void runAiTakeoff(); }, 0);
-    return () => clearTimeout(timer);
-  }, [mode, trade, maxHomeruns, fileBytes]);
+
   const activeTool = toolByKey(tool);
   const sheetMarks = useMemo(
     () => marks.filter((mark) => (mark.sheet || 1) === (sheetMeta.page || 1)),
@@ -1282,9 +1277,17 @@ export default function TakeoffWorkspace() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {[["manual", "Manual"], ["hybrid", "Hybrid"], ["ai", "AI assist"]].map(([value, label]) => (
+          {[["manual", "Manual"], ["hybrid", "Hybrid"]].map(([value, label]) => (
             <button key={value} type="button" onClick={() => setMode(value)} className={cn("rounded-lg border px-3 py-1.5 text-xs font-semibold", mode === value ? "border-blue-600 bg-blue-600 text-white dark:border-orange-500 dark:bg-orange-500" : "border-border bg-background")}>{label}</button>
           ))}
+          <button
+            type="button"
+            disabled={aiBusy}
+            onClick={() => { setMode("ai"); void runAiTakeoff(); }}
+            className={cn("rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:cursor-wait disabled:opacity-60", mode === "ai" ? "border-blue-600 bg-blue-600 text-white dark:border-orange-500 dark:bg-orange-500" : "border-border bg-background")}
+          >
+            {aiBusy ? "AI working…" : "AI assist"}
+          </button>
           <button type="button" onClick={() => saveTakeoff()} className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 dark:bg-orange-500">
             <Save className="h-4 w-4" /> Save
           </button>

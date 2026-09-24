@@ -2,6 +2,7 @@ import { classifyPageText, extractPdfPageItems } from "./drawing-docs";
 import { extractPageSymbolPaths } from "./pdfPaths";
 import { classifySheetDiscipline, findSheetId, parseSheetId } from "./sheetDiscipline";
 import { getPdfDocument } from "@/lib/pdf-document";
+import { extractRasterSymbolCandidates } from "./rasterSymbols";
 
 export async function readAiPages(fileBytes) {
   const pdf = await getPdfDocument(fileBytes);
@@ -20,12 +21,14 @@ export async function readAiPages(fileBytes) {
     const sheetId = findSheetId(tokens) || parseSheetId(text);
     const discipline = classifySheetDiscipline(text, tokens);
     let paths = [];
-    try {
-      paths = await extractPageSymbolPaths(page);
-    } catch {
-      paths = [];
+    try { paths = await extractPageSymbolPaths(page); } catch { paths = []; }
+    let rasterPaths = [];
+    // Scanned/image-only drawings do not expose selectable PDF vectors. Build a
+    // compact-object layer from rendered pixels only when native geometry is sparse.
+    if (paths.length < 8) {
+      try { rasterPaths = await extractRasterSymbolCandidates(page); } catch { rasterPaths = []; }
     }
-    pages.push({ page: pageNumber, kind, tokens, sheetId, discipline, paths });
+    pages.push({ page: pageNumber, kind, tokens, sheetId, discipline, paths: paths.length >= 8 ? paths : [...paths, ...rasterPaths], rasterPaths });
   }
   return pages;
 }

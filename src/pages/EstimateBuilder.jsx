@@ -32,6 +32,7 @@ import AssemblyLibrary from "@/components/estimate/AssemblyLibrary";
 import { assemblyToEstimateLines } from "@/domain/estimate/assemblies";
 import { defaultInstallationConditions } from "@/domain/labor/installationConditions";
 import InstallationConditionEditor from "@/components/labor/InstallationConditionEditor";
+import TakeoffSourceAudit from "@/components/estimate/TakeoffSourceAudit";
 
 function blankLine(rate) {
   return {
@@ -651,6 +652,7 @@ export default function EstimateBuilder() {
 
         {draft.trueTakeoff?.analysis ? (
           <TabsContent value="audit" className="mt-4 space-y-5">
+            <TakeoffSourceAudit lines={lines} drawingFileName={meta.fileName} />
             <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>

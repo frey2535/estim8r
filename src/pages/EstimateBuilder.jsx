@@ -34,6 +34,7 @@ import { defaultInstallationConditions } from "@/domain/labor/installationCondit
 import InstallationConditionEditor from "@/components/labor/InstallationConditionEditor";
 import TakeoffSourceAudit from "@/components/estimate/TakeoffSourceAudit";
 import SupplierPriceIntelligence from "@/components/estimate/SupplierPriceIntelligence";
+import EstimateQualityGate from "@/components/estimate/EstimateQualityGate";
 
 function blankLine(rate) {
   return {
@@ -508,6 +509,8 @@ export default function EstimateBuilder() {
       </section>
 
       <EstimateReadinessPanel checklist={completenessChecklist} onChange={setCompletenessChecklist} />
+
+      <EstimateQualityGate lines={lines} checklist={completenessChecklist} itemized={itemized} trueTakeoff={trueTakeoff} />
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,22rem)]">
         <div className="min-w-0 rounded-2xl border border-border bg-card p-4">

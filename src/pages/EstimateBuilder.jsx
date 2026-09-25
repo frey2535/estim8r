@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { DragDropContext, Draggable, Droppable } from "@hello-pangea/dnd";
 import { Plus } from "lucide-react";
 import { compositeWage, defaultCrew } from "@/domain/labor/employeeClasses";
-import { openEstimateSession, writeEstimate, writeWageBook } from "@/domain/estimate/estimateStore";
+import { openEstimateSession, readEstimate, writeEstimate, writeWageBook } from "@/domain/estimate/estimateStore";
 import { estimateFileNameForSave, estimateGrandTotal, isDrawingFileName } from "@/domain/estimate/projectDocuments";
 import SaveProjectDocuments from "@/components/estimate/SaveProjectDocuments";
 import EstimatePdfActions from "@/components/estimate/EstimatePdfActions";
@@ -176,6 +176,10 @@ export default function EstimateBuilder() {
   }, [ready, library]);
 
   const storageFileName = estimateFileNameForSave({ fileName: meta.fileName, projectName: header.projectName });
+  const storedEstimate = storageFileName ? readEstimate(storageFileName, meta.fileSize || 0) : null;
+  const storedEstimateId = storedEstimate?.id || "";
+  const storedBuildrProjectId = storedEstimate?.buildrSync?.projectId || "";
+  const storedBuildrInvoiceId = storedEstimate?.buildrSync?.invoiceId || "";
 
   useEffect(() => {
     if (!ready) return;
@@ -183,6 +187,8 @@ export default function EstimateBuilder() {
     if (!storageFileName) return;
     writeEstimate({
       version: 1,
+      id: storedEstimate?.id,
+      buildrSync: storedEstimate?.buildrSync || null,
       fileName: storageFileName,
       fileSize: meta.fileSize || 0,
       header,
@@ -205,10 +211,12 @@ export default function EstimateBuilder() {
       supplierPriceBooks,
       pdfDesign,
     });
-  }, [ready, header, crew, lines, contingency, overhead, profit, bondInsurance, itemized, visibleTotals, meta, factors, namedCrewId, trueTakeoff, completenessChecklist, assemblies, installationConditions, supplierPriceBooks, pdfDesign, storageFileName]);
+  }, [ready, header, crew, lines, contingency, overhead, profit, bondInsurance, itemized, visibleTotals, meta, factors, namedCrewId, trueTakeoff, completenessChecklist, assemblies, installationConditions, supplierPriceBooks, pdfDesign, storageFileName, storedEstimateId, storedBuildrProjectId, storedBuildrInvoiceId]);
 
   const draft = useMemo(() => ({
     version: 1,
+    id: storedEstimate?.id,
+    buildrSync: storedEstimate?.buildrSync || null,
     fileName: storageFileName,
     fileSize: meta.fileSize || 0,
     header,
@@ -230,7 +238,7 @@ export default function EstimateBuilder() {
     installationConditions,
     supplierPriceBooks,
     pdfDesign,
-  }), [header, crew, factors, namedCrewId, contingency, overhead, profit, bondInsurance, lines, itemized, visibleTotals, meta, trueTakeoff, completenessChecklist, assemblies, installationConditions, supplierPriceBooks, pdfDesign, storageFileName]);
+  }), [header, crew, factors, namedCrewId, contingency, overhead, profit, bondInsurance, lines, itemized, visibleTotals, meta, trueTakeoff, completenessChecklist, assemblies, installationConditions, supplierPriceBooks, pdfDesign, storageFileName, storedEstimateId, storedBuildrProjectId, storedBuildrInvoiceId]);
 
   const supplyQuote = useMemo(() => buildEstimateSupplyQuote({
     lines,

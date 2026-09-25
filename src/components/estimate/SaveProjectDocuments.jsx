@@ -10,7 +10,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/lib/AuthContext";
-import { fetchBuildrAccountStatus, isBuildrConfigured, saveBuildrProjectDocuments } from "@/api/buildrBridge";
+import { buildrApiUrl, fetchBuildrAccountStatus, saveBuildrProjectDocuments } from "@/api/buildrBridge";
 import { readLinkedBuildrCompanyId } from "@/lib/buildrCompany";
 import { readEstimate, writeEstimate } from "@/domain/estimate/estimateStore";
 import {
@@ -41,7 +41,7 @@ function storedEstimate(estimate, storageName, fileSize) {
 }
 
 export default function SaveProjectDocuments({ estimate, onProjectName }) {
-  const { user } = useAuth();
+  const { user, authChecked } = useAuth();
   const fileName = estimate?.fileName || "";
   const fileSize = estimate?.fileSize || 0;
   const projectName = estimate?.header?.projectName || "";
@@ -54,9 +54,20 @@ export default function SaveProjectDocuments({ estimate, onProjectName }) {
   const [draftName, setDraftName] = useState("");
   const [nameError, setNameError] = useState("");
   const [status, setStatus] = useState("");
+  const [statusKind, setStatusKind] = useState("");
   const [busy, setBusy] = useState(false);
   const lastRun = useRef("");
   const promptedFor = useRef("");
+
+  function setOk(message) {
+    setStatusKind("ok");
+    setStatus(message);
+  }
+
+  function setErrorStatus(message) {
+    setStatusKind("error");
+    setStatus(message);
+  }
 
   function persistDraft(name, extra = {}) {
     const storageName = extra.fileName || estimateFileNameForSave({ fileName, projectName: name });
@@ -144,45 +155,79 @@ export default function SaveProjectDocuments({ estimate, onProjectName }) {
       setDraftName("");
       setNameError(saveRequiresProjectName({ projectName: name }));
       setNameOpen(true);
-      setStatus(saveRequiresProjectName({ projectName: name }));
+      setErrorStatus(saveRequiresProjectName({ projectName: name }));
       return;
     }
     if (!force && !forceLocal && lastRun.current === fingerprint && !promptOpen) return;
     setBusy(true);
+    setStatusKind("");
     try {
-      if (forceLocal || !isBuildrConfigured()) {
-        await saveLocal({ savedTo: "estim8r" }, name);
-        lastRun.current = fingerprint;
-        setStatus("Saved in the Estimates folder under this project name.");
-        return;
-      }
+      const companyId = readLinkedBuildrCompanyId(user);
       const storageName = estimateFileNameForSave({ fileName, projectName: name });
       const current = storedEstimate(estimate, storageName, fileSize);
       const existingProjectId = current.buildrSync?.projectId || estimate?.buildrSync?.projectId || null;
-      const account = await fetchBuildrAccountStatus(user?.email, readLinkedBuildrCompanyId(user));
+      const expectBuildr = Boolean(companyId || existingProjectId);
+
+      if (forceLocal) {
+        await saveLocal({ savedTo: "estim8r" }, name);
+        lastRun.current = fingerprint;
+        setOk("Saved in the Estimates folder under this project name.");
+        return;
+      }
+
+      if (!buildrApiUrl()) {
+        await saveLocal({ savedTo: "estim8r" }, name);
+        lastRun.current = fingerprint;
+        if (expectBuildr) {
+          setErrorStatus("Buildr is not configured, so this estimate could not sync. It was saved in Estim8r only.");
+          return;
+        }
+        setOk("Saved in the Estimates folder under this project name.");
+        return;
+      }
+
+      if (!user?.email) {
+        await saveLocal({ savedTo: "estim8r" }, name);
+        if (expectBuildr) {
+          setErrorStatus("Sign in so Save can send this estimate to Buildr. It was saved in Estim8r only.");
+          return;
+        }
+        lastRun.current = fingerprint;
+        setOk("Saved in the Estimates folder under this project name.");
+        return;
+      }
+
+      const account = await fetchBuildrAccountStatus(user.email, companyId);
       const matchingProject = matchProjectByName(account.projects, name);
       const decision = decideSaveDestination({
         hasBuildrAccount: account.hasAccount,
         canUseBuildr: account.canUseBuildr,
         matchingProject,
         existingProjectId,
+        linkedCompanyId: companyId,
+        accountError: account.error,
       });
+      if (decision.action === "error") {
+        await saveLocal({ savedTo: "estim8r" }, name);
+        setErrorStatus(`${decision.error} The estimate was saved in Estim8r only.`);
+        return;
+      }
       if (decision.action === "buildr") {
         await saveToBuildr(false, name);
         lastRun.current = fingerprint;
-        setStatus(existingProjectId
-          ? `Updated the Buildr project Estimate tab.`
+        setOk(existingProjectId
+          ? "Updated the same estimate on the Buildr project Estimate tab."
           : `Saved to the Buildr project “${decision.project.name || name}” Estimate tab.`);
         return;
       }
       if (decision.action === "prompt") {
-        if (sessionStorage.getItem(promptKey(name)) === "declined") {
+        if (!force && sessionStorage.getItem(promptKey(name)) === "declined") {
           await saveLocal({ savedTo: "estim8r" }, name);
           lastRun.current = fingerprint;
-          setStatus("Saved in the Estimates folder under this project name.");
+          setOk("Saved in the Estimates folder under this project name.");
           return;
         }
-        if (promptedFor.current !== name) {
+        if (force || promptedFor.current !== name) {
           promptedFor.current = name;
           setPromptOpen(true);
         }
@@ -190,21 +235,25 @@ export default function SaveProjectDocuments({ estimate, onProjectName }) {
       }
       await saveLocal({ savedTo: "estim8r" }, name);
       lastRun.current = fingerprint;
-      setStatus("Saved in the Estimates folder under this project name.");
+      if (account.error) {
+        setErrorStatus(`Could not reach Buildr: ${account.error} The estimate was saved in Estim8r only.`);
+        return;
+      }
+      setOk("Saved in the Estimates folder under this project name.");
     } catch (error) {
       await saveLocal({ savedTo: "estim8r" }, name);
-      lastRun.current = fingerprint;
-      setStatus(error?.message || "Could not reach Buildr. The estimate was saved in Estim8r.");
+      setErrorStatus(error?.message || "Buildr could not save this estimate. It was saved in Estim8r only.");
     } finally {
       setBusy(false);
     }
   }
 
   useEffect(() => {
+    if (!authChecked) return undefined;
     if (!canSaveProjectDocuments({ projectName })) return undefined;
     const timer = window.setTimeout(() => { void runSave(); }, 800);
     return () => window.clearTimeout(timer);
-  }, [fingerprint, user?.email, user?.buildr_company_id]);
+  }, [fingerprint, user?.email, user?.buildr_company_id, authChecked]);
 
   async function acceptCreate() {
     setPromptOpen(false);
@@ -213,10 +262,10 @@ export default function SaveProjectDocuments({ estimate, onProjectName }) {
       const result = await saveToBuildr(true);
       lastRun.current = fingerprint;
       sessionStorage.removeItem(promptKey(projectName));
-      setStatus(`Created “${result.project?.name || projectName}” in Buildr and saved the estimate on its Estimate tab.`);
+      setOk(`Created “${result.project?.name || projectName}” in Buildr and saved the estimate on its Estimate tab.`);
     } catch (error) {
       await saveLocal({ savedTo: "estim8r" });
-      setStatus(error?.message || "Buildr could not create the project. The estimate was saved in Estim8r.");
+      setErrorStatus(error?.message || "Buildr could not create the project. The estimate was saved in Estim8r only.");
     } finally {
       setBusy(false);
     }
@@ -227,7 +276,7 @@ export default function SaveProjectDocuments({ estimate, onProjectName }) {
     setPromptOpen(false);
     await saveLocal({ savedTo: "estim8r" });
     lastRun.current = fingerprint;
-    setStatus("Saved in the Estimates folder under this project name.");
+    setOk("Saved in the Estimates folder under this project name.");
   }
 
   function requestSave() {
@@ -235,7 +284,7 @@ export default function SaveProjectDocuments({ estimate, onProjectName }) {
       setDraftName(projectName);
       setNameError(saveRequiresProjectName({ projectName }));
       setNameOpen(true);
-      setStatus(saveRequiresProjectName({ projectName }));
+      setErrorStatus(saveRequiresProjectName({ projectName }));
       return;
     }
     void runSave({ force: true });
@@ -247,7 +296,7 @@ export default function SaveProjectDocuments({ estimate, onProjectName }) {
     const error = saveRequiresProjectName({ projectName: name });
     if (error) {
       setNameError(error);
-      setStatus(error);
+      setErrorStatus(error);
       return;
     }
     setNameError("");
@@ -268,7 +317,10 @@ export default function SaveProjectDocuments({ estimate, onProjectName }) {
       >
         {busy ? "Saving…" : "Save estimate"}
       </button>
-      <p className="text-sm text-muted-foreground" role="status">
+      <p
+        className={`text-sm ${statusKind === "error" ? "text-destructive" : "text-muted-foreground"}`}
+        role={statusKind === "error" ? "alert" : "status"}
+      >
         {busy
           ? "Saving…"
           : status || (nameMessage || (hasDrawing

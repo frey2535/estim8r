@@ -47,6 +47,8 @@ jobs:
           VITE_APP_URL: https://estim8r.currentflowconsulting.org
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_BUILDR_URL: ${{ secrets.VITE_BUILDR_URL }}
+          VITE_BUILDR_API_URL: ${{ secrets.VITE_BUILDR_API_URL }}
       - name: Configure Pages
         uses: actions/configure-pages@v5
         with:

@@ -18,15 +18,38 @@ export function matchProjectByName(projects, projectName) {
   return (projects || []).find((project) => projectFolderKey(project.name) === key) || null;
 }
 
-export function decideSaveDestination({ hasBuildrAccount, canUseBuildr, matchingProject, existingProjectId }) {
+export function decideSaveDestination({
+  hasBuildrAccount,
+  canUseBuildr,
+  matchingProject,
+  existingProjectId,
+  linkedCompanyId,
+  accountError,
+} = {}) {
+  const linked = Boolean(String(linkedCompanyId || "").trim());
   if (existingProjectId) {
     return { action: "buildr", project: matchingProject || { id: existingProjectId } };
   }
-  if (matchingProject && (hasBuildrAccount || canUseBuildr)) {
+  if (accountError && (linked || canUseBuildr || hasBuildrAccount)) {
+    return { action: "error", error: `Could not reach Buildr: ${accountError}` };
+  }
+  if (matchingProject && (hasBuildrAccount || canUseBuildr || linked)) {
     return { action: "buildr", project: matchingProject };
   }
   if (canUseBuildr && !matchingProject) {
     return { action: "prompt" };
+  }
+  if (linked && !hasBuildrAccount && !canUseBuildr) {
+    return {
+      action: "error",
+      error: "Buildr did not find this company or email. Check Settings → Buildr company, then Save again.",
+    };
+  }
+  if (linked && hasBuildrAccount && !canUseBuildr) {
+    return {
+      action: "error",
+      error: "This Buildr login cannot use the linked company yet. The estimate was not sent to Buildr.",
+    };
   }
   return { action: "local" };
 }

@@ -50,4 +50,20 @@ const standalone = writeEstimate({
 assert(standalone.header.projectName === "Main Hospital", "standalone estimate writes without a drawing");
 assert(openEstimateSession({ fileName: "standalone:main hospital", fileSize: 0 })?.id === standalone.id, "standalone estimates reopen from the Estimates folder");
 
+const synced = writeEstimate({
+  fileName: "standalone:main hospital",
+  fileSize: 0,
+  header: { projectName: "Main Hospital" },
+  lines: standalone.lines,
+  buildrSync: { estimateId: standalone.id, projectId: "proj_1", invoiceId: "inv_1", documents: {} },
+});
+const laterEdit = writeEstimate({
+  fileName: "standalone:main hospital",
+  fileSize: 0,
+  header: { projectName: "Main Hospital" },
+  lines: [{ ...standalone.lines[0], quantity: 2 }],
+});
+assert(laterEdit.id === synced.id, "later standalone edits keep the same estimate id");
+assert(laterEdit.buildrSync?.invoiceId === "inv_1", "later edits keep the Buildr invoice id so Save can update");
+
 if (!process.exitCode) console.log("estimate store checks passed");

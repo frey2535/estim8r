@@ -66,6 +66,42 @@ assert(decideSaveDestination({
   existingProjectId: "proj_1",
 }).project.id === "proj_1", "stored Buildr project id is reused");
 
+assert(decideSaveDestination({
+  hasBuildrAccount: false,
+  canUseBuildr: false,
+  matchingProject: null,
+  existingProjectId: "proj_1",
+}).action === "buildr", "later edits reuse the stored Buildr project even if account lookup is empty");
+
+assert(decideSaveDestination({
+  hasBuildrAccount: true,
+  canUseBuildr: true,
+  matchingProject: { id: "p2", name: "Standalone Job" },
+  linkedCompanyId: "co_1",
+}).action === "buildr", "a linked company with a matching project saves to Buildr");
+
+assert(decideSaveDestination({
+  hasBuildrAccount: false,
+  canUseBuildr: false,
+  matchingProject: null,
+  linkedCompanyId: "co_1",
+}).action === "error", "a linked company without a Buildr account is an error, not a silent local save");
+
+assert(decideSaveDestination({
+  hasBuildrAccount: true,
+  canUseBuildr: true,
+  matchingProject: null,
+  linkedCompanyId: "co_1",
+  accountError: "Buildr is unavailable.",
+}).action === "error", "a Buildr lookup failure is surfaced when a company is linked");
+
+assert(decideSaveDestination({
+  hasBuildrAccount: true,
+  canUseBuildr: false,
+  matchingProject: null,
+  linkedCompanyId: "co_1",
+}).action === "error", "a linked company the login cannot use is an error");
+
 assert(canSaveProjectDocuments({ fileName: "plan.pdf", projectName: "Main Hospital" }) === true, "drawing plus project name can save");
 assert(canSaveProjectDocuments({ fileName: "", projectName: "Main Hospital" }) === true, "a named estimate can save without a drawing");
 assert(canSaveProjectDocuments({ projectName: "Main Hospital" }) === true, "project name alone is enough to save");

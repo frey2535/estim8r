@@ -1,17 +1,31 @@
+export const DEFAULT_BUILDR_PRODUCTION_URL = "https://buildrpm.com";
+
 function trimUrl(value) {
   return String(value || "").trim().replace(/\/$/, "");
 }
 
-export function buildrApiUrl() {
-  return trimUrl(import.meta.env.VITE_BUILDR_API_URL || "");
+export function resolveBuildrAppUrl(appUrl, { isProd = false } = {}) {
+  return trimUrl(appUrl || (isProd ? DEFAULT_BUILDR_PRODUCTION_URL : ""));
+}
+
+export function resolveBuildrApiUrl(apiUrl, appUrl, { isProd = false } = {}) {
+  return trimUrl(apiUrl || resolveBuildrAppUrl(appUrl, { isProd }));
 }
 
 export function buildrAppUrl() {
-  return trimUrl(import.meta.env.VITE_BUILDR_URL || "");
+  return resolveBuildrAppUrl(import.meta.env.VITE_BUILDR_URL, { isProd: import.meta.env.PROD });
+}
+
+export function buildrApiUrl() {
+  return resolveBuildrApiUrl(
+    import.meta.env.VITE_BUILDR_API_URL,
+    import.meta.env.VITE_BUILDR_URL,
+    { isProd: import.meta.env.PROD },
+  );
 }
 
 export function isBuildrConfigured() {
-  return Boolean(buildrApiUrl() || buildrAppUrl());
+  return Boolean(buildrApiUrl());
 }
 
 async function readJson(response) {

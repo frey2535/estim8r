@@ -4,6 +4,7 @@ import { base44 } from "@/api/base44Client";
 import { isProductionAuthMisconfigured } from "@/api/supabaseClient";
 import { describeAuthError } from "@/lib/authRedirect";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
 
 function GoogleMark() {
@@ -29,13 +30,19 @@ export default function GoogleSignInButton({ className, compact = false }) {
       if (isProductionAuthMisconfigured) throw new Error("Production authentication is not configured on this build.");
       await base44.auth.loginWithGoogle();
     } catch (err) {
-      setError(describeAuthError(err, { google: true }));
+      const message = describeAuthError(err, { google: true });
+      setError(message);
+      toast({
+        variant: "destructive",
+        title: "Google sign-in failed",
+        description: message,
+      });
       setBusy(false);
     }
   }
 
   return (
-    <div className={cn("space-y-2", compact && "space-y-0")}>
+    <div className={cn("relative space-y-2", compact && "space-y-0")}>
       <Button
         type="button"
         variant="outline"
@@ -48,7 +55,18 @@ export default function GoogleSignInButton({ className, compact = false }) {
         <span className={compact ? "hidden sm:inline" : undefined}>{busy ? "Opening Google…" : text}</span>
         {compact && <span className="sm:hidden">{busy ? "Google…" : "Google"}</span>}
       </Button>
-      {!compact && error && <p className="text-sm text-destructive">{error}</p>}
+      {error && (
+        <p
+          role="alert"
+          aria-live="assertive"
+          className={cn(
+            "text-sm text-destructive",
+            compact && "absolute right-0 top-full z-50 mt-1 w-72 max-w-[min(18rem,calc(100vw-2rem))] rounded-md border border-destructive/30 bg-background p-2 text-left shadow-md",
+          )}
+        >
+          {error}
+        </p>
+      )}
     </div>
   );
 }

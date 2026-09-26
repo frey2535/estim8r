@@ -1,11 +1,11 @@
 import React, { useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import { LogIn, Mail, Lock, Loader2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { isProductionAuthMisconfigured } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
 import { PLATFORM_OWNER_EMAIL, isPlatformStaff } from "@/lib/platformIdentity";
-import { describeAuthError, readAuthCallbackError } from "@/lib/authRedirect";
+import { describeAuthError, hasAuthCode, readAuthCallbackError, supabaseCallbackUrl } from "@/lib/authRedirect";
 import AuthLayout from "@/components/AuthLayout";
 import GoogleSignInButton from "@/components/platform/GoogleSignInButton";
 import { Button } from "@/components/ui/button";
@@ -14,12 +14,21 @@ import { Label } from "@/components/ui/label";
 
 export default function Login({ platformOwner = false }) {
   const { isAuthenticated, user, checkAppState } = useAuth();
+  const location = useLocation();
   const [email, setEmail] = useState(platformOwner ? PLATFORM_OWNER_EMAIL : "");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState(() => (
-    typeof window === "undefined" ? "" : readAuthCallbackError(window.location.search, window.location.hash)
-  ));
+  const [error, setError] = useState(() => {
+    if (typeof window === "undefined") return "";
+    const callbackError = readAuthCallbackError(window.location.search, window.location.hash);
+    if (callbackError) return describeAuthError(callbackError, { google: true });
+    if (location.state?.authError) return describeAuthError(location.state.authError, { google: true });
+    return "";
+  });
   const [busy, setBusy] = useState(false);
+  const finishingGoogle = typeof window !== "undefined"
+    && hasAuthCode(window.location.search, window.location.hash)
+    && !error
+    && !isAuthenticated;
   if (isAuthenticated) return <Navigate to={isPlatformStaff(user) ? "/admin" : "/"} replace />;
 
   async function submit(event) {
@@ -47,8 +56,19 @@ export default function Login({ platformOwner = false }) {
         ? <>Not the platform owner? <Link to="/login" className="text-primary font-medium hover:underline">Sign in</Link></>
         : <>Don't have an account? <Link to="/register" className="text-primary font-medium hover:underline">Create one</Link></>}
     >
-      {error && <div className="mb-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
+      {error && <div role="alert" className="mb-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
+      {finishingGoogle && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg bg-muted p-3 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          Finishing Google sign-in…
+        </div>
+      )}
       <GoogleSignInButton className="h-12 w-full" />
+      <p className="mt-2 text-xs text-muted-foreground">
+        If Google says this app does not comply with OAuth policy, the Authorized redirect URI must be the Supabase callback
+        <span className="font-medium"> {supabaseCallbackUrl(import.meta.env.VITE_SUPABASE_URL)}</span>
+        , not this Estim8r URL.
+      </p>
       <div className="my-4 flex items-center gap-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         <span className="h-px flex-1 bg-border" />
         or email

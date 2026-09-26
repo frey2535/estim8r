@@ -37,12 +37,14 @@ Sign in from the header **Sign in** button (opens the sign-in page) or **Sign in
 
 After the platform owner (or backup admin) signs in, **Access** in the header opens **Estim8r access** (`/admin`). Grant or invite by email, and revoke from the user list. Owner and backup admin rows stay protected. Apply `supabase db push` so the grant/revoke RPCs exist.
 
-Google/Gmail sign-in sends the user to Supabase, then back to `/login` on the same origin. A 400 on that hop is usually a dashboard mismatch, not the Estim8r button. Set:
+Google/Gmail sign-in sends the user to Supabase, then back to this origin with a trailing slash (`https://estim8r.currentflowconsulting.org/` or `http://localhost:5177/`). GitHub Pages 301s `/login` to `/login/`, so the app does not use `/login` as `redirectTo`. If Google or Supabase still rejects the hop, Estim8r shows the error on the sign-in page (and as a toast from the header Google button). Set:
 
-1. **Supabase → Authentication → Providers → Google** — enable it. Paste the Google Cloud client ID and secret.
-2. **Google Cloud → Credentials → OAuth client (Web)** — Authorized JavaScript origins: `https://estim8r.currentflowconsulting.org` and `http://localhost:5177`. Authorized redirect URI must be the Supabase callback, `https://<project-ref>.supabase.co/auth/v1/callback` (copy it from the Google provider page). Do not put the Estim8r URL there.
-3. **Supabase → Authentication → URL Configuration** — Site URL `https://estim8r.currentflowconsulting.org`. Redirect URLs must include `https://estim8r.currentflowconsulting.org/**` and `http://localhost:5177/**`. If this Supabase project is also used by another Current Flow app, add Estim8r’s URLs; the Site URL alone is not enough.
+1. **Supabase → Authentication → Providers → Google** — enable it. Paste the real Google Cloud client ID and secret. Do not use a placeholder client.
+2. **Google Cloud → Credentials → OAuth client (Web)** — Authorized JavaScript origins: `https://estim8r.currentflowconsulting.org` and `http://localhost:5177`. Authorized redirect URI must be the Supabase callback only, `https://gqdxvctvufalunaaopyj.supabase.co/auth/v1/callback` (copy it from the Google provider page). Do not put the Estim8r site URL there. A missing callback is `redirect_uri_mismatch` and Google never returns to Estim8r.
+3. **Supabase → Authentication → URL Configuration** — Site URL `https://estim8r.currentflowconsulting.org`. Redirect URLs must include both slash variants: `https://estim8r.currentflowconsulting.org`, `https://estim8r.currentflowconsulting.org/`, `https://estim8r.currentflowconsulting.org/**`, plus `http://localhost:5177`, `http://localhost:5177/`, and `http://localhost:5177/**`. If this Supabase project is also used by another Current Flow app, add Estim8r’s URLs; the Site URL alone is not enough.
 4. If that Gmail already has an email/password user, enable identity linking for the same email (or use the same Google account after linking). Otherwise Google returns 400 for the second identity.
+
+Do not run `supabase db push` of the full Estim8r migration history against the shared Current Flow project.
 
 When an estimate is created from uploaded drawings, blank header fields are filled from the title block / cover sheet (and from markup JSON when those fields are present). Missing values stay blank — Estim8r does not invent a contact, phone, or email.
 

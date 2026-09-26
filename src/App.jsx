@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { queryClientInstance } from "@/lib/query-client";
 import { AuthProvider } from "@/lib/AuthContext";
 import { ThemeProvider } from "@/lib/ThemeContext";
-import ProtectedRoute from "@/components/ProtectedRoute";
+import ProtectedRoute, { LoginRedirect } from "@/components/ProtectedRoute";
 import AppLayout from "@/components/layout/AppLayout";
 import Login from "@/pages/Login";
 import UpdateAvailablePrompt from "@/components/UpdateAvailablePrompt";
@@ -36,7 +36,7 @@ function AppRoutes() {
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
-          <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
+          <Route element={<ProtectedRoute unauthenticatedElement={<LoginRedirect />} />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/estimates/new" element={<EstimateBuilder />} />
             <Route path="/labor" element={<LaborLibrary />} />
@@ -46,7 +46,7 @@ function AppRoutes() {
             <Route path="/settings" element={<Settings />} />
             <Route path="/profile" element={<Settings />} />
           </Route>
-          <Route element={<ProtectedRoute requireProduct={false} unauthenticatedElement={<Navigate to="/login" replace />} />}>
+          <Route element={<ProtectedRoute requireProduct={false} unauthenticatedElement={<LoginRedirect />} />}>
             <Route path="/admin" element={<OwnerAdmin />} />
           </Route>
         </Route>

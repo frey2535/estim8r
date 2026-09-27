@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { isLocalAuthFallbackEnabled, supabase } from "@/api/supabaseClient";
 import { entitlementGrantsAccess, getProductEntitlement } from "@/api/entitlementRepository";
 import { hasPlatformAccess } from "@/lib/platformIdentity";
+import { describeAuthError, hasAuthCode, readAuthCallbackError, waitForAuthCallbackSession } from "@/lib/authRedirect";
 import { isDrawingPickerOpen } from "@/domain/takeoff/drawingUpload";
 
 const AuthContext = createContext();
@@ -53,6 +54,21 @@ export const AuthProvider = ({ children }) => {
       setEntitlementChecked(false);
     }
     try {
+      if (supabase && typeof window !== "undefined") {
+        const callbackError = readAuthCallbackError(window.location.search, window.location.hash);
+        if (callbackError) {
+          const authCallbackError = new Error(describeAuthError(callbackError, { google: true }));
+          authCallbackError.status = 401;
+          throw authCallbackError;
+        }
+        if (hasAuthCode(window.location.search, window.location.hash)) {
+          await withTimeout(
+            waitForAuthCallbackSession(supabase),
+            AUTH_STARTUP_TIMEOUT_MS,
+            "Google sign-in did not finish establishing a session. Try Sign in with Google again.",
+          );
+        }
+      }
       const current = await withTimeout(base44.auth.me(), AUTH_STARTUP_TIMEOUT_MS, "Authentication took too long. Refresh Estim8r.");
       setUser(current);
       setIsAuthenticated(true);

@@ -76,7 +76,7 @@ export const supabaseAuth = {
     const { data, error } = await client.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: authRedirectUrl("/login"),
+        redirectTo: authRedirectUrl("/"),
         skipBrowserRedirect: true,
         queryParams: {
           access_type: "online",

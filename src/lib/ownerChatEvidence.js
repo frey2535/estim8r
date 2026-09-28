@@ -141,14 +141,33 @@ function snapshotTakeoff() {
     : { present: false };
 }
 
+const CHROME_LABEL = /^(delete|cancel|save|close|sign out|sign in|access|cursor|edit|open|new estimate|takeoff|labor|production|settings|markup)$/i;
+
+export function isChromeLabel(text) {
+  const value = String(text || "").trim();
+  if (!value) return true;
+  if (value.length <= 24 && CHROME_LABEL.test(value)) return true;
+  if (/^delete\b/i.test(value) && value.length < 48) return true;
+  return false;
+}
+
+function isChromeNode(el) {
+  if (!el || typeof el.matches !== "function") return true;
+  if (el.matches("button, a, nav, header, h1, h2, h3, [role='navigation'], [role='banner']")) return true;
+  if (el.closest("button, a, nav, header, [role='navigation']")) return true;
+  return false;
+}
+
 function snapshotVisible() {
   if (typeof document === "undefined") return { alerts: [], invalid: [] };
-  const alerts = [...document.querySelectorAll("[role='alert'], .text-destructive")]
+  const alerts = [...document.querySelectorAll("[role='alert']")]
+    .filter((el) => !isChromeNode(el))
     .map((el) => (el.textContent || "").trim())
-    .filter(Boolean)
+    .filter((text) => text && !isChromeLabel(text))
     .slice(0, 8);
   const invalid = [...document.querySelectorAll("[aria-invalid='true']")]
     .map((el) => el.getAttribute("name") || el.getAttribute("aria-label") || el.id || "field")
+    .filter((text) => text && !isChromeLabel(text))
     .slice(0, 8);
   const heading = document.querySelector("main h1")?.textContent?.trim()
     || document.querySelector("h1")?.textContent?.trim()

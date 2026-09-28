@@ -9,7 +9,7 @@ import {
   screenLabel,
 } from "@/lib/ownerCursorChat";
 import { collectOwnerChatEvidence, installOwnerChatEvidence } from "@/lib/ownerChatEvidence";
-import { formatInspectionReply, inspectOwnerEvidence } from "@/lib/ownerChatInspector";
+import { formatOwnerReply, inspectOwnerEvidence } from "@/lib/ownerChatInspector";
 import { postCursorSessionTurn, probeCursorSession } from "@/api/cursorSession";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -115,7 +115,7 @@ export default function OwnerCursorChat() {
       }
     }
 
-    const reply = formatInspectionReply(inspection, {
+    const reply = formatOwnerReply(text, evidence, inspection, {
       sessionAttached: connection.state === "ready" || queued,
       queued,
     });

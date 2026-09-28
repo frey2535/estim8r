@@ -1,6 +1,7 @@
-import { DEFAULT_DROP_FEET } from "./catalog";
-import { areaFromPercent, feetFromPercent, polygonArea, polylineLength } from "./geometry";
-import { DEFAULT_LINE_SIZE, resolvedLineSize } from "./sizes";
+import { DEFAULT_DROP_FEET } from "./catalog.js";
+import { areaFromPercent, feetFromPercent, polygonArea, polylineLength } from "./geometry.js";
+import { junctionHardwareRows, isJunctionBoxMark } from "./junctionHardware.js";
+import { DEFAULT_LINE_SIZE, resolvedLineSize } from "./sizes.js";
 
 const LENGTH_TYPES = new Set(["line", "route", "homerun", "measure"]);
 
@@ -59,6 +60,8 @@ export function rollupTakeoff(marks, calibration, aspect = 1, sheet = null) {
       if (mark.type === "note" || mark.type === "cloud") rowFor(mark).notes += 1;
       continue;
     }
+    // Junction boxes roll up as a single total row; EMT connectors are derived, not drawn as marks.
+    if (isJunctionBoxMark(mark)) continue;
     const row = rowFor(mark);
     if (mark.type === "count" || mark.type === "drop") row.count += 1;
     const lf = markLengthFeet(mark, calibration, aspect);
@@ -73,7 +76,9 @@ export function rollupTakeoff(marks, calibration, aspect = 1, sheet = null) {
     }
   }
 
-  const list = [...rows.values()].sort((a, b) => a.category.localeCompare(b.category) || a.symbol.localeCompare(b.symbol));
+  const hardware = junctionHardwareRows(scoped);
+  const list = [...rows.values(), ...hardware.rows]
+    .sort((a, b) => a.category.localeCompare(b.category) || a.symbol.localeCompare(b.symbol));
   const totals = list.reduce((acc, row) => {
     acc.count += row.count;
     acc.lf += row.lf;
@@ -82,7 +87,13 @@ export function rollupTakeoff(marks, calibration, aspect = 1, sheet = null) {
   }, { count: 0, lf: 0, sf: 0 });
 
   const calibrated = scoped.length ? scoped.every((mark) => Boolean(calibrationForMark(mark, calibration)?.feet) || !mark.points?.length) : Boolean(calibration?.feet || Object.values(calibration || {}).some((item) => item?.feet));
-  return { rows: list, totals, calibrated };
+  return {
+    rows: list,
+    totals,
+    calibrated,
+    junctionBoxes: hardware.junctionBoxes,
+    emtConnectors: hardware.emtConnectors,
+  };
 }
 
 export function applyScheduleEdits(rollup, edits = {}) {

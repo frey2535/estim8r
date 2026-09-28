@@ -17,6 +17,7 @@ import { DETECT_SOURCE_ORIGINAL_PDF } from "./accuracyReview.js";
 import { describeReconciliation, reconcilePlanToSchedule } from "./countReconciliation.js";
 import { extractSheetNotes, notesToMarks } from "./sheetNotes.js";
 import { associateGeometry, assignExclusiveGeometry, placeOnSymbolGeometry, shapeHintFromLabel } from "./vectorSymbols.js";
+import { orthogonalizePolyline } from "./ortho.js";
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
 
 const STOP = new Set(["the", "and", "for", "with", "from", "this", "that", "sheet", "note", "see", "typ", "all", "new", "nic", "nts", "rev"]);
@@ -463,7 +464,21 @@ export function conduitRoutePoints(devices, anchor) {
   const ordered = nearestNeighborOrder(devices, anchor);
   const points = ordered.map((item) => ({ x: item.x, y: item.y }));
   if (anchor) points.push({ x: anchor.x, y: anchor.y });
-  return points;
+  // Expand diagonal hops into 90° elbows so AI conduit matches field installs.
+  const ortho = [];
+  for (let index = 0; index < points.length; index += 1) {
+    const point = points[index];
+    if (!ortho.length) {
+      ortho.push(point);
+      continue;
+    }
+    const prev = ortho[ortho.length - 1];
+    if (Math.abs(prev.x - point.x) > 0.05 && Math.abs(prev.y - point.y) > 0.05) {
+      ortho.push({ x: point.x, y: prev.y });
+    }
+    ortho.push(point);
+  }
+  return orthogonalizePolyline(ortho);
 }
 
 const CALLOUT_PATTERNS = [
@@ -759,12 +774,15 @@ export function buildAiMarks({
         abbr: symbol.abbr,
         typeCode,
         color,
+        markerSize: 1.45,
         matchedFrom: fromLegend ? "legend" : "drawing",
         outline: usedVector ? geometry.outline : null,
         outlineSource: usedVector ? "vector" : "text",
         detectSource: DETECT_SOURCE_ORIGINAL_PDF,
         confidence: usedVector ? "high" : "low",
         reviewStatus: "pending",
+        layer: "device",
+        fillOpacity: 0.5,
         anchor: anchorIds.has(symbol.id),
       };
       counts.push(mark);

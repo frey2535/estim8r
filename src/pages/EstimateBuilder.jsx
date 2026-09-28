@@ -30,7 +30,7 @@ import { moveEstimateLine } from "@/domain/estimate/lineOrder";
 import { defaultCompletenessChecklist } from "@/domain/estimate/estimatingIntelligence";
 import EstimateReadinessPanel from "@/components/estimate/EstimateReadinessPanel";
 import AssemblyLibrary from "@/components/estimate/AssemblyLibrary";
-import { assemblyToEstimateLines } from "@/domain/estimate/assemblies";
+import { DEFAULT_ASSEMBLIES, assemblyToEstimateLines } from "@/domain/estimate/assemblies";
 import { defaultInstallationConditions } from "@/domain/labor/installationConditions";
 import InstallationConditionEditor from "@/components/labor/InstallationConditionEditor";
 import TakeoffSourceAudit from "@/components/estimate/TakeoffSourceAudit";
@@ -97,7 +97,7 @@ export default function EstimateBuilder() {
   const [openSources, setOpenSources] = useState("");
   const [trueTakeoff, setTrueTakeoff] = useState(null);
   const [completenessChecklist, setCompletenessChecklist] = useState(() => defaultCompletenessChecklist());
-  const [assemblies, setAssemblies] = useState([]);
+  const [assemblies, setAssemblies] = useState(() => DEFAULT_ASSEMBLIES);
   const [installationConditions, setInstallationConditions] = useState(() => defaultInstallationConditions());
   const [supplierPriceBooks, setSupplierPriceBooks] = useState([]);
   const [pdfDesign, setPdfDesign] = useState(DEFAULT_PDF_DESIGN);
@@ -127,7 +127,7 @@ export default function EstimateBuilder() {
       setMeta({ fileName: stored.fileName || "", fileSize: stored.fileSize || 0, scopeEdited: Boolean(stored.scopeEdited) });
       setTrueTakeoff(stored.trueTakeoff || null);
       setCompletenessChecklist(stored.completenessChecklist?.length ? stored.completenessChecklist : defaultCompletenessChecklist());
-      setAssemblies(stored.assemblies || []);
+      setAssemblies(stored.assemblies?.length ? stored.assemblies : DEFAULT_ASSEMBLIES);
       setInstallationConditions(stored.installationConditions?.length ? stored.installationConditions : defaultInstallationConditions());
       setSupplierPriceBooks(stored.supplierPriceBooks || []);
       setPdfDesign(normalizePdfDesign(stored.pdfDesign));
@@ -147,7 +147,7 @@ export default function EstimateBuilder() {
       setMeta({ fileName: "", fileSize: 0, scopeEdited: false });
       setTrueTakeoff(null);
       setCompletenessChecklist(defaultCompletenessChecklist());
-      setAssemblies([]);
+      setAssemblies(DEFAULT_ASSEMBLIES);
       setInstallationConditions(defaultInstallationConditions());
       setSupplierPriceBooks([]);
       setPdfDesign(DEFAULT_PDF_DESIGN);

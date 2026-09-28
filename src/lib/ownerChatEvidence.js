@@ -150,7 +150,9 @@ function snapshotVisible() {
   const invalid = [...document.querySelectorAll("[aria-invalid='true']")]
     .map((el) => el.getAttribute("name") || el.getAttribute("aria-label") || el.id || "field")
     .slice(0, 8);
-  const heading = document.querySelector("h1")?.textContent?.trim() || "";
+  const heading = document.querySelector("main h1")?.textContent?.trim()
+    || document.querySelector("h1")?.textContent?.trim()
+    || "";
   return { heading, alerts, invalid };
 }
 

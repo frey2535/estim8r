@@ -2,7 +2,8 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { base44 } from "@/api/base44Client";
 import { isLocalAuthFallbackEnabled, supabase } from "@/api/supabaseClient";
 import { entitlementGrantsAccess, getProductEntitlement } from "@/api/entitlementRepository";
-import { hasPlatformAccess } from "@/lib/platformIdentity";
+import { applyPlatformIdentity, hasPlatformAccess } from "@/lib/platformIdentity";
+import { localFallbackIdentity, readLocalEmailOverride } from "@/lib/ownerCursorChat";
 import { describeAuthError, hasAuthCode, readAuthCallbackError, waitForAuthCallbackSession } from "@/lib/authRedirect";
 import { isDrawingPickerOpen } from "@/domain/takeoff/drawingUpload";
 
@@ -30,14 +31,10 @@ export const AuthProvider = ({ children }) => {
     // A full refresh flips loading flags and ProtectedRoute unmounts /takeoff.
     // The native file picker blurs the window; a loading remount drops the selected File.
     if (isLocalAuthFallbackEnabled) {
-      setUser({
-        email: "local@localhost",
-        full_name: "Local estimator",
-        org_name: "Local",
-        org_role: "owner",
-        access_type: "trial",
-        access_status: "trial",
-      });
+      const search = typeof window !== "undefined" ? window.location.search : "";
+      const storage = typeof window !== "undefined" ? window.sessionStorage : null;
+      const email = readLocalEmailOverride(search, storage) || "local@localhost";
+      setUser(applyPlatformIdentity(localFallbackIdentity(email)));
       setIsAuthenticated(true);
       setHasProductAccess(true);
       setProductEntitlement({ status: "trial" });

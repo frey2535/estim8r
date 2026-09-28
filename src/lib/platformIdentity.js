@@ -72,6 +72,10 @@ export function hasPlatformAccess(userOrEmail) {
   return isPlatformStaff(userOrEmail);
 }
 
+export function canUseOwnerCursorChat(userOrEmail) {
+  return isPlatformStaff(userOrEmail);
+}
+
 export function needsProductEntitlementGate(userOrEmail, hasProductAccess) {
   if (hasPlatformAccess(userOrEmail)) return false;
   return !hasProductAccess;

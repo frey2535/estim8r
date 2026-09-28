@@ -4,6 +4,7 @@ import {
   FIRST_CUSTOMER_COMPANY,
   PLATFORM_OWNER_EMAIL,
   applyPlatformIdentity,
+  canUseOwnerCursorChat,
   hasPlatformAccess,
   isBackupAdmin,
   isCompanyAdmin,
@@ -54,6 +55,8 @@ assert(!isCompanyAdmin(owner) && !isCompanyAdmin(backup), "platform staff are no
 assert(hasPlatformAccess(owner) && hasPlatformAccess(backup), "staff have platform access");
 assert(!hasPlatformAccess({ email: "x@y.com", is_platform_admin: true }), "a DB platform-admin flag is not a second owner ID");
 assert(!hasPlatformAccess(dayOne), "company admin does not get platform-owner access");
+assert(canUseOwnerCursorChat(owner) && canUseOwnerCursorChat(backup), "owner and backup see Cursor chat");
+assert(!canUseOwnerCursorChat(dayOne), "Day One admin does not see Cursor chat");
 assert(!needsProductEntitlementGate(owner, false), "owner never sees the product gate");
 assert(!needsProductEntitlementGate(backup, false), "backup admin never sees the product gate");
 assert(needsProductEntitlementGate(dayOne, false), "company admin still needs an Estim8r entitlement");

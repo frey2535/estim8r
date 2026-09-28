@@ -31,6 +31,8 @@ VITE_BUILDR_API_URL=http://localhost:3001
 
 GitHub Pages builds pass `VITE_BUILDR_URL` and `VITE_BUILDR_API_URL` from repository secrets. A production build without those values falls back to `https://buildrpm.com` so Save can still POST `/estim8r/account-status` and `/estim8r/save-project-docs`.
 
+`/from-buildr` is the company landing from the Buildr sidebar. It reuses the existing Buildr SSO verify endpoint plus email / company ID. Employees with an Access Control grant enter the company Estim8r; they do not download or install their own copy. This does not require `supabase db push` of full migration history.
+
 Buildr sync sends the signed-in email and, when linked, a Buildr company ID. Set the company ID in **Settings → Buildr company**. If no company ID is linked, Buildr still looks up the account by login email. If a company is linked or an estimate was already synced, a failed Buildr save shows an error instead of a silent local-only save.
 
 Sign in from the header **Sign in** button (opens the sign-in page) or **Sign in with Google**. The sign-in page also has **Sign in with Google**, email/password, and a **Platform owner sign in** button. Platform owner is `currentflowconsultingllc@gmail.com`. `marcus.a.frey@gmail.com` is a backup admin on the regular sign-in page, not the platform owner.

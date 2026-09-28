@@ -21,6 +21,7 @@ const OwnerAdmin = lazy(() => import("@/pages/OwnerAdmin"));
 const Register = lazy(() => import("@/pages/Register"));
 const ForgotPassword = lazy(() => import("@/pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
+const FromBuildr = lazy(() => import("@/pages/FromBuildr"));
 
 function PageLoader() {
   return <div className="flex items-center justify-center py-24"><div className="w-8 h-8 border-4 border-slate-200 border-t-blue-600 dark:border-t-orange-500 rounded-full animate-spin" /></div>;
@@ -36,6 +37,7 @@ function AppRoutes() {
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/from-buildr" element={<FromBuildr />} />
           <Route element={<ProtectedRoute unauthenticatedElement={<LoginRedirect />} />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/estimates/new" element={<EstimateBuilder />} />

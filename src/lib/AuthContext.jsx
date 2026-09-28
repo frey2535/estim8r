@@ -3,6 +3,8 @@ import { base44 } from "@/api/base44Client";
 import { isLocalAuthFallbackEnabled, supabase } from "@/api/supabaseClient";
 import { entitlementGrantsAccess, getProductEntitlement } from "@/api/entitlementRepository";
 import { applyPlatformIdentity, hasPlatformAccess } from "@/lib/platformIdentity";
+import { persistBuildrCompanyId } from "@/lib/buildrCompany";
+import { clearBuildrFamilyAccess, hasBuildrCompanyGrant, readBuildrFamilyAccess } from "@/lib/buildrFamilyAccess";
 import { localFallbackIdentity, readLocalEmailOverride } from "@/lib/ownerCursorChat";
 import { describeAuthError, hasAuthCode, readAuthCallbackError, waitForAuthCallbackSession } from "@/lib/authRedirect";
 import { isDrawingPickerOpen } from "@/domain/takeoff/drawingUpload";
@@ -69,16 +71,26 @@ export const AuthProvider = ({ children }) => {
       const current = await withTimeout(base44.auth.me(), AUTH_STARTUP_TIMEOUT_MS, "Authentication took too long. Refresh Estim8r.");
       setUser(current);
       setIsAuthenticated(true);
+      if (hasBuildrCompanyGrant(current)) {
+        const companyGrant = readBuildrFamilyAccess();
+        if (companyGrant?.companyId) {
+          persistBuildrCompanyId(companyGrant.companyId, current).catch(() => {});
+        }
+      }
       try {
         const entitlement = await getProductEntitlement();
         setProductEntitlement(entitlement);
-        setHasProductAccess(entitlementGrantsAccess(entitlement) || hasPlatformAccess(current));
+        setHasProductAccess(
+          entitlementGrantsAccess(entitlement)
+          || hasPlatformAccess(current)
+          || hasBuildrCompanyGrant(current),
+        );
       } catch (entitlementError) {
         // During rollout, missing entitlement RPC must fail closed for normal users.
         // Silent refresh keeps the current entitlement so a blip does not remount takeoff.
         if (!silent) {
           setProductEntitlement(null);
-          setHasProductAccess(hasPlatformAccess(current));
+          setHasProductAccess(hasPlatformAccess(current) || hasBuildrCompanyGrant(current));
         }
         console.error("Estim8r entitlement check failed", entitlementError);
       } finally {
@@ -140,6 +152,7 @@ export const AuthProvider = ({ children }) => {
     setIsAuthenticated(false);
     setProductEntitlement(null);
     setHasProductAccess(false);
+    clearBuildrFamilyAccess();
     await base44.auth.logout();
   };
 

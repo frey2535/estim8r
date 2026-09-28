@@ -15,7 +15,11 @@ import { Label } from "@/components/ui/label";
 export default function Login({ platformOwner = false }) {
   const { isAuthenticated, user, checkAppState } = useAuth();
   const location = useLocation();
-  const [email, setEmail] = useState(platformOwner ? PLATFORM_OWNER_EMAIL : "");
+  const [email, setEmail] = useState(() => {
+    if (platformOwner) return PLATFORM_OWNER_EMAIL;
+    const params = new URLSearchParams(location.search);
+    return params.get("email") || "";
+  });
   const [password, setPassword] = useState("");
   const [error, setError] = useState(() => {
     if (typeof window === "undefined") return "";
@@ -29,7 +33,8 @@ export default function Login({ platformOwner = false }) {
     && hasAuthCode(window.location.search, window.location.hash)
     && !error
     && !isAuthenticated;
-  if (isAuthenticated) return <Navigate to={isPlatformStaff(user) ? "/admin" : "/"} replace />;
+  const fromBuildr = new URLSearchParams(location.search).get("from") === "buildr";
+  if (isAuthenticated) return <Navigate to={isPlatformStaff(user) && !fromBuildr ? "/admin" : "/"} replace />;
 
   async function submit(event) {
     event.preventDefault();
@@ -51,7 +56,11 @@ export default function Login({ platformOwner = false }) {
     <AuthLayout
       icon={LogIn}
       title={platformOwner ? "Platform owner" : "Sign in to Estim8r"}
-      subtitle={platformOwner ? "Sign in as Current Flow platform owner" : "Use Google or your Current Flow email"}
+      subtitle={platformOwner
+        ? "Sign in as Current Flow platform owner"
+        : fromBuildr
+          ? "Continue into your company's Estim8r. Do not download a separate copy."
+          : "Use Google or your Current Flow email"}
       footer={platformOwner
         ? <>Not the platform owner? <Link to="/login" className="text-primary font-medium hover:underline">Sign in</Link></>
         : <>Don't have an account? <Link to="/register" className="text-primary font-medium hover:underline">Create one</Link></>}

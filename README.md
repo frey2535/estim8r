@@ -37,6 +37,8 @@ Sign in from the header **Sign in** button (opens the sign-in page) or **Sign in
 
 After the platform owner (or backup admin) signs in, **Access** in the header opens **Estim8r access** (`/admin`). Grant or invite by email, and revoke from the user list. Owner and backup admin rows stay protected. Apply `supabase db push` so the grant/revoke RPCs exist.
 
+The same owner and backup admin see a **Cursor** button on every app screen (takeoff, estimate, markup, access, and the rest). It opens a floating panel on top of the current view so they can keep using the page. Day One / company admins never see it. Cursor.com cannot be iframed (`X-Frame-Options: SAMEORIGIN`), so the panel talks to the official [Cloud Agents API](https://cursor.com/docs/cloud-agent/api/endpoints). Locally, `npm run dev` proxies `/api/cursor-agents` when `CURSOR_API_KEY` is set. On this tab they can also paste a Dashboard API key (session only). GitHub Pages is static and cannot hold that secret; the live host needs a same-origin `/api/cursor-agents` reverse proxy before production conversations work without a pasted key. Without Supabase, `?localEmail=currentflowconsultingllc@gmail.com` (or the backup admin email) is the local owner hook.
+
 Google/Gmail sign-in sends the user to Supabase, then back to this origin with a trailing slash (`https://estim8r.currentflowconsulting.org/` or `http://localhost:5177/`). GitHub Pages 301s `/login` to `/login/`, so the app does not use `/login` as `redirectTo`. If Google or Supabase still rejects the hop, Estim8r shows the error on the sign-in page (and as a toast from the header Google button). Set:
 
 1. **Supabase → Authentication → Providers → Google** — enable it. Paste the real Google Cloud client ID and secret. Do not use a placeholder client.
@@ -108,6 +110,8 @@ node src/domain/estimate/estimatePdf.test.js
 node src/api/buildrBridge.test.js
 node src/domain/estimate/projectDocuments.test.js
 node src/lib/platformIdentity.test.js
+node src/lib/ownerCursorChat.test.js
+node src/api/cursorAgents.test.js
 node src/lib/buildrCompany.test.js
 node src/lib/authRedirect.test.js
 node src/lib/ownerAccessRules.test.js

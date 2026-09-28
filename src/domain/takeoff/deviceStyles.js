@@ -1,7 +1,7 @@
 import { isCanDeviceText } from "./symbolDetection.js";
 import { pointHitsOutline, scaleOutline } from "./vectorSymbols.js";
 
-export const DEVICE_FILL_OPACITY = 0.32;
+export const DEVICE_FILL_OPACITY = 0.42;
 export const CIRCUIT_COLOR = "#64748b";
 export const SELECTED_OUTLINE_SCALE = 1;
 
@@ -38,9 +38,12 @@ export function isCircuitMark(mark) {
     || (mark?.type === "route" && mark?.tool !== "polyline");
 }
 
-export function planOverlayMarks(marks) {
+export function planOverlayMarks(marks, options = {}) {
   const list = marks || [];
-  if (list.some(isDeviceMark)) return list.filter((mark) => !isCircuitMark(mark));
+  // Live takeoff must show counted devices AND conduit so the estimator can verify AI / True Takeoff.
+  // PDF markup pages can still request devices-only or circuits-only.
+  if (options.devicesOnly) return list.filter((mark) => !isCircuitMark(mark));
+  if (options.circuitsOnly) return list.filter((mark) => isCircuitMark(mark) || mark?.type === "note");
   return list;
 }
 

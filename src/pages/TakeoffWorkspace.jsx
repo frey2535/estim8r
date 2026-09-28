@@ -14,9 +14,15 @@ import {
 } from "@/domain/takeoff/catalog";
 import {
   calibrationFromPoints, feetFromPercent, formatArea, formatFeet,
-  hitTestMark, polylineLength, sheetAspect, widthPercentDistance,
+  hitTestMark, polylineLength, previewOrthogonalSegment, sheetAspect,
+  snapOrthogonalPoint, widthPercentDistance,
 } from "@/domain/takeoff/geometry";
 import { conduitRuns, nextConduitRunNumber, quantitiesToCsv, rollupTakeoff, applyScheduleEdits, markLengthFeet } from "@/domain/takeoff/quantities";
+import {
+  attachJunctionToConduit,
+  createJunctionBoxMark,
+  junctionHardwareTotals,
+} from "@/domain/takeoff/junctionHardware";
 import { drawingSymbolsFromDocs, printedScaleCalibration, readDrawingDocuments } from "@/domain/takeoff/drawing-docs";
 import { paletteForTrade, pageKindsFromDocs, symbolsOnDrawingForTrade, tradeById, conduitOptionsForTrade, findConduitOption, TRADES, DEFAULT_CONDUIT_ID } from "@/domain/takeoff/trades";
 import { buildAiMarks } from "@/domain/takeoff/aiTakeoff";
@@ -173,7 +179,10 @@ export default function TakeoffWorkspace() {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const panRef = useRef(pan);
+  const panLayerRef = useRef(null);
+  const panningRef = useRef(false);
   panRef.current = pan;
+  const draftJunctionIdsRef = useRef([]);
   const [marks, setMarks] = useState([]);
   const [draftPoints, setDraftPoints] = useState([]);
   const [status, setStatus] = useState("Upload a drawing to begin.");
@@ -306,8 +315,11 @@ export default function TakeoffWorkspace() {
       /* estimate copy failed; takeoff sheet is unchanged */
     }
   }, [file, drawingDocs, editedRollup, runs, marks, sheetMeta.pageCount]);
-  const draftPreview = hoverPoint && draftPoints.length ? [...draftPoints, hoverPoint] : draftPoints;
+  const draftPreview = tool === "conduit"
+    ? previewOrthogonalSegment(draftPoints, hoverPoint)
+    : (hoverPoint && draftPoints.length ? [...draftPoints, hoverPoint] : draftPoints);
   const draftFeet = feetFromPercent(polylineLength(draftPreview, aspect), calibration);
+  const hardwareTotals = useMemo(() => junctionHardwareTotals(marks), [marks]);
   const imageDisplay = fitSheetSize(
     imageSize.width,
     imageSize.height,
@@ -669,16 +681,32 @@ export default function TakeoffWorkspace() {
   }, [file]);
 
 
-  function buildAndSaveTrueElectricalEstimate({ download = false } = {}) {
+  function focusMarkedSheet(nextMarks) {
+    const first = (nextMarks || []).find((mark) => isDeviceMark(mark) || isCircuitMark(mark));
+    if (first?.sheet && first.sheet !== sheetMeta.page) {
+      selectSheet(first.sheet);
+    }
+    setIsolationMode(false);
+    setSelectedId(first?.id || null);
+  }
+
+  async function buildAndSaveTrueElectricalEstimate({ download = false } = {}) {
     if (!file) return null;
+    setMode("hybrid");
+    let workingMarks = marks;
+    if (!workingMarks.some(isDeviceMark) && isPdf && fileBytes) {
+      setStatus("True Takeoff is running AI markup on the drawings so you can verify counts…");
+      workingMarks = await runAiTakeoff({ silent: true }) || marks;
+    }
+    focusMarkedSheet(workingMarks);
     const existing = readEstimate(file.name, file.size);
     const draft = buildTrueElectricalEstimateDraft(existing, {
       fileName: file.name,
       fileSize: file.size,
       drawingDocs,
-      rollup: editedRollup,
-      runs,
-      marks,
+      rollup: applyScheduleEdits(rollupTakeoff(workingMarks, calibrations, aspect), scheduleEdits),
+      runs: conduitRuns(workingMarks, calibrations, aspect, penThickness),
+      marks: workingMarks,
     });
     writeEstimate(draft);
     setTrueTakeoffResult(draft.trueTakeoff);
@@ -695,8 +723,10 @@ export default function TakeoffWorkspace() {
       );
     }
     const warningCount = draft.trueTakeoff.analysis.warnings.length;
+    const devices = workingMarks.filter(isDeviceMark).length;
+    const conduits = workingMarks.filter(isCircuitMark).length;
     setStatus(
-      `True electrical estimate built: $${draft.trueTakeoff.summary.total.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+      `True Takeoff marked ${devices} devices and ${conduits} conduit runs on the drawings, then built the electrical estimate: $${draft.trueTakeoff.summary.total.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
       + (warningCount ? ` · ${warningCount} bid-lock warning${warningCount === 1 ? "" : "s"}` : " · bid-lock checks clear"),
     );
     return draft;
@@ -924,14 +954,14 @@ export default function TakeoffWorkspace() {
     return () => { cancelled = true; };
   }, [fileBytes, isPdf, drawingDocs, maxHomeruns, conduitId, penColor]);
 
-  async function runAiTakeoff() {
+  async function runAiTakeoff({ silent = false } = {}) {
     if (!isPdf || !fileBytes) {
-      setStatus("AI takeoff needs a PDF with a text layer. Image drawings stay manual for the selected trade.");
-      return;
+      if (!silent) setStatus("AI assist needs a PDF with a text layer. Image drawings stay manual for the selected trade.");
+      return marks;
     }
     setAiBusy(true);
     const tradeLabel = tradeById(trade).label;
-    setStatus(`AI is taking off ${tradeLabel} only…`);
+    if (!silent) setStatus(`AI assist is counting and marking ${tradeLabel} on the drawings…`);
     try {
       const pages = await readAiPages(fileBytes);
       const planned = buildAiMarks({
@@ -943,20 +973,39 @@ export default function TakeoffWorkspace() {
         conduit: conduitChoice,
         color: penColor,
       });
-      let nextMarks = planned.marks;
+      const colored = applyDeviceTypeColors(
+        (planned.marks || []).map((mark) => ({
+          ...mark,
+          source: mark.source || "ai",
+          trade: mark.trade || trade,
+          markerSize: mark.markerSize || Math.max(penSize, 1.35),
+          reviewStatus: mark.reviewStatus || "pending",
+        })),
+      );
+      let nextMarks = colored;
       setMarks((current) => {
-        nextMarks = [
+        nextMarks = applyDeviceTypeColors([
           ...current.filter((mark) => !(mark.source === "ai" && mark.trade === trade)),
-          ...planned.marks,
-        ];
+          ...colored,
+        ]);
         return nextMarks;
       });
+      focusMarkedSheet(nextMarks);
       const quote = persistSupplyQuote(nextMarks);
-      setStatus(quote.rows.length
-        ? `${planned.summary} ${planned.reconciliationNote || ""} Supply quote ready (${quote.totals.quantity} plan devices).`
-        : `${planned.summary} ${planned.reconciliationNote || ""} Supply quote has no plan devices yet.`);
+      const devices = nextMarks.filter(isDeviceMark).length;
+      const conduits = nextMarks.filter((mark) => mark.tool === "conduit" || mark.type === "homerun").length;
+      if (!silent) {
+        setStatus(
+          `${planned.summary || `AI marked ${devices} devices and ${conduits} conduit runs.`} `
+          + `${planned.reconciliationNote || ""} `
+          + `Verify the colored marks on the sheet.`
+          + (quote.rows.length ? ` Supply quote ready (${quote.totals.quantity} plan devices).` : ""),
+        );
+      }
+      return nextMarks;
     } catch (error) {
-      setStatus(error?.message || "AI takeoff could not read this drawing.");
+      if (!silent) setStatus(error?.message || "AI takeoff could not read this drawing.");
+      return marks;
     } finally {
       setAiBusy(false);
     }
@@ -1042,29 +1091,43 @@ export default function TakeoffWorkspace() {
       return;
     }
 
-    if (["linear", "homerun", "conduit"].includes(tool)) {
+    if (tool === "conduit") {
+      const nextPoint = draftPoints.length
+        ? snapOrthogonalPoint(draftPoints[draftPoints.length - 1], point)
+        : point;
+      if (!draftPoints.length) {
+        draftJunctionIdsRef.current = [];
+        setDraftPoints([nextPoint]);
+        setStatus('Conduit started on 90° runs. Click corners, Add JB / press J for a 4" square metal box, double-click to finish.');
+        return;
+      }
+      const last = draftPoints[draftPoints.length - 1];
+      if (Math.hypot(nextPoint.x - last.x, nextPoint.y - last.y) < 0.15) return;
+      setDraftPoints([...draftPoints, nextPoint]);
+      setStatus(`Conduit corner ${draftPoints.length + 1}. Add JB / press J for a junction box, double-click to finish.`);
+      return;
+    }
+
+    if (["linear", "homerun"].includes(tool)) {
       if (draftPoints.length === 0) {
         setDraftPoints([point]);
-        const label = tool === "homerun" ? "Homerun" : tool === "conduit" ? "Conduit" : "Linear";
+        const label = tool === "homerun" ? "Homerun" : "Linear";
         setStatus(`${label} started. Click the end point.`);
         return;
       }
       const points = [draftPoints[0], point];
       const feet = feetFromPercent(polylineLength(points, sheetAspectRatio), calibration);
-      const runNumber = tool === "conduit" ? nextConduitRunNumber(marks) : undefined;
       addMark(
         {
-          type: tool === "homerun" ? "homerun" : tool === "conduit" ? "route" : "line",
+          type: tool === "homerun" ? "homerun" : "line",
           tool,
           points,
-          runNumber,
           storedFeet: feet,
         },
-        tool === "conduit"
-          ? (feet == null ? `Conduit run ${runNumber} added. Calibrate scale to read LF.` : `Conduit run ${runNumber}: ${formatFeet(feet)}.`)
-          : (feet == null ? `${tool === "homerun" ? "Homerun" : "Linear"} added. Calibrate scale to read LF.` : `${tool === "homerun" ? "Homerun" : "Linear"} ${formatFeet(feet)}.`),
+        feet == null
+          ? `${tool === "homerun" ? "Homerun" : "Linear"} added. Calibrate scale to read LF.`
+          : `${tool === "homerun" ? "Homerun" : "Linear"} ${formatFeet(feet)}.`,
       );
-      if (tool === "conduit") setMeasureLabel(feet == null ? `Run ${runNumber} stored. Calibrate to total LF.` : `Run ${runNumber}: ${formatFeet(feet)}`);
       setDraftPoints([]);
       return;
     }
@@ -1092,27 +1155,88 @@ export default function TakeoffWorkspace() {
   }
 
   function finishPath(event) {
-    if (!["polyline", "area", "circuit"].includes(tool) || draftPoints.length < 2) return;
-    event.preventDefault();
+    if (!["polyline", "area", "circuit", "conduit"].includes(tool) || draftPoints.length < 2) return;
+    event?.preventDefault?.();
     const sheetAspectRatio = currentAspect();
     if (tool === "area") {
       if (draftPoints.length < 3) return;
       const sf = rollupTakeoff([{ type: "area", points: draftPoints, category }], calibration, sheetAspectRatio).rows[0]?.sf;
       addMark({ type: "area", points: draftPoints }, calibration ? `Area ${formatArea(sf)}.` : "Area added. Calibrate scale to read SF.");
+    } else if (tool === "conduit") {
+      finishConduitRun(draftPoints);
     } else {
       const feet = feetFromPercent(polylineLength(draftPoints, sheetAspectRatio), calibration);
-      const runNumber = tool === "conduit" ? nextConduitRunNumber(marks) : undefined;
       addMark(
-        { type: "route", tool, points: draftPoints, runNumber, storedFeet: feet },
-        tool === "conduit"
-          ? (feet == null ? `Conduit run ${runNumber} added. Calibrate scale to read LF.` : `Conduit run ${runNumber}: ${formatFeet(feet)}.`)
-          : (feet == null ? `${activeTool.label} added. Calibrate scale to read LF.` : `${activeTool.label} ${formatFeet(feet)}.`),
+        { type: "route", tool, points: draftPoints, storedFeet: feet },
+        feet == null ? `${activeTool.label} added. Calibrate scale to read LF.` : `${activeTool.label} ${formatFeet(feet)}.`,
       );
-      if (tool === "conduit") {
-        setMeasureLabel(feet == null ? `Run ${runNumber} stored. Calibrate to total LF.` : `Run ${runNumber}: ${formatFeet(feet)}`);
-      }
     }
     setDraftPoints([]);
+    draftJunctionIdsRef.current = [];
+  }
+
+  function finishConduitRun(points) {
+    if (!points || points.length < 2) return;
+    const sheetAspectRatio = currentAspect();
+    const feet = feetFromPercent(polylineLength(points, sheetAspectRatio), calibration);
+    const runNumber = nextConduitRunNumber(marks);
+    const runId = crypto.randomUUID();
+    const junctionIds = [...draftJunctionIdsRef.current];
+    const conduitMark = {
+      id: runId,
+      type: "route",
+      tool: "conduit",
+      points,
+      runNumber,
+      storedFeet: feet,
+      junctionBoxIds: junctionIds,
+      conduitSize: conduitChoice?.size || "",
+      conduitMaterial: conduitChoice?.material || "EMT",
+      symbol: conduitChoice?.id || "emt-3-4",
+      symbolLabel: conduitChoice?.label || '3/4" EMT',
+      category: "Raceway",
+      color: CIRCUIT_COLOR,
+      thickness: penThickness,
+      sheet: sheetMeta.page || 1,
+      trade,
+      source: "manual",
+    };
+    let nextMarks = [...marks, conduitMark];
+    nextMarks = nextMarks.map((mark) => {
+      if (!junctionIds.includes(mark.id)) return mark;
+      const through = points.some((point, index) => (
+        index > 0 && index < points.length - 1
+        && Math.hypot(point.x - mark.x, point.y - mark.y) < 1.6
+      ));
+      const atEnd = Math.hypot(points[0].x - mark.x, points[0].y - mark.y) < 1.6
+        || Math.hypot(points[points.length - 1].x - mark.x, points[points.length - 1].y - mark.y) < 1.6;
+      const connectors = Math.max(Number(mark.connectorCount) || 0, through ? 2 : (atEnd ? 1 : 2));
+      return { ...mark, parentConduitId: runId, connectorCount: connectors };
+    });
+    commitMarks(nextMarks, feet == null
+      ? `Conduit run ${runNumber} added with ${junctionIds.length} junction box${junctionIds.length === 1 ? "" : "es"}. Calibrate scale to read LF.`
+      : `Conduit run ${runNumber}: ${formatFeet(feet)} · ${junctionIds.length} JB.`);
+    setMeasureLabel(feet == null ? `Run ${runNumber} stored. Calibrate to total LF.` : `Run ${runNumber}: ${formatFeet(feet)}`);
+    setSelectedId(runId);
+  }
+
+  function placeJunctionOnDraft() {
+    if (tool !== "conduit" || !draftPoints.length) {
+      setStatus('Select Conduit and click a point before placing a 4" square metal junction box.');
+      return;
+    }
+    const point = draftPoints[draftPoints.length - 1];
+    const box = createJunctionBoxMark({
+      id: crypto.randomUUID(),
+      sheet: sheetMeta.page || 1,
+      trade,
+      point,
+      color: "#92400e",
+      connectorCount: draftPoints.length > 1 ? 2 : 1,
+    });
+    draftJunctionIdsRef.current = [...draftJunctionIdsRef.current, box.id];
+    commitMarks([...marks, box], `4" square metal JB placed. Continue the conduit or double-click to finish.`);
+    setSelectedId(box.id);
   }
 
   function undo() {
@@ -1164,6 +1288,16 @@ export default function TakeoffWorkspace() {
         event.preventDefault();
         saveTakeoff();
       }
+      if (!event.metaKey && !event.ctrlKey && !event.altKey && (event.key === "j" || event.key === "J")) {
+        if (tool === "conduit" && draftPoints.length) {
+          event.preventDefault();
+          placeJunctionOnDraft();
+        }
+      }
+      if (!event.metaKey && !event.ctrlKey && event.key === "Enter" && tool === "conduit" && draftPoints.length >= 2) {
+        event.preventDefault();
+        finishPath(event);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -1172,27 +1306,36 @@ export default function TakeoffWorkspace() {
   function onPanPointerDown(event) {
     if (tool !== "pan" || event.button > 0) return;
     event.preventDefault();
+    event.stopPropagation();
     const pointerId = event.pointerId;
     const originX = event.clientX;
     const originY = event.clientY;
     const startX = panRef.current.x;
     const startY = panRef.current.y;
     const target = event.currentTarget;
-    target.setPointerCapture(pointerId);
+    panningRef.current = true;
+    target.setPointerCapture?.(pointerId);
     const move = (moveEvent) => {
       if (moveEvent.pointerId !== pointerId) return;
-      setPan({
+      const next = {
         x: startX + (moveEvent.clientX - originX),
         y: startY + (moveEvent.clientY - originY),
-      });
+      };
+      panRef.current = next;
+      // Update the transform directly so pan does not re-render the PDF each frame.
+      if (panLayerRef.current) {
+        panLayerRef.current.style.transform = `translate(${next.x}px, ${next.y}px)`;
+      }
     };
     const up = (upEvent) => {
       if (upEvent.pointerId !== pointerId) return;
+      panningRef.current = false;
+      setPan(panRef.current);
       target.removeEventListener("pointermove", move);
       target.removeEventListener("pointerup", up);
       target.removeEventListener("pointercancel", up);
     };
-    target.addEventListener("pointermove", move);
+    target.addEventListener("pointermove", move, { passive: true });
     target.addEventListener("pointerup", up);
     target.addEventListener("pointercancel", up);
   }
@@ -1288,27 +1431,23 @@ export default function TakeoffWorkspace() {
       return;
     }
     const point = conduitContextMenu.point;
-    const junctionBox = {
+    const points = conduit.points || [];
+    const atEnd = points.length >= 2 && (
+      Math.hypot(points[0].x - point.x, points[0].y - point.y) < 1.6
+      || Math.hypot(points[points.length - 1].x - point.x, points[points.length - 1].y - point.y) < 1.6
+    );
+    const junctionBox = createJunctionBoxMark({
       id: crypto.randomUUID(),
       sheet: conduit.sheet || sheetMeta.page || 1,
       trade,
-      source: "manual",
-      type: "count",
-      x: point.x,
-      y: point.y,
-      color: conduit.color || penColor,
-      category: "Equipment",
-      symbol: "junction-box",
-      symbolLabel: "Junction Box",
-      abbr: "JB",
-      typeCode: "JB",
-      circuitRunId: conduit.id,
-      parentConduitId: conduit.id,
-      reviewStatus: "accepted",
-      layer: "device",
-      fillOpacity: DEVICE_FILL_OPACITY,
-    };
-    commitMarks([...marks, junctionBox], `Junction box added to conduit ${conduit.runNumber || ""}.`);
+      point,
+      color: "#92400e",
+      conduitId: conduit.id,
+      connectorCount: atEnd ? 1 : 2,
+    });
+    const nextConduit = attachJunctionToConduit(conduit, junctionBox);
+    const nextMarks = marks.map((mark) => (mark.id === conduit.id ? nextConduit : mark)).concat(junctionBox);
+    commitMarks(nextMarks, `4" square metal JB on conduit ${conduit.runNumber || ""} · ${junctionBox.connectorCount} EMT connector${junctionBox.connectorCount === 1 ? "" : "s"}.`);
     setSelectedId(junctionBox.id);
     setConduitContextMenu(null);
     setTool("select");
@@ -1385,6 +1524,7 @@ export default function TakeoffWorkspace() {
           <button
             type="button"
             disabled={aiBusy}
+            title="AI assist reads the PDF text/schedule layer for the selected trade, places colored count marks and homerun conduit on the sheets, and leaves them on the drawing so you can verify every count."
             onClick={() => { setMode("ai"); void runAiTakeoff(); }}
             className={cn("rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:cursor-wait disabled:opacity-60", mode === "ai" ? "border-blue-600 bg-blue-600 text-white dark:border-orange-500 dark:bg-orange-500" : "border-border bg-background")}
           >
@@ -1393,8 +1533,15 @@ export default function TakeoffWorkspace() {
           <button type="button" onClick={() => saveTakeoff()} className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 dark:bg-orange-500">
             <Save className="h-4 w-4" /> Save
           </button>
-          <button type="button" onClick={() => buildAndSaveTrueElectricalEstimate()} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-emerald-700">True Takeoff</button>
-          <button type="button" onClick={() => buildAndSaveTrueElectricalEstimate({ download: true })} className="rounded-lg border border-emerald-600 px-3 py-1.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300">Takeoff CSV</button>
+          <button
+            type="button"
+            title="True Takeoff marks the drawings (runs AI assist if nothing is counted yet), then builds the bid-lock electrical estimate from those verified marks."
+            onClick={() => { void buildAndSaveTrueElectricalEstimate(); }}
+            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-emerald-700"
+          >
+            True Takeoff
+          </button>
+          <button type="button" onClick={() => { void buildAndSaveTrueElectricalEstimate({ download: true }); }} className="rounded-lg border border-emerald-600 px-3 py-1.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300">Takeoff CSV</button>
           <Link to={file ? `/estimates/new?file=${encodeURIComponent(file.name)}&size=${file.size}` : "/estimates/new"} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Estimate</Link>
           <Link to={file ? `/markup?file=${encodeURIComponent(file.name)}&size=${file.size}` : "/markup"} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Markup pages</Link>
           <button type="button" onClick={downloadQuoteExcel} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Quote Excel</button>
@@ -1421,7 +1568,7 @@ export default function TakeoffWorkspace() {
                 {TAKEOFF_TOOLS.filter((item) => item.group === group.key).map((item) => {
                   const Icon = TOOL_ICONS[item.key] || Pencil;
                   return (
-                    <button key={item.key} type="button" onClick={() => { setTool(item.key); setDraftPoints([]); setMeasureLabel(""); }}
+                    <button key={item.key} type="button" onClick={() => { setTool(item.key); setDraftPoints([]); draftJunctionIdsRef.current = []; setMeasureLabel(""); }}
                       className={cn("flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-left text-[11px] font-semibold",
                         tool === item.key ? "border-blue-600 bg-blue-50 text-blue-700 dark:border-orange-500 dark:bg-orange-500/10 dark:text-orange-300" : "border-border bg-background hover:bg-muted")}>
                       <Icon className="h-3.5 w-3.5 shrink-0" />{item.label}
@@ -1437,6 +1584,19 @@ export default function TakeoffWorkspace() {
                 {conduitChoices.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
               </select>
             </label>
+            <button
+              type="button"
+              disabled={tool !== "conduit" || !draftPoints.length}
+              onClick={placeJunctionOnDraft}
+              className="w-full rounded-lg border border-amber-700 bg-amber-50 px-2 py-2 text-xs font-bold text-amber-900 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-amber-500/10 dark:text-amber-200"
+              title='While drawing conduit, place a 4" square metal junction box at the last corner (or press J)'
+            >
+              Add 4&quot; square JB
+            </button>
+            <div className="rounded-lg border border-border bg-background px-2 py-2 text-[11px] text-muted-foreground">
+              <div className="flex justify-between"><span>Junction boxes</span><strong className="text-foreground">{hardwareTotals.junctionBoxes}</strong></div>
+              <div className="mt-1 flex justify-between"><span>EMT connectors</span><strong className="text-foreground">{hardwareTotals.emtConnectors}</strong></div>
+            </div>
             <label className="text-xs font-bold text-muted-foreground">Color
               <input type="color" value={penColor} onChange={(event) => setPenColor(event.target.value)} className="mt-1 h-8 w-full" />
             </label>
@@ -1450,6 +1610,7 @@ export default function TakeoffWorkspace() {
               <input type="number" min="1" max="12" value={maxHomeruns} onChange={(event) => setMaxHomeruns(Math.max(1, Number(event.target.value) || 1))} className="mt-1 w-full rounded-lg border border-input bg-background px-2 py-1 text-sm" />
             </label>
             <p className="text-[11px] leading-4 text-muted-foreground">Default is 3. AI will not put more homeruns in one conduit unless you raise this.</p>
+            <p className="text-[11px] leading-4 text-muted-foreground"><strong className="text-foreground">AI assist</strong> counts the selected trade and draws colored marks on the sheets. <strong className="text-foreground">True Takeoff</strong> marks the drawings (runs AI if empty) then builds the bid-lock estimate.</p>
             <DevicePicker
               trades={TRADES}
               trade={trade}
@@ -1552,15 +1713,29 @@ export default function TakeoffWorkspace() {
           >
             <div className="flex h-full w-full items-center justify-center p-2">
               <div
-                ref={viewerRef}
-                onClick={onDrawingClick}
+                ref={(node) => {
+                  viewerRef.current = node;
+                  panLayerRef.current = node;
+                }}
+                onClick={(event) => {
+                  if (panningRef.current) return;
+                  onDrawingClick(event);
+                }}
                 onDoubleClick={finishPath}
                 onContextMenu={onViewerContextMenu}
                 onPointerDown={onViewerPointerDown}
-                style={{ transform: `translate(${pan.x}px, ${pan.y}px)` }}
+                style={{ transform: `translate(${pan.x}px, ${pan.y}px)`, willChange: tool === "pan" ? "transform" : "auto" }}
                 onPointerMove={(event) => {
+                  if (panningRef.current) return;
                   if (!["conduit", "polyline", "linear", "measure", "homerun"].includes(tool)) return;
-                  setHoverPoint(drawingPoint(event));
+                  const point = drawingPoint(event);
+                  if (!point) return;
+                  // Throttle hover updates while drafting conduit to keep pan/draw smooth.
+                  if (tool === "conduit") {
+                    const prev = hoverPoint;
+                    if (prev && Math.hypot(prev.x - point.x, prev.y - point.y) < 0.35) return;
+                  }
+                  setHoverPoint(point);
                 }}
                 onPointerLeave={() => setHoverPoint(null)}
                 className={cn("relative bg-white shadow-xl", tool === "pan" ? "cursor-grab" : tool === "select" ? "cursor-default" : "cursor-crosshair")}
@@ -1852,16 +2027,69 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
       {draftEnd && draftFeet != null && (
         <text x={draftEnd.x} y={Math.max(2, draftEnd.y - 1.2)} fontSize={OVERLAY_FONT_SIZE} fontWeight="600" fill="#ea580c" stroke="#ffffff" strokeWidth="0.22" paintOrder="stroke">{formatFeet(draftFeet)}</text>
       )}
-      {devices.filter((mark) => mark.id !== selectedId).map((mark) => (
-        <DeviceFill key={mark.id} mark={mark} selected={false} markerSize={resolvedMarkerSize(mark, markerSize)} />
-      ))}
-      {devices.filter((mark) => mark.id === selectedId).map((mark) => (
-        <g key={mark.id} style={{ filter: "drop-shadow(0 0 3px rgba(0,0,0,0.85)) drop-shadow(0 0 1.5px rgba(234,88,12,1))" }}>
-          <circle cx={mark.x} cy={mark.y} r={Math.max(1.15, resolvedMarkerSize(mark, markerSize) * 1.8)} fill="white" fillOpacity="0.96" stroke="#ea580c" strokeWidth="0.38" vectorEffect="non-scaling-stroke" />
-          <DeviceFill mark={mark} selected focus markerSize={resolvedMarkerSize(mark, markerSize)} />
-          <text x={mark.x} y={mark.y - Math.max(1.65, resolvedMarkerSize(mark, markerSize) * 2.25)} textAnchor="middle" fontSize="1.15" fontWeight="800" fill="#ea580c" stroke="#ffffff" strokeWidth="0.32" paintOrder="stroke">SELECTED</text>
-        </g>
-      ))}
+      {devices.filter((mark) => mark.id !== selectedId).map((mark) => {
+        const size = resolvedMarkerSize(mark, markerSize);
+        const isJb = mark.symbol === "junction-box" || mark.abbr === "JB";
+        return (
+          <g key={mark.id}>
+            {isJb ? (
+              <rect
+                x={mark.x - size}
+                y={mark.y - size}
+                width={size * 2}
+                height={size * 2}
+                fill={mark.color || "#92400e"}
+                fillOpacity={0.45}
+                stroke="#78350f"
+                strokeWidth="0.35"
+                vectorEffect="non-scaling-stroke"
+              />
+            ) : (
+              <DeviceFill mark={mark} selected={false} markerSize={size} />
+            )}
+            <text
+              x={mark.x}
+              y={mark.y - Math.max(1.2, size * 1.7)}
+              textAnchor="middle"
+              fontSize="1.05"
+              fontWeight="800"
+              fill={mark.color || "#0f172a"}
+              stroke="#ffffff"
+              strokeWidth="0.28"
+              paintOrder="stroke"
+            >
+              {mark.typeCode || mark.abbr || mark.symbolLabel || "•"}
+            </text>
+          </g>
+        );
+      })}
+      {devices.filter((mark) => mark.id === selectedId).map((mark) => {
+        const size = resolvedMarkerSize(mark, markerSize);
+        const isJb = mark.symbol === "junction-box" || mark.abbr === "JB";
+        return (
+          <g key={mark.id} style={{ filter: "drop-shadow(0 0 3px rgba(0,0,0,0.85)) drop-shadow(0 0 1.5px rgba(234,88,12,1))" }}>
+            <circle cx={mark.x} cy={mark.y} r={Math.max(1.15, size * 1.8)} fill="white" fillOpacity="0.96" stroke="#ea580c" strokeWidth="0.38" vectorEffect="non-scaling-stroke" />
+            {isJb ? (
+              <rect
+                x={mark.x - size}
+                y={mark.y - size}
+                width={size * 2}
+                height={size * 2}
+                fill="#92400e"
+                fillOpacity={0.7}
+                stroke="#ea580c"
+                strokeWidth="0.4"
+                vectorEffect="non-scaling-stroke"
+              />
+            ) : (
+              <DeviceFill mark={mark} selected focus markerSize={size} />
+            )}
+            <text x={mark.x} y={mark.y - Math.max(1.65, size * 2.25)} textAnchor="middle" fontSize="1.15" fontWeight="800" fill="#ea580c" stroke="#ffffff" strokeWidth="0.32" paintOrder="stroke">
+              {mark.typeCode || mark.abbr || "SELECTED"}
+            </text>
+          </g>
+        );
+      })}
       {callouts.conduitLabels.map((label) => (
         <OverlayLabel key={`conduit-${label.id}`} label={label} fill={label.selected ? "#334155" : "#475569"} />
       ))}

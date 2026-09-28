@@ -118,6 +118,10 @@ node src/lib/buildrCompany.test.js
 node src/lib/authRedirect.test.js
 node src/lib/ownerAccessRules.test.js
 node src/domain/takeoff/aiTakeoff.test.js
+node src/domain/takeoff/deviceStyles.test.js
+node src/domain/takeoff/ortho.test.js
+node src/domain/takeoff/junctionHardware.test.js
+node src/domain/takeoff/quantities.hardware.test.js
 node src/domain/takeoff/markupPages.test.js
 node src/domain/takeoff/sizes.test.js
 ```

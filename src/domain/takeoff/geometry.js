@@ -62,6 +62,8 @@ export function formatArea(value) {
   return `${value.toFixed(1)} SF`;
 }
 
+export { snapOrthogonalPoint, orthogonalizePolyline, previewOrthogonalSegment } from "./ortho.js";
+
 export function hitTestMark(mark, point, aspect = 1, threshold = 2.2) {
   if (!mark || !point) return false;
   if (mark.points?.length) {

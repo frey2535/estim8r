@@ -68,8 +68,10 @@ const plan = planOverlayMarks([
   { id: "ckt", type: "route", tool: "conduit", points: [{ x: 12, y: 20 }, { x: 70, y: 20 }] },
   { id: "hr", type: "homerun", points: [{ x: 12, y: 20 }, { x: 40, y: 10 }] },
 ]);
-assert(plan.every((mark) => mark.type === "count"), "device-count sheets overlay devices only");
-assert(!plan.some((mark) => mark.tool === "conduit" || mark.type === "homerun"), "grouped circuits stay off the count sheet");
+assert(plan.some((mark) => mark.type === "count") && plan.some((mark) => mark.tool === "conduit"), "live overlay shows devices and conduit together for verification");
+const devicesOnly = planOverlayMarks(plan, { devicesOnly: true });
+assert(devicesOnly.every((mark) => mark.type === "count"), "devicesOnly still hides circuits for PDF count sheets");
+assert(!devicesOnly.some((mark) => mark.tool === "conduit" || mark.type === "homerun"), "grouped circuits stay off the count sheet export");
 const conduitOnly = planOverlayMarks([
   { id: "ckt", type: "route", tool: "conduit", points: [{ x: 10, y: 10 }, { x: 40, y: 10 }] },
 ]);

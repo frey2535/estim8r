@@ -36,6 +36,31 @@ async function readJson(response) {
   }
 }
 
+export async function verifyBuildrFamilyAppSso(token, audience = "estim8r") {
+  const api = buildrApiUrl();
+  if (!api) {
+    return { valid: false, error: "buildr_not_configured" };
+  }
+  if (!token) {
+    return { valid: false, error: "token_required" };
+  }
+  try {
+    const response = await fetch(`${api}/functions/verifyFamilyAppSSOToken`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, audience }),
+    });
+    const data = await readJson(response);
+    if (!response.ok) {
+      return { valid: false, error: data.error || "verify_failed", ...data };
+    }
+    return data;
+  } catch (error) {
+    return { valid: false, error: "buildr_unavailable", message: error?.message };
+  }
+}
+
 export async function fetchBuildrAccountStatus(email, companyId) {
   const api = buildrApiUrl();
   if (!api || !email) {

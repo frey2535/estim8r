@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-import { cursorAgentsProxyPlugin } from "./scripts/cursorAgentsProxy.js";
+import { cursorSessionProxyPlugin } from "./scripts/cursorSessionProxy.js";
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const buildSha = [
@@ -40,7 +40,7 @@ function buildVersionPlugin() {
 }
 
 export default defineConfig({
-  plugins: [react(), buildVersionPlugin(), cursorAgentsProxyPlugin()],
+  plugins: [react(), buildVersionPlugin(), cursorSessionProxyPlugin()],
   define: { "import.meta.env.VITE_APP_BUILD_SHA": JSON.stringify(buildSha) },
   resolve: { alias: { "@": path.resolve(rootDir, "./src") } },
   server: { port: 5177, host: true },

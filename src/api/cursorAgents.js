@@ -83,6 +83,26 @@ async function readError(response) {
   }
 }
 
+async function validateCursorAuth(apiKey, via, hasEnvKey) {
+  try {
+    await cursorFetch("/models", { apiKey });
+    return { state: "ready", via, hasEnvKey };
+  } catch (error) {
+    if (error?.status === 401 || error?.code === 401 || /api key/i.test(error?.message || "")) {
+      return {
+        state: "error",
+        via,
+        message: cursorApiErrorMessage({ status: 401, message: error.message }),
+      };
+    }
+    return {
+      state: "error",
+      via,
+      message: cursorApiErrorMessage(error),
+    };
+  }
+}
+
 export async function probeCursorConnection(apiKey = "") {
   try {
     const proxy = await fetch(`${CURSOR_AGENTS_PROXY}/health`, { headers: { Accept: "application/json" } });
@@ -90,7 +110,7 @@ export async function probeCursorConnection(apiKey = "") {
       const body = await proxy.json().catch(() => ({}));
       if (body?.proxy) {
         if (body.hasEnvKey || apiKey) {
-          return { state: "ready", via: "proxy", hasEnvKey: Boolean(body.hasEnvKey) };
+          return validateCursorAuth(apiKey, "proxy", Boolean(body.hasEnvKey));
         }
         return { state: "needs_key", via: "proxy", hasEnvKey: false };
       }

@@ -9,6 +9,9 @@ import ProtectedRoute, { LoginRedirect } from "@/components/ProtectedRoute";
 import AppLayout from "@/components/layout/AppLayout";
 import Login from "@/pages/Login";
 import UpdateAvailablePrompt from "@/components/UpdateAvailablePrompt";
+import { installOwnerChatEvidence } from "@/lib/ownerChatEvidence";
+
+installOwnerChatEvidence();
 
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const LaborLibrary = lazy(() => import("@/pages/LaborLibrary"));

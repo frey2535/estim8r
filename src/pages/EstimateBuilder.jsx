@@ -35,7 +35,9 @@ import { defaultInstallationConditions } from "@/domain/labor/installationCondit
 import InstallationConditionEditor from "@/components/labor/InstallationConditionEditor";
 import TakeoffSourceAudit from "@/components/estimate/TakeoffSourceAudit";
 import SupplierPriceIntelligence from "@/components/estimate/SupplierPriceIntelligence";
+import LiveSupplierCatalog from "@/components/estimate/LiveSupplierCatalog";
 import EstimateQualityGate from "@/components/estimate/EstimateQualityGate";
+import { applySupplierOfferToLine, LIVE_CATALOG_SOURCE_TYPE } from "@/domain/estimate/liveSupplierCatalog";
 
 function blankLine(rate) {
   return {
@@ -613,21 +615,23 @@ export default function EstimateBuilder() {
         </TabsContent>
 
         <TabsContent value="supplier-prices" className="mt-4 space-y-5">
+          <LiveSupplierCatalog
+            lines={lines}
+            onApplyPrice={(line, match) => setLines((current) => current.map((row) => (
+              row.id === line.id
+                ? applySupplierOfferToLine(row, match, { sourceType: match.sourceType || LIVE_CATALOG_SOURCE_TYPE })
+                : row
+            )))}
+          />
           <SupplierPriceIntelligence
             lines={lines}
             books={supplierPriceBooks}
             onChange={setSupplierPriceBooks}
-            onApplyPrice={(line, match) => setLines((current) => current.map((row) => row.id === line.id ? {
-              ...row,
-              materialUnitCost: match.unitCost,
-              materialPriceMeta: {
-                sourceType: "Supplier quote",
-                supplier: match.supplier || "",
-                reference: match.reference || "",
-                effectiveDate: match.effectiveDate || "",
-                capturedAt: new Date().toISOString(),
-              },
-            } : row))}
+            onApplyPrice={(line, match) => setLines((current) => current.map((row) => (
+              row.id === line.id
+                ? applySupplierOfferToLine(row, match, { sourceType: match.sourceType || "Supplier quote" })
+                : row
+            )))}
           />
         </TabsContent>
 

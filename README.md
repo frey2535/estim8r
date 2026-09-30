@@ -16,6 +16,35 @@ The Vite app defaults to http://localhost:5177.
 
 Auth and data use Supabase when `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are set. Without them, the bundled labor library and local estimate storage still work.
 
+## Live supplier catalog pricing
+
+Estimate Builder → **Supplier Prices** searches official distributor catalogs and writes those current prices onto estimate lines. Estim8r does not invent a price if a catalog is unconfigured or returns no match.
+
+| Source | Official API | Secrets |
+|---|---|---|
+| Mouser | Search API | `MOUSER_API_KEY` |
+| Digi-Key | Product Information v4 | `DIGIKEY_CLIENT_ID`, `DIGIKEY_CLIENT_SECRET` (`DIGIKEY_SANDBOX=true` for sandbox) |
+| Nexar Supply (Octopart) | GraphQL authorized-distributor offers | `NEXAR_CLIENT_ID`, `NEXAR_CLIENT_SECRET` |
+| Newark / element14 | Product Search | `ELEMENT14_API_KEY` (`ELEMENT14_STORE_ID=us` for Newark) |
+
+Do **not** prefix these with `VITE_`. Keys stay on the server.
+
+Local (`npm run dev`): the Vite proxy at `/api/live-supplier-catalog` reads the secrets from `.env` / `.env.local`.
+
+Production: store the same names as Supabase function secrets and deploy the proxy:
+
+```bash
+supabase secrets set MOUSER_API_KEY=...
+supabase secrets set DIGIKEY_CLIENT_ID=...
+supabase secrets set DIGIKEY_CLIENT_SECRET=...
+supabase secrets set NEXAR_CLIENT_ID=...
+supabase secrets set NEXAR_CLIENT_SECRET=...
+supabase secrets set ELEMENT14_API_KEY=...
+supabase functions deploy search-supplier-catalog
+```
+
+Sign up at [Mouser](https://www.mouser.com/api-shopping/), [Digi-Key](https://developer.digikey.com/), [Nexar](https://nexar.com/api), and [element14](https://partner.element14.com/). CSV import remains for supply-house quotes that have no public catalog API.
+
 Apply new database changes with the Supabase CLI against this project’s linked database:
 
 ```bash

@@ -2,6 +2,7 @@ import { DEFAULT_DROP_FEET } from "./catalog.js";
 import { areaFromPercent, feetFromPercent, polygonArea, polylineLength } from "./geometry.js";
 import { junctionHardwareRows, isJunctionBoxMark } from "./junctionHardware.js";
 import { DEFAULT_LINE_SIZE, resolvedLineSize } from "./sizes.js";
+import { applyTypicalMultiplier } from "./liveLinkedTakeoff.js";
 
 const LENGTH_TYPES = new Set(["line", "route", "homerun", "measure"]);
 
@@ -77,7 +78,7 @@ export function rollupTakeoff(marks, calibration, aspect = 1, sheet = null) {
   }
 
   const hardware = junctionHardwareRows(scoped);
-  const list = [...rows.values(), ...hardware.rows]
+  const list = applyTypicalMultiplier([...rows.values(), ...hardware.rows], scoped)
     .sort((a, b) => a.category.localeCompare(b.category) || a.symbol.localeCompare(b.symbol));
   const totals = list.reduce((acc, row) => {
     acc.count += row.count;

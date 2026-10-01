@@ -55,7 +55,7 @@ for m in data.get("marks", []):
 manifest = []
 for page_num in range(1, len(doc)+1):
     page = doc[page_num-1]
-    pix = page.get_pixmap(matrix=fitz.Matrix(2.0,2.0), alpha=False)
+    pix = page.get_pixmap(matrix=fitz.Matrix(4.0,4.0), alpha=False)
     base = Image.frombytes("RGB", [pix.width, pix.height], pix.samples).convert("RGBA")
     if page_num == 1:
         out = os.path.join(out_dir, "01-legend-source.png")
@@ -70,7 +70,13 @@ for page_num in range(1, len(doc)+1):
     name = "02-lighting-estim8r-marked.png" if page_num == 2 else "03-power-estim8r-marked.png"
     out = os.path.join(out_dir, name)
     combined.convert("RGB").save(out, quality=95)
-    manifest.append({"page":page_num,"image":out,"marks":len(marks_by_page.get(page_num,[]))})
+    # Also emit high-resolution plan-area crops so symbol fills can be inspected on a phone.
+    crop_box = (int(base.width*0.05), int(base.height*0.08), int(base.width*0.82), int(base.height*0.88))
+    crop = combined.crop(crop_box).convert("RGB")
+    crop_name = "02-lighting-zoom.png" if page_num == 2 else "03-power-zoom.png"
+    crop_out = os.path.join(out_dir, crop_name)
+    crop.save(crop_out, quality=98)
+    manifest.append({"page":page_num,"image":out,"zoom":crop_out,"marks":len(marks_by_page.get(page_num,[]))})
 
 with open(os.path.join(out_dir, "render-manifest.json"), "w", encoding="utf-8") as f:
     json.dump(manifest, f, indent=2)

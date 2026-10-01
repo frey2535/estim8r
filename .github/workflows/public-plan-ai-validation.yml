@@ -37,7 +37,7 @@ jobs:
 
       - name: Download untouched public construction drawing set
         run: |
-          curl -fL --retry 4 --retry-delay 3             "https://www.riggsharrod.com/wp-content/uploads/2024/10/Electrical-FA-2.21.25.pdf"             -o source-drawings.pdf
+          curl -fL --retry 4 --retry-delay 3             "https://www.hendersoncountync.gov/sites/default/files/fileattachments/henderson_county/page/120171/hhs_telecom_bid_-_electrical_drawings_reduced.pdf"             -o source-drawings.pdf
           ls -lh source-drawings.pdf
 
       - name: Extract legend, lighting, and power sheets from same source

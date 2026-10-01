@@ -31,7 +31,7 @@ jobs:
 
       - name: Install harness dependencies
         run: |
-          npm install --no-save tsx
+          npm install --no-save tsx @thednp/dommatrix
           python -m pip install --upgrade pip
           python -m pip install pymupdf pillow
 
@@ -47,7 +47,7 @@ jobs:
 
       - name: Run Estim8r AI takeoff
         run: |
-          npx tsx --tsconfig scripts/public-plan-test-tsconfig.json scripts/public-plan-ai-test.mjs public-test-set.pdf public-plan-test-result.json
+          NODE_OPTIONS='--import=./scripts/node-dom-polyfill.mjs' npx tsx --tsconfig scripts/public-plan-test-tsconfig.json scripts/public-plan-ai-test.mjs public-test-set.pdf public-plan-test-result.json
           cat public-plan-test-result.json | head -n 80
 
       - name: Render Estim8r marks over original source sheets

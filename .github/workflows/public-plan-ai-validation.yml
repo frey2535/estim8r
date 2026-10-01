@@ -49,12 +49,15 @@ jobs:
       - name: Run Estim8r AI takeoff in Chromium
         run: |
           cp public-test-set.pdf public/public-test-set.pdf
-          npm run dev -- --host 127.0.0.1 > /tmp/estim8r-vite.log 2>&1 &
+          npx vite --host 127.0.0.1 --port 5173 > /tmp/estim8r-vite.log 2>&1 &
           echo $! > /tmp/estim8r-vite.pid
+          READY=0
           for i in {1..30}; do
-            if curl -fsS http://127.0.0.1:5173 >/dev/null; then break; fi
+            if curl -fsS http://127.0.0.1:5173 >/dev/null; then READY=1; break; fi
+            if ! kill -0 $(cat /tmp/estim8r-vite.pid) 2>/dev/null; then break; fi
             sleep 1
           done
+          if [ "$READY" != "1" ]; then cat /tmp/estim8r-vite.log; exit 1; fi
           node scripts/public-plan-browser-test.mjs
           cat public-plan-test-result.json | head -n 80
 

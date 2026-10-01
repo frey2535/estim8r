@@ -460,6 +460,27 @@ export function scaleOutline(outline, factor, origin) {
   if (!outline || scale === 1) return outline;
   const ox = origin?.x ?? 0;
   const oy = origin?.y ?? 0;
+  if (outline.kind === "composite" && outline.parts?.length) {
+    return {
+      ...outline,
+      w: outline.w != null ? outline.w * scale : outline.w,
+      h: outline.h != null ? outline.h * scale : outline.h,
+      parts: outline.parts.map((part) => ({
+        ...part,
+        cx: ox + ((part.cx ?? ox) - ox) * scale,
+        cy: oy + ((part.cy ?? oy) - oy) * scale,
+        r: part.r != null ? part.r * scale : part.r,
+        w: part.w != null ? part.w * scale : part.w,
+        h: part.h != null ? part.h * scale : part.h,
+        points: (part.points || []).map((point) => ({ x: ox + (point.x - ox) * scale, y: oy + (point.y - oy) * scale })),
+      })),
+    };
+  }
+
+  const scale = Number(factor) || 1;
+  if (!outline || scale === 1) return outline;
+  const ox = origin?.x ?? 0;
+  const oy = origin?.y ?? 0;
   const points = (outline.points || []).map((point) => ({
     x: ox + (point.x - ox) * scale,
     y: oy + (point.y - oy) * scale,

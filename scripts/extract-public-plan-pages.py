@@ -2,9 +2,9 @@ import fitz, sys, json, re, os
 src, out_pdf, out_meta = sys.argv[1:4]
 doc = fitz.open(src)
 targets = [
-    ("legend", "ELECTRICAL LEGEND", "E-001"),
-    ("lighting", "ELECTRICAL FIRST FLOOR LIGHTING PLAN-LEFT", "E-201"),
-    ("power", "ELECTRICAL FIRST FLOOR POWER PLAN-LEFT", "E-301"),
+    ("legend", "ELECTRICAL LEGEND, NOTES, AND SCHEDULES", "E001"),
+    ("lighting", "ELECTRICAL LIGHTING PLAN - 1ST FLOOR", "E101"),
+    ("power", "ELECTRICAL POWER PLAN - 1ST FLOOR", "E201"),
 ]
 chosen = []
 for kind, title, code in targets:

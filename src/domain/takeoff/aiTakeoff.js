@@ -745,7 +745,7 @@ export function buildAiMarks({
       if (!geometryPoint || !placementAllowed(geometryPoint)) continue;
       const placed = geometryPoint;
       const geometrySource = geometry?.outline?.source || geometry?.source || "vector";
-      const usedGeometry = Boolean(geometryPoint);
+      const geometryAnchored = Boolean(geometryPoint);
       const compact = normalizeTakeoffText(normalizeTypeMark(token.text));
       const fromLegend = aliases.some((alias) => normalizeTakeoffText(alias.code) === compact && alias.symbol?.id === symbol.id);
       const typeCode = fromLegend
@@ -777,7 +777,7 @@ export function buildAiMarks({
         color,
         markerSize: 1.45,
         matchedFrom: fromLegend ? "legend" : "drawing",
-        outline: usedGeometry ? geometry.outline : null,
+        outline: geometryAnchored ? geometry.outline : null,
         outlineSource: geometrySource,
         detectSource: DETECT_SOURCE_ORIGINAL_PDF,
         confidence: geometrySource === "vector" ? "high" : "medium",
@@ -788,7 +788,7 @@ export function buildAiMarks({
       };
       counts.push(mark);
       seen.push({ ...mark, tagX: token.x, tagY: token.y });
-      if (usedGeometry) usedGeometry.add(geometry);
+      if (geometryAnchored) usedGeometry.add(geometry);
     }
   }
   const anchors = counts.filter((mark) => mark.anchor);

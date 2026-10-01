@@ -31,9 +31,10 @@ jobs:
 
       - name: Install harness dependencies
         run: |
-          npm install --no-save tsx @thednp/dommatrix
+          npm install --no-save tsx @thednp/dommatrix playwright
           python -m pip install --upgrade pip
           python -m pip install pymupdf pillow
+          npx playwright install --with-deps chromium
 
       - name: Download untouched public construction drawing set
         run: |
@@ -45,9 +46,16 @@ jobs:
           python scripts/extract-public-plan-pages.py source-drawings.pdf public-test-set.pdf source-pages.json
           cat source-pages.json
 
-      - name: Run Estim8r AI takeoff
+      - name: Run Estim8r AI takeoff in Chromium
         run: |
-          NODE_OPTIONS='--import=./scripts/node-dom-polyfill.mjs' npx tsx --tsconfig scripts/public-plan-test-tsconfig.json scripts/public-plan-ai-test.mjs public-test-set.pdf public-plan-test-result.json
+          cp public-test-set.pdf public/public-test-set.pdf
+          npm run dev -- --host 127.0.0.1 > /tmp/estim8r-vite.log 2>&1 &
+          echo $! > /tmp/estim8r-vite.pid
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:5173 >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/public-plan-browser-test.mjs
           cat public-plan-test-result.json | head -n 80
 
       - name: Render Estim8r marks over original source sheets

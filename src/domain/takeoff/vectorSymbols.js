@@ -477,10 +477,6 @@ export function scaleOutline(outline, factor, origin) {
     };
   }
 
-  const scale = Number(factor) || 1;
-  if (!outline || scale === 1) return outline;
-  const ox = origin?.x ?? 0;
-  const oy = origin?.y ?? 0;
   const points = (outline.points || []).map((point) => ({
     x: ox + (point.x - ox) * scale,
     y: oy + (point.y - oy) * scale,

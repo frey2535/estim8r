@@ -1905,6 +1905,18 @@ function DeviceFill({ mark, selected, markerSize, focus = false }) {
   const stroke = selected ? "#ea580c" : color;
   const strokeWidth = focus ? 0.55 : selected ? 0.28 : 0.12;
   const transform = focus ? `translate(${mark.x} ${mark.y}) scale(1.8) translate(${-mark.x} ${-mark.y})` : undefined;
+  if (outline.kind === "composite" && outline.parts?.length) {
+    return (
+      <g transform={transform}>
+        {outline.parts.map((part, index) => {
+          const partColor = color;
+          if (part.kind === "path" && part.points?.length >= 3) return <polygon key={index} points={part.points.map((point) => `${point.x},${point.y}`).join(" ")} fill={partColor} fillOpacity={opacity} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />;
+          if (part.kind === "circle") return <circle key={index} cx={part.cx ?? mark.x} cy={part.cy ?? mark.y} r={part.r || Math.max(part.w || 0, part.h || 0) / 2} fill={partColor} fillOpacity={opacity} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />;
+          return <rect key={index} x={(part.cx ?? mark.x) - (part.w || 0) / 2} y={(part.cy ?? mark.y) - (part.h || 0) / 2} width={part.w || 0} height={part.h || 0} rx={0.08} fill={partColor} fillOpacity={opacity} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />;
+        })}
+      </g>
+    );
+  }
   if (outline.kind === "path" && outline.points?.length >= 3) {
     return (
       <polygon

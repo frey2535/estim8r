@@ -5,6 +5,7 @@ import { makeLaborSelection } from "../labor/selection.js";
 import { fillEmptyHeader, headerFromDrawings } from "./fromDrawings.js";
 import { applySavedLineOrder } from "./lineOrder.js";
 import { sourcesForRollupRow, summarizeLineSources } from "./takeoffSourceAudit.js";
+import { liveEstimateSourcesForRow } from "../takeoff/liveLinkedTakeoff.js";
 
 export function estimateStorageKey(fileName, fileSize) {
   return `estim8r.estimate.v1:${fileName || "drawing"}:${fileSize || 0}`;
@@ -85,6 +86,7 @@ export function linesFromRollup(rollup, rate, sourceContext = {}) {
         rate,
       });
       line.takeoffSources = takeoffSources;
+      line.liveTakeoffSources = liveEstimateSourcesForRow(row, sourceContext.marks || []);
       line.sourceAudit = sourceAudit;
       lines.push(line);
     }
@@ -191,7 +193,8 @@ export function buildEstimateDraft({ fileName, fileSize, drawingDocs, rollup, pa
     lines: [...takeoffLines, ...drawingLines],
     itemized: false,
     visibleTotals: undefined,
-    separateFromTakeoff: true,
+    separateFromTakeoff: false,
+    liveLinkedTakeoff: true,
     scopeEdited: false,
   };
 }
@@ -213,6 +216,7 @@ export function syncEstimateDraft(existing, input) {
       scopeNotes: existing.scopeEdited ? existing.header?.scopeNotes : scopeFromDrawing(input),
     }, fromDrawings, { fileName: input.fileName }),
     lines: mergeEstimate(existing, incoming).map((line) => applyRate(line, rate)),
-    separateFromTakeoff: true,
+    separateFromTakeoff: false,
+    liveLinkedTakeoff: true,
   };
 }

@@ -5,6 +5,8 @@ const browser = await chromium.launch({headless:true});
 const page = await browser.newPage();
 await page.goto("http://127.0.0.1:5173", {waitUntil:"networkidle"});
 const result = await page.evaluate(async () => {
+  const pdfjs = await import("/node_modules/pdfjs-dist/build/pdf.mjs");
+  pdfjs.GlobalWorkerOptions.workerSrc = "/node_modules/pdfjs-dist/build/pdf.worker.mjs";
   const [{readDrawingDocuments,drawingSymbolsFromDocs},{readAiPages},{buildAiMarks},{applyDeviceTypeColors,deviceOutline,isDeviceMark},{findConduitOption,paletteForTrade}] = await Promise.all([
     import("/src/domain/takeoff/drawing-docs.js"),
     import("/src/domain/takeoff/aiPages.js"),

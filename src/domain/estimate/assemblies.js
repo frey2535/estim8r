@@ -1,5 +1,28 @@
 export const DEFAULT_ASSEMBLIES = [
   {
+    id: "device-duplex-receptacle", name: "Duplex receptacle rough-in + trim", description: "Live takeoff assembly for a standard duplex receptacle.", category: "Receptacles", source: "system", active: true,
+    components: [
+      { id:"device", description:"Duplex receptacle device", itemType:"material", category:"Device Install", quantity:1, unit:"EA", laborMhPerUnit:0, requiresReview:true },
+      { id:"box", description:"Device box", itemType:"material", category:"Rough-in", quantity:1, unit:"EA", laborMhPerUnit:0, requiresReview:true },
+      { id:"ring", description:"Device ring / cover", itemType:"material", category:"Rough-in", quantity:1, unit:"EA", laborMhPerUnit:0, requiresReview:true },
+    ],
+  },
+  {
+    id: "device-switch", name: "Wall switch rough-in + trim", description: "Live takeoff assembly for a wall switch.", category: "Switches", source: "system", active: true,
+    components: [
+      { id:"switch", description:"Wall switch", itemType:"material", category:"Device Install", quantity:1, unit:"EA", laborMhPerUnit:0, requiresReview:true },
+      { id:"box", description:"Switch box", itemType:"material", category:"Rough-in", quantity:1, unit:"EA", laborMhPerUnit:0, requiresReview:true },
+    ],
+  },
+  {
+    id: "device-light-fixture", name: "Light fixture install", description: "Live takeoff assembly for a scheduled light fixture.", category: "Lighting", source: "system", active: true,
+    components: [
+      { id:"fixture", description:"Scheduled light fixture", itemType:"material", category:"Device Install", quantity:1, unit:"EA", laborMhPerUnit:0, requiresReview:true },
+      { id:"support", description:"Fixture support / attachment", itemType:"material", category:"Rough-in", quantity:1, unit:"EA", laborMhPerUnit:0, requiresReview:true },
+    ],
+  },
+
+  {
     id: "system-whole-home-standby-generator",
     name: "Whole-home standby generator",
     description: "Component-built standby-generator estimate. Enter measured raceway/conductor/control lengths and select a verified labor basis for every component before bidding.",

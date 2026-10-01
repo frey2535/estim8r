@@ -37,7 +37,7 @@ jobs:
 
       - name: Download untouched public construction drawing set
         run: |
-          curl -fL --retry 4 --retry-delay 3             "https://www.wayland.ma.us/sites/g/files/vyhlif9231/f/uploads/21-125-2125.04_-_wayland_senior_center_-_architecture_90_cd_2022.11.23-combined.pdf"             -o source-drawings.pdf
+          curl -fL --retry 4 --retry-delay 3             "https://www.riggsharrod.com/wp-content/uploads/2024/10/Electrical-FA-2.21.25.pdf"             -o source-drawings.pdf
           ls -lh source-drawings.pdf
 
       - name: Extract legend, lighting, and power sheets from same source

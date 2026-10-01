@@ -5,6 +5,8 @@ const EQUIP_SCHED_RE = /equipment\s+schedule|mechanical\s+equipment|panel\s+sche
 const ONELINE_RE = /\briser\s+diagram\b|one[\s-]?line(?:\s+diagram)?|single[\s-]?line/i;
 const DETAIL_RE = /\b(?:electrical\s+)?(?:site\s+)?plan\s+details\b|\bsite\s+plan\s+details\b/i;
 const SPEC_RE = /specification|general\s+notes|electrical\s+notes|abbreviations/i;
+const PLAN_TITLE_RE = /\b(?:electrical\s+)?(?:lighting|power|receptacle|branch\s+power|floor)\s+plan\b|\belectrical\s+(?:lighting|power)\b/i;
+const INDEX_RE = /\bdrawing\s+index\b|\bsheet\s+index\b/i;
 const SKIP = /^(symbol|symbols|description|type|manufacturer|model|remarks|notes|qty|quantity|mounting|voltage|watts|lamp|catalog)$/i;
 const TYPE_RE = /^(?:type\s*)?([a-z]{1,3}\d{0,3}[a-z]{0,2}|\d{1,3}[a-z]{0,3})$/i;
 
@@ -45,6 +47,7 @@ export function printedScaleCalibration(page) {
 
 export function classifyPageText(text) {
   const blob = String(text || "");
+  if (PLAN_TITLE_RE.test(blob) && !INDEX_RE.test(blob)) return "drawing";
   if (LIGHTING_SCHED_RE.test(blob)) return "lighting-schedule";
   if (DEVICE_SCHED_RE.test(blob)) return "device-schedule";
   if (EQUIP_SCHED_RE.test(blob)) return "equipment-schedule";

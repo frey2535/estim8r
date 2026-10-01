@@ -47,7 +47,7 @@ jobs:
 
       - name: Run Estim8r AI takeoff
         run: |
-          npx tsx scripts/public-plan-ai-test.mjs public-test-set.pdf public-plan-test-result.json
+          npx tsx --tsconfig scripts/public-plan-test-tsconfig.json scripts/public-plan-ai-test.mjs public-test-set.pdf public-plan-test-result.json
           cat public-plan-test-result.json | head -n 80
 
       - name: Render Estim8r marks over original source sheets

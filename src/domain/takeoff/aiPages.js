@@ -23,12 +23,19 @@ export async function readAiPages(fileBytes) {
     let paths = [];
     try { paths = await extractPageSymbolPaths(page); } catch { paths = []; }
     let rasterPaths = [];
-    // Scanned/image-only drawings do not expose selectable PDF vectors. Build a
-    // compact-object layer from rendered pixels only when native geometry is sparse.
-    if (paths.length < 8) {
-      try { rasterPaths = await extractRasterSymbolCandidates(page); } catch { rasterPaths = []; }
-    }
-    pages.push({ page: pageNumber, kind, tokens, sheetId, discipline, paths: paths.length >= 8 ? paths : [...paths, ...rasterPaths], rasterPaths });
+    // Always keep a raster geometry pass available. Many electrical PDFs contain
+    // vector text/walls but rasterized device symbols; treating "some vectors exist"
+    // as proof that symbol geometry is vector-only caused text-coordinate markers.
+    try { rasterPaths = await extractRasterSymbolCandidates(page); } catch { rasterPaths = []; }
+    pages.push({
+      page: pageNumber,
+      kind,
+      tokens,
+      sheetId,
+      discipline,
+      paths: [...paths, ...rasterPaths],
+      rasterPaths,
+    });
   }
   return pages;
 }

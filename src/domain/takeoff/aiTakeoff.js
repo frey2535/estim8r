@@ -738,13 +738,14 @@ export function buildAiMarks({
         symbol = resolveCanSymbol(matchSymbols) || symbol;
       }
       const geometryPoint = geometry ? { x: geometry.cx, y: geometry.cy } : null;
-      const placed = geometryPoint && placementAllowed(geometryPoint)
-        ? geometryPoint
-        : placementAllowed(token)
-          ? { x: token.x, y: token.y }
-          : null;
-      if (!placed) continue;
-      const usedVector = Boolean(geometryPoint && placed.x === geometryPoint.x && placed.y === geometryPoint.y);
+      // A text tag is evidence for classification, not the physical device location.
+      // Never create a counted mark at OCR/text coordinates: that is what produced
+      // floating marks beside fixtures and receptacles. A counted device must be
+      // anchored to detected source geometry on the drawing.
+      if (!geometryPoint || !placementAllowed(geometryPoint)) continue;
+      const placed = geometryPoint;
+      const geometrySource = geometry?.outline?.source || geometry?.source || "vector";
+      const geometryAnchored = Boolean(geometryPoint);
       const compact = normalizeTakeoffText(normalizeTypeMark(token.text));
       const fromLegend = aliases.some((alias) => normalizeTakeoffText(alias.code) === compact && alias.symbol?.id === symbol.id);
       const typeCode = fromLegend
@@ -776,10 +777,10 @@ export function buildAiMarks({
         color,
         markerSize: 1.45,
         matchedFrom: fromLegend ? "legend" : "drawing",
-        outline: usedVector ? geometry.outline : null,
-        outlineSource: usedVector ? "vector" : "text",
+        outline: geometryAnchored ? geometry.outline : null,
+        outlineSource: geometrySource,
         detectSource: DETECT_SOURCE_ORIGINAL_PDF,
-        confidence: usedVector ? "high" : "low",
+        confidence: geometrySource === "vector" ? "high" : "medium",
         reviewStatus: "pending",
         layer: "device",
         fillOpacity: 0.5,
@@ -787,7 +788,7 @@ export function buildAiMarks({
       };
       counts.push(mark);
       seen.push({ ...mark, tagX: token.x, tagY: token.y });
-      if (usedVector) usedGeometry.add(geometry);
+      if (geometryAnchored) usedGeometry.add(geometry);
     }
   }
   const anchors = counts.filter((mark) => mark.anchor);

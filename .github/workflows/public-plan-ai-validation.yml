@@ -1,0 +1,66 @@
+name: Public plan AI validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/public-plan-ai-validation.yml"
+      - "scripts/public-plan-ai-test.mjs"
+      - "scripts/extract-public-plan-pages.py"
+      - "scripts/render-public-plan-test.py"
+      - "src/domain/takeoff/**"
+      - "src/lib/pdf-document.js"
+
+permissions:
+  contents: read
+
+jobs:
+  public-plan-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install harness dependencies
+        run: |
+          npm install --no-save tsx
+          python -m pip install --upgrade pip
+          python -m pip install pymupdf pillow
+
+      - name: Download untouched public construction drawing set
+        run: |
+          curl -fL --retry 4 --retry-delay 3             "https://www.wayland.ma.us/sites/g/files/vyhlif9231/f/uploads/21-125-2125.04_-_wayland_senior_center_-_architecture_90_cd_2022.11.23-combined.pdf"             -o source-drawings.pdf
+          ls -lh source-drawings.pdf
+
+      - name: Extract legend, lighting, and power sheets from same source
+        run: |
+          python scripts/extract-public-plan-pages.py source-drawings.pdf public-test-set.pdf source-pages.json
+          cat source-pages.json
+
+      - name: Run Estim8r AI takeoff
+        run: |
+          npx tsx scripts/public-plan-ai-test.mjs public-test-set.pdf public-plan-test-result.json
+          cat public-plan-test-result.json | head -n 80
+
+      - name: Render Estim8r marks over original source sheets
+        run: |
+          mkdir -p public-plan-test-output
+          python scripts/render-public-plan-test.py public-test-set.pdf public-plan-test-result.json public-plan-test-output
+          cp public-plan-test-result.json public-plan-test-output/
+          cp source-pages.json public-plan-test-output/
+          ls -lh public-plan-test-output
+
+      - name: Upload marked drawings
+        uses: actions/upload-artifact@v4
+        with:
+          name: estim8r-public-plan-test
+          path: public-plan-test-output/
+          if-no-files-found: error

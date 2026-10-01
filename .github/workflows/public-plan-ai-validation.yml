@@ -1,0 +1,77 @@
+name: Public plan AI validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/public-plan-ai-validation.yml"
+      - "scripts/public-plan-ai-test.mjs"
+      - "scripts/extract-public-plan-pages.py"
+      - "scripts/render-public-plan-test.py"
+      - "src/domain/takeoff/**"
+      - "src/lib/pdf-document.js"
+
+permissions:
+  contents: read
+
+jobs:
+  public-plan-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install harness dependencies
+        run: |
+          npm install --no-save tsx @thednp/dommatrix playwright
+          python -m pip install --upgrade pip
+          python -m pip install pymupdf pillow
+          npx playwright install --with-deps chromium
+
+      - name: Download untouched public construction drawing set
+        run: |
+          curl -fL --retry 4 --retry-delay 3             "https://www.hendersoncountync.gov/sites/default/files/fileattachments/henderson_county/page/120171/hhs_telecom_bid_-_electrical_drawings_reduced.pdf"             -o source-drawings.pdf
+          ls -lh source-drawings.pdf
+
+      - name: Extract legend, lighting, and power sheets from same source
+        run: |
+          python scripts/extract-public-plan-pages.py source-drawings.pdf public-test-set.pdf source-pages.json
+          cat source-pages.json
+
+      - name: Run Estim8r AI takeoff in Chromium
+        run: |
+          cp public-test-set.pdf public/public-test-set.pdf
+          npx vite --host 127.0.0.1 --port 5173 > /tmp/estim8r-vite.log 2>&1 &
+          echo $! > /tmp/estim8r-vite.pid
+          READY=0
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:5173 >/dev/null; then READY=1; break; fi
+            if ! kill -0 $(cat /tmp/estim8r-vite.pid) 2>/dev/null; then break; fi
+            sleep 1
+          done
+          if [ "$READY" != "1" ]; then cat /tmp/estim8r-vite.log; exit 1; fi
+          node scripts/public-plan-browser-test.mjs
+          cat public-plan-test-result.json | head -n 80
+
+      - name: Render Estim8r marks over original source sheets
+        run: |
+          mkdir -p public-plan-test-output
+          python scripts/render-public-plan-test.py public-test-set.pdf public-plan-test-result.json public-plan-test-output
+          cp public-plan-test-result.json public-plan-test-output/
+          cp source-pages.json public-plan-test-output/
+          ls -lh public-plan-test-output
+
+      - name: Upload marked drawings
+        uses: actions/upload-artifact@v4
+        with:
+          name: estim8r-public-plan-test
+          path: public-plan-test-output/
+          if-no-files-found: error

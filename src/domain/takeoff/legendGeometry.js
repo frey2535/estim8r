@@ -156,12 +156,16 @@ export function scanPageByLegendGeometry(page,dictionary,options={}){
   if(!entries.length)return [];
   const paths=(page?.paths||[]).filter((p)=>!isJunkGeometry(p));
   const clusters=[];
-  const usedSeeds=new Set();
+  // Do not globally consume primitives here. A single primitive can be the seed
+  // for several nearby symbol hypotheses; consuming it after the first cluster
+  // caused one fixture family to dominate a sheet and hid other device types.
+  const seenClusterKeys=new Set();
   for(const seed of paths){
-    if(usedSeeds.has(seed))continue;
     const cluster=clusterSymbolGeometry(seed,paths,{maxSpan:2.8});
     if(!cluster)continue;
-    for(const p of cluster.parts||[])usedSeeds.add(p);
+    const key=[cluster.cx.toFixed(2),cluster.cy.toFixed(2),cluster.w.toFixed(2),cluster.h.toFixed(2),cluster.parts?.length||1].join(":");
+    if(seenClusterKeys.has(key))continue;
+    seenClusterKeys.add(key);
     clusters.push(cluster);
   }
   const hits=[];
@@ -172,8 +176,18 @@ export function scanPageByLegendGeometry(page,dictionary,options={}){
       if(score>bestScore){best=entry;bestScore=score;}
     }
     if(best&&bestScore>=threshold){
-      hits.push({geometry:cluster,entry:best,score:bestScore});
+      const runnerUp=entries
+        .filter((entry)=>entry!==best)
+        .reduce((score,entry)=>Math.max(score,geometrySimilarity(cluster,entry.prototype)),0);
+      // Ambiguous lookalikes stay reviewable instead of being silently assigned
+      // to whichever legend type happens to score a fraction higher.
+      hits.push({geometry:cluster,entry:best,score:bestScore,margin:bestScore-runnerUp,ambiguous:(bestScore-runnerUp)<0.045});
     }
   }
-  return hits;
+  // Keep the strongest hypothesis for the same physical footprint, but do not
+  // suppress distinct nearby symbols.
+  return hits.sort((a,b)=>b.score-a.score).filter((hit,index,all)=>!all.slice(0,index).some((other)=>
+    Math.hypot(other.geometry.cx-hit.geometry.cx,other.geometry.cy-hit.geometry.cy)<0.16 &&
+    other.entry.symbol?.id===hit.entry.symbol?.id
+  ));
 }

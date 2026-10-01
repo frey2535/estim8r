@@ -45,8 +45,13 @@ export function printedScaleCalibration(page) {
   };
 }
 
+const STRONG_LEGEND_TITLE_RE = /\belectrical\s+(?:symbol\s+)?legend(?:\s*(?:and|&)\s*schedules?)?\b|\belectrical\s+legend\s+and\s+schedules\b/i;
+const LIGHTING_PLAN_TITLE_RE = /\b(?:electrical\s+)?lighting\s+plan\b/i;
+const POWER_PLAN_TITLE_RE = /\b(?:electrical\s+)?power\s+plan\b|\bbranch\s+power\s+plan\b/i;
+
 export function classifyPageText(text) {
   const blob = String(text || "");
+  if (STRONG_LEGEND_TITLE_RE.test(blob) && !LIGHTING_PLAN_TITLE_RE.test(blob) && !POWER_PLAN_TITLE_RE.test(blob)) return "legend";
   // Real plan sheets often carry fixture/equipment schedules in a side panel.
   // The plan title must win over schedule text or AI skips the entire floor plan.
   if (PLAN_TITLE_RE.test(blob) && !INDEX_RE.test(blob)) return "drawing";
@@ -58,6 +63,32 @@ export function classifyPageText(text) {
   if (LEGEND_RE.test(blob)) return "legend";
   if (SPEC_RE.test(blob)) return "spec";
   return "drawing";
+}
+
+export function classifyPageItems(items = [], viewport = {}) {
+  const width = Number(viewport?.width) || 1;
+  const height = Number(viewport?.height) || 1;
+  const full = (items || []).map((item) => String(item.str || "").trim()).filter(Boolean).join("\n");
+  const titleBlock = (items || [])
+    .filter((item) => (Number(item.x) || 0) >= width * 0.58 && (Number(item.y) || 0) >= height * 0.62)
+    .map((item) => String(item.str || "").trim()).filter(Boolean).join(" ");
+  if (STRONG_LEGEND_TITLE_RE.test(titleBlock)) return "legend";
+  if (LIGHTING_PLAN_TITLE_RE.test(titleBlock) || POWER_PLAN_TITLE_RE.test(titleBlock)) return "drawing";
+  return classifyPageText(full);
+}
+
+export function inferPlanType(items = [], viewport = {}) {
+  const width = Number(viewport?.width) || 1;
+  const height = Number(viewport?.height) || 1;
+  const titleBlock = (items || [])
+    .filter((item) => (Number(item.x) || 0) >= width * 0.5 && (Number(item.y) || 0) >= height * 0.58)
+    .map((item) => String(item.str || "").trim()).filter(Boolean).join(" ");
+  if (LIGHTING_PLAN_TITLE_RE.test(titleBlock)) return "lighting";
+  if (POWER_PLAN_TITLE_RE.test(titleBlock)) return "power";
+  const full = (items || []).map((item) => String(item.str || "").trim()).filter(Boolean).join(" ");
+  if (LIGHTING_PLAN_TITLE_RE.test(full)) return "lighting";
+  if (POWER_PLAN_TITLE_RE.test(full)) return "power";
+  return "";
 }
 
 export function clusterTextRows(items, yTolerance = 3.5) {
@@ -196,7 +227,7 @@ export async function readDrawingDocuments(fileBytes) {
     const { items, viewport } = await extractPdfPage(pdf, pageNumber);
     const rows = clusterTextRows(items);
     const text = rows.map((row) => row.text).join("\n");
-    const kind = classifyPageText(text);
+    const kind = classifyPageItems(items, viewport);
     pages.push({ page: pageNumber, kind, textLength: text.length, text, widthPt: viewport.width, heightPt: viewport.height, printedScale: parsePrintedScale(text) });
     const titleRows = titleBlockRowsFromItems(items, viewport);
     const titleText = titleRows.join("\n");

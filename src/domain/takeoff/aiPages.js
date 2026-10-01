@@ -1,4 +1,4 @@
-import { classifyPageText, extractPdfPageItems } from "./drawing-docs";
+import { classifyPageItems, inferPlanType, extractPdfPageItems } from "./drawing-docs";
 import { extractPageSymbolPaths } from "./pdfPaths";
 import { classifySheetDiscipline, findSheetId, parseSheetId } from "./sheetDiscipline";
 import { getPdfDocument } from "@/lib/pdf-document";
@@ -17,7 +17,8 @@ export async function readAiPages(fileBytes) {
       y: viewport.height ? (item.y / viewport.height) * 100 : 0,
     })).filter((item) => item.text);
     const text = tokens.map((item) => item.text).join("\n");
-    const kind = classifyPageText(text);
+    const kind = classifyPageItems(items, viewport);
+    const planType = inferPlanType(items, viewport);
     const sheetId = findSheetId(tokens) || parseSheetId(text);
     const discipline = classifySheetDiscipline(text, tokens);
     let paths = [];
@@ -33,6 +34,7 @@ export async function readAiPages(fileBytes) {
       tokens,
       sheetId,
       discipline,
+      planType,
       paths: [...paths, ...rasterPaths],
       rasterPaths,
     });

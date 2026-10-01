@@ -1,4 +1,7 @@
-import { getDocument } from "pdfjs-dist";
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
+import workerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
+
+GlobalWorkerOptions.workerSrc = workerUrl;
 
 const cache = new WeakMap();
 

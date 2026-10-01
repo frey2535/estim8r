@@ -18,6 +18,7 @@ import { describeReconciliation, reconcilePlanToSchedule } from "./countReconcil
 import { extractSheetNotes, notesToMarks } from "./sheetNotes.js";
 import { associateGeometry, assignExclusiveGeometry, placeOnSymbolGeometry, shapeHintFromLabel } from "./vectorSymbols.js";
 import { orthogonalizePolyline } from "./ortho.js";
+import { attachLegendGeometryPrototypes, scanPageByLegendGeometry } from "./legendGeometry.js";
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
 
 const STOP = new Set(["the", "and", "for", "with", "from", "this", "that", "sheet", "note", "see", "typ", "all", "new", "nic", "nts", "rev"]);
@@ -703,7 +704,7 @@ export function buildAiMarks({
   color = "#2563eb",
 }) {
   const anchorIds = new Set(ANCHOR_SYMBOL_IDS[trade] || []);
-  const dictionary = legendDictionaryFromPages(pages, drawingSymbols, symbols, trade);
+  const dictionary = attachLegendGeometryPrototypes(legendDictionaryFromPages(pages, drawingSymbols, symbols, trade), pages);
   const aliases = dictionary.aliases;
   const usableDrawing = dictionary.usableDrawing;
   const matchSymbols = [...(symbols || []), ...usableDrawing];
@@ -728,6 +729,47 @@ export function buildAiMarks({
     const assigned = assignExclusiveGeometry(hits.map((hit) => hit.token), page.paths || [], {
       shapeHintFor: (token) => shapeHintForToken(token.text, dictionary),
     });
+    // Visual legend pass: detect repeated graphical symbols even when the plan has
+    // no adjacent type text. This is required for power receptacles and many light
+    // fixtures whose only identity is their legend geometry.
+    const visualHits = scanPageByLegendGeometry(page, dictionary);
+    for (const visual of visualHits) {
+      const geometry = visual.geometry;
+      const symbol = visual.entry.symbol;
+      const placed = { x: geometry.cx, y: geometry.cy };
+      if (!placementAllowed(placed)) continue;
+      const duplicate = seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.34);
+      if (duplicate) continue;
+      const mark = {
+        id: newId(),
+        source: "ai",
+        trade,
+        type: "count",
+        sheet: page.page,
+        x: placed.x,
+        y: placed.y,
+        category: symbol.takeoffCategory || symbol.category,
+        symbol: symbol.id,
+        symbolLabel: symbol.label,
+        abbr: symbol.abbr,
+        typeCode: String(visual.entry.code || symbol.abbr || "").toUpperCase(),
+        color,
+        markerSize: 1.45,
+        matchedFrom: "legend-geometry",
+        outline: geometry.outline,
+        outlineSource: geometry.outline?.source || geometry.source || "vector",
+        detectSource: DETECT_SOURCE_ORIGINAL_PDF,
+        confidence: visual.score >= 0.9 ? "high" : "medium",
+        reviewStatus: visual.score >= 0.9 ? "accepted" : "pending",
+        layer: "device",
+        fillOpacity: 0.5,
+        anchor: anchorIds.has(symbol.id),
+        geometryScore: visual.score,
+      };
+      counts.push(mark);
+      seen.push({ ...mark, tagX: placed.x, tagY: placed.y });
+      for (const part of geometry.parts || []) usedGeometry.add(part);
+    }
     for (const hit of hits) {
       let { token, symbol } = hit;
       const geometry = assigned.get(token) || placeOnSymbolGeometry(token, (page.paths || []).filter((item) => !usedGeometry.has(item)), {

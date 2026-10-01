@@ -97,7 +97,7 @@ export function applyDeviceTypeColors(marks) {
 }
 
 export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
-  if (mark?.outline && ["vector", "raster"].includes(mark.outline.source)) {
+  if (mark?.outline && (["vector", "raster", "mixed"].includes(mark.outline.source) || mark.outline.kind === "composite")) {
     // AI marks must paint the geometry that was actually detected on the print.
     // Never replace a detected raster/vector footprint with a generic marker.
     return scaleOutline(mark.outline, 1, { x: mark.x, y: mark.y });

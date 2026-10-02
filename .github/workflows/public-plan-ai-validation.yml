@@ -2,6 +2,7 @@ name: Public plan AI validation
 
 on:
   workflow_dispatch:
+  # rerun after #137
   # rerun after #135
   pull_request:
     branches: [main]

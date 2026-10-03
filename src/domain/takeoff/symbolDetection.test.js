@@ -10,6 +10,7 @@ import {
   isTitleBlockLetter,
   persistedPlanDeviceCount,
   shouldAcceptPlanToken,
+  snapFillToDevice,
 } from "./symbolDetection.js";
 import { candidatesFromConstructedPaths, DRAW_CLOSE, DRAW_CUBIC, DRAW_LINE, DRAW_MOVE } from "./vectorSymbols.js";
 
@@ -53,6 +54,8 @@ assert(!shouldScan({ kind: "lighting-schedule", tokens: [{ text: "F1" }] }, "ele
 assert(isCanDeviceText("Type 2 6\" can"), "can copy is detected");
 assert(isCanDeviceText("LED downlight"), "downlight copy is detected");
 assert(!isCanDeviceText("Type 1 2x4 LED troffer"), "a troffer is not a can");
+const onSymbol = snapFillToDevice({ text: "GFI", x: 40, y: 50 }, "circle");
+assert(onSymbol.x === 40 && onSymbol.y === 50, "fills sit on the symbol, not offset toward sheet center");
 
 const electrical = paletteForTrade("electrical");
 assert(matchTradeSymbol("R16.3", electrical.symbols) == null, "R16.3 does not match a light");

@@ -1,7 +1,7 @@
 import { isCanDeviceText } from "./symbolDetection.js";
 import { pointHitsOutline, scaleOutline } from "./vectorSymbols.js";
 
-export const DEVICE_FILL_OPACITY = 0.42;
+export const DEVICE_FILL_OPACITY = 0.34;
 export const CIRCUIT_COLOR = "#64748b";
 export const SELECTED_OUTLINE_SCALE = 1;
 
@@ -40,10 +40,11 @@ export function isCircuitMark(mark) {
 
 export function planOverlayMarks(marks, options = {}) {
   const list = marks || [];
-  // Live takeoff must show counted devices AND conduit so the estimator can verify AI / True Takeoff.
-  // PDF markup pages can still request devices-only or circuits-only.
   if (options.devicesOnly) return list.filter((mark) => !isCircuitMark(mark));
   if (options.circuitsOnly) return list.filter((mark) => isCircuitMark(mark) || mark?.type === "note");
+  // Device-count sheets stay devices-only. Conduit belongs on conduit/circuit pages
+  // or on a takeoff sheet that has no counted devices.
+  if (list.some(isDeviceMark)) return list.filter((mark) => !isCircuitMark(mark));
   return list;
 }
 
@@ -97,7 +98,7 @@ export function applyDeviceTypeColors(marks) {
 }
 
 export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
-  if (mark?.outline && (["vector", "raster", "mixed"].includes(mark.outline.source) || mark.outline.kind === "composite")) {
+  if (mark?.outline && (["vector", "raster", "mixed", "text"].includes(mark.outline.source) || mark.outline.kind === "composite")) {
     // AI marks must paint the geometry that was actually detected on the print.
     // Never replace a detected raster/vector footprint with a generic marker.
     return scaleOutline(mark.outline, 1, { x: mark.x, y: mark.y });
@@ -105,10 +106,10 @@ export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
   const scale = Math.max(0.4, Number(markerSize) || 0.55) / 0.55;
   const blob = `${mark?.symbol || ""} ${mark?.symbolLabel || ""} ${mark?.abbr || ""} ${mark?.typeCode || ""}`;
   if (isCanDeviceText(blob) || /downlight|pendant|high bay|low bay|occup|sensor|switch/.test(blob.toLowerCase())) {
-    return { kind: "circle", r: 0.42 * scale };
+    return { kind: "circle", r: 0.28 * scale };
   }
   if (/recept|gfci|gfi|duplex|outlet|\br\b|quad/.test(blob.toLowerCase())) {
-    return { kind: "circle", r: 0.38 * scale };
+    return { kind: "circle", r: 0.24 * scale };
   }
   const size = blob.toLowerCase().match(/(\d)\s*[x×]\s*(\d)/);
   if (size) {
@@ -116,9 +117,9 @@ export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
     const b = Number(size[2]);
     const long = Math.max(a, b);
     const short = Math.min(a, b);
-    return { kind: "rect", w: 0.42 * long * scale, h: 0.38 * short * scale };
+    return { kind: "rect", w: 0.32 * long * scale, h: 0.28 * short * scale };
   }
-  return { kind: "rect", w: 0.95 * scale, h: 0.55 * scale };
+  return { kind: "rect", w: 0.62 * scale, h: 0.36 * scale };
 }
 
 export function hitTestDeviceFill(mark, point, markerSize = 0.55) {

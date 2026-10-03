@@ -4,6 +4,7 @@ import {
   fixtureSizeFromWholeToken,
   isCanDeviceText,
   isNonPlanSheetKind,
+  isPlanInterior,
   isQuotedTypeMark,
   isReferenceCallout,
   isTitleBlockLetter,
@@ -16,9 +17,10 @@ import {
 import { DETECT_SOURCE_ORIGINAL_PDF } from "./accuracyReview.js";
 import { describeReconciliation, reconcilePlanToSchedule } from "./countReconciliation.js";
 import { extractSheetNotes, notesToMarks } from "./sheetNotes.js";
+import { pagePlanType } from "./drawing-docs.js";
 import { associateGeometry, assignExclusiveGeometry, placeOnSymbolGeometry, shapeHintFromLabel, tagOnSymbolGeometry } from "./vectorSymbols.js";
 import { orthogonalizePolyline } from "./ortho.js";
-import { attachLegendGeometryPrototypes, scanPageByLegendGeometry } from "./legendGeometry.js";
+import { attachConfirmedGeometryPrototypes, attachLegendGeometryPrototypes, scanPageByLegendGeometry, snapToEntryPrototype } from "./legendGeometry.js";
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
 
 const STOP = new Set(["the", "and", "for", "with", "from", "this", "that", "sheet", "note", "see", "typ", "all", "new", "nic", "nts", "rev"]);
@@ -704,7 +706,7 @@ export function buildAiMarks({
   color = "#2563eb",
 }) {
   const anchorIds = new Set(ANCHOR_SYMBOL_IDS[trade] || []);
-  const dictionary = attachLegendGeometryPrototypes(legendDictionaryFromPages(pages, drawingSymbols, symbols, trade), pages);
+  let dictionary = attachLegendGeometryPrototypes(legendDictionaryFromPages(pages, drawingSymbols, symbols, trade), pages);
   const aliases = dictionary.aliases;
   const usableDrawing = dictionary.usableDrawing;
   const matchSymbols = [...(symbols || []), ...usableDrawing];
@@ -714,6 +716,7 @@ export function buildAiMarks({
   for (const page of pages || []) {
     if (!shouldScan(page, trade)) continue;
     const sitePlan = isSitePlanPage(page);
+    const planType = pagePlanType(page);
     const pageCandidates = collectMatchCandidates(page);
     const hits = [];
     for (const token of pageCandidates) {
@@ -732,7 +735,10 @@ export function buildAiMarks({
     // Visual legend pass: detect repeated graphical symbols even when the plan has
     // no adjacent type text. This is required for power receptacles and many light
     // fixtures whose only identity is their legend geometry.
-    const visualHits = scanPageByLegendGeometry(page, dictionary);
+    const visualHits = scanPageByLegendGeometry(page, dictionary, {
+      planType,
+      occupied: seen.filter((item) => item.sheet === page.page),
+    });
     for (const visual of visualHits) {
       const geometry = visual.geometry;
       const symbol = visual.entry.symbol;
@@ -774,10 +780,11 @@ export function buildAiMarks({
       let { token, symbol } = hit;
       const hint = shapeHintForToken(token.text, dictionary)
         || (isCanDeviceText(token.text, token.nearbyText, symbol.label) ? "circle" : null);
+      const entry = (dictionary.entries || []).find((item) => normalizeTakeoffText(item.code) === normalizeTakeoffText(normalizeTypeMark(token.text)));
       const geometry = assigned.get(token) || placeOnSymbolGeometry(token, (page.paths || []).filter((item) => !usedGeometry.has(item)), {
         shapeHint: hint,
         rivals: hits.map((other) => other.token).filter((other) => other !== token),
-      }) || tagOnSymbolGeometry(token, { shapeHint: hint });
+      }) || snapToEntryPrototype(token, page, entry, { used: usedGeometry }) || tagOnSymbolGeometry(token, { shapeHint: hint });
       if (isCanDeviceText(token.text, token.nearbyText, symbol.label) && geometry?.kind !== "rect") {
         symbol = resolveCanSymbol(matchSymbols) || symbol;
       }
@@ -831,6 +838,52 @@ export function buildAiMarks({
       counts.push(mark);
       seen.push({ ...mark, tagX: token.x, tagY: token.y });
       if (geometryAnchored) usedGeometry.add(geometry);
+    }
+    // After labeled hits exist, copy their extracted bodies across the same
+    // sheet to recover devices that have no printed type mark.
+    dictionary = attachConfirmedGeometryPrototypes(dictionary, counts.filter((mark) => mark.sheet === page.page));
+    const unlabeledHits = scanPageByLegendGeometry(page, dictionary, {
+      planType,
+      threshold: 0.9,
+      strictSize: true,
+      occupyRadius: 0.72,
+      occupied: seen.filter((item) => item.sheet === page.page),
+    });
+    for (const visual of unlabeledHits) {
+      const geometry = visual.geometry;
+      const symbol = visual.entry.symbol;
+      const placed = { x: geometry.cx, y: geometry.cy };
+      if (!placementAllowed(placed) || !isPlanInterior(placed) || placed.x > 64) continue;
+      const duplicate = seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.34);
+      if (duplicate) continue;
+      counts.push({
+        id: newId(),
+        source: "ai",
+        trade,
+        type: "count",
+        sheet: page.page,
+        x: placed.x,
+        y: placed.y,
+        category: symbol.takeoffCategory || symbol.category,
+        symbol: symbol.id,
+        symbolLabel: symbol.label,
+        abbr: symbol.abbr,
+        typeCode: String(visual.entry.code || symbol.abbr || "").toUpperCase(),
+        color,
+        matchedFrom: "plan-repeat",
+        outline: geometry.outline,
+        outlineSource: geometry.outline?.source || geometry.source || "vector",
+        detectSource: DETECT_SOURCE_ORIGINAL_PDF,
+        confidence: visual.ambiguous ? "medium" : "high",
+        reviewStatus: visual.ambiguous ? "pending" : "accepted",
+        detectionAmbiguous: Boolean(visual.ambiguous),
+        geometryMargin: visual.margin,
+        layer: "device",
+        anchor: anchorIds.has(symbol.id),
+        geometryScore: visual.score,
+      });
+      seen.push({ sheet: page.page, x: placed.x, y: placed.y, typeCode: String(visual.entry.code || symbol.abbr || "").toUpperCase(), tagX: placed.x, tagY: placed.y });
+      for (const part of geometry.parts || []) usedGeometry.add(part);
     }
   }
   const anchors = counts.filter((mark) => mark.anchor);

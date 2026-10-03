@@ -1,4 +1,5 @@
 
+import { pagePlanType } from "./drawing-docs.js";
 import { isJunkGeometry } from "./vectorSymbols.js";
 
 const CATEGORY_ALLOW = new Set(["Lighting","Receptacles","Switches","Equipment","Panels / MCC","Fire Alarm","Low Voltage","HVAC"]);
@@ -150,10 +151,122 @@ export function attachLegendGeometryPrototypes(dictionary,pages=[]){
   return {...dictionary,entries};
 }
 
+function entryFamily(entry) {
+  const blob = `${entry?.symbol?.takeoffCategory || ""} ${entry?.symbol?.category || ""} ${entry?.symbol?.label || ""}`;
+  if (/lighting|downlight|troffer|can light|fixture/i.test(blob) && !/recept|gfi|switch/i.test(blob)) return "lighting";
+  if (/recept|gfi|switch|outlet|duplex/i.test(blob)) return "power";
+  if (/equipment|panel|fan|hvac/i.test(blob)) return "power";
+  return "";
+}
+
+export function planTypeScore(entry, planType) {
+  const family = entryFamily(entry);
+  if (!planType || !family) return 0;
+  if (planType === family) return 0.08;
+  if (planType !== family) return -0.07;
+  return 0;
+}
+
+export function isEmergencyTwin(a, b) {
+  const left = compact(a?.code || a);
+  const right = compact(b?.code || b);
+  if (!left || !right || left === right) return false;
+  return left + "e" === right || right + "e" === left;
+}
+
+export function rankGeometryEntries(cluster, entries = [], planType = "") {
+  return (entries || [])
+    .filter((entry) => entry?.prototype)
+    .map((entry) => ({
+      entry,
+      raw: geometrySimilarity(cluster, entry.prototype),
+      score: geometrySimilarity(cluster, entry.prototype) + planTypeScore(entry, planType),
+    }))
+    .sort((a, b) => b.score - a.score || b.raw - a.raw);
+}
+
+export function sizeCompatible(a, b) {
+  const A = a?.signature || geometrySignature(a);
+  const B = b?.signature || geometrySignature(b);
+  if (!A || !B) return false;
+  const longR = Math.max(A.long, B.long) / Math.max(0.0001, Math.min(A.long, B.long));
+  const shortR = Math.max(A.short, B.short) / Math.max(0.0001, Math.min(A.short, B.short));
+  return longR <= 1.32 && shortR <= 1.32;
+}
+
+export function resolveGeometryMatch(cluster, entries = [], options = {}) {
+  const planType = options.planType || "";
+  const ranked = rankGeometryEntries(cluster, entries, planType)
+    .filter((row) => !options.strictSize || sizeCompatible(cluster, row.entry.prototype));
+  const best = ranked[0];
+  if (!best) return null;
+  const runner = ranked[1];
+  const margin = best.score - (runner?.score || 0);
+  const twins = runner ? isEmergencyTwin(best.entry, runner.entry) : false;
+  const settledByPlan = Boolean(planType && entryFamily(best.entry) === planType && runner && entryFamily(runner.entry) !== planType);
+  if (twins && margin < 0.08 && !settledByPlan) return null;
+  return {
+    entry: best.entry,
+    score: best.raw,
+    adjustedScore: best.score,
+    margin,
+    ambiguous: !settledByPlan && margin < 0.045,
+  };
+}
+
+export function attachConfirmedGeometryPrototypes(dictionary, marks = []) {
+  const entries = (dictionary?.entries || []).map((entry) => ({ ...entry }));
+  const byCode = new Map(entries.map((entry) => [compact(entry.code), entry]));
+  for (const mark of marks || []) {
+    const code = compact(mark.typeCode || mark.abbr);
+    const entry = byCode.get(code);
+    if (!entry || !mark.outline || mark.outlineSource === "text") continue;
+    const candidate = {
+      cx: Number(mark.x) || 0,
+      cy: Number(mark.y) || 0,
+      w: Number(mark.outline.w) || Number(mark.w) || 0,
+      h: Number(mark.outline.h) || Number(mark.h) || 0,
+      kind: mark.outline.kind || "rect",
+      source: mark.outlineSource || mark.outline.source || "vector",
+      parts: mark.outline.parts || mark.parts,
+      outline: mark.outline,
+    };
+    if (!candidate.w || !candidate.h) continue;
+    candidate.signature = geometrySignature(candidate);
+    if (!entry.prototype || geometrySimilarity(candidate, entry.prototype) < 0.5) {
+      entry.prototype = candidate;
+    }
+  }
+  return { ...dictionary, entries };
+}
+
+export function snapToEntryPrototype(token, page, entry, options = {}) {
+  if (!token || !entry?.prototype) return null;
+  const used = options.used || new Set();
+  const paths = (page?.paths || []).filter((path) => !used.has(path) && !isJunkGeometry(path));
+  let best = null;
+  let bestScore = 0;
+  for (const seed of paths) {
+    if (Math.hypot((seed.cx || 0) - token.x, (seed.cy || 0) - token.y) > 1.8) continue;
+    const cluster = clusterSymbolGeometry(seed, paths, { maxSpan: 2.2 });
+    if (!cluster) continue;
+    const score = geometrySimilarity(cluster, entry.prototype);
+    if (score > bestScore) {
+      best = cluster;
+      bestScore = score;
+    }
+  }
+  if (!best || bestScore < 0.86) return null;
+  if (Math.hypot(best.cx - token.x, best.cy - token.y) > 1.15) return null;
+  return best;
+}
+
 export function scanPageByLegendGeometry(page,dictionary,options={}){
   const threshold=Number(options.threshold)||0.82;
   const entries=(dictionary?.entries||[]).filter((e)=>e.prototype);
   if(!entries.length)return [];
+  const planType=options.planType||pagePlanType(page);
+  const occupied=options.occupied||[];
   const paths=(page?.paths||[]).filter((p)=>!isJunkGeometry(p));
   const clusters=[];
   // Do not globally consume primitives here. A single primitive can be the seed
@@ -170,18 +283,10 @@ export function scanPageByLegendGeometry(page,dictionary,options={}){
   }
   const hits=[];
   for(const cluster of clusters){
-    let best=null,bestScore=0;
-    for(const entry of entries){
-      const score=geometrySimilarity(cluster,entry.prototype);
-      if(score>bestScore){best=entry;bestScore=score;}
-    }
-    if(best&&bestScore>=threshold){
-      const runnerUp=entries
-        .filter((entry)=>entry!==best)
-        .reduce((score,entry)=>Math.max(score,geometrySimilarity(cluster,entry.prototype)),0);
-      // Ambiguous lookalikes stay reviewable instead of being silently assigned
-      // to whichever legend type happens to score a fraction higher.
-      hits.push({geometry:cluster,entry:best,score:bestScore,margin:bestScore-runnerUp,ambiguous:(bestScore-runnerUp)<0.045});
+    if(occupied.some((point)=>Math.hypot((point.x||0)-cluster.cx,(point.y||0)-cluster.cy)<(Number(options.occupyRadius)||0.34))) continue;
+    const resolved=resolveGeometryMatch(cluster,entries,{planType,strictSize:options.strictSize});
+    if(resolved&&resolved.score>=threshold){
+      hits.push({geometry:cluster,entry:resolved.entry,score:resolved.score,margin:resolved.margin,ambiguous:resolved.ambiguous});
     }
   }
   // Keep the strongest hypothesis for the same physical footprint, but do not

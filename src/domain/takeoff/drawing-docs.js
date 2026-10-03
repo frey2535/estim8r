@@ -46,8 +46,8 @@ export function printedScaleCalibration(page) {
 }
 
 const STRONG_LEGEND_TITLE_RE = /\belectrical\s+(?:symbol\s+)?legend(?:\s*(?:and|&)\s*schedules?)?\b|\belectrical\s+legend\s+and\s+schedules\b/i;
-const LIGHTING_PLAN_TITLE_RE = /\b(?:electrical\s+)?lighting\s+plan\b/i;
-const POWER_PLAN_TITLE_RE = /\b(?:electrical\s+)?power\s+plan\b|\bbranch\s+power\s+plan\b/i;
+const LIGHTING_PLAN_TITLE_RE = /\b(?:electrical\s+)?lighting(?:\s+floor)?\s+plan\b/i;
+const POWER_PLAN_TITLE_RE = /\b(?:electrical\s+)?power(?:\s+floor)?\s+plan\b|\bbranch\s+power\s+plan\b/i;
 
 export function classifyPageText(text) {
   const blob = String(text || "");
@@ -88,6 +88,14 @@ export function inferPlanType(items = [], viewport = {}) {
   const full = (items || []).map((item) => String(item.str || "").trim()).filter(Boolean).join(" ");
   if (LIGHTING_PLAN_TITLE_RE.test(full)) return "lighting";
   if (POWER_PLAN_TITLE_RE.test(full)) return "power";
+  return "";
+}
+
+export function pagePlanType(page) {
+  if (page?.planType) return String(page.planType);
+  const blob = [page?.title, page?.sheetId, ...(page?.tokens || []).map((token) => token.text)].filter(Boolean).join(" ");
+  if (LIGHTING_PLAN_TITLE_RE.test(blob)) return "lighting";
+  if (POWER_PLAN_TITLE_RE.test(blob)) return "power";
   return "";
 }
 

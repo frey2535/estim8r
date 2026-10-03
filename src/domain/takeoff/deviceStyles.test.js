@@ -45,8 +45,12 @@ assert(colored.find((mark) => mark.id === "run").layer === "circuit", "circuits 
 
 const fixture = deviceOutline({ symbol: "2x4", abbr: "2x4" });
 assert(fixture.kind === "rect" && fixture.w > fixture.h, "2x4 fill follows the fixture outline");
+assert(fixture.w <= 1.4 && fixture.h <= 0.9, "fallback 2x4 fills stay small");
 const receptacle = deviceOutline({ symbol: "gfci", abbr: "GFI", symbolLabel: "GFCI receptacle" });
 assert(receptacle.kind === "circle", "receptacles use a circular outline");
+assert(receptacle.r <= 0.28, "fallback receptacle fills stay small");
+const canFill = deviceOutline({ symbol: "downlight", abbr: "2", symbolLabel: "Type 2 8 inch recessed downlight" });
+assert(canFill.kind === "circle", "cans use a circular outline, not a 2x4");
 assert(hitTestDeviceFill({ x: 10, y: 10, symbol: "2x4", abbr: "2x4" }, { x: 10.2, y: 10.1 }), "a 2x4 fill is selectable");
 assert(!hitTestDeviceFill({ x: 10, y: 10, symbol: "2x4", abbr: "2x4" }, { x: 18, y: 18 }), "fill hit stays on the device");
 
@@ -68,7 +72,7 @@ const plan = planOverlayMarks([
   { id: "ckt", type: "route", tool: "conduit", points: [{ x: 12, y: 20 }, { x: 70, y: 20 }] },
   { id: "hr", type: "homerun", points: [{ x: 12, y: 20 }, { x: 40, y: 10 }] },
 ]);
-assert(plan.some((mark) => mark.type === "count") && plan.some((mark) => mark.tool === "conduit"), "live overlay shows devices and conduit together for verification");
+assert(plan.some((mark) => mark.type === "count") && !plan.some((mark) => mark.tool === "conduit" || mark.type === "homerun"), "device-count sheets hide conduit overlays");
 const devicesOnly = planOverlayMarks(plan, { devicesOnly: true });
 assert(devicesOnly.every((mark) => mark.type === "count"), "devicesOnly still hides circuits for PDF count sheets");
 assert(!devicesOnly.some((mark) => mark.tool === "conduit" || mark.type === "homerun"), "grouped circuits stay off the count sheet export");

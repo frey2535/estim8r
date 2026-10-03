@@ -16,7 +16,7 @@ import {
 import { DETECT_SOURCE_ORIGINAL_PDF } from "./accuracyReview.js";
 import { describeReconciliation, reconcilePlanToSchedule } from "./countReconciliation.js";
 import { extractSheetNotes, notesToMarks } from "./sheetNotes.js";
-import { associateGeometry, assignExclusiveGeometry, placeOnSymbolGeometry, shapeHintFromLabel } from "./vectorSymbols.js";
+import { associateGeometry, assignExclusiveGeometry, placeOnSymbolGeometry, shapeHintFromLabel, tagOnSymbolGeometry } from "./vectorSymbols.js";
 import { orthogonalizePolyline } from "./ortho.js";
 import { attachLegendGeometryPrototypes, scanPageByLegendGeometry } from "./legendGeometry.js";
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
@@ -754,7 +754,6 @@ export function buildAiMarks({
         abbr: symbol.abbr,
         typeCode: String(visual.entry.code || symbol.abbr || "").toUpperCase(),
         color,
-        markerSize: 1.45,
         matchedFrom: "legend-geometry",
         outline: geometry.outline,
         outlineSource: geometry.outline?.source || geometry.source || "vector",
@@ -764,7 +763,6 @@ export function buildAiMarks({
         detectionAmbiguous: Boolean(visual.ambiguous),
         geometryMargin: visual.margin,
         layer: "device",
-        fillOpacity: 0.5,
         anchor: anchorIds.has(symbol.id),
         geometryScore: visual.score,
       };
@@ -774,22 +772,24 @@ export function buildAiMarks({
     }
     for (const hit of hits) {
       let { token, symbol } = hit;
+      const hint = shapeHintForToken(token.text, dictionary)
+        || (isCanDeviceText(token.text, token.nearbyText, symbol.label) ? "circle" : null);
       const geometry = assigned.get(token) || placeOnSymbolGeometry(token, (page.paths || []).filter((item) => !usedGeometry.has(item)), {
-        shapeHint: shapeHintForToken(token.text, dictionary),
+        shapeHint: hint,
         rivals: hits.map((other) => other.token).filter((other) => other !== token),
-      });
+      }) || tagOnSymbolGeometry(token, { shapeHint: hint });
       if (isCanDeviceText(token.text, token.nearbyText, symbol.label) && geometry?.kind !== "rect") {
         symbol = resolveCanSymbol(matchSymbols) || symbol;
       }
       const geometryPoint = geometry ? { x: geometry.cx, y: geometry.cy } : null;
-      // A text tag is evidence for classification, not the physical device location.
-      // Never create a counted mark at OCR/text coordinates: that is what produced
-      // floating marks beside fixtures and receptacles. A counted device must be
-      // anchored to detected source geometry on the drawing.
+      // Prefer extracted fixture geometry. When the type mark sits on the symbol
+      // itself (slashed-circle cans, OS, GFI, quoted Revit types), the tag *is*
+      // the device — place the fill there instead of inventing an offset or
+      // dropping the count.
       if (!geometryPoint || !placementAllowed(geometryPoint)) continue;
       const placed = geometryPoint;
-      const geometrySource = geometry?.outline?.source || geometry?.source || "vector";
-      const geometryAnchored = Boolean(geometryPoint);
+      const geometrySource = geometry?.outline?.source || geometry?.source || "text";
+      const geometryAnchored = geometrySource !== "text";
       const compact = normalizeTakeoffText(normalizeTypeMark(token.text));
       const fromLegend = aliases.some((alias) => normalizeTakeoffText(alias.code) === compact && alias.symbol?.id === symbol.id);
       const typeCode = fromLegend
@@ -819,15 +819,13 @@ export function buildAiMarks({
         abbr: symbol.abbr,
         typeCode,
         color,
-        markerSize: 1.45,
         matchedFrom: fromLegend ? "legend" : "drawing",
-        outline: geometryAnchored ? geometry.outline : null,
+        outline: geometry?.outline || null,
         outlineSource: geometrySource,
         detectSource: DETECT_SOURCE_ORIGINAL_PDF,
         confidence: geometrySource === "vector" ? "high" : "medium",
         reviewStatus: "pending",
         layer: "device",
-        fillOpacity: 0.5,
         anchor: anchorIds.has(symbol.id),
       };
       counts.push(mark);

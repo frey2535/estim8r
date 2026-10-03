@@ -207,15 +207,10 @@ export function resolveCanSymbol(symbols) {
 }
 
 export function snapFillToDevice(token, kind = "rect") {
-  const x = Number(token?.x) || 0;
-  const y = Number(token?.y) || 0;
-  const dx = 50 - x;
-  const dy = 48 - y;
-  const len = Math.hypot(dx, dy) || 1;
-  const step = kind === "circle" ? 0.8 : 0.95;
   return {
-    x: x + (dx / len) * step,
-    y: y + (dy / len) * step,
+    x: Number(token?.x) || 0,
+    y: Number(token?.y) || 0,
+    kind,
   };
 }
 

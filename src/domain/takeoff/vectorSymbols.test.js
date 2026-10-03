@@ -17,6 +17,7 @@ import {
   pointHitsOutline,
   scaleOutline,
   shapeHintFromLabel,
+  tagOnSymbolGeometry,
 } from "./vectorSymbols.js";
 
 function assert(cond, message) {
@@ -125,5 +126,10 @@ assert(assigned.get(type1e) === rectCandidates[0], "exclusive assign prefers the
 assert(placeOnSymbolGeometry({ text: "'2'", x: 53.4, y: 14.3 }, [{
   kind: "rect", cx: 55.7, cy: 12.9, w: 3.79, h: 0.65, outline: { kind: "rect", w: 3.79, h: 0.65 },
 }], { shapeHint: "circle" }) == null, "circle-hint devices stay on the tag when only a building bar is nearby");
+const tagCan = tagOnSymbolGeometry({ text: "'2'", x: 53.4, y: 14.3 }, { shapeHint: "circle" });
+assert(tagCan?.kind === "circle" && Math.abs(tagCan.cx - 53.4) < 0.01 && Math.abs(tagCan.cy - 14.3) < 0.01, "can/OS/GFI fills sit on the type mark, not beside it");
+assert(tagCan.r <= 0.3, "tag-on-symbol can fills stay small");
+const tagTroffer = tagOnSymbolGeometry({ text: "'1'", x: 25.7, y: 22.1 }, { shapeHint: "rect" });
+assert(tagTroffer?.kind === "rect" && tagTroffer.cx === 25.7 && tagTroffer.cy === 22.1, "quoted type 1 stays on the printed mark when no body extracts");
 
 if (!process.exitCode) console.log("vector symbol checks passed");

@@ -425,6 +425,35 @@ export function placeOnSymbolGeometry(token, candidates = [], options = {}) {
   return far;
 }
 
+export function tagOnSymbolGeometry(token, options = {}) {
+  if (!token) return null;
+  const x = Number(token.x);
+  const y = Number(token.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  const hint = options.shapeHint;
+  const kind = hint === "rect" ? "rect" : "circle";
+  const r = 0.26;
+  const w = kind === "rect" ? 0.68 : r * 2;
+  const h = kind === "rect" ? 0.38 : r * 2;
+  return {
+    cx: x,
+    cy: y,
+    kind,
+    w,
+    h,
+    r: kind === "circle" ? r : undefined,
+    source: "text",
+    outline: {
+      kind,
+      source: "text",
+      w,
+      h,
+      r: kind === "circle" ? r : undefined,
+      points: [],
+    },
+  };
+}
+
 export function assignExclusiveGeometry(tokens = [], candidates = [], options = {}) {
   const pairs = [];
   for (const token of tokens || []) {

@@ -20,7 +20,7 @@ import { DETECT_SOURCE_ORIGINAL_PDF } from "./accuracyReview.js";
 import { describeReconciliation, reconcilePlanToSchedule } from "./countReconciliation.js";
 import { extractSheetNotes, notesToMarks } from "./sheetNotes.js";
 import { looksLikeCoverOrRendering, looksLikeElectricalPlan, looksLikeIndexPage, pagePlanType } from "./drawing-docs.js";
-import { associateGeometry, assignExclusiveGeometry, placeOnSymbolGeometry, shapeHintFromLabel, tagOnSymbolGeometry } from "./vectorSymbols.js";
+import { associateGeometry, assignExclusiveGeometry, looksLikeRecessedCanBody, placeOnSymbolGeometry, shapeHintFromLabel, tagOnSymbolGeometry } from "./vectorSymbols.js";
 import { orthogonalizePolyline } from "./ortho.js";
 import { attachConfirmedGeometryPrototypes, attachFragmentPrototypes, attachLegendGeometryPrototypes, attachPowerGlyphPrototypes, findNearbyReceptacleGlyph, isEmergencyHatch, isHatchTickCluster, looksLikeHexNoteGlyph, scanPageByLegendGeometry, scanUnlabeledPowerGlyphs, snapToEntryPrototype } from "./legendGeometry.js";
 import { matchRasterToLegend, rasterCandidatesFromPage } from "./rasterSymbols.js";
@@ -356,6 +356,11 @@ export function matchTradeSymbol(text, symbols, aliases = [], options = {}) {
   const compact = normalizeTakeoffText(token);
   if (!compact || STOP.has(lower) || isReferenceCallout(raw) || isReferenceCallout(token)) return null;
   if (/^e\/m$/i.test(token) || (compact === "em" && /e\/m/i.test(raw))) return null;
+  if (options.planType === "lighting") {
+    if (/^(pc|photocell)$/i.test(token)) return null;
+    if (/^(120|208|240|277|480)$/.test(token)) return null;
+    if (/^ef(?:[- ]?\d+)?$/i.test(token)) return null;
+  }
   if (!isQuotedTypeMark(raw) && (/^\d+['′](?:\s*-\s*\d+['′]?)?$/.test(raw) || /['"′]-/.test(raw) || /^-['"]/.test(raw))) return null;
   if (options.reject && options.reject({ text: raw })) return null;
   const tagged = taggedEquipmentCode(token);
@@ -842,7 +847,10 @@ export function buildAiMarks({
       const powerDeviceTag = /^(WP|SP|SPR|P2|DB|DOORBELL)$/.test(printedCode)
         || (planType === "power" && printedCode === "R");
       const powerGlyph = powerDeviceTag
-        ? findNearbyReceptacleGlyph(token, page.paths || [], { radius: 0.62 })
+        ? findNearbyReceptacleGlyph(token, page.paths || [], {
+          radius: printedCode === "WP" ? 0.55 : 0.62,
+          allowWpCover: printedCode === "WP",
+        })
         : null;
       let geometry = powerGlyph
         ? { ...powerGlyph, source: "vector", outline: powerGlyph.outline || { kind: powerGlyph.kind || "rect", source: "vector", w: powerGlyph.w, h: powerGlyph.h, points: powerGlyph.points || [] } }
@@ -1175,6 +1183,26 @@ export function buildAiMarks({
       if (!review) continue;
       counts.push(review);
       seen.push({ ...review, tagX: placed.x, tagY: placed.y });
+    }
+    if (planType === "lighting") {
+      for (const path of page.paths || []) {
+        if (!looksLikeRecessedCanBody(path)) continue;
+        const placed = { x: path.cx, y: path.cy };
+        if (!placementAllowed(placed) || !isPlanInterior(placed) || placed.x > 64 || placed.y < 12) continue;
+        if (isPlotStampToken(placed, page.tokens)) continue;
+        if (seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.55)) continue;
+        const review = reviewCandidateMark({
+          trade,
+          sheet: page.page,
+          geometry: path,
+          reason: "unlabeled-lighting-can",
+          sources: ["vector"],
+          scores: { visual: 0.7, vector: 0.75 },
+        });
+        if (!review) continue;
+        counts.push(review);
+        seen.push({ ...review, tagX: placed.x, tagY: placed.y });
+      }
     }
   }
   const anchors = counts.filter((mark) => mark.anchor && !isReviewOnlyMark(mark));

@@ -116,5 +116,14 @@ assert(extraType2.length === 0, `type 2 extras must be 0 against can coordinates
 assert(type1Bid.length <= labeledPlan.filter((token) => normalizeTypeMark(token.text) === "1").length + 2, `type 1 bid copies stay near printed plan 1s, got ${type1Bid.length}`);
 assert((result.marks || []).filter((mark) => mark.sheet === 1 && (mark.type === "count" || mark.type === "drop")).length === 0, "cover stays 0");
 assert((result.marks || []).filter((mark) => mark.sheet === 48 && (mark.type === "count" || mark.type === "drop")).length === 0, "E001 stays 0");
+assert(!bid.some((mark) => /^(PC|208|EF)$/i.test(String(mark.typeCode || "")) || mark.symbol === "photocell" || mark.symbol === "ef"), `lighting-sheet PC/208V/EF are not bid devices, got ${bid.filter((mark) => /^(PC|208|EF)$/i.test(String(mark.typeCode || "")) || mark.symbol === "ef").map((mark) => mark.typeCode).join(",")}`);
+const acceptedType3 = labeledPlan.filter((token) => normalizeTypeMark(token.text) === "3");
+const extraType3 = bid.filter((mark) => String(mark.typeCode || "") === "3" && !acceptedType3.some((token) => (
+  Math.hypot(mark.x - token.x, mark.y - token.y) < 1.8
+  || Math.hypot((mark.labelLocation?.x ?? 999) - token.x, (mark.labelLocation?.y ?? 999) - token.y) < 0.45
+)));
+assert(extraType3.length === 0, `type 3 extras that are not the accepted plan 3 must not bid, got ${extraType3.length}`);
+const leftoverCanReview = review.some((mark) => Math.hypot(mark.x - 58.74, mark.y - 81.86) < 0.7);
+assert(leftoverCanReview, "unlabeled can at 58.74,81.86 stays REVIEW when it is not bid-confident");
 
 if (!process.exitCode) console.log("e210 lighting fixture-level checks passed");

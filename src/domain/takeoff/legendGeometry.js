@@ -350,18 +350,32 @@ function nearNoteChrome(point, tokens = []) {
   });
 }
 
+export function looksLikeWpCoverGlyph(candidate) {
+  if (!candidate || looksLikeHexNoteGlyph(candidate)) return false;
+  const w = Number(candidate.w) || 0;
+  const h = Number(candidate.h) || 0;
+  const long = Math.max(w, h);
+  const short = Math.min(w, h);
+  const aspect = long / (short || 1e-9);
+  return long >= 0.36 && long <= 0.72 && short >= 0.32 && aspect <= 1.45;
+}
+
 export function findNearbyReceptacleGlyph(point, paths = [], options = {}) {
   const x = Number(point?.x ?? point?.cx) || 0;
   const y = Number(point?.y ?? point?.cy) || 0;
   const radius = Number(options.radius) || 1.15;
   const hexClearance = Number(options.hexClearance) || 0.22;
+  const allowWpCover = Boolean(options.allowWpCover);
   return (paths || [])
-    .filter((path) => looksLikeReceptacleGlyph(path))
+    .filter((path) => looksLikeReceptacleGlyph(path) || (allowWpCover && looksLikeWpCoverGlyph(path)))
     .filter((path) => !(paths || []).some((hex) => looksLikeHexNoteGlyph(hex)
       && Math.hypot((Number(hex.cx) || 0) - (Number(path.cx) || 0), (Number(hex.cy) || 0) - (Number(path.cy) || 0)) < hexClearance))
     .map((path) => ({ path, dist: Math.hypot((Number(path.cx) || 0) - x, (Number(path.cy) || 0) - y) }))
     .filter((item) => item.dist <= radius)
-    .sort((a, b) => a.dist - b.dist)[0]?.path || null;
+    .sort((a, b) => {
+      const receptacleFirst = Number(looksLikeReceptacleGlyph(b.path)) - Number(looksLikeReceptacleGlyph(a.path));
+      return receptacleFirst || a.dist - b.dist;
+    })[0]?.path || null;
 }
 
 function classifyNearbyPowerLabel(point, tokens = []) {
@@ -537,6 +551,7 @@ export function attachConfirmedGeometryPrototypes(dictionary, marks = []) {
     const entry = byCode.get(code);
     if (!entry || !mark.outline || mark.outlineSource === "text") continue;
     if (/^(wp|sp|spr|r|p2|db)$/.test(code)) continue;
+    if ((Number(mark.x) || 0) > 64 || (Number(mark.y) || 0) < 14) continue;
     const candidate = {
       cx: Number(mark.x) || 0,
       cy: Number(mark.y) || 0,

@@ -133,7 +133,7 @@ assert(lightingOnPower.length === 0, `lighting types / site poles must not mark 
 assert(hexMarked.length === 0, `hex notes must not get text chips, got ${hexMarked.length}`);
 assert(hatchBand.length <= 4, `stair/hatch ticks must not become room-full of marks, got ${hatchBand.length}`);
 assert(maxExtent <= 1.65, `fills must stay Beam-tight, max extent ${maxExtent}`);
-assert(wpOnGlyph.length >= Math.min(3, found.wp), `WP fills must sit on the printed glyph, ${wpOnGlyph.length}/${found.wp}`);
+assert(wpOnGlyph.length === found.wp, `every WP fill must sit on the printed glyph, ${wpOnGlyph.length}/${found.wp}`);
 assert(!(e110?.tokens || []).some((token) => (
   /^TYP\.?$/i.test(normalizeTypeMark(token.text))
   && e110Marks.some((mark) => Math.hypot(mark.x - token.x, mark.y - token.y) < 0.2 && mark.typeCode === "TYP")

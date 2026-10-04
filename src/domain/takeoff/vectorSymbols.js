@@ -333,6 +333,15 @@ export function shapeHintFromLabel(text) {
   return null;
 }
 
+export function looksLikeRecessedCanBody(candidate) {
+  if (!candidate || isJunkGeometry(candidate)) return false;
+  const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
+  const short = Math.min(Number(candidate.w) || 0, Number(candidate.h) || 0);
+  const aspect = long / (short || 1e-9);
+  if (long < 0.60 || long > 0.82 || short < 0.58 || aspect > 1.35) return false;
+  return candidate.kind === "circle" || candidate.kind === "rect";
+}
+
 export function isJunkGeometry(candidate) {
   if (!candidate) return true;
   const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);

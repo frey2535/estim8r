@@ -18,7 +18,7 @@ import {
 import { DETECT_SOURCE_ORIGINAL_PDF } from "./accuracyReview.js";
 import { describeReconciliation, reconcilePlanToSchedule } from "./countReconciliation.js";
 import { extractSheetNotes, notesToMarks } from "./sheetNotes.js";
-import { pagePlanType } from "./drawing-docs.js";
+import { looksLikeCoverOrRendering, looksLikeElectricalPlan, looksLikeIndexPage, pagePlanType } from "./drawing-docs.js";
 import { associateGeometry, assignExclusiveGeometry, placeOnSymbolGeometry, shapeHintFromLabel, tagOnSymbolGeometry } from "./vectorSymbols.js";
 import { orthogonalizePolyline } from "./ortho.js";
 import { attachConfirmedGeometryPrototypes, attachFragmentPrototypes, attachLegendGeometryPrototypes, isEmergencyHatch, scanPageByLegendGeometry, snapToEntryPrototype } from "./legendGeometry.js";
@@ -128,7 +128,10 @@ export function fixtureAliasesFromSchedules(pages, symbols, trade) {
   for (const page of pages || []) {
     const kind = String(page.kind || "");
     if (!kind.includes("schedule") && kind !== "legend") continue;
-    if (trade && !pageMatchesTrade(page, trade)) continue;
+    if (trade && !pageMatchesTrade(page, trade)) {
+      const discipline = pageDiscipline(page);
+      if (discipline && discipline !== "unknown") continue;
+    }
     const rows = [];
     const sorted = [...(page.tokens || [])].sort((a, b) => a.y - b.y || a.x - b.x);
     for (const token of sorted) {
@@ -215,7 +218,9 @@ function usableDrawingSymbols(drawingSymbols, pages, trade) {
   return (drawingSymbols || []).filter((item) => {
     if (!item.page) return true;
     const source = (pages || []).find((page) => page.page === item.page);
-    return !source || pageMatchesTrade(source, trade);
+    if (!source || pageMatchesTrade(source, trade)) return true;
+    const discipline = pageDiscipline(source);
+    return !discipline || discipline === "unknown";
   });
 }
 
@@ -285,7 +290,11 @@ function phrasesFromTokens(tokens) {
 
 export function shouldScan(page, trade) {
   if (!page) return false;
-  if (isNonPlanSheetKind(page.kind) || page.kind === "spec") return false;
+  if (looksLikeCoverOrRendering(page) || looksLikeIndexPage(page)) return false;
+  if (isNonPlanSheetKind(page.kind) || page.kind === "spec") {
+    if (!(trade === "electrical" && looksLikeElectricalPlan(page))) return false;
+  }
+  if (trade === "electrical") return looksLikeElectricalPlan(page);
   if (trade && !pageMatchesTrade(page, trade)) return false;
   return true;
 }

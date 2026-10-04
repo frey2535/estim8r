@@ -1,4 +1,5 @@
 export const SHEET_ID_RE = /\b([A-Z]{1,3})[- ]?(\d{1,2})[.-](\d{2})[A-Z]?\b/i;
+export const COMPACT_SHEET_ID_RE = /\b([A-Z]{1,3})[- ]?(\d{3,4})[A-Z]?\b/i;
 
 const PREFIX_TRADE = {
   e: "electrical",
@@ -44,9 +45,23 @@ const RELATED = {
 };
 
 export function parseSheetId(text) {
-  const match = String(text || "").toUpperCase().match(SHEET_ID_RE);
-  if (!match) return "";
-  return `${match[1]}${Number(match[2])}.${match[3]}`;
+  const blob = String(text || "").toUpperCase();
+  const dotted = blob.match(SHEET_ID_RE);
+  if (dotted) return `${dotted[1]}${Number(dotted[2])}.${dotted[3]}`;
+  const compact = blob.match(COMPACT_SHEET_ID_RE);
+  if (!compact) return "";
+  return `${compact[1]}${compact[2]}`;
+}
+
+export function electricalSheetLooksLikePlan(sheetId) {
+  const raw = String(sheetId || "").toUpperCase();
+  if (!/^E[A-Z]*/.test(raw)) return false;
+  const dotted = raw.match(/^E[A-Z]*[- ]?(\d{1,2})\.(\d{2})/);
+  if (dotted) return Number(dotted[1]) >= 1 && Number(dotted[1]) <= 4;
+  const compact = raw.match(/^E[A-Z]*[- ]?(\d{3,4})/);
+  if (!compact) return false;
+  const n = Number(compact[1]);
+  return n >= 100 && n < 500;
 }
 
 export function tradeFromSheetId(sheetId) {
@@ -106,7 +121,7 @@ export function pageDiscipline(page) {
 export function pageMatchesTrade(page, trade) {
   if (!trade) return true;
   const discipline = pageDiscipline(page);
-  if (!discipline || discipline === "unknown") return true;
+  if (!discipline || discipline === "unknown") return false;
   if (discipline === trade) return true;
   return (RELATED[trade] || []).includes(discipline);
 }

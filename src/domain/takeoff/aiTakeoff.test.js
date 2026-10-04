@@ -67,7 +67,10 @@ const planned = buildAiMarks({
   pages: [{
     page: 1,
     kind: "drawing",
+    sheetId: "E1.01",
     tokens: [
+      { text: "ELECTRICAL POWER PLAN", x: 80, y: 88 },
+      { text: "E1.01", x: 92, y: 94 },
       { text: "LP", x: 70, y: 20 },
       { text: "GFI", x: 10, y: 20 },
       { text: "GFI", x: 20, y: 20 },
@@ -104,7 +107,10 @@ const fixtures = buildAiMarks({
     {
       page: 2,
       kind: "drawing",
+      sheetId: "E2.01",
       tokens: [
+        { text: "ELECTRICAL LIGHTING PLAN", x: 80, y: 88 },
+        { text: "E2.01", x: 92, y: 94 },
         { text: "F1", x: 12, y: 30 },
         { text: "F1", x: 40, y: 55 },
         { text: "2", x: 70, y: 40 },
@@ -158,7 +164,10 @@ const sitePlan = buildAiMarks({
     {
       page: 2,
       kind: "drawing",
+      sheetId: "E1.01",
       tokens: [
+        { text: "ELECTRICAL SITE PLAN", x: 80, y: 88 },
+        { text: "E1.01", x: 92, y: 94 },
         { text: "SECTION", x: 8, y: 8 },
         { text: "A", x: 16, y: 8 },
         { text: "SECTION", x: 70, y: 8 },
@@ -210,7 +219,10 @@ const lonely = buildAiMarks({
   pages: [{
     page: 1,
     kind: "drawing",
+    sheetId: "E1.01",
     tokens: [
+      { text: "ELECTRICAL POWER PLAN", x: 80, y: 88 },
+      { text: "E1.01", x: 92, y: 94 },
       { text: "1x4", x: 10, y: 10 },
       { text: "1x4", x: 14, y: 12 },
     ],

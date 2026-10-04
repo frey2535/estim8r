@@ -3,7 +3,7 @@ const CAN_RE = /downlight|can\s*light|recessed\s*can|\bdl\b|\bcan-?\d|\d\s*["”
 const BARE_TYPE_RE = /^(?:\d{1,2}[a-z]?|[a-z])$/i;
 const LEGEND_HEADER_RE = /^(?:electrical\s+|lighting\s+|power\s+|device\s+|symbol\s+)?legend$|^abbreviations?$/i;
 const NOTE_WORD_RE = /^(see|schedule|sched|title|qty|quantity|refer)$/i;
-const NON_PLAN_KIND_RE = /legend|schedule|^spec$|oneline|riser|detail/i;
+const NON_PLAN_KIND_RE = /legend|schedule|^spec$|oneline|riser|detail|cover|rendering|photo|^title$|index|comcheck|perspective|^other$/i;
 const CIRCUIT_TAG_RE = /^(?:LN|LP|PP|RP|H|P|L|EM)\d{1,2}$/i;
 const TAGGED_EQUIP_RE = /^(VF|EF)(?:[- ]?\d+)?$/i;
 

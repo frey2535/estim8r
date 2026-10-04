@@ -778,6 +778,57 @@ function nearbyText(token, tokens) {
     .join(" ");
 }
 
+function equipmentFamilyCode(value) {
+  const direct = taggedEquipmentCode(value);
+  if (direct) return direct;
+  const compact = normalizeTakeoffText(value);
+  if (/^ef\d*$/.test(compact)) return "EF";
+  if (/^vf\d*$/.test(compact)) return "VF";
+  return "";
+}
+
+function equipmentCodeForVisual(visual) {
+  return equipmentFamilyCode(visual?.entry?.code)
+    || equipmentFamilyCode(visual?.entry?.symbol?.abbr)
+    || equipmentFamilyCode(visual?.entry?.symbol?.id)
+    || equipmentFamilyCode(visual?.entry?.symbol?.label);
+}
+
+function printedEquipmentTags(page, family) {
+  return (page?.tokens || []).filter((token) => equipmentFamilyCode(token.text) === family);
+}
+
+function hasPrintedEquipmentTagNear(page, family, point, radius = 2.4) {
+  if (!family || !point) return false;
+  return printedEquipmentTags(page, family).some((token) => (
+    Math.hypot((Number(token.x) || 0) - point.x, (Number(token.y) || 0) - point.y) <= radius
+  ));
+}
+
+function isVisualOnlyEquipmentHit(visual, page, placed) {
+  const family = equipmentCodeForVisual(visual);
+  if (!family) return false;
+  return !hasPrintedEquipmentTagNear(page, family, placed);
+}
+
+function validateTaggedEquipmentMarks(marks, pages) {
+  const pageMap = new Map((pages || []).map((page) => [page.page, page]));
+  return (marks || []).filter((mark) => {
+    const family = equipmentFamilyCode(mark.typeCode)
+      || equipmentFamilyCode(mark.abbr)
+      || equipmentFamilyCode(mark.symbol)
+      || equipmentFamilyCode(mark.symbolLabel);
+    if (!family) return true;
+
+    const page = pageMap.get(mark.sheet);
+    const label = mark.labelLocation;
+    if (label && hasPrintedEquipmentTagNear(page, family, label, 0.45)) return true;
+    if ((mark.matchedFrom === "drawing" || mark.matchedFrom === "legend")
+      && hasPrintedEquipmentTagNear(page, family, { x: mark.x, y: mark.y }, 2.4)) return true;
+    return false;
+  });
+}
+
 function isSitePlanPage(page) {
   const blob = `${page?.title || ""} ${page?.sheetId || ""} ${(page?.tokens || []).map((token) => token.text).join(" ")}`;
   if (/^ES\d/i.test(String(page?.sheetId || ""))) return true;
@@ -883,6 +934,7 @@ export function buildAiMarks({
       const geometry = visual.geometry;
       const symbol = visual.entry.symbol;
       const placed = { x: geometry.cx, y: geometry.cy };
+      if (isVisualOnlyEquipmentHit(visual, page, placed)) continue;
       if (!placementAllowed(placed, { sitePlan })) continue;
       const duplicate = seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.34);
       if (duplicate) continue;
@@ -1125,6 +1177,7 @@ export function buildAiMarks({
       const geometry = visual.geometry;
       const symbol = visual.entry.symbol;
       const placed = { x: geometry.cx, y: geometry.cy };
+      if (isVisualOnlyEquipmentHit(visual, page, placed)) continue;
       const titleBand = planType !== "power" && (placed.x > 64 || placed.y < 12);
       if (!placementAllowed(placed, { sitePlan }) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens) || titleBand) continue;
       if (looksLikeHexNoteGlyph(geometry)) continue;
@@ -1226,6 +1279,7 @@ export function buildAiMarks({
     for (const visual of rasterHits) {
       const geometry = visual.geometry;
       const placed = { x: geometry.cx, y: geometry.cy };
+      if (isVisualOnlyEquipmentHit(visual, page, placed)) continue;
       const titleBand = planType !== "power" && (placed.x > 64 || placed.y < 12);
       if (!placementAllowed(placed, { sitePlan }) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens) || titleBand) continue;
       if (looksLikeHexNoteGlyph(geometry) || isHatchTickCluster(geometry, page.paths || [])) continue;
@@ -1313,8 +1367,9 @@ export function buildAiMarks({
       }
     }
   }
-  const anchors = counts.filter((mark) => mark.anchor && !isReviewOnlyMark(mark));
-  const devices = counts.filter((mark) => !mark.anchor && !isReviewOnlyMark(mark));
+  const validatedCounts = validateTaggedEquipmentMarks(counts, pages);
+  const anchors = validatedCounts.filter((mark) => mark.anchor && !isReviewOnlyMark(mark));
+  const devices = validatedCounts.filter((mark) => !mark.anchor && !isReviewOnlyMark(mark));
   const sections = findConduitSections(pages, trade);
   const groups = groupHomeruns(devices, anchors, maxHomeruns, { sections });
   const conduits = groups.map((group, index) => {
@@ -1346,8 +1401,8 @@ export function buildAiMarks({
   conduits.push(...applyConduitCallouts(conduits, callouts, anchors, conduits.length, trade, color));
   const cap = Math.max(1, Number(maxHomeruns) || DEFAULT_MAX_HOMERUNS);
   const pageKinds = Object.fromEntries((pages || []).filter((page) => page?.page).map((page) => [page.page, page.kind]));
-  const persistedCount = persistedPlanDeviceCount(counts, pageKinds);
-  const legendHits = counts.filter((mark) => mark.matchedFrom === "legend").length;
+  const persistedCount = persistedPlanDeviceCount(validatedCounts, pageKinds);
+  const legendHits = validatedCounts.filter((mark) => mark.matchedFrom === "legend").length;
   const skipped = (pages || []).filter((page) => !pageMatchesTrade(page, trade));
   const skippedSheets = skipped.map((page) => ({
     page: page.page,
@@ -1362,14 +1417,14 @@ export function buildAiMarks({
     : "";
   const noteMarks = notesToMarks(extractSheetNotes(pages, trade), trade);
   const reconciliation = reconcilePlanToSchedule({
-    marks: counts,
+    marks: validatedCounts,
     pages,
     pageKinds,
     trade,
   });
   return {
     marks: applyDeviceTypeColors([
-      ...counts.map(({ anchor, ...mark }) => mark),
+      ...validatedCounts.map(({ anchor, ...mark }) => mark),
       ...conduits,
       ...noteMarks,
     ]),
@@ -1377,7 +1432,7 @@ export function buildAiMarks({
       ? `AI ${trade} takeoff: ${persistedCount} devices from the drawing${legendHits ? ` (${legendHits} matched from the legend)` : ""}, ${conduits.length} conduit runs on ${trade} sheets showing run count and path, max ${cap} homeruns per conduit.${skipNote}`
       : `No ${trade} symbols were found on ${trade} sheets.${skipNote || " Counts stay empty until that trade is labeled on the sheets."}`,
     deviceCount: persistedCount,
-    reviewCount: counts.filter(isReviewOnlyMark).length,
+    reviewCount: validatedCounts.filter(isReviewOnlyMark).length,
     conduitCount: conduits.length,
     noteCount: noteMarks.length,
     skippedSheets,

@@ -882,6 +882,40 @@ export default function TakeoffWorkspace() {
     };
   }
 
+  function handleDrawingWheel(event) {
+    if (!file) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    const viewport = viewportRef.current?.getBoundingClientRect();
+    if (!viewport?.width || !viewport?.height) return;
+
+    // Normal mouse wheel / trackpad: wheel up zooms in, wheel down zooms out.
+    // Keep the drawing point under the cursor in approximately the same screen
+    // position by compensating pan as the centered drawing grows/shrinks.
+    const direction = event.deltaY < 0 ? 1 : -1;
+    const step = event.ctrlKey ? 0.1 : 0.15;
+
+    setZoom((currentZoom) => {
+      const nextZoom = Math.min(4, Math.max(0.25, Number((currentZoom + direction * step).toFixed(2))));
+      if (nextZoom === currentZoom) return currentZoom;
+
+      const ratio = nextZoom / currentZoom;
+      const cursorX = event.clientX - (viewport.left + viewport.width / 2);
+      const cursorY = event.clientY - (viewport.top + viewport.height / 2);
+      const currentPan = panRef.current;
+
+      const nextPan = {
+        x: currentPan.x + (cursorX - currentPan.x) * (1 - ratio),
+        y: currentPan.y + (cursorY - currentPan.y) * (1 - ratio),
+      };
+      panRef.current = nextPan;
+      setPan(nextPan);
+
+      return nextZoom;
+    });
+  }
+
   function currentAspect() {
     const el = viewerRef.current;
     return sheetAspect(el?.clientWidth, el?.clientHeight);
@@ -1898,6 +1932,7 @@ export default function TakeoffWorkspace() {
           <div
             ref={viewportRef}
             onPointerDown={onPanPointerDown}
+            onWheel={handleDrawingWheel}
             className={cn("min-h-0 min-w-0 flex-1 overflow-hidden bg-neutral-400/40 dark:bg-neutral-950", tool === "pan" && "cursor-grab touch-none")}
           >
             <div className="flex h-full w-full items-center justify-center p-2">

@@ -77,13 +77,17 @@ import { OVERLAY_FONT_SIZE, layoutOverlayCallouts } from "@/domain/takeoff/overl
 import {
   CIRCUIT_COLOR,
   DEVICE_FILL_OPACITY,
+  DEVICE_FILL_STROKE_PX,
+  MIN_VISIBLE_FILL,
   applyDeviceTypeColors,
   deviceOutline,
   hitTestDeviceFill,
   isCircuitMark,
   isDeviceMark,
   planOverlayMarks,
+  readableFillColor,
   selectMarkAtPoint,
+  sheetTypeColorSwatches,
   shortenCircuitPath,
 } from "@/domain/takeoff/deviceStyles";
 import {
@@ -254,6 +258,7 @@ export default function TakeoffWorkspace() {
   );
   const overlayMarks = useMemo(() => planOverlayMarks(sheetMarks), [sheetMarks]);
   const visibleOverlayMarks = useMemo(() => isolationMode && selectedId ? overlayMarks.filter((mark) => mark.id === selectedId) : overlayMarks, [overlayMarks, isolationMode, selectedId]);
+  const typeSwatches = useMemo(() => sheetTypeColorSwatches(overlayMarks), [overlayMarks]);
   const sheetReview = useMemo(
     () => reviewQueue(marks, sheetMeta.page),
     [marks, sheetMeta.page],
@@ -1597,9 +1602,27 @@ export default function TakeoffWorkspace() {
               <div className="flex justify-between"><span>Junction boxes</span><strong className="text-foreground">{hardwareTotals.junctionBoxes}</strong></div>
               <div className="mt-1 flex justify-between"><span>EMT connectors</span><strong className="text-foreground">{hardwareTotals.emtConnectors}</strong></div>
             </div>
-            <label className="text-xs font-bold text-muted-foreground">Color
-              <input type="color" value={penColor} onChange={(event) => setPenColor(event.target.value)} className="mt-1 h-8 w-full" />
-            </label>
+            <div className="space-y-1">
+              <div className="text-xs font-bold text-muted-foreground">Type colors</div>
+              {typeSwatches.length ? (
+                <div className="flex flex-wrap gap-1">
+                  {typeSwatches.map((item) => (
+                    <span key={item.key} className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-1.5 py-0.5 text-[10px] font-semibold text-foreground">
+                      <span className="h-3 w-3 rounded-sm border border-black/20" style={{ backgroundColor: item.color }} aria-hidden />
+                      {item.key.toUpperCase()}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">No device fills on this sheet yet.</p>
+              )}
+              <label className="text-xs font-bold text-muted-foreground">Pen
+                <span className="mt-1 flex items-center gap-2">
+                  <span className="h-8 w-8 shrink-0 rounded-md border border-border" style={{ backgroundColor: penColor }} aria-hidden />
+                  <input type="color" value={penColor} onChange={(event) => setPenColor(event.target.value)} className="h-8 w-full" />
+                </span>
+              </label>
+            </div>
             <TakeoffSizeControl
               markerSize={penSize}
               lineSize={penThickness}
@@ -1805,6 +1828,18 @@ export default function TakeoffWorkspace() {
                   lineSize={penThickness}
                   lengthFor={(mark) => markLengthFeet(mark, calibration, aspect)}
                 />
+                {file && !aiBusy && visibleOverlayMarks.length === 0 && (
+                  <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center p-4">
+                    <div className="max-w-sm rounded-xl border border-border bg-background/95 px-4 py-3 text-center shadow-lg">
+                      <p className="text-sm font-semibold text-foreground">No takeoff marks on this sheet</p>
+                      <p className="mt-1 text-xs leading-4 text-muted-foreground">
+                        {marks.length
+                          ? "This sheet has no counted devices or visible overlays. Open a plan sheet or run AI Assist again."
+                          : "Run AI Assist to count the selected trade and paint a type-colored fill on each symbol, or place a count yourself."}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1900,18 +1935,24 @@ function OverlayLabel({ label, fill }) {
 
 function DeviceFill({ mark, selected, markerSize, focus = false }) {
   const outline = deviceOutline(mark, markerSize, { selected });
-  const color = mark.color || "#1e3a8a";
-  const opacity = focus ? 0.72 : (mark.fillOpacity ?? DEVICE_FILL_OPACITY);
+  const color = readableFillColor(mark.color || "#1e3a8a");
+  const opacity = focus ? 0.78 : Math.max(mark.fillOpacity ?? DEVICE_FILL_OPACITY, DEVICE_FILL_OPACITY);
   const stroke = selected || focus ? "#ea580c" : color;
-  const strokeWidth = selected || focus ? 0.22 : 0.1;
+  const strokeWidth = selected || focus ? DEVICE_FILL_STROKE_PX + 0.6 : DEVICE_FILL_STROKE_PX;
+  const minR = MIN_VISIBLE_FILL / 2;
   if (outline.kind === "composite" && outline.parts?.length) {
     return (
       <g>
         {outline.parts.map((part, index) => {
           const partColor = color;
           if (part.kind === "path" && part.points?.length >= 3) return <polygon key={index} points={part.points.map((point) => `${point.x},${point.y}`).join(" ")} fill={partColor} fillOpacity={opacity} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />;
-          if (part.kind === "circle") return <circle key={index} cx={part.cx ?? mark.x} cy={part.cy ?? mark.y} r={part.r || Math.max(part.w || 0, part.h || 0) / 2} fill={partColor} fillOpacity={opacity} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />;
-          return <rect key={index} x={(part.cx ?? mark.x) - (part.w || 0) / 2} y={(part.cy ?? mark.y) - (part.h || 0) / 2} width={part.w || 0} height={part.h || 0} rx={0.08} fill={partColor} fillOpacity={opacity} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />;
+          if (part.kind === "circle") {
+            const r = Math.max(Number(part.r) || Math.max(part.w || 0, part.h || 0) / 2, minR);
+            return <circle key={index} cx={part.cx ?? mark.x} cy={part.cy ?? mark.y} r={r} fill={partColor} fillOpacity={opacity} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />;
+          }
+          const w = Math.max(Number(part.w) || 0, MIN_VISIBLE_FILL);
+          const h = Math.max(Number(part.h) || 0, MIN_VISIBLE_FILL * 0.7);
+          return <rect key={index} x={(part.cx ?? mark.x) - w / 2} y={(part.cy ?? mark.y) - h / 2} width={w} height={h} rx={0.08} fill={partColor} fillOpacity={opacity} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />;
         })}
       </g>
     );
@@ -1931,9 +1972,9 @@ function DeviceFill({ mark, selected, markerSize, focus = false }) {
   if (outline.kind === "circle") {
     return (
       <circle
-        cx={mark.x}
-        cy={mark.y}
-        r={outline.r}
+        cx={Number.isFinite(outline.cx) ? outline.cx : mark.x}
+        cy={Number.isFinite(outline.cy) ? outline.cy : mark.y}
+        r={Math.max(Number(outline.r) || 0, minR)}
         fill={color}
         fillOpacity={opacity}
         stroke={stroke}
@@ -1942,12 +1983,14 @@ function DeviceFill({ mark, selected, markerSize, focus = false }) {
       />
     );
   }
+  const width = Math.max(Number(outline.w) || 0, MIN_VISIBLE_FILL);
+  const height = Math.max(Number(outline.h) || 0, MIN_VISIBLE_FILL * 0.7);
   return (
     <rect
-      x={mark.x - outline.w / 2}
-      y={mark.y - outline.h / 2}
-      width={outline.w}
-      height={outline.h}
+      x={mark.x - width / 2}
+      y={mark.y - height / 2}
+      width={width}
+      height={height}
       rx={0.12}
       fill={color}
       fillOpacity={opacity}

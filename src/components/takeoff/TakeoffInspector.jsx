@@ -267,7 +267,12 @@ export default function TakeoffInspector({
         <p className="mb-2 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] leading-4 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">Calibrate scale before trusting LF / SF. Counts still work.</p>
       )}
       <div className="space-y-2 text-sm">
-        {rollup.rows.length === 0 && <p className="text-xs text-muted-foreground">No takeoff items yet.</p>}
+        {rollup.rows.length === 0 && (
+          <div className="rounded-lg border border-dashed border-border bg-muted/40 px-3 py-3">
+            <p className="text-sm font-semibold text-foreground">No takeoff items yet</p>
+            <p className="mt-1 text-xs leading-4 text-muted-foreground">Run AI Assist or place a count. Each counted device gets a type-colored fill on the symbol.</p>
+          </div>
+        )}
         {rollup.rows.map((row) => {
           const key = `${row.category}|${row.symbol}`;
           const edit = scheduleEdits[key] || {};

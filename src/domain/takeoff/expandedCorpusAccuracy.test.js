@@ -257,7 +257,8 @@ assert(soccerPower.found === 32, "Soccer power sheet keeps its 32 device GT");
 assert(pottsvilleOsWp.found === 15 && pottsvilleOsWp.falsePositives === 0, "Pottsville OS+WP regression stays 15/15");
 assert(pottsvillePowerGlyphs.found === 8, "E110 receptacle glyphs stay 8/8");
 assert(pottsvilleCans.found === 12 && pottsvilleCans.falsePositives === 0, "E210 type-2 cans stay 12/12 extra2 0");
-assert(pottsvilleLabeled.found === 23 && pottsvilleLabeled.falsePositives === 0, "E210 labeled 1-4/OS stay 23/23");
+assert(pottsvilleLabeled.found === pottsvilleLabeled.truth && pottsvilleLabeled.falsePositives === 0, `E210 labeled 1-4/OS stay ${pottsvilleLabeled.found}/${pottsvilleLabeled.truth}`);
+assert(pottsvilleLabeled.found >= 23, "E210 labeled plan types stay at least the previous 23");
 
 const electrical = paletteForTrade("electrical");
 const soccerMarks = buildAiMarks({

@@ -49,6 +49,7 @@ export function overlayBidMarks(marks = [], pageKinds = {}) {
       && Array.isArray(mark.points)
       && mark.points.length >= 2;
     if (!drawn) return false;
+    if (mark.source === "ai") return false;
     return !isNonPlanSheetKind(pageKinds[mark.sheet]);
   });
 }

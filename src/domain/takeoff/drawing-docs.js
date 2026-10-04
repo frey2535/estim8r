@@ -21,6 +21,7 @@ const RESERVED_SCHEDULE_TYPES = new Set([
   "QTY", "QUANTITY", "QUANTITIES", "NOTES", "NOTE", "TOTAL", "NONE",
   "NIC", "NTS", "NEW", "EXISTING", "OR", "OF", "TO", "PER", "EACH",
   "DS", "SF", "CF", "LF", "EA", "AFF", "AHJ", "NEC", "NFPA",
+  "AC", "FFE", "ELEC", "EL", "MECH", "ARCH", "GEN", "PNL",
 ]);
 const AREA_TYPE_RE = /\d[\d,]*\s*(?:sf|s\.f\.?|cf|lf)\b/i;
 const JUNK_NOTE_TYPE_RE = /^(?:W\d+(?:-\d+)?|FX-?\d+|FD-?\d+|FDC|PIV)$/i;

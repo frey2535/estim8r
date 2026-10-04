@@ -156,4 +156,24 @@ assert(pottsvilleReview.rows.find((row) => row.type === "1")?.scheduleQty === 11
 assert(pottsvilleReview.rows.find((row) => row.type === "1")?.planCount === 0, "missing lighting type stays 0 on the plan");
 assert(pottsvilleReview.rows.find((row) => row.type === "1")?.status === "short", "real missing fixture type can still show short");
 
+const abbrevReview = reconcilePlanToSchedule({
+  marks: [
+    { type: "count", sheet: 50, x: 82, y: 40, typeCode: "AC", abbr: "AC", category: "Low Voltage" },
+    { type: "count", sheet: 50, x: 83, y: 42, typeCode: "FFE", abbr: "FFE" },
+    { type: "count", sheet: 50, x: 84, y: 44, typeCode: "ELEC", abbr: "ELEC" },
+    { type: "count", sheet: 50, x: 81, y: 30, typeCode: "R", abbr: "R", category: "Receptacles", symbolLabel: "RECEPTACLES ≤ 10KVA PHASE A LOAD" },
+    { type: "count", sheet: 50, x: 22, y: 40, typeCode: "R", abbr: "R", category: "Receptacles", symbol: "duplex", symbolBodyLocation: { x: 22, y: 40 } },
+  ],
+  scheduleItems: [
+    { type: "AC", abbr: "AC", scheduleQty: 4, label: "ALTERNATING CURRENT" },
+    { type: "FFE", abbr: "FFE", scheduleQty: 20, label: "FIXTURES FURNITURE EQUIPMENT" },
+    { type: "ELEC", abbr: "ELEC", scheduleQty: 7, label: "ELECTRICAL" },
+  ],
+  pages: [powerPlan],
+  pageKinds: { 50: "drawing" },
+  trade: "electrical",
+});
+assert(!abbrevReview.rows.some((row) => /^(AC|FFE|ELEC)$/.test(row.type)), "abbreviation-list words are not fixture types");
+assert(abbrevReview.rows.find((row) => row.type === "R")?.planCount === 1, "schedule-header Type R in the notes band is not a receptacle count");
+
 if (!process.exitCode) console.log("count reconciliation checks passed");

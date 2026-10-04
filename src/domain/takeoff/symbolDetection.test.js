@@ -199,7 +199,8 @@ assert(selected.r === idle.r, "selection does not enlarge the extracted outline"
 assert(matchTradeSymbol("VF", electrical.symbols)?.id === "vf", "VF matches the electrical vent fan");
 assert(matchTradeSymbol("EF", electrical.symbols)?.id === "ef", "EF matches the electrical exhaust fan");
 assert(matchTradeSymbol("VENT FAN", electrical.symbols)?.id === "vf", "vent fan copy matches electrical");
-assert(matchTradeSymbol("EXHAUST FAN", electrical.symbols)?.id === "ef", "exhaust fan copy matches electrical");
+assert(!matchTradeSymbol("EXHAUST FAN", electrical.symbols), "exhaust-fan note words are not a plan device");
+assert(matchTradeSymbol("EF-1", electrical.symbols)?.id === "ef", "tagged EF-1 still matches");
 
 const fanPlan = buildAiMarks({
   trade: "electrical",

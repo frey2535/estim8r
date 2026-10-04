@@ -54,4 +54,41 @@ assert(marks.every((mark) => mark.type === "note"), "notes are not device counts
 assert(mergeExtractedNotes(marks, pages, "electrical").length === marks.length, "existing AI notes are not duplicated");
 assert(mergeExtractedNotes([], pages, "electrical").length === 2, "notes can be merged onto a saved takeoff");
 
+const e001 = {
+  page: 48,
+  kind: "legend",
+  sheetId: "E001",
+  title: "E001 GENERAL NOTES & LEGENDS",
+  tokens: [
+    { text: "E001", x: 90, y: 92 },
+    { text: "GENERAL", x: 20, y: 8 },
+    { text: "NOTES", x: 30, y: 8 },
+    { text: "1.", x: 20, y: 16 },
+    { text: "PROVIDE", x: 24, y: 16 },
+    { text: "DEVICES", x: 34, y: 16 },
+    { text: "AS", x: 42, y: 16 },
+    { text: "SHOWN", x: 46, y: 16 },
+  ],
+};
+const es100 = {
+  page: 55,
+  kind: "drawing",
+  sheetId: "ES100",
+  title: "ES100 SITE PLAN",
+  tokens: [
+    { text: "ES100", x: 90, y: 92 },
+    { text: "SITE", x: 80, y: 90 },
+    { text: "PLAN", x: 86, y: 90 },
+    { text: "KEYNOTES", x: 30, y: 20 },
+    { text: "1.", x: 30, y: 24 },
+    { text: "PROVIDE", x: 34, y: 24 },
+    { text: "GROUNDING", x: 44, y: 24 },
+    { text: "FOR", x: 56, y: 24 },
+    { text: "ALL", x: 60, y: 24 },
+    { text: "EQUIPMENT", x: 64, y: 24 },
+  ],
+};
+assert(extractSheetNotes([e001], "electrical").length === 0, "E001 legend keynotes are not takeoff notes");
+assert(extractSheetNotes([es100], "electrical").length === 0, "ES100 site keynotes are not takeoff notes");
+
 if (!process.exitCode) console.log("sheet note checks passed");

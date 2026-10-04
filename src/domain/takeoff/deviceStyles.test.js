@@ -1,13 +1,17 @@
 import {
   CIRCUIT_COLOR,
   DEVICE_FILL_OPACITY,
+  MIN_VISIBLE_FILL,
   SCHEDULE_TYPE_COLORS,
   applyDeviceTypeColors,
   deviceOutline,
   hitTestDeviceFill,
+  outlineExtent,
   planOverlayMarks,
+  readableFillColor,
   scheduleTypeColor,
   selectMarkAtPoint,
+  sheetTypeColorSwatches,
   shortenCircuitPath,
 } from "./deviceStyles.js";
 
@@ -42,15 +46,41 @@ assert(colored.find((mark) => mark.id === "a").color !== colored.find((mark) => 
 assert(colored.find((mark) => mark.id === "run").color === CIRCUIT_COLOR, "circuits do not use device fill colors");
 assert(colored.find((mark) => mark.id === "a").fillOpacity === DEVICE_FILL_OPACITY, "device fills stay transparent");
 assert(colored.find((mark) => mark.id === "run").layer === "circuit", "circuits are a separate layer");
+assert(colored.every((mark) => mark.type !== "count" || (mark.color && mark.color.toLowerCase() !== "#ffffff")), "device fills are never white");
+assert(readableFillColor("#ffffff") !== "#ffffff", "white fills are replaced with a readable color");
+assert(readableFillColor("#86efac") !== "#86efac", "pale type tints are darkened for white paper");
+assert(scheduleTypeColor("GFI") === SCHEDULE_TYPE_COLORS.gfi, "GFI has its own fill color");
+assert(scheduleTypeColor("OS") === SCHEDULE_TYPE_COLORS.os, "OS has its own fill color");
 
 const fixture = deviceOutline({ symbol: "2x4", abbr: "2x4" });
 assert(fixture.kind === "rect" && fixture.w > fixture.h, "2x4 fill follows the fixture outline");
 assert(fixture.w <= 1.4 && fixture.h <= 0.9, "fallback 2x4 fills stay small");
 const receptacle = deviceOutline({ symbol: "gfci", abbr: "GFI", symbolLabel: "GFCI receptacle" });
 assert(receptacle.kind === "circle", "receptacles use a circular outline");
-assert(receptacle.r <= 0.28, "fallback receptacle fills stay small");
+assert(receptacle.r * 2 >= MIN_VISIBLE_FILL, "fallback receptacle fills are large enough to see");
+assert(receptacle.r <= 0.8, "fallback receptacle fills stay on the symbol");
 const canFill = deviceOutline({ symbol: "downlight", abbr: "2", symbolLabel: "Type 2 8 inch recessed downlight" });
 assert(canFill.kind === "circle", "cans use a circular outline, not a 2x4");
+assert(canFill.r * 2 >= MIN_VISIBLE_FILL, "fallback can fills are large enough to see");
+const slashFragment = deviceOutline({
+  x: 22,
+  y: 40,
+  type: "count",
+  abbr: "OS",
+  outlineSource: "vector",
+  outline: { kind: "circle", source: "vector", r: 0.03, w: 0.06, h: 0.09, points: [] },
+});
+assert(outlineExtent(slashFragment) >= MIN_VISIBLE_FILL, "tiny extracted slashes still paint a visible fill");
+const offSheet = deviceOutline({
+  x: 30,
+  y: 40,
+  type: "count",
+  abbr: "GFI",
+  outline: { kind: "path", source: "vector", points: [{ x: 420, y: 280 }, { x: 430, y: 280 }, { x: 430, y: 290 }] },
+});
+assert(offSheet.kind === "circle" && offSheet.r * 2 >= MIN_VISIBLE_FILL, "off-screen outlines fall back to a visible fill on the symbol");
+const swatches = sheetTypeColorSwatches(colored.filter((mark) => mark.type === "count"));
+assert(swatches.length >= 3 && swatches.every((item) => item.color && item.color !== "#ffffff"), "left-rail type chips use real fill colors");
 assert(hitTestDeviceFill({ x: 10, y: 10, symbol: "2x4", abbr: "2x4" }, { x: 10.2, y: 10.1 }), "a 2x4 fill is selectable");
 assert(!hitTestDeviceFill({ x: 10, y: 10, symbol: "2x4", abbr: "2x4" }, { x: 18, y: 18 }), "fill hit stays on the device");
 

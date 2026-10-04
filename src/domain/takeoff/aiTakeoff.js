@@ -20,9 +20,10 @@ import { DETECT_SOURCE_ORIGINAL_PDF } from "./accuracyReview.js";
 import { describeReconciliation, reconcilePlanToSchedule } from "./countReconciliation.js";
 import { extractSheetNotes, notesToMarks } from "./sheetNotes.js";
 import { looksLikeCoverOrRendering, looksLikeElectricalPlan, looksLikeIndexPage, pagePlanType } from "./drawing-docs.js";
-import { associateGeometry, assignExclusiveGeometry, placeOnSymbolGeometry, shapeHintFromLabel, tagOnSymbolGeometry } from "./vectorSymbols.js";
+import { associateGeometry, assignExclusiveGeometry, looksLikeRecessedCanBody, placeOnSymbolGeometry, shapeHintFromLabel, tagOnSymbolGeometry } from "./vectorSymbols.js";
 import { orthogonalizePolyline } from "./ortho.js";
 import { attachConfirmedGeometryPrototypes, attachFragmentPrototypes, attachLegendGeometryPrototypes, attachPowerGlyphPrototypes, findNearbyReceptacleGlyph, isEmergencyHatch, isHatchTickCluster, looksLikeHexNoteGlyph, scanPageByLegendGeometry, scanUnlabeledPowerGlyphs, snapToEntryPrototype } from "./legendGeometry.js";
+import { matchRasterToLegend, rasterCandidatesFromPage } from "./rasterSymbols.js";
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
 
 const STOP = new Set(["the", "and", "for", "with", "from", "this", "that", "sheet", "note", "see", "typ", "all", "new", "nic", "nts", "rev"]);
@@ -355,6 +356,11 @@ export function matchTradeSymbol(text, symbols, aliases = [], options = {}) {
   const compact = normalizeTakeoffText(token);
   if (!compact || STOP.has(lower) || isReferenceCallout(raw) || isReferenceCallout(token)) return null;
   if (/^e\/m$/i.test(token) || (compact === "em" && /e\/m/i.test(raw))) return null;
+  if (options.planType === "lighting") {
+    if (/^(pc|photocell)$/i.test(token)) return null;
+    if (/^(120|208|240|277|480)$/.test(token)) return null;
+    if (/^ef(?:[- ]?\d+)?$/i.test(token)) return null;
+  }
   if (!isQuotedTypeMark(raw) && (/^\d+['′](?:\s*-\s*\d+['′]?)?$/.test(raw) || /['"′]-/.test(raw) || /^-['"]/.test(raw))) return null;
   if (options.reject && options.reject({ text: raw })) return null;
   const tagged = taggedEquipmentCode(token);
@@ -689,9 +695,10 @@ function candidateKey(item) {
   return `${normalizeTakeoffText(normalizeTypeMark(item.text))}|${Number(item.x || 0).toFixed(1)}|${Number(item.y || 0).toFixed(1)}`;
 }
 
-function collectMatchCandidates(page) {
-  const tokens = (page.tokens || []).filter((token) => !isSheetChrome(token) && shouldAcceptPlanToken(token, page.tokens));
-  const phrases = phrasesFromTokens(tokens).filter((phrase) => shouldAcceptPlanToken(phrase, page.tokens));
+function collectMatchCandidates(page, options = {}) {
+  const accept = (token) => shouldAcceptPlanToken(token, page.tokens, options);
+  const tokens = (page.tokens || []).filter((token) => !isSheetChrome(token) && accept(token));
+  const phrases = phrasesFromTokens(tokens).filter((phrase) => accept(phrase));
   const candidates = [];
   const seen = new Set();
   const add = (item) => {
@@ -746,7 +753,7 @@ export function buildAiMarks({
     if (!shouldScan(page, trade)) continue;
     const sitePlan = isSitePlanPage(page);
     const planType = pagePlanType(page);
-    const pageCandidates = collectMatchCandidates(page);
+    const pageCandidates = collectMatchCandidates(page, { planType, paths: page.paths || [] });
     const hits = [];
     for (const token of pageCandidates) {
       const symbol = matchTradeSymbol(token.text, matchSymbols, aliases, {
@@ -754,7 +761,7 @@ export function buildAiMarks({
         nearbyText: token.nearbyText,
         sitePlan,
         planType,
-        reject: (item) => !shouldAcceptPlanToken({ ...token, text: item.text }, page.tokens),
+        reject: (item) => !shouldAcceptPlanToken({ ...token, text: item.text }, page.tokens, { planType, paths: page.paths || [] }),
       });
       if (!symbol) continue;
       hits.push({ token, symbol });
@@ -767,6 +774,7 @@ export function buildAiMarks({
     // fixtures whose only identity is their legend geometry.
     const visualHits = scanPageByLegendGeometry(page, dictionary, {
       planType,
+      strictSize: planType === "lighting",
       occupied: seen.filter((item) => item.sheet === page.page),
     });
     for (const visual of visualHits) {
@@ -776,6 +784,21 @@ export function buildAiMarks({
       if (!placementAllowed(placed)) continue;
       const duplicate = seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.34);
       if (duplicate) continue;
+      if (planType === "lighting") {
+        const review = reviewCandidateMark({
+          trade,
+          sheet: page.page,
+          geometry,
+          reason: visual.ambiguous ? "detector-disagreement" : "unconfirmed-lighting-copy",
+          sources: ["legend-geometry"],
+          scores: { visual: visual.score, legend: visual.score, vector: visual.score },
+        });
+        if (review) {
+          counts.push(review);
+          seen.push({ ...review, tagX: placed.x, tagY: placed.y });
+        }
+        continue;
+      }
       const mark = attachDetectionRecord({
         id: newId(),
         source: "ai",
@@ -824,7 +847,10 @@ export function buildAiMarks({
       const powerDeviceTag = /^(WP|SP|SPR|P2|DB|DOORBELL)$/.test(printedCode)
         || (planType === "power" && printedCode === "R");
       const powerGlyph = powerDeviceTag
-        ? findNearbyReceptacleGlyph(token, page.paths || [], { radius: 0.62 })
+        ? findNearbyReceptacleGlyph(token, page.paths || [], {
+          radius: printedCode === "WP" ? 0.55 : 0.62,
+          allowWpCover: printedCode === "WP",
+        })
         : null;
       let geometry = powerGlyph
         ? { ...powerGlyph, source: "vector", outline: powerGlyph.outline || { kind: powerGlyph.kind || "rect", source: "vector", w: powerGlyph.w, h: powerGlyph.h, points: powerGlyph.points || [] } }
@@ -854,6 +880,24 @@ export function buildAiMarks({
       }
       if (isCanDeviceText(token.text, token.nearbyText, symbol.label) && geometry?.kind !== "rect") {
         symbol = resolveCanSymbol(matchSymbols) || symbol;
+      }
+      const lightingType = planType === "lighting" || /^\d{1,2}E?$/.test(printedCode);
+      const twinTaken = lightingType && hits.some((other) => {
+        if (other.token === token) return false;
+        const otherCode = normalizeTypeMark(other.token.text).toUpperCase();
+        if (otherCode.replace(/E$/, "") !== printedCode.replace(/E$/, "") || otherCode === printedCode) return false;
+        return Math.hypot((other.token.x || 0) - token.x, (other.token.y || 0) - token.y) < 2.8;
+      });
+      if (twinTaken && (!geometry || geometry.source === "text" || geometry.outline?.source === "text")) {
+        const leftover = placeOnSymbolGeometry(token, (page.paths || []).filter((item) => !usedGeometry.has(item)), {
+          shapeHint: hint || "rect",
+          rivals: [],
+          farRadius: 1.7,
+        });
+        if (leftover && leftover.source !== "text" && !looksLikeHexNoteGlyph(leftover)) {
+          const long = Math.max(Number(leftover.w) || 0, Number(leftover.h) || 0);
+          if (long >= 0.4 && long <= 1.15) geometry = leftover;
+        }
       }
       const geometryPoint = geometry ? { x: geometry.cx, y: geometry.cy } : null;
       // Prefer extracted fixture geometry. When the type mark sits on the symbol
@@ -893,6 +937,7 @@ export function buildAiMarks({
           || (typeCode === "GFI/WP" && item.typeCode === "GFI");
         if (!sameType) return false;
         const tagDist = Math.hypot((item.tagX ?? item.x) - token.x, (item.tagY ?? item.y) - token.y);
+        if (powerDeviceTag && tagDist >= 0.55) return false;
         return tagDist < 0.35 || (distance(item, placed) < 0.42 && tagDist < 0.9);
       });
       if (near) continue;
@@ -939,7 +984,10 @@ export function buildAiMarks({
     if (planType === "power") dictionary = attachPowerGlyphPrototypes(dictionary, pageCounts, page);
     dictionary = attachConfirmedGeometryPrototypes(dictionary, pageCounts);
     dictionary = attachFragmentPrototypes(dictionary, pageCounts, page);
-    const occupied = seen.filter((item) => item.sheet === page.page);
+    const occupied = seen.filter((item) => (
+      item.sheet === page.page
+      && (planType !== "lighting" || !isReviewOnlyMark(item))
+    ));
     const twinHits = planType === "power" ? [] : scanPageByLegendGeometry(page, {
       ...dictionary,
       entries: (dictionary.entries || []).filter((entry) => /^\d{1,2}e?$/i.test(entry.code || "") && /2x4|troffer/i.test(entry.symbol?.label || "")),
@@ -975,8 +1023,25 @@ export function buildAiMarks({
       const titleBand = planType !== "power" && (placed.x > 64 || placed.y < 12);
       if (!placementAllowed(placed) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens) || titleBand) continue;
       if (looksLikeHexNoteGlyph(geometry)) continue;
-      const duplicate = seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.34);
-      if (duplicate) continue;
+      const existingIndex = counts.findIndex((mark) => mark.sheet === page.page && distance(mark, placed) < 0.34);
+      const existing = existingIndex >= 0 ? counts[existingIndex] : null;
+      if (existing && !isReviewOnlyMark(existing)) continue;
+      if (planType === "lighting" && visual.ambiguous) {
+        if (existing) continue;
+        const review = reviewCandidateMark({
+          trade,
+          sheet: page.page,
+          geometry,
+          reason: "detector-disagreement",
+          sources: ["plan-repeat", "legend-geometry"],
+          scores: { visual: visual.score, legend: visual.score, vector: visual.score },
+        });
+        if (review) {
+          counts.push(review);
+          seen.push({ ...review, tagX: placed.x, tagY: placed.y });
+        }
+        continue;
+      }
       const mark = attachDetectionRecord({
         id: newId(),
         source: "ai",
@@ -1012,8 +1077,14 @@ export function buildAiMarks({
         requiresReview: Boolean(visual.ambiguous),
         reviewReason: visual.ambiguous ? "detector-disagreement" : "",
       });
-      counts.push(mark);
-      seen.push({ sheet: page.page, x: placed.x, y: placed.y, typeCode: String(visual.entry.code || symbol.abbr || "").toUpperCase(), tagX: placed.x, tagY: placed.y });
+      if (existing && isReviewOnlyMark(existing)) {
+        counts[existingIndex] = mark;
+        const seenIndex = seen.findIndex((item) => item.sheet === page.page && distance(item, placed) < 0.34);
+        if (seenIndex >= 0) seen[seenIndex] = { ...mark, tagX: placed.x, tagY: placed.y };
+      } else {
+        counts.push(mark);
+        seen.push({ sheet: page.page, x: placed.x, y: placed.y, typeCode: String(visual.entry.code || symbol.abbr || "").toUpperCase(), tagX: placed.x, tagY: placed.y });
+      }
       for (const part of geometry.parts || []) usedGeometry.add(part);
     }
     // Keep mid-confidence visual hits as UNKNOWN/REVIEW instead of deleting them.
@@ -1043,6 +1114,95 @@ export function buildAiMarks({
       if (!review) continue;
       counts.push(review);
       seen.push({ ...review, tagX: placed.x, tagY: placed.y });
+    }
+    const rasterHits = matchRasterToLegend(rasterCandidatesFromPage(page), dictionary, {
+      threshold: REVIEW_VISUAL_THRESHOLD,
+    });
+    for (const visual of rasterHits) {
+      const geometry = visual.geometry;
+      const placed = { x: geometry.cx, y: geometry.cy };
+      const titleBand = planType !== "power" && (placed.x > 64 || placed.y < 12);
+      if (!placementAllowed(placed) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens) || titleBand) continue;
+      if (looksLikeHexNoteGlyph(geometry) || isHatchTickCluster(geometry, page.paths || [])) continue;
+      const existing = counts.find((mark) => mark.sheet === page.page && distance(mark, placed) < 0.4);
+      if (existing) {
+        existing.detectionSources = [...new Set([...(existing.detectionSources || []), "raster"])];
+        existing.visualMatchScore = Math.max(Number(existing.visualMatchScore) || 0, visual.score);
+        const rasterCode = String(visual.entry?.code || "").toUpperCase();
+        if (rasterCode && existing.typeCode && rasterCode !== existing.typeCode && !isReviewOnlyMark(existing)) {
+          existing.requiresReview = true;
+          existing.detectionAmbiguous = true;
+          existing.reviewReason = existing.reviewReason || "detector-disagreement";
+        }
+        continue;
+      }
+      const symbol = visual.entry?.symbol;
+      if (visual.score >= 0.9 && symbol && !visual.ambiguous) {
+        const mark = attachDetectionRecord({
+          id: newId(),
+          source: "ai",
+          trade,
+          type: "count",
+          sheet: page.page,
+          x: placed.x,
+          y: placed.y,
+          category: symbol.takeoffCategory || symbol.category,
+          symbol: symbol.id,
+          symbolLabel: symbol.label,
+          abbr: symbol.abbr,
+          typeCode: String(visual.entry.code || symbol.abbr || "").toUpperCase(),
+          color,
+          matchedFrom: "raster",
+          outline: geometry.outline,
+          outlineSource: "raster",
+          detectSource: DETECT_SOURCE_ORIGINAL_PDF,
+          confidence: "medium",
+          reviewStatus: "pending",
+          layer: "device",
+          geometryScore: visual.score,
+        }, {
+          geometry,
+          symbolBodyLocation: placed,
+          detectionSources: ["raster"],
+          visualMatchScore: visual.score,
+          requiresReview: true,
+          reviewReason: "raster-only",
+        });
+        counts.push(mark);
+        seen.push({ ...mark, tagX: placed.x, tagY: placed.y });
+        continue;
+      }
+      const review = reviewCandidateMark({
+        trade,
+        sheet: page.page,
+        geometry,
+        reason: visual.ambiguous ? "detector-disagreement" : "low-confidence-visual",
+        sources: ["raster"],
+        scores: { visual: visual.score },
+      });
+      if (!review) continue;
+      counts.push(review);
+      seen.push({ ...review, tagX: placed.x, tagY: placed.y });
+    }
+    if (planType === "lighting") {
+      for (const path of page.paths || []) {
+        if (!looksLikeRecessedCanBody(path)) continue;
+        const placed = { x: path.cx, y: path.cy };
+        if (!placementAllowed(placed) || !isPlanInterior(placed) || placed.x > 64 || placed.y < 12) continue;
+        if (isPlotStampToken(placed, page.tokens)) continue;
+        if (seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.55)) continue;
+        const review = reviewCandidateMark({
+          trade,
+          sheet: page.page,
+          geometry: path,
+          reason: "unlabeled-lighting-can",
+          sources: ["vector"],
+          scores: { visual: 0.7, vector: 0.75 },
+        });
+        if (!review) continue;
+        counts.push(review);
+        seen.push({ ...review, tagX: placed.x, tagY: placed.y });
+      }
     }
   }
   const anchors = counts.filter((mark) => mark.anchor && !isReviewOnlyMark(mark));

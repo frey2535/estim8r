@@ -258,7 +258,8 @@ export function looksLikeHexNoteGlyph(candidate) {
   const long = Math.max(w, h);
   const short = Math.min(w, h);
   const area = w * h;
-  return area >= 0.20 && area <= 0.38 && long >= 0.48 && long <= 0.74 && short >= 0.36 && short <= 0.52;
+  const aspect = long / (short || 1e-9);
+  return area >= 0.20 && area <= 0.38 && long >= 0.48 && long <= 0.74 && short >= 0.36 && short <= 0.52 && aspect >= 1.2;
 }
 
 export function looksLikeReceptacleGlyph(candidate) {
@@ -284,8 +285,33 @@ export function looksLikeUnlabeledReceptacleGlyph(candidate) {
   const short = Math.min(w, h);
   const aspect = long / (short || 1e-9);
   const strokeBox = long >= 0.20 && long <= 0.36 && short >= 0.10 && short <= 0.16 && aspect >= 1.7 && aspect <= 2.75;
-  const duplexBox = long >= 0.13 && long <= 0.24 && short >= 0.10 && short <= 0.20 && aspect >= 1.05 && aspect <= 1.75;
+  const duplexBox = long >= 0.17 && long <= 0.24 && short >= 0.12 && short <= 0.20 && aspect >= 1.05 && aspect <= 1.75;
   return strokeBox || duplexBox;
+}
+
+export function isPlanReceptacleGlyph(candidate, paths = [], tokens = []) {
+  if (!looksLikeUnlabeledReceptacleGlyph(candidate)) return false;
+  if (isHatchTickCluster(candidate, paths) || looksLikeHexNoteGlyph(candidate)) return false;
+  if (nearHexNoteGlyph(candidate, paths, 1.0)) return false;
+  const placed = { x: Number(candidate.cx) || 0, y: Number(candidate.cy) || 0 };
+  if (!isPlanInterior(placed) || isPlotStampToken(placed, tokens)) return false;
+  if (placed.y > 74 || placed.y < 12) return false;
+  if ((tokens || []).some((token) => {
+    const text = normalizeTypeMark(token.text).toUpperCase();
+    if (!/^(WP|SP|SPR|GFI|GFI\/WP|P2|DB)$/.test(text)) return false;
+    return Math.hypot((Number(token.x) || 0) - placed.x, (Number(token.y) || 0) - placed.y) <= 0.55;
+  })) return false;
+  return true;
+}
+
+export function uniquePlanReceptacleGlyphs(paths = [], tokens = []) {
+  const glyphs = (paths || []).filter((path) => isPlanReceptacleGlyph(path, paths, tokens));
+  const unique = [];
+  for (const glyph of glyphs) {
+    if (unique.some((other) => Math.hypot((other.cx || 0) - (glyph.cx || 0), (other.cy || 0) - (glyph.cy || 0)) < 0.28)) continue;
+    unique.push(glyph);
+  }
+  return unique;
 }
 
 export function isHatchTickCluster(candidate, paths = []) {
@@ -306,11 +332,12 @@ export function isHatchTickCluster(candidate, paths = []) {
   return xs.length >= 3 && ys.length >= 3;
 }
 
-function nearHexNoteGlyph(point, paths = []) {
+export function nearHexNoteGlyph(point, paths = [], radius = 0.55) {
   const x = Number(point?.x ?? point?.cx) || 0;
   const y = Number(point?.y ?? point?.cy) || 0;
+  const limit = Number(radius) || 0.55;
   return (paths || []).some((path) => looksLikeHexNoteGlyph(path)
-    && Math.hypot((Number(path.cx) || 0) - x, (Number(path.cy) || 0) - y) <= 0.55);
+    && Math.hypot((Number(path.cx) || 0) - x, (Number(path.cy) || 0) - y) <= limit);
 }
 
 function nearNoteChrome(point, tokens = []) {
@@ -323,18 +350,32 @@ function nearNoteChrome(point, tokens = []) {
   });
 }
 
+export function looksLikeWpCoverGlyph(candidate) {
+  if (!candidate || looksLikeHexNoteGlyph(candidate)) return false;
+  const w = Number(candidate.w) || 0;
+  const h = Number(candidate.h) || 0;
+  const long = Math.max(w, h);
+  const short = Math.min(w, h);
+  const aspect = long / (short || 1e-9);
+  return long >= 0.36 && long <= 0.72 && short >= 0.32 && aspect <= 1.45;
+}
+
 export function findNearbyReceptacleGlyph(point, paths = [], options = {}) {
   const x = Number(point?.x ?? point?.cx) || 0;
   const y = Number(point?.y ?? point?.cy) || 0;
   const radius = Number(options.radius) || 1.15;
   const hexClearance = Number(options.hexClearance) || 0.22;
+  const allowWpCover = Boolean(options.allowWpCover);
   return (paths || [])
-    .filter((path) => looksLikeReceptacleGlyph(path))
+    .filter((path) => looksLikeReceptacleGlyph(path) || (allowWpCover && looksLikeWpCoverGlyph(path)))
     .filter((path) => !(paths || []).some((hex) => looksLikeHexNoteGlyph(hex)
       && Math.hypot((Number(hex.cx) || 0) - (Number(path.cx) || 0), (Number(hex.cy) || 0) - (Number(path.cy) || 0)) < hexClearance))
     .map((path) => ({ path, dist: Math.hypot((Number(path.cx) || 0) - x, (Number(path.cy) || 0) - y) }))
     .filter((item) => item.dist <= radius)
-    .sort((a, b) => a.dist - b.dist)[0]?.path || null;
+    .sort((a, b) => {
+      const receptacleFirst = Number(looksLikeReceptacleGlyph(b.path)) - Number(looksLikeReceptacleGlyph(a.path));
+      return receptacleFirst || a.dist - b.dist;
+    })[0]?.path || null;
 }
 
 function classifyNearbyPowerLabel(point, tokens = []) {
@@ -402,11 +443,10 @@ export function scanUnlabeledPowerGlyphs(page, options = {}) {
   const gfiHeavy = tokens.filter((token) => /^GFI/i.test(normalizeTypeMark(token.text))).length >= 8;
   const hits = [];
   for (const path of paths) {
-    if (!looksLikeUnlabeledReceptacleGlyph(path) || isHatchTickCluster(path, paths)) continue;
+    if (!isPlanReceptacleGlyph(path, paths, tokens)) continue;
     const placed = { x: path.cx, y: path.cy };
     if (occupied.some((item) => Math.hypot((Number(item.x) || 0) - placed.x, (Number(item.y) || 0) - placed.y) < 0.34)) continue;
-    if (!isPlanInterior(placed) || isPlotStampToken(placed, tokens)) continue;
-    if (nearNoteChrome(placed, tokens) || nearHexNoteGlyph(placed, paths)) continue;
+    if (isPlotStampToken(placed, tokens) || nearNoteChrome(placed, tokens)) continue;
     if (classifyNearbyPowerLabel(placed, tokens) || gfiHeavy) continue;
     if (!duplex) continue;
     hits.push({
@@ -510,6 +550,8 @@ export function attachConfirmedGeometryPrototypes(dictionary, marks = []) {
     const code = compact(mark.typeCode || mark.abbr);
     const entry = byCode.get(code);
     if (!entry || !mark.outline || mark.outlineSource === "text") continue;
+    if (/^(wp|sp|spr|r|p2|db)$/.test(code)) continue;
+    if ((Number(mark.x) || 0) > 64 || (Number(mark.y) || 0) < 14) continue;
     const candidate = {
       cx: Number(mark.x) || 0,
       cy: Number(mark.y) || 0,
@@ -521,6 +563,12 @@ export function attachConfirmedGeometryPrototypes(dictionary, marks = []) {
       outline: mark.outline,
     };
     if (!candidate.w || !candidate.h) continue;
+    const long = Math.max(candidate.w, candidate.h);
+    if (long < 0.45) continue;
+    if (entry.prototype) {
+      const protoLong = Math.max(Number(entry.prototype.w) || 0, Number(entry.prototype.h) || 0);
+      if (protoLong > 0.7 && long < protoLong * 0.62) continue;
+    }
     candidate.signature = geometrySignature(candidate);
     entry.prototypes = entry.prototypes || (entry.prototype ? [entry.prototype] : []);
     if (entry.prototypes.length < 2 && !entry.prototypes.some((existing) => geometrySimilarity(candidate, existing) >= 0.96 && sizeCompatible(candidate, existing))) {

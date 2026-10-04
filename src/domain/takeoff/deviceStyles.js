@@ -1,3 +1,4 @@
+import { isReviewOnlyMark } from "./detectionRecord.js";
 import { isCanDeviceText } from "./symbolDetection.js";
 import { pointHitsOutline, scaleOutline } from "./vectorSymbols.js";
 
@@ -112,7 +113,7 @@ export function applyDeviceTypeColors(marks) {
   const list = marks || [];
   const bySheet = new Map();
   for (const mark of list) {
-    if (!isDeviceMark(mark)) continue;
+    if (!isDeviceMark(mark) || isReviewOnlyMark(mark)) continue;
     const sheet = mark.sheet || 1;
     if (!bySheet.has(sheet)) bySheet.set(sheet, []);
     bySheet.get(sheet).push(deviceTypeKey(mark));
@@ -124,6 +125,9 @@ export function applyDeviceTypeColors(marks) {
   return list.map((mark) => {
     if (isCircuitMark(mark)) return { ...mark, color: CIRCUIT_COLOR, layer: "circuit" };
     if (!isDeviceMark(mark)) return mark;
+    if (isReviewOnlyMark(mark)) {
+      return { ...mark, color: mark.color || "#94a3b8", layer: "review", fillOpacity: DEVICE_FILL_OPACITY };
+    }
     const key = deviceTypeKey(mark);
     const color = readableFillColor(
       sheetMaps.get(mark.sheet || 1)?.get(key) || scheduleTypeColor(key) || FALLBACK_COLORS[0],
@@ -135,7 +139,7 @@ export function applyDeviceTypeColors(marks) {
 export function sheetTypeColorSwatches(marks) {
   const seen = new Map();
   for (const mark of marks || []) {
-    if (!isDeviceMark(mark)) continue;
+    if (!isDeviceMark(mark) || isReviewOnlyMark(mark)) continue;
     const key = deviceTypeKey(mark) || "device";
     const color = readableFillColor(mark.color || scheduleTypeColor(key) || FALLBACK_COLORS[0]);
     const current = seen.get(key) || { key, color, count: 0 };
@@ -237,7 +241,10 @@ function genericDeviceOutline(mark, markerSize = 0.55) {
 }
 
 export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
-  const origin = { x: Number(mark?.x) || 0, y: Number(mark?.y) || 0 };
+  const origin = {
+    x: Number(mark?.symbolBodyLocation?.x ?? mark?.x) || 0,
+    y: Number(mark?.symbolBodyLocation?.y ?? mark?.y) || 0,
+  };
   const maxExtent = maxFillExtent(mark);
   if (mark?.outline && (["vector", "raster", "mixed", "text"].includes(mark.outline.source) || mark.outline.kind === "composite")) {
     if (isUsablePaintOutline(mark.outline, origin, maxExtent)) {

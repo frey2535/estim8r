@@ -1,3 +1,4 @@
+import { attachDetectionRecord, isReviewOnlyMark, labelLocationFromToken, nearbyCircuitTag, reviewCandidateMark, REVIEW_VISUAL_THRESHOLD } from "./detectionRecord.js";
 import { applyDeviceTypeColors } from "./deviceStyles.js";
 import { isSheetChrome, pageDiscipline, pageMatchesTrade } from "./sheetDiscipline.js";
 import {
@@ -21,7 +22,7 @@ import { extractSheetNotes, notesToMarks } from "./sheetNotes.js";
 import { looksLikeCoverOrRendering, looksLikeElectricalPlan, looksLikeIndexPage, pagePlanType } from "./drawing-docs.js";
 import { associateGeometry, assignExclusiveGeometry, placeOnSymbolGeometry, shapeHintFromLabel, tagOnSymbolGeometry } from "./vectorSymbols.js";
 import { orthogonalizePolyline } from "./ortho.js";
-import { attachConfirmedGeometryPrototypes, attachFragmentPrototypes, attachLegendGeometryPrototypes, attachPowerGlyphPrototypes, findNearbyReceptacleGlyph, isEmergencyHatch, looksLikeHexNoteGlyph, scanPageByLegendGeometry, scanUnlabeledPowerGlyphs, snapToEntryPrototype } from "./legendGeometry.js";
+import { attachConfirmedGeometryPrototypes, attachFragmentPrototypes, attachLegendGeometryPrototypes, attachPowerGlyphPrototypes, findNearbyReceptacleGlyph, isEmergencyHatch, isHatchTickCluster, looksLikeHexNoteGlyph, scanPageByLegendGeometry, scanUnlabeledPowerGlyphs, snapToEntryPrototype } from "./legendGeometry.js";
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
 
 const STOP = new Set(["the", "and", "for", "with", "from", "this", "that", "sheet", "note", "see", "typ", "all", "new", "nic", "nts", "rev"]);
@@ -775,7 +776,7 @@ export function buildAiMarks({
       if (!placementAllowed(placed)) continue;
       const duplicate = seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.34);
       if (duplicate) continue;
-      const mark = {
+      const mark = attachDetectionRecord({
         id: newId(),
         source: "ai",
         trade,
@@ -800,7 +801,16 @@ export function buildAiMarks({
         layer: "device",
         anchor: anchorIds.has(symbol.id),
         geometryScore: visual.score,
-      };
+      }, {
+        geometry,
+        symbolBodyLocation: placed,
+        detectionSources: ["legend-geometry", "vector"],
+        visualMatchScore: visual.score,
+        vectorMatchScore: visual.score,
+        legendMatchScore: visual.score,
+        requiresReview: visual.score < 0.9 || Boolean(visual.ambiguous),
+        reviewReason: visual.ambiguous ? "detector-disagreement" : visual.score < 0.9 ? "mid-confidence-visual" : "",
+      });
       counts.push(mark);
       seen.push({ ...mark, tagX: placed.x, tagY: placed.y });
       for (const part of geometry.parts || []) usedGeometry.add(part);
@@ -849,8 +859,24 @@ export function buildAiMarks({
       // Prefer extracted fixture geometry. When the type mark sits on the symbol
       // itself (slashed-circle cans, OS, GFI, quoted Revit types), the tag *is*
       // the device — place the fill there instead of inventing an offset or
-      // dropping the count.
-      if (!geometryPoint || !placementAllowed(geometryPoint)) continue;
+      // dropping the count. Chrome/title-block stays dropped. A classified
+      // token with no symbol body stays as UNKNOWN/REVIEW instead of vanishing.
+      if (geometryPoint && !placementAllowed(geometryPoint)) continue;
+      if (!geometryPoint) {
+        const review = reviewCandidateMark({
+          trade,
+          sheet: page.page,
+          label: labelLocationFromToken(token),
+          reason: "classified-without-symbol-body",
+          sources: ["text"],
+          scores: { text: 0.55 },
+        });
+        if (review) {
+          counts.push(review);
+          seen.push({ ...review, tagX: token.x, tagY: token.y });
+        }
+        continue;
+      }
       const placed = geometryPoint;
       const geometrySource = geometry?.outline?.source || geometry?.source || "text";
       const geometryAnchored = geometrySource !== "text";
@@ -870,7 +896,7 @@ export function buildAiMarks({
         return tagDist < 0.35 || (distance(item, placed) < 0.42 && tagDist < 0.9);
       });
       if (near) continue;
-      const mark = {
+      const mark = attachDetectionRecord({
         id: newId(),
         source: "ai",
         trade,
@@ -892,7 +918,17 @@ export function buildAiMarks({
         reviewStatus: "pending",
         layer: "device",
         anchor: anchorIds.has(symbol.id),
-      };
+      }, {
+        geometry,
+        symbolBodyLocation: placed,
+        labelLocation: labelLocationFromToken(token),
+        circuitTagLocation: nearbyCircuitTag(token, page.tokens),
+        detectionSources: [fromLegend ? "legend" : "drawing", geometrySource].filter(Boolean),
+        vectorMatchScore: geometrySource === "vector" ? 0.9 : 0,
+        legendMatchScore: fromLegend ? 0.85 : 0,
+        textContextScore: 0.7,
+        visualMatchScore: powerGlyph ? 0.85 : 0,
+      });
       counts.push(mark);
       seen.push({ ...mark, tagX: token.x, tagY: token.y });
       if (geometryAnchored) usedGeometry.add(geometry);
@@ -941,7 +977,7 @@ export function buildAiMarks({
       if (looksLikeHexNoteGlyph(geometry)) continue;
       const duplicate = seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.34);
       if (duplicate) continue;
-      counts.push({
+      const mark = attachDetectionRecord({
         id: newId(),
         source: "ai",
         trade,
@@ -966,13 +1002,51 @@ export function buildAiMarks({
         layer: "device",
         anchor: anchorIds.has(symbol.id),
         geometryScore: visual.score,
+      }, {
+        geometry,
+        symbolBodyLocation: placed,
+        detectionSources: ["plan-repeat", "vector"],
+        visualMatchScore: visual.score,
+        vectorMatchScore: visual.score,
+        legendMatchScore: 0.8,
+        requiresReview: Boolean(visual.ambiguous),
+        reviewReason: visual.ambiguous ? "detector-disagreement" : "",
       });
+      counts.push(mark);
       seen.push({ sheet: page.page, x: placed.x, y: placed.y, typeCode: String(visual.entry.code || symbol.abbr || "").toUpperCase(), tagX: placed.x, tagY: placed.y });
       for (const part of geometry.parts || []) usedGeometry.add(part);
     }
+    // Keep mid-confidence visual hits as UNKNOWN/REVIEW instead of deleting them.
+    // Chrome, hex notes, hatch ticks, and title-block stamps stay dropped.
+    const reviewHits = scanPageByLegendGeometry(page, dictionary, {
+      planType,
+      threshold: REVIEW_VISUAL_THRESHOLD,
+      occupyRadius: 0.34,
+      occupied: seen.filter((item) => item.sheet === page.page),
+    });
+    for (const visual of reviewHits) {
+      const geometry = visual.geometry;
+      const placed = { x: geometry.cx, y: geometry.cy };
+      const titleBand = planType !== "power" && (placed.x > 64 || placed.y < 12);
+      if (!placementAllowed(placed) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens) || titleBand) continue;
+      if (looksLikeHexNoteGlyph(geometry) || isHatchTickCluster(geometry, page.paths || [])) continue;
+      const duplicate = seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.34);
+      if (duplicate) continue;
+      const review = reviewCandidateMark({
+        trade,
+        sheet: page.page,
+        geometry,
+        reason: "low-confidence-visual",
+        sources: ["legend-geometry"],
+        scores: { visual: visual.score, legend: visual.score, vector: visual.score },
+      });
+      if (!review) continue;
+      counts.push(review);
+      seen.push({ ...review, tagX: placed.x, tagY: placed.y });
+    }
   }
-  const anchors = counts.filter((mark) => mark.anchor);
-  const devices = counts.filter((mark) => !mark.anchor);
+  const anchors = counts.filter((mark) => mark.anchor && !isReviewOnlyMark(mark));
+  const devices = counts.filter((mark) => !mark.anchor && !isReviewOnlyMark(mark));
   const sections = findConduitSections(pages, trade);
   const groups = groupHomeruns(devices, anchors, maxHomeruns, { sections });
   const conduits = groups.map((group, index) => {
@@ -1027,7 +1101,7 @@ export function buildAiMarks({
   });
   return {
     marks: applyDeviceTypeColors([
-      ...counts.map(({ anchor, matchedFrom, ...mark }) => mark),
+      ...counts.map(({ anchor, ...mark }) => mark),
       ...conduits,
       ...noteMarks,
     ]),
@@ -1035,6 +1109,7 @@ export function buildAiMarks({
       ? `AI ${trade} takeoff: ${persistedCount} devices from the drawing${legendHits ? ` (${legendHits} matched from the legend)` : ""}, ${conduits.length} conduit runs on ${trade} sheets showing run count and path, max ${cap} homeruns per conduit.${skipNote}`
       : `No ${trade} symbols were found on ${trade} sheets.${skipNote || " Counts stay empty until that trade is labeled on the sheets."}`,
     deviceCount: persistedCount,
+    reviewCount: counts.filter(isReviewOnlyMark).length,
     conduitCount: conduits.length,
     noteCount: noteMarks.length,
     skippedSheets,

@@ -1,3 +1,4 @@
+import { isReviewOnlyMark } from "./detectionRecord.js";
 import { deviceTypeKey, isDeviceMark } from "./deviceStyles.js";
 
 export const DETECT_SOURCE_ORIGINAL_PDF = "original-pdf";
@@ -9,8 +10,8 @@ export function cropWindowForMark(mark, options = {}) {
   const bodyH = Number(outline.h) || (outline.r ? Number(outline.r) * 2 : 0);
   const w = clamp(Math.max(bodyW, 1.2) + pad * 2, 4, 28);
   const h = clamp(Math.max(bodyH, 1.2) + pad * 2, 4, 28);
-  const x = Number(mark?.x) || 0;
-  const y = Number(mark?.y) || 0;
+  const x = Number(mark?.symbolBodyLocation?.x ?? mark?.x) || 0;
+  const y = Number(mark?.symbolBodyLocation?.y ?? mark?.y) || 0;
   return {
     x: clamp(x - w / 2, 0, 100 - w),
     y: clamp(y - h / 2, 0, 100 - h),
@@ -32,6 +33,7 @@ export function cropToViewportPixels(crop, viewport) {
 
 export function isUncertainDetection(mark) {
   if (!isDeviceMark(mark)) return false;
+  if (isReviewOnlyMark(mark) || mark.requiresReview === true) return true;
   if (mark.confidence === "low" || mark.uncertain === true) return true;
   if (mark.outlineSource && mark.outlineSource !== "vector") return true;
   if (!deviceTypeKey(mark)) return true;

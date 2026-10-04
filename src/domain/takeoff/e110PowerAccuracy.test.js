@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildAiMarks } from "./aiTakeoff.js";
+import { bidDeviceMarks } from "./detectionRecord.js";
 import { deviceOutline } from "./deviceStyles.js";
 import { isHatchTickCluster, looksLikeHexNoteGlyph, looksLikeUnlabeledReceptacleGlyph } from "./legendGeometry.js";
 import { isPlanInterior, normalizeTypeMark, shouldAcceptPlanToken } from "./symbolDetection.js";
@@ -28,7 +29,8 @@ const result = buildAiMarks({
   maxHomeruns: 8,
 });
 
-const marks = (result.marks || []).filter((mark) => mark.type === "count" || mark.type === "drop");
+const marks = bidDeviceMarks(result.marks);
+const reviewMarks = (result.marks || []).filter((mark) => mark.layer === "review" || String(mark.typeCode || "").toUpperCase() === "UNKNOWN");
 const e110Marks = marks.filter((mark) => mark.sheet === 50);
 const byType = (code) => e110Marks.filter((mark) => String(mark.typeCode || "").toUpperCase() === code);
 const bySymbol = (id) => e110Marks.filter((mark) => mark.symbol === id);
@@ -90,7 +92,7 @@ console.log(`WP visible=${visible.wp} found=${found.wp}`);
 console.log(`SP visible=${visible.sp} found=${found.sp}`);
 console.log(`GFI visible=${visible.gfi} found=${found.gfi}`);
 console.log(`OS visible=${visible.os} found=${found.os}`);
-console.log(`E110 total=${e110Marks.length} hexFP=${hexMarked.length} lightingOnPower=${lightingOnPower.length} hatchBand=${hatchBand.length} maxExtent=${maxExtent.toFixed(2)}`);
+console.log(`E110 total=${e110Marks.length} review=${reviewMarks.filter((mark) => mark.sheet === 50).length} hexFP=${hexMarked.length} lightingOnPower=${lightingOnPower.length} hatchBand=${hatchBand.length} maxExtent=${maxExtent.toFixed(2)}`);
 console.log(`E001=${legendMarks.length} cover=${coverMarks.length} WP_on_glyph=${wpOnGlyph.length}/${found.wp}`);
 
 assert(legendMarks.length === 0, `legend E001 must stay 0, got ${legendMarks.length}`);

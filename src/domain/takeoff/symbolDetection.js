@@ -64,7 +64,7 @@ export function isZoneNoteContext(token, tokens = []) {
     const dx = Math.abs((Number(other.x) || 0) - (Number(token?.x) || 0));
     const dy = Math.abs((Number(other.y) || 0) - (Number(token?.y) || 0));
     if (dx > 10 || dy > 0.85) return false;
-    return /^(all|work|this|zone|designated|alternate|base|bid)$/i.test(normalizeTypeMark(other.text));
+    return /^(all|work|this|zone|designated|alternate|base|bid|off|office|room|rm|toilet|stor|storage|mech|corridor|corr)$/i.test(normalizeTypeMark(other.text));
   });
 }
 
@@ -88,6 +88,7 @@ export function hasReferenceNeighbor(token, tokens = []) {
     if (dist < 0.15 || dist > 2.5) return false;
     const text = String(other.text || "").trim();
     if (/^R$/i.test(text)) return /^\d/.test(self) || isReferenceCallout(self);
+    if (/^E\d{2,3}[A-Z]?$/i.test(normalizeTypeMark(text)) && /^\d{1,2}$/.test(normalizeTypeMark(self))) return true;
     return /^R\d+/i.test(text) || isReferenceCallout(text);
   });
 }
@@ -113,6 +114,35 @@ export function isUnquotedCircuitBesideQuotedType(token, tokens = []) {
     if (normalizeTypeMark(other.text).toUpperCase() !== code.toUpperCase()) return false;
     const dist = Math.hypot((Number(other.x) || 0) - (Number(token?.x) || 0), (Number(other.y) || 0) - (Number(token?.y) || 0));
     return dist > 0.35 && dist < 8;
+  });
+}
+
+export function isFixtureLegendStripToken(token, tokens = []) {
+  if (isQuotedTypeMark(token?.text)) return false;
+  const code = normalizeTypeMark(token?.text);
+  if (!/^[1-9]$/.test(code)) return false;
+  const y = Number(token?.y) || 0;
+  const row = (tokens || []).filter((other) => (
+    !isQuotedTypeMark(other.text)
+    && /^[1-9]$/.test(normalizeTypeMark(other.text))
+    && Math.abs((Number(other.y) || 0) - y) <= 0.45
+  ));
+  if (row.length < 5) return false;
+  const codes = new Set(row.map((item) => normalizeTypeMark(item.text)));
+  if (codes.size < 5) return false;
+  const xs = row.map((item) => Number(item.x) || 0);
+  return Math.max(...xs) - Math.min(...xs) >= 8;
+}
+
+export function hasNearbyFixtureBody(token, paths = []) {
+  const x = Number(token?.x) || 0;
+  const y = Number(token?.y) || 0;
+  return (paths || []).some((path) => {
+    const long = Math.max(Number(path?.w) || 0, Number(path?.h) || 0);
+    const short = Math.min(Number(path?.w) || 0, Number(path?.h) || 0);
+    const aspect = long / (short || 1e-9);
+    if (long < 0.45 || long > 1.05 || aspect > 1.55) return false;
+    return Math.hypot((Number(path.cx) || 0) - x, (Number(path.cy) || 0) - y) <= 0.55;
   });
 }
 
@@ -239,7 +269,7 @@ export function persistedPlanDeviceCount(marks, pageKinds = {}) {
   return (marks || []).filter((mark) => isPersistedPlanDetection(mark, pageKinds)).length;
 }
 
-export function shouldAcceptPlanToken(token, tokens = []) {
+export function shouldAcceptPlanToken(token, tokens = [], options = {}) {
   if (!token) return false;
   const marked = { ...token, text: normalizeTypeMark(token.text) };
   if (!marked.text) return false;
@@ -248,8 +278,12 @@ export function shouldAcceptPlanToken(token, tokens = []) {
   if (isTitleBlockLetter(token) || isTitleBlockLetter(marked)) return false;
   if (isPlotStampToken(token, tokens) || isPlotStampToken(marked, tokens)) return false;
   if (isLegendClusterToken(token, tokens) || isLegendClusterToken(marked, tokens)) return false;
+  if (isFixtureLegendStripToken(token, tokens) || isFixtureLegendStripToken(marked, tokens)) return false;
   if (isScheduleNoteContext(token, tokens) || isScheduleNoteContext(marked, tokens)) return false;
-  if (isCircuitCalloutToken(token, tokens)) return false;
+  if (isCircuitCalloutToken(token, tokens)) {
+    const lightingType = options.planType === "lighting" && /^\d{1,2}E?$/.test(marked.text);
+    if (!(lightingType && hasNearbyFixtureBody(token, options.paths))) return false;
+  }
   if (isSheetGridTick(token)) return false;
   if (isNotesClusterToken(token, tokens)) return false;
   if (isZoneNoteContext(token, tokens)) return false;

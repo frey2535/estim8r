@@ -57,10 +57,32 @@ export async function extractRasterSymbolCandidates(page, options = {}) {
   return out;
 }
 
+export function pdfPageFromTakeoffPage(page) {
+  if (page?.pdfPage && typeof page.pdfPage.getViewport === "function") return page.pdfPage;
+  if (typeof page?.getViewport === "function") return page;
+  return null;
+}
+
 export function rasterCandidatesFromPage(page) {
   if (Array.isArray(page?.rasterCandidates) && page.rasterCandidates.length) return page.rasterCandidates;
   if (Array.isArray(page?.rasterPaths) && page.rasterPaths.length) return page.rasterPaths;
   return (page?.paths || []).filter((path) => path?.source === "raster" || path?.outline?.source === "raster");
+}
+
+export async function hydrateRasterPaths(page, options = {}) {
+  if (!page) return [];
+  if (Array.isArray(page.rasterCandidates) && page.rasterCandidates.length) return page.rasterCandidates;
+  if (Array.isArray(page.rasterPaths) && page.rasterPaths.length) return page.rasterPaths;
+  const pdfPage = pdfPageFromTakeoffPage(page);
+  if (!pdfPage || typeof document === "undefined") return [];
+  const extracted = await extractRasterSymbolCandidates(pdfPage, options);
+  page.rasterPaths = extracted;
+  return extracted;
+}
+
+export async function hydratePagesRaster(pages, options = {}) {
+  for (const page of pages || []) await hydrateRasterPaths(page, options);
+  return pages;
 }
 
 export function matchRasterToLegend(candidates, dictionary, options = {}) {

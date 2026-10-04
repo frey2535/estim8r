@@ -320,6 +320,7 @@ export function looksLikeTextGlyph(candidate, token) {
   const size = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
   const tokenLen = String(token.text || "").trim().replace(/^['"‘’“”`]+|['"‘’“”`]+$/g, "").length || 1;
   const expected = Math.max(0.35, tokenLen * 0.42);
+  if (size > 0.70) return false;
   return dist < 0.7 && size <= expected + 0.4 && size < 1.35;
 }
 
@@ -348,7 +349,10 @@ export function isPlausibleSymbolForHint(candidate, hint) {
   const short = Math.min(Number(candidate.w) || 0, Number(candidate.h) || 0);
   const aspect = long / (short || 1e-9);
   if (hint === "circle") {
-    return candidate.kind === "circle" && long <= 1.25 && aspect <= 1.45;
+    if (candidate.kind === "circle" && long <= 1.25 && aspect <= 1.45) return true;
+    // Recessed-can bodies on E210 are compact rects (~0.6x0.72), not
+    // letter-sized ticks (~0.29x0.41) that flood Soccer type 4 / F.
+    return long >= 0.55 && long <= 1.05 && aspect <= 1.45;
   }
   if (hint === "rect") return long >= 0.22 && long <= 2.3 && aspect <= 4.2;
   return long <= 2.3 && aspect <= 4.5;
@@ -395,6 +399,7 @@ export function associateGeometry(token, candidates = [], options = {}) {
     if (!isPlausibleSymbolForHint(candidate, hint)) continue;
     const dist = distanceToCandidate(token, candidate);
     const inside = containsPoint(candidate, token);
+    if (hint === "circle" && candidate.kind !== "circle" && dist > 0.55 && !inside) continue;
     if (dist > radius && !(inside && Math.max(candidate.w, candidate.h) <= 2.3)) continue;
     if (hint === "rect" && !inside && (Math.max(candidate.w, candidate.h) < 0.55 || candidate.w * candidate.h < 0.28)) continue;
     if (rivals.some((rival) => distanceToCandidate(rival, candidate) + 0.12 < dist)) continue;
@@ -464,6 +469,7 @@ export function assignExclusiveGeometry(tokens = [], candidates = [], options = 
       if (!isPlausibleSymbolForHint(candidate, hint)) continue;
       const dist = distanceToCandidate(token, candidate);
       const inside = containsPoint(candidate, token);
+      if (hint === "circle" && candidate.kind !== "circle" && dist > 0.55 && !inside) continue;
       if (dist > maxDist && !(inside && Math.max(candidate.w, candidate.h) <= 2.3)) continue;
       if (hint === "rect" && !inside && (Math.max(candidate.w, candidate.h) < 0.55 || candidate.w * candidate.h < 0.28)) continue;
       const score = fixtureAssociationScore(token, candidate, { shapeHint: hint });

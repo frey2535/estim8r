@@ -1,6 +1,6 @@
 import { buildAiMarks } from "./aiTakeoff.js";
 import { isReviewOnlyMark } from "./detectionRecord.js";
-import { matchRasterToLegend, rasterCandidatesFromPage } from "./rasterSymbols.js";
+import { hydrateRasterPaths, matchRasterToLegend, rasterCandidatesFromPage } from "./rasterSymbols.js";
 import { paletteForTrade } from "./trades.js";
 
 function assert(cond, message) {
@@ -83,5 +83,11 @@ const disagreed = buildAiMarks({
 const overlap = (disagreed.marks || []).find((mark) => mark.type === "count" && Math.abs(mark.x - 20) < 0.4);
 assert(overlap, "overlapping raster+vector still produces a mark");
 assert((overlap.detectionSources || []).includes("raster") || overlap.outlineSource === "vector", "vector/raster overlap is reconciled onto one body");
+
+const injected = { rasterPaths: [rasterBlob], pdfPage: { getViewport() { return { width: 10, height: 10 }; } } };
+const kept = await hydrateRasterPaths(injected);
+assert(kept.length === 1 && kept[0].cx === 40.2, "hydrate keeps test-injected rasterPaths and does not require a live PDF render");
+const empty = await hydrateRasterPaths({ pdfPage: { getViewport() { return { width: 10, height: 10 }; } } });
+assert(empty.length === 0, "node without document does not invent raster blobs");
 
 if (!process.exitCode) console.log("raster reconcile checks passed");

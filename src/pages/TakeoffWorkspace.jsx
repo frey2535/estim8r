@@ -27,6 +27,7 @@ import { drawingSymbolsFromDocs, printedScaleCalibration, readDrawingDocuments }
 import { paletteForTrade, pageKindsFromDocs, symbolsOnDrawingForTrade, tradeById, conduitOptionsForTrade, findConduitOption, TRADES, DEFAULT_CONDUIT_ID } from "@/domain/takeoff/trades";
 import { buildAiMarks } from "@/domain/takeoff/aiTakeoff";
 import { readAiPages } from "@/domain/takeoff/aiPages";
+import { hydratePagesRaster } from "@/domain/takeoff/rasterSymbols";
 import { buildDrawingObjectLayer, hitDrawingObject, materializeDrawingObject } from "@/domain/takeoff/drawingObjectLayer";
 import SheetThumbnailPanel, { readThumbsOpen, writeThumbsOpen } from "@/components/takeoff/SheetThumbnailPanel";
 import DevicePicker from "@/components/takeoff/DevicePicker";
@@ -940,6 +941,7 @@ export default function TakeoffWorkspace() {
       try {
         const pages = await readAiPages(fileBytes);
         if (cancelled) return;
+        await hydratePagesRaster(pages);
         const detected = buildAiMarks({
           pages,
           trade: "electrical",
@@ -970,6 +972,7 @@ export default function TakeoffWorkspace() {
     if (!silent) setStatus(`AI assist is counting and marking ${tradeLabel} on the drawings…`);
     try {
       const pages = await readAiPages(fileBytes);
+      await hydratePagesRaster(pages);
       const planned = buildAiMarks({
         pages,
         trade,

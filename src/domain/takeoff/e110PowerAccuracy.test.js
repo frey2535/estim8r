@@ -142,9 +142,10 @@ assert((e110?.tokens || []).filter((token) => normalizeTypeMark(token.text) === 
 
 const e210 = (fixture.pages || []).find((page) => page.page === 52);
 const e210Marks = marks.filter((mark) => mark.sheet === 52);
+const lightingOpts = { planType: "lighting", paths: e210?.paths || [] };
 const labeledLighting = (e210?.tokens || []).filter((token) => {
   const code = normalizeTypeMark(token.text).toUpperCase();
-  return /^(?:[1-4]|OS)$/.test(code) && shouldAcceptPlanToken(token, e210.tokens);
+  return /^(?:[1-4]|OS)$/.test(code) && shouldAcceptPlanToken(token, e210.tokens, lightingOpts);
 });
 const lightingFound = labeledLighting.filter((token) => e210Marks.some((mark) => {
   const code = normalizeTypeMark(token.text).toUpperCase();
@@ -155,8 +156,10 @@ const lightingFound = labeledLighting.filter((token) => e210Marks.some((mark) =>
     || Math.hypot((mark.labelLocation?.x ?? 999) - token.x, (mark.labelLocation?.y ?? 999) - token.y) < 0.45;
 }));
 const type1Count = e210Marks.filter((mark) => String(mark.typeCode || "") === "1").length;
-console.log(`E210 labeled lighting ${lightingFound.length}/${labeledLighting.length} type1=${type1Count}`);
+const legendStripBid = e210Marks.filter((mark) => mark.y >= 29.8 && mark.y <= 31.6 && /^(?:[1-9])$/.test(String(mark.typeCode || "")));
+console.log(`E210 labeled lighting ${lightingFound.length}/${labeledLighting.length} type1=${type1Count} legendStripBid=${legendStripBid.length}`);
 assert(lightingFound.length === labeledLighting.length, `E210 labeled 1-4/OS must be marked from the plan, found ${lightingFound.length}/${labeledLighting.length}`);
-assert(type1Count <= 12, `E210 type 1 must not invent a room-grid, got ${type1Count}`);
+assert(legendStripBid.length === 0, `E210 fixture-legend strip is not schedule qty, got ${legendStripBid.length}`);
+assert(type1Count <= 6, `E210 type 1 must not invent a room-grid, got ${type1Count}`);
 
 if (!process.exitCode) console.log("e110 power glyph accuracy checks passed");

@@ -23,6 +23,7 @@ import AccuracyPopout from "@/components/takeoff/AccuracyPopout";
 import ReconciliationPanel from "@/components/takeoff/ReconciliationPanel";
 import { buildAiMarks } from "@/domain/takeoff/aiTakeoff";
 import { readAiPages } from "@/domain/takeoff/aiPages";
+import { hydratePagesRaster } from "@/domain/takeoff/rasterSymbols";
 import { drawingSymbolsFromDocs, readDrawingDocuments } from "@/domain/takeoff/drawing-docs";
 import { describeReconciliation, reconcilePlanToSchedule } from "@/domain/takeoff/countReconciliation";
 import { isNoteMark, mergeExtractedNotes } from "@/domain/takeoff/sheetNotes";
@@ -182,6 +183,7 @@ export default function MarkupPages() {
         setDrawingSymbols(drawingSymbolsFromDocs(docs));
         setPageKinds(pageKindsFromDocs(docs));
         const pages = await readAiPages(bytes);
+        await hydratePagesRaster(pages);
         setAiPages(pages);
         if ((stored?.marks || []).length) {
           const next = mergeExtractedNotes(stored.marks, pages, stored?.trade || "electrical");
@@ -205,6 +207,7 @@ export default function MarkupPages() {
     setStatus("AI is creating markup pages from the drawing…");
     try {
       const pages = await readAiPages(bytes);
+      await hydratePagesRaster(pages);
       let drawingSymbols = [];
       try {
         drawingSymbols = drawingSymbolsFromDocs(await readDrawingDocuments(bytes));

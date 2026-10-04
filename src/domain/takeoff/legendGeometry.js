@@ -536,6 +536,7 @@ export function attachConfirmedGeometryPrototypes(dictionary, marks = []) {
     const code = compact(mark.typeCode || mark.abbr);
     const entry = byCode.get(code);
     if (!entry || !mark.outline || mark.outlineSource === "text") continue;
+    if (/^(wp|sp|spr|r|p2|db)$/.test(code)) continue;
     const candidate = {
       cx: Number(mark.x) || 0,
       cy: Number(mark.y) || 0,
@@ -547,6 +548,12 @@ export function attachConfirmedGeometryPrototypes(dictionary, marks = []) {
       outline: mark.outline,
     };
     if (!candidate.w || !candidate.h) continue;
+    const long = Math.max(candidate.w, candidate.h);
+    if (long < 0.45) continue;
+    if (entry.prototype) {
+      const protoLong = Math.max(Number(entry.prototype.w) || 0, Number(entry.prototype.h) || 0);
+      if (protoLong > 0.7 && long < protoLong * 0.62) continue;
+    }
     candidate.signature = geometrySignature(candidate);
     entry.prototypes = entry.prototypes || (entry.prototype ? [entry.prototype] : []);
     if (entry.prototypes.length < 2 && !entry.prototypes.some((existing) => geometrySimilarity(candidate, existing) >= 0.96 && sizeCompatible(candidate, existing))) {

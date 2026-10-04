@@ -690,9 +690,10 @@ function candidateKey(item) {
   return `${normalizeTakeoffText(normalizeTypeMark(item.text))}|${Number(item.x || 0).toFixed(1)}|${Number(item.y || 0).toFixed(1)}`;
 }
 
-function collectMatchCandidates(page) {
-  const tokens = (page.tokens || []).filter((token) => !isSheetChrome(token) && shouldAcceptPlanToken(token, page.tokens));
-  const phrases = phrasesFromTokens(tokens).filter((phrase) => shouldAcceptPlanToken(phrase, page.tokens));
+function collectMatchCandidates(page, options = {}) {
+  const accept = (token) => shouldAcceptPlanToken(token, page.tokens, options);
+  const tokens = (page.tokens || []).filter((token) => !isSheetChrome(token) && accept(token));
+  const phrases = phrasesFromTokens(tokens).filter((phrase) => accept(phrase));
   const candidates = [];
   const seen = new Set();
   const add = (item) => {
@@ -747,7 +748,7 @@ export function buildAiMarks({
     if (!shouldScan(page, trade)) continue;
     const sitePlan = isSitePlanPage(page);
     const planType = pagePlanType(page);
-    const pageCandidates = collectMatchCandidates(page);
+    const pageCandidates = collectMatchCandidates(page, { planType, paths: page.paths || [] });
     const hits = [];
     for (const token of pageCandidates) {
       const symbol = matchTradeSymbol(token.text, matchSymbols, aliases, {
@@ -755,7 +756,7 @@ export function buildAiMarks({
         nearbyText: token.nearbyText,
         sitePlan,
         planType,
-        reject: (item) => !shouldAcceptPlanToken({ ...token, text: item.text }, page.tokens),
+        reject: (item) => !shouldAcceptPlanToken({ ...token, text: item.text }, page.tokens, { planType, paths: page.paths || [] }),
       });
       if (!symbol) continue;
       hits.push({ token, symbol });
@@ -778,6 +779,21 @@ export function buildAiMarks({
       if (!placementAllowed(placed)) continue;
       const duplicate = seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.34);
       if (duplicate) continue;
+      if (planType === "lighting") {
+        const review = reviewCandidateMark({
+          trade,
+          sheet: page.page,
+          geometry,
+          reason: visual.ambiguous ? "detector-disagreement" : "unconfirmed-lighting-copy",
+          sources: ["legend-geometry"],
+          scores: { visual: visual.score, legend: visual.score, vector: visual.score },
+        });
+        if (review) {
+          counts.push(review);
+          seen.push({ ...review, tagX: placed.x, tagY: placed.y });
+        }
+        continue;
+      }
       const mark = attachDetectionRecord({
         id: newId(),
         source: "ai",
@@ -960,7 +976,10 @@ export function buildAiMarks({
     if (planType === "power") dictionary = attachPowerGlyphPrototypes(dictionary, pageCounts, page);
     dictionary = attachConfirmedGeometryPrototypes(dictionary, pageCounts);
     dictionary = attachFragmentPrototypes(dictionary, pageCounts, page);
-    const occupied = seen.filter((item) => item.sheet === page.page);
+    const occupied = seen.filter((item) => (
+      item.sheet === page.page
+      && (planType !== "lighting" || !isReviewOnlyMark(item))
+    ));
     const twinHits = planType === "power" ? [] : scanPageByLegendGeometry(page, {
       ...dictionary,
       entries: (dictionary.entries || []).filter((entry) => /^\d{1,2}e?$/i.test(entry.code || "") && /2x4|troffer/i.test(entry.symbol?.label || "")),
@@ -996,8 +1015,25 @@ export function buildAiMarks({
       const titleBand = planType !== "power" && (placed.x > 64 || placed.y < 12);
       if (!placementAllowed(placed) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens) || titleBand) continue;
       if (looksLikeHexNoteGlyph(geometry)) continue;
-      const duplicate = seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.34);
-      if (duplicate) continue;
+      const existingIndex = counts.findIndex((mark) => mark.sheet === page.page && distance(mark, placed) < 0.34);
+      const existing = existingIndex >= 0 ? counts[existingIndex] : null;
+      if (existing && !isReviewOnlyMark(existing)) continue;
+      if (planType === "lighting" && visual.ambiguous) {
+        if (existing) continue;
+        const review = reviewCandidateMark({
+          trade,
+          sheet: page.page,
+          geometry,
+          reason: "detector-disagreement",
+          sources: ["plan-repeat", "legend-geometry"],
+          scores: { visual: visual.score, legend: visual.score, vector: visual.score },
+        });
+        if (review) {
+          counts.push(review);
+          seen.push({ ...review, tagX: placed.x, tagY: placed.y });
+        }
+        continue;
+      }
       const mark = attachDetectionRecord({
         id: newId(),
         source: "ai",
@@ -1033,8 +1069,14 @@ export function buildAiMarks({
         requiresReview: Boolean(visual.ambiguous),
         reviewReason: visual.ambiguous ? "detector-disagreement" : "",
       });
-      counts.push(mark);
-      seen.push({ sheet: page.page, x: placed.x, y: placed.y, typeCode: String(visual.entry.code || symbol.abbr || "").toUpperCase(), tagX: placed.x, tagY: placed.y });
+      if (existing && isReviewOnlyMark(existing)) {
+        counts[existingIndex] = mark;
+        const seenIndex = seen.findIndex((item) => item.sheet === page.page && distance(item, placed) < 0.34);
+        if (seenIndex >= 0) seen[seenIndex] = { ...mark, tagX: placed.x, tagY: placed.y };
+      } else {
+        counts.push(mark);
+        seen.push({ sheet: page.page, x: placed.x, y: placed.y, typeCode: String(visual.entry.code || symbol.abbr || "").toUpperCase(), tagX: placed.x, tagY: placed.y });
+      }
       for (const part of geometry.parts || []) usedGeometry.add(part);
     }
     // Keep mid-confidence visual hits as UNKNOWN/REVIEW instead of deleting them.

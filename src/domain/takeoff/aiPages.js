@@ -2,7 +2,7 @@ import { classifyPageItems, inferPlanType, extractPdfPageItems } from "./drawing
 import { extractPageSymbolPaths } from "./pdfPaths";
 import { classifySheetDiscipline, findSheetId, parseSheetId } from "./sheetDiscipline";
 import { getPdfDocument } from "@/lib/pdf-document";
-import { extractRasterSymbolCandidates } from "./rasterSymbols";
+import { extractRasterSymbolCandidates, hydrateRasterPaths } from "./rasterSymbols";
 
 export async function readAiPages(fileBytes) {
   const pdf = await getPdfDocument(fileBytes);
@@ -23,21 +23,31 @@ export async function readAiPages(fileBytes) {
     const discipline = classifySheetDiscipline(text, tokens);
     let paths = [];
     try { paths = await extractPageSymbolPaths(page); } catch { paths = []; }
-    let rasterPaths = [];
-    // Always keep a raster geometry pass available. Many electrical PDFs contain
-    // vector text/walls but rasterized device symbols; treating "some vectors exist"
-    // as proof that symbol geometry is vector-only caused text-coordinate markers.
-    try { rasterPaths = await extractRasterSymbolCandidates(page); } catch { rasterPaths = []; }
-    pages.push({
+    const recorded = {
       page: pageNumber,
       kind,
       tokens,
       sheetId,
       discipline,
       planType,
-      paths: [...paths, ...rasterPaths],
-      rasterPaths,
-    });
+      paths,
+      pdfPage: page,
+      rasterPaths: [],
+    };
+    // Live PDF.js pages extract real raster blobs here. Node tests inject
+    // rasterPaths/rasterCandidates on the page record instead.
+    let rasterPaths = [];
+    try {
+      rasterPaths = await extractRasterSymbolCandidates(page);
+      recorded.rasterPaths = rasterPaths;
+      await hydrateRasterPaths(recorded);
+      rasterPaths = recorded.rasterPaths || rasterPaths;
+    } catch {
+      rasterPaths = [];
+    }
+    recorded.paths = [...paths, ...rasterPaths];
+    recorded.rasterPaths = rasterPaths;
+    pages.push(recorded);
   }
   return pages;
 }

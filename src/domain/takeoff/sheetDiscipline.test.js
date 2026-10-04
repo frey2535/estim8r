@@ -1,5 +1,6 @@
 import {
   classifySheetDiscipline,
+  electricalSheetLooksLikePlan,
   pageMatchesTrade,
   parseSheetId,
   tradeFromSheetId,
@@ -15,6 +16,14 @@ function assert(cond, message) {
 assert(parseSheetId("P1.01") === "P1.01", "P1.01 sheet id");
 assert(parseSheetId("C0.04") === "C0.04", "C0.04 sheet id");
 assert(parseSheetId("E-2.01") === "E2.01", "E-2.01 sheet id");
+assert(parseSheetId("E210") === "E210", "undotted E210 sheet id");
+assert(parseSheetId("E110") === "E110", "undotted E110 sheet id");
+assert(parseSheetId("E001") === "E001", "undotted E001 sheet id");
+assert(electricalSheetLooksLikePlan("E210"), "E210 is a lighting-plan number");
+assert(electricalSheetLooksLikePlan("E110"), "E110 is a power-plan number");
+assert(electricalSheetLooksLikePlan("E1.01"), "E1.01 is a plan number");
+assert(!electricalSheetLooksLikePlan("E001"), "E001 is notes/legend, not a floor plan");
+assert(!electricalSheetLooksLikePlan("E501"), "E501 is details, not a floor plan");
 assert(tradeFromSheetId("P1.01") === "plumbing", "P prefix is plumbing");
 assert(tradeFromSheetId("S1.01") === "structural", "S prefix is structural");
 assert(tradeFromSheetId("C0.04") === "civil", "C prefix is civil");
@@ -52,7 +61,7 @@ assert(pageMatchesTrade({ discipline: "structural" }, "electrical") === false, "
 assert(pageMatchesTrade({ discipline: "civil" }, "electrical") === false, "civil is not electrical");
 assert(pageMatchesTrade({ discipline: "mechanical" }, "electrical") === false, "mechanical is not electrical");
 assert(pageMatchesTrade({ discipline: "electrical" }, "electrical") === true, "electrical matches electrical");
-assert(pageMatchesTrade({ discipline: "unknown" }, "electrical") === true, "unknown sheets still scan");
+assert(pageMatchesTrade({ discipline: "unknown" }, "electrical") === false, "unknown sheets do not scan");
 assert(pageMatchesTrade({ discipline: "mechanical" }, "hvac") === true, "hvac can read mechanical sheets");
 
 if (!process.exitCode) console.log("sheet discipline checks passed");

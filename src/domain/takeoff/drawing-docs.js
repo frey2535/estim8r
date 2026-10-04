@@ -1,3 +1,5 @@
+import { electricalSheetLooksLikePlan } from "./sheetDiscipline.js";
+
 const LEGEND_RE = /electrical\s+legend|lighting\s+legend|symbol\s+legend|\blegend\b|abbreviation/i;
 const LIGHTING_SCHED_RE = /lighting\s+fixture\s+schedule|fixture\s+schedule|luminaire\s+schedule|lighting\s+schedule/i;
 const DEVICE_SCHED_RE = /device\s+schedule|receptacle\s+schedule|switch\s+schedule/i;
@@ -5,8 +7,13 @@ const EQUIP_SCHED_RE = /equipment\s+schedule|mechanical\s+equipment|panel\s+sche
 const ONELINE_RE = /\briser\s+diagram\b|one[\s-]?line(?:\s+diagram)?|single[\s-]?line/i;
 const DETAIL_RE = /\b(?:electrical\s+)?(?:site\s+)?plan\s+details\b|\bsite\s+plan\s+details\b/i;
 const SPEC_RE = /specification|general\s+notes|electrical\s+notes|abbreviations/i;
-const PLAN_TITLE_RE = /\b(?:electrical\s+)?(?:lighting|power|receptacle|branch\s+power|floor)\s+plan\b|\belectrical\s+(?:lighting|power)\b/i;
-const INDEX_RE = /\bdrawing\s+index\b|\bsheet\s+index\b/i;
+const PLAN_TITLE_RE = /\b(?:electrical\s+)?(?:lighting|power|receptacle|branch\s+power|floor)\s+plans?\b|\belectrical\s+(?:lighting|power)\b|\bpower\s*(?:&|and)\s*systems?\s+plans?\b/i;
+const INDEX_RE = /\bdrawing\s+index\b|\bsheet\s+index\b|\bindex\s+of\s+drawings\b|\bthese\s+drawings\s+reflect\b/i;
+const COVER_SHEET_RE = /\bcover\s*(?:sheet|\/)|^\s*cover\b|\bproject\s+cover\b|\btitle\s*sheet\b/i;
+const COVERPLATE_RE = /\bcover\s*plates?\b/i;
+const RENDERING_RE = /\b(?:artist'?s\s+)?rendering\b|\b3d\s+views?\b|\barchitectural\s+perspectives?\b/i;
+const COMCHECK_RE = /\bcomcheck\b/i;
+const SITE_ELECTRICAL_PLAN_RE = /\belectrical\s+site\s+plans?\b|\bsite\s+(?:electrical|lighting)\s+plans?\b|\bsite\s+lighting\s+plans?\b/i;
 const SKIP = /^(symbol|symbols|description|type|manufacturer|model|remarks|notes|qty|quantity|mounting|voltage|watts|lamp|catalog)$/i;
 const TYPE_RE = /^(?:type\s*)?([a-z]{1,3}\d{0,3}[a-z]{0,2}|\d{1,3}[a-z]{0,3})$/i;
 
@@ -45,16 +52,82 @@ export function printedScaleCalibration(page) {
   };
 }
 
-const STRONG_LEGEND_TITLE_RE = /\belectrical\s+(?:symbol\s+)?legend(?:\s*(?:and|&)\s*schedules?)?\b|\belectrical\s+legend\s+and\s+schedules\b/i;
-const LIGHTING_PLAN_TITLE_RE = /\b(?:electrical\s+)?lighting(?:\s+floor)?\s+plan\b|\bfloor\s+lighting\s+plan\b/i;
-const POWER_PLAN_TITLE_RE = /\b(?:electrical\s+)?power(?:\s+floor)?\s+plan\b|\bbranch\s+power\s+plan\b|\bpower\s*(?:&|and)\s*systems?\s+plan\b/i;
+const STRONG_LEGEND_TITLE_RE = /\belectrical\s+(?:symbol\s+)?legend(?:\s*(?:and|&)\s*schedules?)?\b|\belectrical\s+legend\s+and\s+schedules\b|\bgeneral\s+notes\s*(?:&|and)\s*legends?\b/i;
+const LIGHTING_PLAN_TITLE_RE = /\b(?:electrical\s+)?lighting(?:\s+floor)?\s+plans?\b|\bfloor\s+lighting\s+plans?\b/i;
+const POWER_PLAN_TITLE_RE = /\b(?:electrical\s+)?power(?:\s+floor)?\s+plans?\b|\bbranch\s+power\s+plans?\b|\bpower\s*(?:&|and)\s*systems?\s+plans?\b/i;
+
+export function isPlanTitleText(text) {
+  const blob = String(text || "");
+  if (DETAIL_RE.test(blob) || ONELINE_RE.test(blob)) return false;
+  return LIGHTING_PLAN_TITLE_RE.test(blob)
+    || POWER_PLAN_TITLE_RE.test(blob)
+    || PLAN_TITLE_RE.test(blob)
+    || SITE_ELECTRICAL_PLAN_RE.test(blob);
+}
+
+export function isIndexText(text) {
+  const blob = String(text || "");
+  if (INDEX_RE.test(blob)) return true;
+  // Real floor plans cite many panel/room/sheet IDs. Only treat a bare ID
+  // list as an index when the page is not already a lighting/power plan.
+  if (isPlanTitleText(blob)) return false;
+  const ids = blob.match(/\b[A-Z]{1,3}[- ]?\d{1,2}[.-]\d{2}[A-Z]?\b|\b[A-Z]{1,3}\d{3,4}[A-Z]?\b/gi) || [];
+  return new Set(ids.map((id) => id.toUpperCase().replace(/[\s-]/g, ""))).size >= 8;
+}
+
+export function isCoverOrRenderingText(text) {
+  const blob = String(text || "");
+  if (isPlanTitleText(blob) || isIndexText(blob)) return false;
+  if (RENDERING_RE.test(blob)) return true;
+  if (COVER_SHEET_RE.test(blob)) return true;
+  if (COVERPLATE_RE.test(blob)) return false;
+  return false;
+}
+
+export function pageTextBlob(page) {
+  return [page?.title, page?.sheetId, ...(page?.tokens || []).map((token) => token.text)].filter(Boolean).join(" ");
+}
+
+export function looksLikeIndexPage(page) {
+  if (!page) return false;
+  if (page.kind === "index") return true;
+  return isIndexText(pageTextBlob(page));
+}
+
+export function looksLikeCoverOrRendering(page) {
+  if (!page) return false;
+  if (/^(cover|rendering|photo|title)$/i.test(String(page.kind || ""))) return true;
+  return isCoverOrRenderingText(pageTextBlob(page));
+}
+
+export function looksLikeElectricalPlan(page) {
+  if (!page) return false;
+  if (looksLikeCoverOrRendering(page) || looksLikeIndexPage(page)) return false;
+  const blob = pageTextBlob(page);
+  if (COMCHECK_RE.test(blob) && !isPlanTitleText(blob)) return false;
+  const electricalNamed = LIGHTING_PLAN_TITLE_RE.test(blob)
+    || POWER_PLAN_TITLE_RE.test(blob)
+    || SITE_ELECTRICAL_PLAN_RE.test(blob)
+    || /\belectrical\s+(?:lighting|power|site)\b/i.test(blob);
+  if (electricalNamed && !isIndexText(blob)) return true;
+  const id = String(page.sheetId || "").toUpperCase();
+  if (electricalSheetLooksLikePlan(id)) {
+    if (STRONG_LEGEND_TITLE_RE.test(blob) && !isPlanTitleText(blob)) return false;
+    if (/\b(?:diagrams?\s*(?:&|and)\s*schedules?|panelboard\s+schedules?)\b/i.test(blob) && !isPlanTitleText(blob)) return false;
+    return true;
+  }
+  return false;
+}
 
 export function classifyPageText(text) {
   const blob = String(text || "");
-  if (STRONG_LEGEND_TITLE_RE.test(blob) && !LIGHTING_PLAN_TITLE_RE.test(blob) && !POWER_PLAN_TITLE_RE.test(blob)) return "legend";
+  if (isIndexText(blob)) return "index";
+  if (COMCHECK_RE.test(blob) && !isPlanTitleText(blob)) return "spec";
+  if (isCoverOrRenderingText(blob)) return "cover";
+  if (STRONG_LEGEND_TITLE_RE.test(blob) && !isPlanTitleText(blob)) return "legend";
   // Real plan sheets often carry fixture/equipment schedules in a side panel.
   // The plan title must win over schedule text or AI skips the entire floor plan.
-  if (PLAN_TITLE_RE.test(blob) && !INDEX_RE.test(blob)) return "drawing";
+  if (isPlanTitleText(blob) && !isIndexText(blob)) return "drawing";
   if (LIGHTING_SCHED_RE.test(blob)) return "lighting-schedule";
   if (DEVICE_SCHED_RE.test(blob)) return "device-schedule";
   if (EQUIP_SCHED_RE.test(blob)) return "equipment-schedule";
@@ -62,7 +135,7 @@ export function classifyPageText(text) {
   if (DETAIL_RE.test(blob)) return "detail";
   if (LEGEND_RE.test(blob)) return "legend";
   if (SPEC_RE.test(blob)) return "spec";
-  return "drawing";
+  return "other";
 }
 
 export function classifyPageItems(items = [], viewport = {}) {
@@ -72,8 +145,11 @@ export function classifyPageItems(items = [], viewport = {}) {
   const titleBlock = (items || [])
     .filter((item) => (Number(item.x) || 0) >= width * 0.58 && (Number(item.y) || 0) >= height * 0.62)
     .map((item) => String(item.str || "").trim()).filter(Boolean).join(" ");
-  if (STRONG_LEGEND_TITLE_RE.test(titleBlock)) return "legend";
-  if (LIGHTING_PLAN_TITLE_RE.test(titleBlock) || POWER_PLAN_TITLE_RE.test(titleBlock)) return "drawing";
+  if (isIndexText(titleBlock) || isIndexText(full)) return "index";
+  if (isCoverOrRenderingText(titleBlock) && !isPlanTitleText(titleBlock)) return "cover";
+  if (COMCHECK_RE.test(titleBlock) || (COMCHECK_RE.test(full) && !isPlanTitleText(titleBlock))) return "spec";
+  if (STRONG_LEGEND_TITLE_RE.test(titleBlock) && !isPlanTitleText(titleBlock)) return "legend";
+  if (isPlanTitleText(titleBlock)) return "drawing";
   return classifyPageText(full);
 }
 

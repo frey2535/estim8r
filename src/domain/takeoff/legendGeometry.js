@@ -288,6 +288,13 @@ export function looksLikeUnlabeledReceptacleGlyph(candidate) {
   return strokeBox || duplexBox;
 }
 
+export function nearHexNoteGlyph(point, paths = []) {
+  const x = Number(point?.x ?? point?.cx) || 0;
+  const y = Number(point?.y ?? point?.cy) || 0;
+  return (paths || []).some((path) => looksLikeHexNoteGlyph(path)
+    && Math.hypot((Number(path.cx) || 0) - x, (Number(path.cy) || 0) - y) <= 0.55);
+}
+
 export function isHatchTickCluster(candidate, paths = []) {
   if (!candidate) return false;
   const w = Number(candidate.w) || 0;
@@ -306,11 +313,24 @@ export function isHatchTickCluster(candidate, paths = []) {
   return xs.length >= 3 && ys.length >= 3;
 }
 
-function nearHexNoteGlyph(point, paths = []) {
-  const x = Number(point?.x ?? point?.cx) || 0;
-  const y = Number(point?.y ?? point?.cy) || 0;
-  return (paths || []).some((path) => looksLikeHexNoteGlyph(path)
-    && Math.hypot((Number(path.cx) || 0) - x, (Number(path.cy) || 0) - y) <= 0.55);
+export function isStairHatchTick(candidate, paths = []) {
+  if (!candidate) return false;
+  const w = Number(candidate.w) || 0;
+  const h = Number(candidate.h) || 0;
+  const long = Math.max(w, h);
+  const short = Math.min(w, h);
+  if (long < 0.20 || long > 0.26 || short < 0.14 || short > 0.19) return false;
+  const ticks = (paths || []).filter((other) => {
+    const lw = Math.max(Number(other.w) || 0, Number(other.h) || 0);
+    const sh = Math.min(Number(other.w) || 0, Number(other.h) || 0);
+    if (lw < 0.12 || lw > 0.26 || sh < 0.10 || sh > 0.20) return false;
+    return Math.abs((Number(other.cx) || 0) - (Number(candidate.cx) || 0)) <= 5
+      && Math.abs((Number(other.cy) || 0) - (Number(candidate.cy) || 0)) <= 5;
+  });
+  if (ticks.length < 10) return false;
+  const xs = [...new Set(ticks.map((item) => (Number(item.cx) || 0).toFixed(1)))];
+  const ys = [...new Set(ticks.map((item) => (Number(item.cy) || 0).toFixed(1)))];
+  return xs.length >= 3 && ys.length >= 3;
 }
 
 function nearNoteChrome(point, tokens = []) {
@@ -339,7 +359,7 @@ export function findNearbyReceptacleGlyph(point, paths = [], options = {}) {
 
 function classifyNearbyPowerLabel(point, tokens = []) {
   let best = "";
-  let bestDist = 1.15;
+  let bestDist = 0.55;
   for (const token of tokens || []) {
     const text = normalizeTypeMark(token.text).toUpperCase();
     const dist = Math.hypot((Number(token.x) || 0) - (Number(point?.x) || 0), (Number(token.y) || 0) - (Number(point?.y) || 0));
@@ -402,10 +422,11 @@ export function scanUnlabeledPowerGlyphs(page, options = {}) {
   const gfiHeavy = tokens.filter((token) => /^GFI/i.test(normalizeTypeMark(token.text))).length >= 8;
   const hits = [];
   for (const path of paths) {
-    if (!looksLikeUnlabeledReceptacleGlyph(path) || isHatchTickCluster(path, paths)) continue;
+    if (!looksLikeUnlabeledReceptacleGlyph(path) || isHatchTickCluster(path, paths) || isStairHatchTick(path, paths)) continue;
     const placed = { x: path.cx, y: path.cy };
     if (occupied.some((item) => Math.hypot((Number(item.x) || 0) - placed.x, (Number(item.y) || 0) - placed.y) < 0.34)) continue;
     if (!isPlanInterior(placed) || isPlotStampToken(placed, tokens)) continue;
+    if (placed.y > 74) continue;
     if (nearNoteChrome(placed, tokens) || nearHexNoteGlyph(placed, paths)) continue;
     if (classifyNearbyPowerLabel(placed, tokens) || gfiHeavy) continue;
     if (!duplex) continue;

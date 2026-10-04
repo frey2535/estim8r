@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildAiMarks } from "./aiTakeoff.js";
 import { deviceOutline } from "./deviceStyles.js";
-import { isHatchTickCluster, looksLikeHexNoteGlyph, looksLikeUnlabeledReceptacleGlyph } from "./legendGeometry.js";
+import { isHatchTickCluster, isStairHatchTick, looksLikeHexNoteGlyph, looksLikeUnlabeledReceptacleGlyph, nearHexNoteGlyph } from "./legendGeometry.js";
 import { isPlanInterior, normalizeTypeMark, shouldAcceptPlanToken } from "./symbolDetection.js";
 import { paletteForTrade } from "./trades.js";
 
@@ -42,19 +42,23 @@ function visibleReceptacleGlyphs(page) {
   return paths.filter((path) => (
     looksLikeUnlabeledReceptacleGlyph(path)
     && !isHatchTickCluster(path, paths)
+    && !isStairHatchTick(path, paths)
     && !looksLikeHexNoteGlyph(path)
+    && !nearHexNoteGlyph(path, paths)
     && isPlanInterior({ x: path.cx, y: path.cy })
     && path.cy <= 74
-  )).length;
+  ));
 }
 
+const receptacleGlyphs = visibleReceptacleGlyphs(e110);
 const visible = {
-  receptacles: visibleReceptacleGlyphs(e110),
+  receptacles: receptacleGlyphs.length,
   wp: visibleText(e110, /^WP$/i),
   sp: visibleText(e110, /^SP$/i),
   gfi: visibleText(e110, /^GFI(?:\/WP)?$/i),
   os: visibleText(e110, /^OS$/i),
 };
+const glyphsOnMark = receptacleGlyphs.filter((glyph) => e110Marks.some((mark) => Math.hypot(mark.x - glyph.cx, mark.y - glyph.cy) < 0.45)).length;
 const found = {
   receptacles: byType("R").length + bySymbol("duplex").filter((mark) => mark.typeCode !== "R").length,
   wp: byType("WP").length,
@@ -85,7 +89,7 @@ const legendMarks = marks.filter((mark) => mark.sheet === 48);
 const coverMarks = marks.filter((mark) => mark.sheet === 1);
 
 console.log("E110 visible vs found (drawing, not legend qty)");
-console.log(`receptacles visible=${visible.receptacles} found=${found.receptacles}`);
+console.log(`receptacles visible=${visible.receptacles} found=${found.receptacles} onGlyph=${glyphsOnMark}`);
 console.log(`WP visible=${visible.wp} found=${found.wp}`);
 console.log(`SP visible=${visible.sp} found=${found.sp}`);
 console.log(`GFI visible=${visible.gfi} found=${found.gfi}`);
@@ -96,13 +100,14 @@ console.log(`E001=${legendMarks.length} cover=${coverMarks.length} WP_on_glyph=$
 assert(legendMarks.length === 0, `legend E001 must stay 0, got ${legendMarks.length}`);
 assert(coverMarks.length === 0, `cover must stay 0, got ${coverMarks.length}`);
 assert(found.wp >= visible.wp, `WP recall: found ${found.wp} of ${visible.wp} printed tags`);
-assert(found.sp >= Math.floor(visible.sp * 0.9), `SP recall: found ${found.sp} of ${visible.sp} printed tags`);
+assert(found.sp >= visible.sp, `SP recall: found ${found.sp} of ${visible.sp} printed tags`);
+assert(glyphsOnMark >= Math.ceil(visible.receptacles * 0.99), `receptacle glyphs on-mark ${glyphsOnMark}/${visible.receptacles}`);
 assert(found.gfi === visible.gfi, `GFI on E110 should match printed tags, found ${found.gfi} visible ${visible.gfi}`);
 assert(found.os === visible.os, `OS on E110 should match printed tags, found ${found.os} visible ${visible.os}`);
 assert(found.receptacles >= Math.floor(visible.receptacles * 0.85), `unlabeled receptacle recall: found ${found.receptacles} of ${visible.receptacles} glyphs`);
 assert(lightingOnPower.length === 0, `lighting types / site poles must not mark a power sheet, got ${lightingOnPower.length}`);
 assert(hexMarked.length === 0, `hex notes must not get text chips, got ${hexMarked.length}`);
-assert(hatchBand.length <= 4, `stair/hatch ticks must not become room-full of marks, got ${hatchBand.length}`);
+assert(hatchBand.length === 0, `stair/hatch ticks must not become marks, got ${hatchBand.length}`);
 assert(maxExtent <= 1.65, `fills must stay Beam-tight, max extent ${maxExtent}`);
 assert(wpOnGlyph.length >= Math.min(3, found.wp), `WP fills must sit on the printed glyph, ${wpOnGlyph.length}/${found.wp}`);
 assert(!(e110?.tokens || []).some((token) => (

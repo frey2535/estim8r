@@ -7,6 +7,7 @@ import {
   geometrySimilarity,
   isDeviceFragment,
   isHatchTickCluster,
+  isStairHatchTick,
   looksLikeHexNoteGlyph,
   looksLikeReceptacleGlyph,
   looksLikeUnlabeledReceptacleGlyph,
@@ -115,6 +116,12 @@ assert(looksLikeReceptacleGlyph(stroke) && looksLikeUnlabeledReceptacleGlyph(str
 assert(findNearbyReceptacleGlyph({ x: 17.214, y: 69.416 }, [hex, box]) === box, "WP/SP fills prefer the box, not the hex");
 const hatch = Array.from({ length: 12 }, (_, index) => part(12 + (index % 4) * 0.4, 16 + Math.floor(index / 4) * 0.4, 0.134, 0.187));
 assert(isHatchTickCluster(hatch[0], hatch), "stair/hatch tick lattices are not receptacles");
+const stairTicks = [
+  ...hatch,
+  part(12.88, 21.58, 0.16, 0.224),
+  part(12.88, 14.4, 0.16, 0.224),
+];
+assert(isStairHatchTick(stairTicks[stairTicks.length - 1], stairTicks), "oversized stair ticks in a hatch field are not receptacles");
 
 if (!process.exitCode) console.log("legend geometry checks passed");
 

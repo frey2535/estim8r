@@ -811,9 +811,11 @@ export function buildAiMarks({
         || (isCanDeviceText(token.text, token.nearbyText, symbol.label) ? "circle" : null);
       const entry = (dictionary.entries || []).find((item) => normalizeTakeoffText(item.code) === normalizeTakeoffText(normalizeTypeMark(token.text)));
       const printedCode = normalizeTypeMark(token.text).toUpperCase();
+      const fanTag = /^(EF|VF)-?\d*$/i.test(printedCode);
       const powerDeviceTag = /^(WP|SP|SPR|P2|DB|DOORBELL)$/.test(printedCode)
+        || fanTag
         || (planType === "power" && printedCode === "R");
-      const powerGlyph = powerDeviceTag
+      const powerGlyph = (powerDeviceTag && !fanTag)
         ? findNearbyReceptacleGlyph(token, page.paths || [], { radius: 0.62 })
         : null;
       let geometry = powerGlyph
@@ -829,8 +831,9 @@ export function buildAiMarks({
       }
       if (geometry && powerDeviceTag) {
         const away = Math.hypot((geometry.cx || 0) - token.x, (geometry.cy || 0) - token.y);
-        if (away > 0.62) {
-          geometry = powerGlyph
+        const long = Math.max(Number(geometry.w) || 0, Number(geometry.h) || 0);
+        if (away > 0.62 || (fanTag && (away > 0.55 || long > 0.7))) {
+          geometry = (!fanTag && powerGlyph)
             ? { ...powerGlyph, source: "vector", outline: powerGlyph.outline || { kind: powerGlyph.kind || "rect", source: "vector", w: powerGlyph.w, h: powerGlyph.h } }
             : tagOnSymbolGeometry(token, { shapeHint: hint || "rect" });
         }
@@ -867,7 +870,10 @@ export function buildAiMarks({
           || (typeCode === "GFI/WP" && item.typeCode === "GFI");
         if (!sameType) return false;
         const tagDist = Math.hypot((item.tagX ?? item.x) - token.x, (item.tagY ?? item.y) - token.y);
-        return tagDist < 0.35 || (distance(item, placed) < 0.42 && tagDist < 0.9);
+        if (tagDist < 0.35) return true;
+        // Stacked WP/SP tags are separate devices even when their boxes almost touch.
+        if (tagDist >= 0.55 && /^(WP|SP|SPR|GFI|GFI\/WP|OS|R|P2|DB)$/.test(typeCode)) return false;
+        return distance(item, placed) < 0.42 && tagDist < 0.9;
       });
       if (near) continue;
       const mark = {

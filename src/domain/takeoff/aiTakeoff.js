@@ -22,7 +22,7 @@ import { extractSheetNotes, notesToMarks } from "./sheetNotes.js";
 import { looksLikeCoverOrRendering, looksLikeElectricalPlan, looksLikeIndexPage, pagePlanType } from "./drawing-docs.js";
 import { associateGeometry, assignExclusiveGeometry, looksLikeRecessedCanBody, placeOnSymbolGeometry, shapeHintFromLabel, tagOnSymbolGeometry } from "./vectorSymbols.js";
 import { orthogonalizePolyline } from "./ortho.js";
-import { attachConfirmedGeometryPrototypes, attachFragmentPrototypes, attachLegendGeometryPrototypes, attachPowerGlyphPrototypes, findNearbyReceptacleGlyph, isEmergencyHatch, isHatchTickCluster, looksLikeHexNoteGlyph, scanPageByLegendGeometry, scanUnlabeledPowerGlyphs, snapToEntryPrototype } from "./legendGeometry.js";
+import { attachConfirmedGeometryPrototypes, attachFragmentPrototypes, attachLegendGeometryPrototypes, attachPowerGlyphPrototypes, attachProjectPrototypes, findNearbyReceptacleGlyph, isEmergencyHatch, isHatchTickCluster, looksLikeHexNoteGlyph, scanPageByLegendGeometry, scanUnlabeledPowerGlyphs, snapToEntryPrototype } from "./legendGeometry.js";
 import { matchRasterToLegend, rasterCandidatesFromPage } from "./rasterSymbols.js";
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
 
@@ -740,9 +740,11 @@ export function buildAiMarks({
   maxHomeruns = DEFAULT_MAX_HOMERUNS,
   conduit,
   color = "#2563eb",
+  projectPrototypes = [],
 }) {
   const anchorIds = new Set(ANCHOR_SYMBOL_IDS[trade] || []);
   let dictionary = attachLegendGeometryPrototypes(legendDictionaryFromPages(pages, drawingSymbols, symbols, trade), pages);
+  if (projectPrototypes.length) dictionary = attachProjectPrototypes(dictionary, projectPrototypes);
   const aliases = dictionary.aliases;
   const usableDrawing = dictionary.usableDrawing;
   const matchSymbols = [...(symbols || []), ...usableDrawing];

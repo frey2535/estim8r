@@ -13,7 +13,7 @@ import {
   resolvedMarkerSize,
 } from "@/domain/takeoff/sizes";
 import TradeSymbolSelect from "@/components/takeoff/TradeSymbolSelect";
-import { describeReconciliation } from "@/domain/takeoff/countReconciliation";
+import ReconciliationPanel from "@/components/takeoff/ReconciliationPanel";
 
 function Field({ label, children }) {
   return (
@@ -52,6 +52,7 @@ export default function TakeoffInspector({
   onBuildTrueTakeoff,
   reconciliation,
   reviewSummary,
+  coverageNote,
   isolationMode = false,
   onIsolationMode,
 }) {
@@ -247,19 +248,17 @@ export default function TakeoffInspector({
           <div className="font-bold text-foreground">Accuracy review</div>
           <p className="mt-1 text-muted-foreground">
             {reviewSummary.pending
-              ? `${reviewSummary.pending} item${reviewSummary.pending === 1 ? "" : "s"} still need a look (${reviewSummary.typesPending} type${reviewSummary.typesPending === 1 ? "" : "s"}, ${reviewSummary.uncertainPending} uncertain).`
+              ? `${reviewSummary.pending} item${reviewSummary.pending === 1 ? "" : "s"} still need a look (${reviewSummary.typesPending} type${reviewSummary.typesPending === 1 ? "" : "s"}, ${reviewSummary.uncertainPending} uncertain${reviewSummary.unscannedPending ? `, ${reviewSummary.unscannedPending} unscanned` : ""}).`
               : "Every detection on this sheet has been accepted or rejected."}
           </p>
           <p className="mt-1 text-muted-foreground">{reviewSummary.vector} extracted outlines · {reviewSummary.text} text tags · {reviewSummary.accepted} accepted · {reviewSummary.rejected} rejected. These are review counts, not a 99% claim.</p>
+          {coverageNote ? <p className="mt-1 text-muted-foreground">{coverageNote}</p> : null}
         </div>
       ) : null}
       {reconciliation ? (
         <div className="mb-3 rounded-lg border border-border p-2 text-[11px] leading-4">
           <div className="font-bold text-foreground">Plan vs schedule</div>
-          <p className="mt-1 text-muted-foreground">{describeReconciliation(reconciliation)}</p>
-          {reconciliation.discrepancyCount ? (
-            <p className="mt-1 text-amber-800 dark:text-amber-200">Takeoff quantity is still the plan count ({reconciliation.persistedCount}).</p>
-          ) : null}
+          <ReconciliationPanel reconciliation={reconciliation} compact />
         </div>
       ) : null}
       <div className="mb-2 flex items-center gap-2"><Layers3 className="h-4 w-4 text-blue-600 dark:text-orange-500" /><h3 className="font-bold">Quantity schedule</h3></div>

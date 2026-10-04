@@ -326,7 +326,7 @@ export function looksLikeTextGlyph(candidate, token) {
 export function shapeHintFromLabel(text) {
   const blob = String(text || "").toLowerCase();
   if (!blob.trim()) return null;
-  if (/\d\s*[x×]\s*\d|troffer|strip light|linear fixture/.test(blob) && !/downlight/.test(blob)) return "rect";
+  if (/\d\s*[x×]\s*\d|troffer|strip light|linear fixture|lighting fixture/.test(blob) && !/downlight/.test(blob)) return "rect";
   if (/exhaust fan|vent fan/.test(blob)) return "rect";
   if (/downlight|recessed can|occup|sensor|recept|gfi|gfci|duplex|outlet|pendant|\bfan\b/.test(blob)) return "circle";
   return null;

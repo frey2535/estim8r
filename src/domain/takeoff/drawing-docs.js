@@ -46,8 +46,8 @@ export function printedScaleCalibration(page) {
 }
 
 const STRONG_LEGEND_TITLE_RE = /\belectrical\s+(?:symbol\s+)?legend(?:\s*(?:and|&)\s*schedules?)?\b|\belectrical\s+legend\s+and\s+schedules\b/i;
-const LIGHTING_PLAN_TITLE_RE = /\b(?:electrical\s+)?lighting(?:\s+floor)?\s+plan\b/i;
-const POWER_PLAN_TITLE_RE = /\b(?:electrical\s+)?power(?:\s+floor)?\s+plan\b|\bbranch\s+power\s+plan\b/i;
+const LIGHTING_PLAN_TITLE_RE = /\b(?:electrical\s+)?lighting(?:\s+floor)?\s+plan\b|\bfloor\s+lighting\s+plan\b/i;
+const POWER_PLAN_TITLE_RE = /\b(?:electrical\s+)?power(?:\s+floor)?\s+plan\b|\bbranch\s+power\s+plan\b|\bpower\s*(?:&|and)\s*systems?\s+plan\b/i;
 
 export function classifyPageText(text) {
   const blob = String(text || "");

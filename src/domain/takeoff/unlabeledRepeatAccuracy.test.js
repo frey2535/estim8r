@@ -101,4 +101,41 @@ const powerCopy = powerLookalike.marks.filter((mark) => mark.type === "count").f
 assert(powerCopy?.typeCode === "GFI", `power lookalike copy is a receptacle, got ${powerCopy?.typeCode}`);
 assert(powerCopy?.detectionAmbiguous !== true, "power prior settles the receptacle instead of dumping it to review");
 
+const hatch = (cx, cy) => ([
+  { cx, cy, w: 0.8, h: 1.25, kind: "rect", source: "vector", outline: { kind: "rect", source: "vector", w: 0.8, h: 1.25, points: [] } },
+  { cx: cx - 0.04, cy: cy + 0.06, w: 0.62, h: 0.97, kind: "rect", source: "vector", outline: { kind: "rect", source: "vector", w: 0.62, h: 0.97, points: [] } },
+  { cx: cx - 0.08, cy: cy + 0.12, w: 0.4, h: 0.62, kind: "rect", source: "vector", outline: { kind: "rect", source: "vector", w: 0.4, h: 0.62, points: [] } },
+  { cx: cx - 0.12, cy: cy - 0.18, w: 0.18, h: 0.22, kind: "rect", source: "vector", outline: { kind: "rect", source: "vector", w: 0.18, h: 0.22, points: [] } },
+]);
+const twinPage = buildAiMarks({
+  trade: "electrical",
+  symbols: electrical.symbols,
+  drawingSymbols: [
+    { abbr: "1", type: "1", label: "Type 1 2x4 LED surface troffer", takeoffCategory: "Lighting", category: "From drawing" },
+    { abbr: "1E", type: "1E", label: "Type 1E 2x4 LED surface troffer with emergency battery", takeoffCategory: "Lighting", category: "From drawing" },
+  ],
+  pages: [{
+    page: 4,
+    kind: "drawing",
+    title: "LIGHTING FLOOR PLAN - MAIN LEVEL",
+    discipline: "electrical",
+    tokens: [
+      { text: "LIGHTING FLOOR PLAN", x: 80, y: 88 },
+      { text: "'1'", x: 20.1, y: 20.1 },
+      { text: "'1E'", x: 32.1, y: 20.1 },
+    ],
+    paths: [
+      body(20.6, 20.4),
+      ...hatch(32.6, 20.4),
+      body(20.6, 36.4),
+      ...hatch(32.6, 36.4),
+    ],
+  }],
+});
+const twinCounts = twinPage.marks.filter((mark) => mark.type === "count");
+const unlabeledOne = twinCounts.find((mark) => mark.typeCode === "1" && mark.y > 30);
+const unlabeledEm = twinCounts.find((mark) => mark.typeCode === "1E" && mark.y > 30);
+assert(unlabeledOne && Math.abs(unlabeledOne.x - 20.6) < 0.2, `simple unlabeled 2x4 is type 1, got ${unlabeledOne?.typeCode}@${unlabeledOne?.x}`);
+assert(unlabeledEm && Math.abs(unlabeledEm.x - 32.6) < 0.2, `hatched unlabeled 2x4 is type 1E, got ${unlabeledEm?.typeCode}@${unlabeledEm?.x}`);
+
 if (!process.exitCode) console.log("unlabeled repeat accuracy checks passed");

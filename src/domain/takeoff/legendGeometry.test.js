@@ -1,8 +1,10 @@
 import { pagePlanType } from "./drawing-docs.js";
 import {
   attachConfirmedGeometryPrototypes,
+  attachFragmentPrototypes,
   clusterSymbolGeometry,
   geometrySimilarity,
+  isDeviceFragment,
   resolveGeometryMatch,
   scanPageByLegendGeometry,
 } from "./legendGeometry.js";
@@ -50,7 +52,23 @@ const twins = {
     { code: "1E", symbol: { id: "2x4", label: "Type 1E 2x4 emergency", category: "Lighting" }, prototype: proto },
   ],
 };
-assert(resolveGeometryMatch(match, twins.entries, { planType: "lighting" }) == null, "unlabeled 1 vs 1E twins are not guessed");
+assert(resolveGeometryMatch(match, twins.entries, { planType: "lighting" }) == null, "unlabeled 1 vs 1E twins are not guessed when hatch does not distinguish them");
+
+const simpleTroffer = clusterSymbolGeometry(part(20, 20, 0.8, 1.25), [part(20, 20, 0.8, 1.25)], { maxSpan: 2 });
+const hatchedTroffer = clusterSymbolGeometry(part(40, 20, 0.8, 1.25), [
+  part(40, 20, 0.8, 1.25),
+  part(39.85, 19.85, 0.18, 0.22),
+  part(40.05, 20.05, 0.16, 0.2),
+  part(40.15, 20.2, 0.14, 0.18),
+], { maxSpan: 2 });
+const twinBodies = {
+  entries: [
+    { code: "1", symbol: { id: "2x4", label: "Type 1 2x4 troffer", category: "Lighting" }, prototype: simpleTroffer },
+    { code: "1E", symbol: { id: "2x4", label: "Type 1E 2x4 emergency", category: "Lighting" }, prototype: hatchedTroffer },
+  ],
+};
+assert(resolveGeometryMatch(hatchedTroffer, twinBodies.entries, { planType: "lighting", twinHatch: true })?.entry.code === "1E", "hatched 2x4 settles as emergency");
+assert(resolveGeometryMatch(simpleTroffer, twinBodies.entries, { planType: "lighting", twinHatch: true })?.entry.code === "1", "simple 2x4 settles as the normal twin");
 
 const learned = attachConfirmedGeometryPrototypes(
   { entries: [{ code: "1E", symbol: { id: "2x4", label: "Type 1E", category: "Lighting" } }] },
@@ -60,7 +78,27 @@ assert(learned.entries[0].prototype, "confirmed extracted bodies become repeat p
 
 assert(pagePlanType({ title: "LIGHTING FLOOR PLAN - MAIN LEVEL" }) === "lighting", "lighting title is a lighting plan");
 assert(pagePlanType({ title: "POWER FLOOR PLAN - MAIN LEVEL" }) === "power", "power title is a power plan");
+assert(pagePlanType({ title: "FIRST FLOOR LIGHTING PLAN" }) === "lighting", "floor lighting title is a lighting plan");
+assert(pagePlanType({ title: "POWER & SYSTEMS PLAN" }) === "power", "power and systems title is a power plan");
 assert(pagePlanType({ planType: "power", title: "LIGHTING FLOOR PLAN" }) === "power", "explicit planType wins");
+
+const slashA = part(22.1, 22.2, 0.167, 0.087);
+const slashB = part(22.22, 22.28, 0.144, 0.107);
+const slashCopyA = part(40.1, 36.2, 0.167, 0.087);
+const slashCopyB = part(40.22, 36.28, 0.144, 0.107);
+assert(isDeviceFragment(slashA), "can slashes are first-class fragments");
+const slashDict = attachFragmentPrototypes(
+  { entries: [{ code: "4", symbol: { id: "downlight", label: "Type 4 4 inch surface downlight", category: "Lighting" } }] },
+  [{ typeCode: "4", x: 22.15, y: 22.2, outlineSource: "text", outline: { kind: "circle", source: "text", w: 0.52, h: 0.52 } }],
+  { paths: [slashA, slashB, slashCopyA, slashCopyB] },
+);
+assert(slashDict.entries[0].slashPrototype, "labeled slashed-circle tags train a slash prototype");
+const slashHits = scanPageByLegendGeometry(
+  { paths: [slashA, slashB, slashCopyA, slashCopyB] },
+  { entries: [{ ...slashDict.entries[0], prototype: slashDict.entries[0].slashPrototype }] },
+  { allowSlash: true, threshold: 0.9, strictSize: true, occupyRadius: 0.4, occupied: [{ x: 22.15, y: 22.2 }] },
+);
+assert(slashHits.some((hit) => Math.abs(hit.geometry.cx - 40.16) < 0.25), "unlabeled slashed-circle copy is recovered from fragments");
 
 if (!process.exitCode) console.log("legend geometry checks passed");
 

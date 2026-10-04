@@ -33,11 +33,25 @@ export function isCanDeviceText(...parts) {
   return CAN_RE.test(parts.filter(Boolean).join(" "));
 }
 
+export function isPlotStampToken(token, tokens = []) {
+  const x = Number(token?.x);
+  const y = Number(token?.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y) || y < 60) return false;
+  return (tokens || []).some((other) => {
+    if (other === token) return false;
+    const dy = Math.abs((Number(other.y) || 0) - y);
+    const dx = Math.abs((Number(other.x) || 0) - x);
+    if (dx > 16 || dy > 15) return false;
+    if ((Number(other.y) || 0) < 76) return false;
+    const text = String(other.text || "");
+    return /autodesk|docs:\/\//i.test(text) || /^\d{1,2}:\d{2}:\d{2}$/.test(text);
+  });
+}
+
 export function isPlanInterior(token) {
   const x = Number(token?.x);
   const y = Number(token?.y);
   if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
-  if (y >= 64 && x <= 28) return false;
   return x >= 7 && x <= 76 && y >= 10 && y <= 88;
 }
 
@@ -181,6 +195,7 @@ export function shouldAcceptPlanToken(token, tokens = []) {
   if (isReferenceCallout(marked.text) || isReferenceCallout(token.text)) return false;
   if (hasReferenceNeighbor(token, tokens) || hasReferenceNeighbor(marked, tokens)) return false;
   if (isTitleBlockLetter(token) || isTitleBlockLetter(marked)) return false;
+  if (isPlotStampToken(token, tokens) || isPlotStampToken(marked, tokens)) return false;
   if (isLegendClusterToken(token, tokens) || isLegendClusterToken(marked, tokens)) return false;
   if (isScheduleNoteContext(token, tokens) || isScheduleNoteContext(marked, tokens)) return false;
   if (isCircuitCalloutToken(token, tokens)) return false;

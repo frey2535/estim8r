@@ -1,4 +1,5 @@
 import { linesFromRollup, mergeEstimate, syncEstimateDraft } from "./fromTakeoff.js";
+import { buildTrueElectricalEstimateDraft } from "./trueElectricalTakeoff.js";
 import { parseTitleBlock } from "./fromDrawings.js";
 import { compositeWage, defaultCrew, journeymanWage } from "../labor/employeeClasses.js";
 import { assignLaborHours } from "../labor/libraryDocument.js";
@@ -62,7 +63,7 @@ const draft = syncEstimateDraft(null, {
   rollup,
   pageCount: 4,
 });
-assert(draft.separateFromTakeoff === true, "estimate is marked separate from takeoff");
+assert(draft.liveLinkedTakeoff === true, "estimate stays live-linked to overlay takeoff");
 assert(draft.header.projectName === "level-1", "project name from drawing");
 assert(draft.lines.every((line) => line.source === "takeoff"), "takeoff quantities win over blank legend lines");
 assert(assignLaborHours({ category: "Lighting", symbol: "2x4 troffer", unit: "EA" }).mhPerUnit === 0.75, "workbook troffer match");
@@ -96,7 +97,7 @@ assert(soccer.header.customerPhone === "615-370-8500", "estimate phone from titl
 assert(soccer.header.customerEmail === "", "no email on the drawings");
 assert(soccer.header.customerName === "", "no contact name on the drawings");
 assert(soccer.header.estimateNumber === "257031", "commission number from title block");
-assert(soccer.separateFromTakeoff === true, "soccer estimate stays separate from takeoff");
+assert(soccer.liveLinkedTakeoff === true, "soccer estimate stays live-linked to overlay takeoff");
 
 const editedHeader = syncEstimateDraft({
   ...soccer,
@@ -109,5 +110,42 @@ const editedHeader = syncEstimateDraft({
 });
 assert(editedHeader.header.customerCompany === "Typed Contractor", "typed company is not overwritten");
 assert(editedHeader.lines.length === soccer.lines.length, "header fill does not change takeoff lines");
+
+const overlayOnly = syncEstimateDraft({
+  lines: [
+    { takeoffKey: "harvest|generator", source: "takeoff", category: "Panels / MCC", description: "Generator", quantity: 147, unit: "EA" },
+    { takeoffKey: "harvest|emt", source: "takeoff", category: "Raceway", description: '3/4" EMT', quantity: 4350.7, unit: "LF" },
+  ],
+}, {
+  fileName: "pottsville.pdf",
+  drawingDocs: {
+    pages: [
+      { page: 3, kind: "spec", text: "GENERATOR PANELBOARD EF-1 3/4\" EMT EXHAUST FAN COMCHECK" },
+      { page: 48, kind: "legend", text: "AFF AHJ ABBREVIATIONS ELECTRICAL LEGEND" },
+    ],
+    symbols: [{ id: "legend:g", label: "Generator", abbr: "G", category: "Panels / MCC" }],
+    scheduleItems: [{ id: "sched:emt", label: '3/4" EMT', abbr: "EMT", category: "Raceway", scheduleQty: 4350 }],
+  },
+  rollup: { rows: [{ category: "Receptacles", symbol: "Duplex receptacle", count: 1, lf: 0, sf: 0, hasLength: false, hasArea: false }], totals: { count: 1, lf: 0, sf: 0 } },
+  marks: [{ id: "r1", type: "count", sheet: 50, category: "Receptacles", symbol: "duplex", symbolLabel: "Duplex receptacle" }],
+  pageKinds: { 3: "spec", 48: "legend", 50: "drawing" },
+  pageCount: 76,
+});
+assert(overlayOnly.lines.length === 1, `estimate follows overlay marks, got ${overlayOnly.lines.length}`);
+assert(overlayOnly.lines[0].quantity === 1, "one overlay receptacle is one estimate quantity");
+assert(!overlayOnly.lines.some((line) => /generator|emt|exhaust/i.test(line.description)), "spec sentences are not bid lines");
+
+const trueDraft = buildTrueElectricalEstimateDraft(overlayOnly, {
+  fileName: "pottsville.pdf",
+  drawingDocs: overlayOnly && {
+    pages: [{ page: 3, kind: "spec", text: "PROVIDE GENERATOR AND 246 PANELBOARDS. EF-1 EF-2 3/4\" EMT." }],
+  },
+  rollup: { rows: [{ category: "Receptacles", symbol: "Duplex receptacle", count: 1, lf: 0, sf: 0, hasLength: false, hasArea: false }], totals: { count: 1, lf: 0 } },
+  marks: [{ id: "r1", type: "count", sheet: 50, category: "Receptacles", symbol: "duplex", symbolLabel: "Duplex receptacle" }],
+  pageKinds: { 50: "drawing" },
+  runs: [],
+});
+assert(!trueDraft.lines.some((line) => /generator|panelboard|exhaust|emt/i.test(String(line.description))), "true takeoff does not invent gear/EMT from spec text");
+assert(trueDraft.lines.filter((line) => line.category === "Receptacles").every((line) => line.quantity === 1), "true takeoff quantity stays the overlay count");
 
 if (!process.exitCode) console.log("estimate labor checks passed");

@@ -119,7 +119,29 @@ const architectural = {
 assert(!looksLikeElectricalPlan(architectural), "architectural floor plans are not electrical takeoff sheets");
 assert(!shouldScan(architectural, "electrical"), "A101 is never scanned for electrical");
 
+const liveNonPlan = [
+  { page: 1, kind: "drawing", title: "MCFD POTTSVILLE FIRE STATION ADD 2 SET", tokens: [{ text: "PRELIMINARY", x: 10, y: 10 }, { text: "NOT", x: 20, y: 10 }, { text: "FOR", x: 26, y: 10 }, { text: "CONSTRUCTION", x: 32, y: 10 }, { text: "PERMIT", x: 70, y: 88 }, { text: "SET", x: 78, y: 88 }] },
+  { page: 3, kind: "spec", sheetId: "G005", title: "G005 COMCHECK", tokens: [{ text: "G005", x: 68, y: 3 }, { text: "COMCHECK", x: 72, y: 88 }, { text: "LIGHTING", x: 20, y: 40 }, { text: "POWER", x: 30, y: 40 }] },
+  { page: 18, kind: "drawing", sheetId: "A111", title: "A111 FIRST FLOOR PLAN", tokens: [{ text: "A111", x: 68, y: 3 }, { text: "FIRST", x: 80, y: 90 }, { text: "FLOOR", x: 86, y: 90 }, { text: "PLAN", x: 92, y: 90 }] },
+  { page: 42, kind: "spec", sheetId: "M002", title: "M002 COMCHECK", tokens: [{ text: "M002", x: 94, y: 94 }, { text: "COMCHECK", x: 80, y: 90 }, { text: "MECHANICAL", x: 20, y: 20 }] },
+  { page: 61, kind: "detail", sheetId: "P500", title: "P500 DETAILS", tokens: [{ text: "P500", x: 94, y: 94 }, { text: "DETAILS", x: 80, y: 90 }, { text: "PLUMBING", x: 20, y: 20 }] },
+  { page: 66, kind: "device-schedule", sheetId: "P601", title: "P601", tokens: [{ text: "P601", x: 94, y: 94 }, { text: "MAKE", x: 20, y: 20 }, { text: "MODEL", x: 30, y: 20 }] },
+  { page: 70, kind: "detail", sheetId: "FP500", title: "FP500 DETAILS", tokens: [{ text: "FP500", x: 94, y: 94 }, { text: "DETAILS", x: 80, y: 90 }, { text: "SPRINKLER", x: 20, y: 20 }] },
+  { page: 48, kind: "legend", sheetId: "E001", title: "E001 GENERAL NOTES & LEGENDS", tokens: [{ text: "E001", x: 68, y: 3 }, { text: "GENERAL", x: 70, y: 88 }, { text: "NOTES", x: 78, y: 88 }, { text: "&", x: 84, y: 88 }, { text: "LEGENDS", x: 88, y: 88 }, { text: "ABBREVIATIONS", x: 20, y: 20 }, { text: "AFF", x: 20, y: 30 }] },
+];
+for (const page of liveNonPlan) {
+  assert(!shouldScan(page, "electrical"), `${page.sheetId || page.title} must not be scanned for bid devices`);
+}
+
 const electrical = paletteForTrade("electrical");
+const liveZero = buildAiMarks({
+  trade: "electrical",
+  symbols: electrical.symbols,
+  pages: liveNonPlan,
+  maxHomeruns: 8,
+});
+const liveBid = (liveZero.marks || []).filter((mark) => mark.type === "count" || mark.type === "drop");
+assert(liveBid.length === 0, `cover/COMCHECK/arch/mech/plumbing/FP/legend stay 0, got ${liveBid.length}`);
 const coverResult = buildAiMarks({
   trade: "electrical",
   symbols: electrical.symbols,

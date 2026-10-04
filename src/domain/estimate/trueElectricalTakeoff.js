@@ -1,4 +1,5 @@
 import { buildConduitWireMakeup, aggregateWirePulling } from "../takeoff/conduitWireMakeup.js";
+import { overlayBidMarks } from "../takeoff/liveLinkedTakeoff.js";
 import { assignLaborHours } from "../labor/libraryDocument.js";
 import { compositeWage, defaultCrew, journeymanWage } from "../labor/employeeClasses.js";
 import { estimateLineHours, estimateLineLaborCost } from "./manualLineLabor.js";
@@ -20,16 +21,6 @@ const MATERIAL_BASELINES = Object.freeze({
   "panels / mcc": 0,
   raceway: 1.5,
   wire: 0.75,
-});
-
-const SERVICE_GEAR_BASELINES = Object.freeze({
-  "panel-150": 5000,
-  "panel-200": 4500,
-  transformer45: 5500,
-  spd: 1200,
-  meter: 2500,
-  contactor: 1800,
-  utilityVault: 6500,
 });
 
 function money(value) {
@@ -149,14 +140,6 @@ function alternateTags(text, tags) {
   return result;
 }
 
-function scopeForTag(alternates, tag) {
-  if ((alternates?.alternate1 || []).includes(tag)) return "Alternate 1";
-  if ((alternates?.alternate2 || []).includes(tag)) return "Alternate 2";
-  if ((alternates?.alternate3 || []).includes(tag)) return "Alternate 3";
-  if ((alternates?.base || []).includes(tag)) return "Base";
-  return "Base/Common";
-}
-
 function materialBaseline(category, description, unit) {
   const key = String(category || "").toLowerCase();
   const text = String(description || "").toLowerCase();
@@ -259,7 +242,8 @@ function mergeGeneratedLines(existingLines, generatedLines) {
   for (const line of existingLines || []) {
     const key = line.takeoffKey || line.id;
     if (generatedKeys.has(key)) continue;
-    if (line.source === "true-takeoff") continue;
+    if (line.source === "true-takeoff" || line.source === "takeoff" || line.source === "drawing") continue;
+    if (!line.quantityEdited) continue;
     next.push(line);
   }
   return next;
@@ -408,145 +392,6 @@ export function buildTrueElectricalEstimateLines({
     }));
   }
 
-  for (const panel of analysis?.panels || []) {
-    const unitCost = panel.amps >= 200 ? SERVICE_GEAR_BASELINES["panel-200"] : SERVICE_GEAR_BASELINES["panel-150"];
-    lines.push(makeEstimateLine({
-      key: `true|gear|panel|${slug(panel.name)}`,
-      category: "Panels / MCC",
-      description: `Panel ${panel.name} - ${panel.amps}A ${panel.volts}`,
-      quantity: 1,
-      unit: "EA",
-      materialUnitCost: unitCost,
-      laborRate,
-      confidence: "high",
-      notes: "Detected from panel/riser schedule. Replace budget material allowance with quoted gear.",
-    }));
-  }
-
-  for (const kva of analysis?.transformers || []) {
-    lines.push(makeEstimateLine({
-      key: `true|gear|transformer|${kva}`,
-      category: "Panels / MCC",
-      description: `${kva} kVA transformer`,
-      quantity: 1,
-      unit: "EA",
-      materialUnitCost: kva === 45 ? SERVICE_GEAR_BASELINES.transformer45 : Math.max(2500, kva * 120),
-      laborRate,
-      confidence: "high",
-      notes: "Detected from electrical riser. Replace budget material allowance with vendor quote.",
-    }));
-  }
-
-  if (analysis?.utility?.spd) {
-    lines.push(makeEstimateLine({
-      key: "true|gear|spd",
-      category: "Panels / MCC",
-      description: "Surge protective device",
-      quantity: 1,
-      unit: "EA",
-      materialUnitCost: SERVICE_GEAR_BASELINES.spd,
-      laborRate,
-      confidence: "high",
-      notes: "SPD detected on electrical riser/schedule.",
-    }));
-  }
-  if (analysis?.utility?.meter) {
-    lines.push(makeEstimateLine({
-      key: "true|gear|meter-service",
-      category: "Panels / MCC",
-      description: "Meter / service equipment allowance",
-      quantity: 1,
-      unit: "EA",
-      materialUnitCost: SERVICE_GEAR_BASELINES.meter,
-      laborRate,
-      confidence: "medium",
-      notes: "Metering detected on service riser. Verify utility-furnished versus contractor-furnished equipment.",
-    }));
-  }
-  if (analysis?.utility?.lightingContactor) {
-    lines.push(makeEstimateLine({
-      key: "true|gear|lighting-contactor",
-      category: "Controls",
-      description: "6-pole lighting contactor",
-      quantity: 1,
-      unit: "EA",
-      materialUnitCost: SERVICE_GEAR_BASELINES.contactor,
-      laborRate,
-      confidence: "high",
-      notes: "Electrically held lighting contactor detected from riser note.",
-    }));
-  }
-  if (analysis?.utility?.photocell) {
-    lines.push(makeEstimateLine({
-      key: "true|controls|photocell",
-      category: "Switches",
-      description: "Exterior lighting photocell",
-      quantity: 1,
-      unit: "EA",
-      materialUnitCost: MATERIAL_BASELINES.sensor,
-      laborRate,
-      confidence: "high",
-      notes: "Photocell control detected from site/riser notes.",
-    }));
-  }
-
-  if (analysis?.utility?.utilityVault) {
-    lines.push(makeEstimateLine({
-      key: "true|site|utility-vault",
-      category: "Site / Utility",
-      description: "Contractor-installed utility vault",
-      quantity: 1,
-      unit: "EA",
-      materialUnitCost: SERVICE_GEAR_BASELINES.utilityVault,
-      laborRate,
-      confidence: "high",
-      notes: "Utility vault requirement detected on electrical site plan.",
-    }));
-  }
-  if (analysis?.utility?.concreteEncasement) {
-    const primary = (analysis.measuredRuns || []).find((run) => /4"?|primary|service/i.test(String(run.type || "")));
-    lines.push(makeEstimateLine({
-      key: "true|site|concrete-encasement",
-      category: "Site / Utility",
-      description: "Concrete encasement for utility/service ductbank",
-      quantity: primary?.lf || 1,
-      unit: primary?.lf ? "LF" : "LOT",
-      materialUnitCost: primary?.lf ? 22 : 0,
-      laborRate,
-      confidence: primary?.lf ? "high" : "review",
-      notes: primary?.lf ? "Quantity follows tagged primary/service run." : "Scope detected, but route length is not yet measured. Trace the utility ductbank before bid lock.",
-    }));
-  }
-  if (analysis?.utility?.contractorTrenching) {
-    const primary = (analysis.measuredRuns || []).find((run) => /4"?|primary|service/i.test(String(run.type || "")));
-    lines.push(makeEstimateLine({
-      key: "true|site|utility-trenching",
-      category: "Site / Utility",
-      description: "Utility trench excavation and backfill",
-      quantity: primary?.lf || 1,
-      unit: primary?.lf ? "LF" : "LOT",
-      materialUnitCost: primary?.lf ? 10 : 0,
-      laborRate,
-      confidence: primary?.lf ? "high" : "review",
-      notes: "Contractor trench/open-close requirement detected.",
-    }));
-  }
-
-  for (const stub of analysis?.futureStubs || []) {
-    const description = `${stub.quantity} x ${stub.size} future stub conduits - ${stub.description}`;
-    lines.push(makeEstimateLine({
-      key: `true|future-stub|${slug(description)}`,
-      category: "Site / Utility",
-      description,
-      quantity: stub.quantity,
-      unit: "EA",
-      materialUnitCost: 150,
-      laborRate,
-      confidence: "medium",
-      notes: "Stub quantity/size parsed from electrical site/riser notes. Field length still requires trace or estimator allowance.",
-    }));
-  }
-
   for (const wire of analysis?.wirePulling || []) {
     const isGround = /\s+GND$/i.test(wire.size);
     const baseSize = String(wire.size || "").replace(/\s+GND$/i, "");
@@ -564,33 +409,6 @@ export function buildTrueElectricalEstimateLines({
       confidence: review ? "review" : "high",
       notes: `Calculated from assigned circuits and measured conduit lengths. ${review ? "One or more source runs still have wire-makeup warnings." : "All contributing runs passed wire-makeup checks."}`,
     }));
-  }
-
-  const rollupText = new Set((rollup?.rows || []).map((row) => slug(row.symbol || row.category)));
-  const equipmentGroups = [
-    ["Electric heater", analysis?.equipment?.heaters || [], 180],
-    ["Exhaust fan", analysis?.equipment?.exhaustFans || [], 150],
-    ["Ventilation fan", analysis?.equipment?.ventilationFans || [], 150],
-    ["PTAC", analysis?.equipment?.ptacs || [], 350],
-    ["Air handler", analysis?.equipment?.airHandlers || [], 350],
-    ["RTU", analysis?.equipment?.rooftopUnits || [], 450],
-  ];
-  for (const [label, tags, baseline] of equipmentGroups) {
-    for (const tag of tags) {
-      if ([...rollupText].some((text) => text.includes(slug(tag)))) continue;
-      lines.push(makeEstimateLine({
-        key: `true|equipment|${slug(tag)}`,
-        category: "Mechanical Connections",
-        description: `${label} ${tag} electrical connection`,
-        quantity: 1,
-        unit: "EA",
-        materialUnitCost: baseline,
-        laborRate,
-        scope: scopeForTag(analysis?.alternates, tag),
-        confidence: "high",
-        notes: "Equipment tag detected from mechanical/electrical drawings; verify disconnect and conductor requirements against equipment schedule.",
-      }));
-    }
   }
 
   return lines;
@@ -647,12 +465,14 @@ export function buildTrueElectricalEstimateDraft(existing, {
   rollup,
   runs,
   marks,
+  pageKinds = {},
   settings = DEFAULT_TRUE_BID_SETTINGS,
 } = {}) {
   const crew = existing?.crew?.length ? existing.crew : defaultCrew();
   const crewRate = compositeWage(crew).rate || journeymanWage(crew) || num(settings.laborRate);
   const laborRate = num(settings.laborRate) || crewRate;
-  const analysis = analyzeElectricalTakeoff({ drawingDocs, rollup, runs, marks });
+  const bidMarks = overlayBidMarks(marks, pageKinds);
+  const analysis = analyzeElectricalTakeoff({ drawingDocs, rollup, runs, marks: bidMarks });
   const generated = buildTrueElectricalEstimateLines({ analysis, rollup, runs, laborRate });
   const lines = mergeGeneratedLines(existing?.lines || [], generated);
   const scopeNotes = [

@@ -18,6 +18,7 @@ import {
   snapOrthogonalPoint, widthPercentDistance,
 } from "@/domain/takeoff/geometry";
 import { conduitRuns, nextConduitRunNumber, quantitiesToCsv, rollupTakeoff, applyScheduleEdits, markLengthFeet } from "@/domain/takeoff/quantities";
+import { overlayBidMarks } from "@/domain/takeoff/liveLinkedTakeoff";
 import {
   attachJunctionToConduit,
   createJunctionBoxMark,
@@ -336,13 +337,18 @@ export default function TakeoffWorkspace() {
     [marks, calibrations, aspect],
   );
   const editedRollup = useMemo(() => applyScheduleEdits(rollup, scheduleEdits), [rollup, scheduleEdits]);
+  const bidMarks = useMemo(() => overlayBidMarks(marks, pageKinds), [marks, pageKinds]);
+  const bidRollup = useMemo(
+    () => applyScheduleEdits(rollupTakeoff(bidMarks, calibrations, aspect), scheduleEdits),
+    [bidMarks, calibrations, aspect, scheduleEdits],
+  );
   const runs = useMemo(
-    () => conduitRuns(marks, calibrations, aspect, penThickness),
-    [marks, calibrations, aspect, penThickness],
+    () => conduitRuns(bidMarks, calibrations, aspect, penThickness),
+    [bidMarks, calibrations, aspect, penThickness],
   );
   const trueAnalysis = useMemo(
-    () => analyzeElectricalTakeoff({ drawingDocs, rollup: editedRollup, runs, marks }),
-    [drawingDocs, editedRollup, runs, marks],
+    () => analyzeElectricalTakeoff({ drawingDocs, rollup: bidRollup, runs, marks: bidMarks }),
+    [drawingDocs, bidRollup, runs, bidMarks],
   );
 
   useEffect(() => {
@@ -354,9 +360,10 @@ export default function TakeoffWorkspace() {
           fileName: file.name,
           fileSize: file.size,
           drawingDocs,
-          rollup: editedRollup,
+          rollup: bidRollup,
           runs,
-          marks,
+          marks: bidMarks,
+          pageKinds,
           settings: existing.trueTakeoff.settings,
         });
         writeEstimate(draft);
@@ -366,16 +373,17 @@ export default function TakeoffWorkspace() {
           fileName: file.name,
           fileSize: file.size,
           drawingDocs,
-          rollup: editedRollup,
+          rollup: bidRollup,
           pageCount: sheetMeta.pageCount,
-          marks,
+          marks: bidMarks,
           runs,
+          pageKinds,
         });
       }
     } catch {
       /* estimate copy failed; takeoff sheet is unchanged */
     }
-  }, [file, drawingDocs, editedRollup, runs, marks, sheetMeta.pageCount]);
+  }, [file, drawingDocs, bidRollup, bidMarks, pageKinds, runs, sheetMeta.pageCount]);
   const draftPreview = tool === "conduit"
     ? previewOrthogonalSegment(draftPoints, hoverPoint)
     : (hoverPoint && draftPoints.length ? [...draftPoints, hoverPoint] : draftPoints);
@@ -766,13 +774,15 @@ export default function TakeoffWorkspace() {
     }
     focusMarkedSheet(workingMarks);
     const existing = readEstimate(file.name, file.size);
+    const nextBid = overlayBidMarks(workingMarks, pageKinds);
     const draft = buildTrueElectricalEstimateDraft(existing, {
       fileName: file.name,
       fileSize: file.size,
       drawingDocs,
-      rollup: applyScheduleEdits(rollupTakeoff(workingMarks, calibrations, aspect), scheduleEdits),
-      runs: conduitRuns(workingMarks, calibrations, aspect, penThickness),
-      marks: workingMarks,
+      rollup: applyScheduleEdits(rollupTakeoff(nextBid, calibrations, aspect), scheduleEdits),
+      runs: conduitRuns(nextBid, calibrations, aspect, penThickness),
+      marks: nextBid,
+      pageKinds,
     });
     writeEstimate(draft);
     setTrueTakeoffResult(draft.trueTakeoff);

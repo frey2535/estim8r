@@ -5,6 +5,7 @@ import {
   isCanDeviceText,
   isNonPlanSheetKind,
   isPlanInterior,
+  isPlotStampToken,
   isQuotedTypeMark,
   isReferenceCallout,
   isTitleBlockLetter,
@@ -20,7 +21,7 @@ import { extractSheetNotes, notesToMarks } from "./sheetNotes.js";
 import { pagePlanType } from "./drawing-docs.js";
 import { associateGeometry, assignExclusiveGeometry, placeOnSymbolGeometry, shapeHintFromLabel, tagOnSymbolGeometry } from "./vectorSymbols.js";
 import { orthogonalizePolyline } from "./ortho.js";
-import { attachConfirmedGeometryPrototypes, attachLegendGeometryPrototypes, scanPageByLegendGeometry, snapToEntryPrototype } from "./legendGeometry.js";
+import { attachConfirmedGeometryPrototypes, attachFragmentPrototypes, attachLegendGeometryPrototypes, isEmergencyHatch, scanPageByLegendGeometry, snapToEntryPrototype } from "./legendGeometry.js";
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
 
 const STOP = new Set(["the", "and", "for", "with", "from", "this", "that", "sheet", "note", "see", "typ", "all", "new", "nic", "nts", "rev"]);
@@ -781,10 +782,17 @@ export function buildAiMarks({
       const hint = shapeHintForToken(token.text, dictionary)
         || (isCanDeviceText(token.text, token.nearbyText, symbol.label) ? "circle" : null);
       const entry = (dictionary.entries || []).find((item) => normalizeTakeoffText(item.code) === normalizeTakeoffText(normalizeTypeMark(token.text)));
-      const geometry = assigned.get(token) || placeOnSymbolGeometry(token, (page.paths || []).filter((item) => !usedGeometry.has(item)), {
+      let geometry = assigned.get(token) || placeOnSymbolGeometry(token, (page.paths || []).filter((item) => !usedGeometry.has(item)), {
         shapeHint: hint,
         rivals: hits.map((other) => other.token).filter((other) => other !== token),
       }) || snapToEntryPrototype(token, page, entry, { used: usedGeometry }) || tagOnSymbolGeometry(token, { shapeHint: hint });
+      if (hint === "circle" && geometry) {
+        const away = Math.hypot((geometry.cx || 0) - token.x, (geometry.cy || 0) - token.y);
+        const code = normalizeTypeMark(token.text).toUpperCase();
+        if (away > 0.48 && code === "OS") {
+          geometry = tagOnSymbolGeometry(token, { shapeHint: hint });
+        }
+      }
       if (isCanDeviceText(token.text, token.nearbyText, symbol.label) && geometry?.kind !== "rect") {
         symbol = resolveCanSymbol(matchSymbols) || symbol;
       }
@@ -839,21 +847,43 @@ export function buildAiMarks({
       seen.push({ ...mark, tagX: token.x, tagY: token.y });
       if (geometryAnchored) usedGeometry.add(geometry);
     }
-    // After labeled hits exist, copy their extracted bodies across the same
-    // sheet to recover devices that have no printed type mark.
-    dictionary = attachConfirmedGeometryPrototypes(dictionary, counts.filter((mark) => mark.sheet === page.page));
-    const unlabeledHits = scanPageByLegendGeometry(page, dictionary, {
-      planType,
-      threshold: 0.9,
-      strictSize: true,
-      occupyRadius: 0.72,
-      occupied: seen.filter((item) => item.sheet === page.page),
-    });
+    // After labeled hits exist, copy their extracted bodies and slash/tick
+    // fragments across the same sheet to recover devices that have no printed type mark.
+    const pageCounts = counts.filter((mark) => mark.sheet === page.page);
+    dictionary = attachConfirmedGeometryPrototypes(dictionary, pageCounts);
+    dictionary = attachFragmentPrototypes(dictionary, pageCounts, page);
+    const occupied = seen.filter((item) => item.sheet === page.page);
+    const unlabeledHits = [
+      ...scanPageByLegendGeometry(page, dictionary, {
+        planType,
+        threshold: 0.9,
+        strictSize: true,
+        occupyRadius: 0.72,
+        occupied,
+      }),
+      ...scanPageByLegendGeometry(page, {
+        ...dictionary,
+        entries: (dictionary.entries || []).filter((entry) => /^\d{1,2}e?$/i.test(entry.code || "") && /2x4|troffer/i.test(entry.symbol?.label || "")),
+      }, {
+        planType,
+        threshold: 0.9,
+        strictSize: true,
+        keepSeedBody: true,
+        twinHatch: true,
+        occupyRadius: 1.55,
+        occupied,
+      }).filter((hit) => {
+        const code = String(hit.entry?.code || "").toLowerCase();
+        if (!code.endsWith("e")) return true;
+        const nearby = (page.paths || []).filter((path) => Math.hypot((path.cx || 0) - hit.geometry.cx, (path.cy || 0) - hit.geometry.cy) <= 0.8);
+        return isEmergencyHatch(hit.geometry, nearby);
+      }),
+    ];
     for (const visual of unlabeledHits) {
       const geometry = visual.geometry;
       const symbol = visual.entry.symbol;
       const placed = { x: geometry.cx, y: geometry.cy };
-      if (!placementAllowed(placed) || !isPlanInterior(placed) || placed.x > 64) continue;
+      if (!placementAllowed(placed) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens) || placed.x > 64 || placed.y < 12) continue;
       const duplicate = seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.34);
       if (duplicate) continue;
       counts.push({

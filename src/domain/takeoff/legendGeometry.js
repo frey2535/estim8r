@@ -31,6 +31,27 @@ function normalizedPart(part, box) {
   };
 }
 
+export function isDeviceFragment(candidate) {
+  if (!candidate) return false;
+  const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
+  const short = Math.min(Number(candidate.w) || 0, Number(candidate.h) || 0);
+  if (long < 0.08 || long > 0.52 || short < 0.06 || short > 0.16) return false;
+  const aspect = long / (short || 1e-9);
+  return aspect >= 1.28 && aspect <= 5.4;
+}
+
+export function isSlashFragment(candidate) {
+  if (!isDeviceFragment(candidate)) return false;
+  const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
+  return long <= 0.28;
+}
+
+function allowCandidate(candidate, options = {}) {
+  if (!candidate) return false;
+  if (!isJunkGeometry(candidate)) return true;
+  return Boolean(options.allowSlash) && isDeviceFragment(candidate);
+}
+
 export function clusterSymbolGeometry(seed, candidates=[], options={}) {
   if(!seed) return null;
   const maxParts=Math.max(1,Number(options.maxParts)||12);
@@ -43,7 +64,8 @@ export function clusterSymbolGeometry(seed, candidates=[], options={}) {
     changed=false;
     const box=unionBounds(parts);
     for(const c of candidates){
-      if(parts.includes(c)||isJunkGeometry(c)) continue;
+      if(parts.includes(c)||!allowCandidate(c,options)) continue;
+      if (options.keepSeedBody && looksLikeTroffer(seed)) continue;
       const nextBox=unionBounds([...parts,c]);
       if(Math.max(nextBox.w,nextBox.h)>maxSpan) continue;
       if(parts.some((p)=>gap(p,c)<=joinGap)){parts.push(c);changed=true;if(parts.length>=maxParts)break;}
@@ -100,6 +122,83 @@ export function geometrySimilarity(a,b){
   for(const k of keys){kind+=Math.min(A.kinds[k]||0,B.kinds[k]||0);total+=Math.max(A.kinds[k]||0,B.kinds[k]||0);}
   kind=total?kind/total:0;
   return aspect*.28+size*.28+count*.22+kind*.22;
+}
+
+export function bodySimilarity(a, b) {
+  const A = a?.signature || geometrySignature(a);
+  const B = b?.signature || geometrySignature(b);
+  if (!A || !B) return 0;
+  return (ratioScore(A.aspect, B.aspect) + ratioScore(A.long, B.long) + ratioScore(A.short, B.short)) / 3;
+}
+
+export function hatchEvidence(cluster, nearby = []) {
+  const box = unionBounds(cluster?.parts?.length ? cluster.parts : (cluster ? [cluster] : [])) || cluster;
+  const parts = [
+    ...(cluster?.parts?.length ? cluster.parts : (cluster ? [cluster] : [])),
+    ...nearby.filter((part) => {
+      if (!box) return false;
+      return Math.abs((part.cx || 0) - box.cx) <= (box.w || 0) / 2 + 0.04
+        && Math.abs((part.cy || 0) - box.cy) <= (box.h || 0) / 2 + 0.04;
+    }),
+  ];
+  let hatchParts = 0;
+  const seen = new Set();
+  for (const part of parts) {
+    if (!part || seen.has(part)) continue;
+    seen.add(part);
+    const long = Math.max(Number(part.w) || 0, Number(part.h) || 0);
+    const short = Math.min(Number(part.w) || 0, Number(part.h) || 0);
+    if (long >= 0.08 && long <= 0.42 && short >= 0.07) hatchParts += 1;
+  }
+  return { partCount: Math.max(cluster?.parts?.length || 1, seen.size), hatchParts };
+}
+
+export function isHatchedFixture(cluster, nearby = []) {
+  const evidence = hatchEvidence(cluster, nearby);
+  return evidence.hatchParts >= 3 || evidence.partCount >= 4;
+}
+
+export function isEmergencyHatch(cluster, nearby = []) {
+  const box = unionBounds(cluster?.parts?.length ? cluster.parts : (cluster ? [cluster] : [])) || cluster;
+  if (!box) return false;
+  const bodyLong = Math.max(box.w || 0, box.h || 0);
+  const nested = (nearby || []).filter((part) => {
+    const long = Math.max(Number(part.w) || 0, Number(part.h) || 0);
+    const aspect = long / (Math.min(Number(part.w) || 0, Number(part.h) || 0) || 1e-9);
+    if (long < 0.35 || long > 1.08 || long >= bodyLong * 0.95) return false;
+    if (aspect < 1.45 || aspect > 2.05) return false;
+    return Math.abs((part.cx || 0) - box.cx) <= (box.w || 0) / 2 + 0.02
+      && Math.abs((part.cy || 0) - box.cy) <= (box.h || 0) / 2 + 0.02;
+  });
+  return nested.length >= 2;
+}
+
+export function looksLikeTroffer(cluster) {
+  if (!cluster) return false;
+  const long = Math.max(Number(cluster.w) || 0, Number(cluster.h) || 0);
+  const short = Math.min(Number(cluster.w) || 0, Number(cluster.h) || 0);
+  if (cluster.kind === "circle") return false;
+  const aspect = long / (short || 1e-9);
+  return long >= 0.7 && long <= 1.65 && short >= 0.55 && aspect >= 1.4 && aspect <= 2.2;
+}
+
+export function emergencyTwinAdjustment(cluster, entry, nearby = []) {
+  const code = compact(entry?.code);
+  if (!/^\d{1,2}e?$/.test(code) || !looksLikeTroffer(cluster)) return 0;
+  const emergency = /e$/.test(code);
+  const hatched = isHatchedFixture(cluster, nearby);
+  if (emergency && hatched) return 0.11;
+  if (!emergency && !hatched) return 0.08;
+  if (emergency && !hatched) return -0.12;
+  if (!emergency && hatched) return -0.12;
+  return 0;
+}
+
+function circleHintEntry(entry) {
+  const blob = `${entry?.shapeHint || ""} ${entry?.symbol?.label || ""} ${entry?.code || ""}`;
+  if (/downlight|recessed can|occup|sensor|\bos\b|recept|gfi|gfci|duplex|outlet|pendant/i.test(blob)) return true;
+  if (entry?.shapeHint === "circle") return true;
+  return /^(gfi|gfiwp|os|2|2e|4)$/.test(compact(entry?.code));
 }
 
 function compact(v){return String(v||"").toLowerCase().replace(/[^a-z0-9]+/g,"");}
@@ -174,14 +273,26 @@ export function isEmergencyTwin(a, b) {
   return left + "e" === right || right + "e" === left;
 }
 
-export function rankGeometryEntries(cluster, entries = [], planType = "") {
+export function rankGeometryEntries(cluster, entries = [], planType = "", options = {}) {
   return (entries || [])
     .filter((entry) => entry?.prototype)
-    .map((entry) => ({
-      entry,
-      raw: geometrySimilarity(cluster, entry.prototype),
-      score: geometrySimilarity(cluster, entry.prototype) + planTypeScore(entry, planType),
-    }))
+    .map((entry) => {
+      const protos = entry.prototypes?.length ? entry.prototypes : [entry.prototype];
+      const geom = Math.max(...protos.map((proto) => geometrySimilarity(cluster, proto)));
+      const body = Math.max(...protos.map((proto) => bodySimilarity(cluster, proto)));
+      const twin = (entries || []).some((other) => other !== entry && other.prototype && isEmergencyTwin(entry, other));
+      const emergency = /^\d{1,2}e$/.test(compact(entry.code));
+      const hatched = isHatchedFixture(cluster, options.nearby);
+      const useBody = Boolean(options.twinHatch)
+        && looksLikeTroffer(cluster)
+        && ((twin && body >= 0.88) || (emergency && hatched && body >= 0.88));
+      const raw = useBody ? Math.max(geom, body) : geom;
+      return {
+        entry,
+        raw,
+        score: raw + planTypeScore(entry, planType) + emergencyTwinAdjustment(cluster, entry, options.nearby),
+      };
+    })
     .sort((a, b) => b.score - a.score || b.raw - a.raw);
 }
 
@@ -196,21 +307,29 @@ export function sizeCompatible(a, b) {
 
 export function resolveGeometryMatch(cluster, entries = [], options = {}) {
   const planType = options.planType || "";
-  const ranked = rankGeometryEntries(cluster, entries, planType)
-    .filter((row) => !options.strictSize || sizeCompatible(cluster, row.entry.prototype));
+  const ranked = rankGeometryEntries(cluster, entries, planType, options)
+    .filter((row) => {
+      if (!options.strictSize) return true;
+      const protos = row.entry.prototypes?.length ? row.entry.prototypes : [row.entry.prototype];
+      return protos.some((proto) => sizeCompatible(cluster, proto));
+    });
   const best = ranked[0];
   if (!best) return null;
   const runner = ranked[1];
   const margin = best.score - (runner?.score || 0);
   const twins = runner ? isEmergencyTwin(best.entry, runner.entry) : false;
   const settledByPlan = Boolean(planType && entryFamily(best.entry) === planType && runner && entryFamily(runner.entry) !== planType);
-  if (twins && margin < 0.08 && !settledByPlan) return null;
+  const hatchSettled = twins && Math.abs(
+    emergencyTwinAdjustment(cluster, best.entry, options.nearby)
+    - emergencyTwinAdjustment(cluster, runner.entry, options.nearby),
+  ) >= 0.15;
+  if (twins && margin < 0.08 && !settledByPlan && !hatchSettled) return null;
   return {
     entry: best.entry,
     score: best.raw,
     adjustedScore: best.score,
     margin,
-    ambiguous: !settledByPlan && margin < 0.045,
+    ambiguous: !settledByPlan && !hatchSettled && margin < 0.045,
   };
 }
 
@@ -233,9 +352,64 @@ export function attachConfirmedGeometryPrototypes(dictionary, marks = []) {
     };
     if (!candidate.w || !candidate.h) continue;
     candidate.signature = geometrySignature(candidate);
-    if (!entry.prototype || geometrySimilarity(candidate, entry.prototype) < 0.5) {
+    entry.prototypes = entry.prototypes || (entry.prototype ? [entry.prototype] : []);
+    if (entry.prototypes.length < 2 && !entry.prototypes.some((existing) => geometrySimilarity(candidate, existing) >= 0.96 && sizeCompatible(candidate, existing))) {
+      entry.prototypes.push(candidate);
+    }
+    if (!entry.prototype || entry.prototype.fragmentSymbol || geometrySimilarity(candidate, entry.prototype) < 0.5) {
       entry.prototype = candidate;
     }
+  }
+  return { ...dictionary, entries };
+}
+
+function countFragmentMatches(page, prototype) {
+  if (!prototype) return 0;
+  const hits = scanPageByLegendGeometry(page, { entries: [{ code: "frag", symbol: { id: "frag" }, prototype }] }, {
+    allowSlash: true,
+    threshold: 0.92,
+    strictSize: true,
+    occupyRadius: 0.2,
+    occupied: [],
+  });
+  return hits.length;
+}
+
+export function attachFragmentPrototypes(dictionary, marks = [], page = null) {
+  const entries = (dictionary?.entries || []).map((entry) => ({ ...entry }));
+  const byCode = new Map(entries.map((entry) => [compact(entry.code), entry]));
+  const fragments = (page?.paths || []).filter(isDeviceFragment);
+  if (!fragments.length) return { ...dictionary, entries };
+  const labeledCount = new Map();
+  for (const mark of marks || []) {
+    const code = compact(mark.typeCode || mark.abbr);
+    labeledCount.set(code, (labeledCount.get(code) || 0) + 1);
+  }
+  for (const mark of marks || []) {
+    const code = compact(mark.typeCode || mark.abbr);
+    const entry = byCode.get(code);
+    if (!entry || !circleHintEntry(entry)) continue;
+    if (entry.prototype && !entry.prototype.fragmentSymbol && entry.prototype.source !== "text") continue;
+    const nearby = fragments.filter((fragment) => Math.hypot((fragment.cx || 0) - mark.x, (fragment.cy || 0) - mark.y) <= 0.52);
+    if (!nearby.length) continue;
+    const cluster = clusterSymbolGeometry(nearby[0], nearby, {
+      allowSlash: true,
+      maxSpan: 0.85,
+      joinGap: 0.26,
+      maxParts: 6,
+    });
+    if (!cluster) continue;
+    const long = Math.max(cluster.w || 0, cluster.h || 0);
+    if (long < 0.12 || long > 0.72) continue;
+    cluster.fragmentSymbol = true;
+    cluster.signature = geometrySignature(cluster);
+    if (!entry.slashPrototype) entry.slashPrototype = cluster;
+  }
+  for (const entry of entries) {
+    if (!entry.slashPrototype) continue;
+    const matches = countFragmentMatches(page, entry.slashPrototype);
+    const labeled = labeledCount.get(compact(entry.code)) || 0;
+    if (matches > labeled + 1) entry.slashPrototype = null;
   }
   return { ...dictionary, entries };
 }
@@ -263,19 +437,33 @@ export function snapToEntryPrototype(token, page, entry, options = {}) {
 
 export function scanPageByLegendGeometry(page,dictionary,options={}){
   const threshold=Number(options.threshold)||0.82;
-  const entries=(dictionary?.entries||[]).filter((e)=>e.prototype);
+  const entries=(dictionary?.entries||[]).filter((e)=>{
+    if(!e.prototype) return false;
+    if (!options.planType) return true;
+    const family = entryFamily(e);
+    return !family || family === options.planType;
+  });
   if(!entries.length)return [];
   const planType=options.planType||pagePlanType(page);
   const occupied=options.occupied||[];
-  const paths=(page?.paths||[]).filter((p)=>!isJunkGeometry(p));
+  const paths=(page?.paths||[]).filter((p)=>allowCandidate(p,options));
   const clusters=[];
   // Do not globally consume primitives here. A single primitive can be the seed
   // for several nearby symbol hypotheses; consuming it after the first cluster
   // caused one fixture family to dominate a sheet and hid other device types.
   const seenClusterKeys=new Set();
+  const clusterOpts = options.allowSlash
+    ? { allowSlash: true, maxSpan: 0.85, joinGap: 0.26, maxParts: 6 }
+    : { maxSpan: 2.8, keepSeedBody: Boolean(options.keepSeedBody) };
   for(const seed of paths){
-    const cluster=clusterSymbolGeometry(seed,paths,{maxSpan:2.8});
+    if (options.allowSlash && !isDeviceFragment(seed) && isJunkGeometry(seed)) continue;
+    if (options.twinHatch && !looksLikeTroffer(seed)) continue;
+    const cluster=clusterSymbolGeometry(seed,paths,clusterOpts);
     if(!cluster)continue;
+    if (options.allowSlash) {
+      const long = Math.max(cluster.w || 0, cluster.h || 0);
+      if (long < 0.1 || long > 0.98) continue;
+    }
     const key=[cluster.cx.toFixed(2),cluster.cy.toFixed(2),cluster.w.toFixed(2),cluster.h.toFixed(2),cluster.parts?.length||1].join(":");
     if(seenClusterKeys.has(key))continue;
     seenClusterKeys.add(key);
@@ -284,7 +472,13 @@ export function scanPageByLegendGeometry(page,dictionary,options={}){
   const hits=[];
   for(const cluster of clusters){
     if(occupied.some((point)=>Math.hypot((point.x||0)-cluster.cx,(point.y||0)-cluster.cy)<(Number(options.occupyRadius)||0.34))) continue;
-    const resolved=resolveGeometryMatch(cluster,entries,{planType,strictSize:options.strictSize});
+    const nearby = (page?.paths || []).filter((path) => Math.hypot((path.cx || 0) - cluster.cx, (path.cy || 0) - cluster.cy) <= 0.7);
+    const resolved=resolveGeometryMatch(cluster,entries,{
+      planType,
+      strictSize:options.strictSize,
+      bodyOnly:options.bodyOnly,
+      nearby,
+    });
     if(resolved&&resolved.score>=threshold){
       hits.push({geometry:cluster,entry:resolved.entry,score:resolved.score,margin:resolved.margin,ambiguous:resolved.ambiguous});
     }

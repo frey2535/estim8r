@@ -708,3 +708,22 @@ export function scanPageByLegendGeometry(page,dictionary,options={}){
     other.entry.symbol?.id===hit.entry.symbol?.id
   ));
 }
+
+export function attachProjectPrototypes(dictionary, prototypes = []) {
+  const entries = (dictionary?.entries || []).map((entry) => ({ ...entry }));
+  const byCode = new Map(entries.map((entry) => [compact(entry.code), entry]));
+  for (const item of prototypes || []) {
+    const code = compact(item?.code);
+    const entry = byCode.get(code);
+    if (!entry || !item?.prototype) continue;
+    const proto = item.prototype;
+    const long = Math.max(Number(proto.w) || 0, Number(proto.h) || 0);
+    if (long < 0.35 || long > 2.2) continue;
+    entry.prototypes = entry.prototypes || (entry.prototype ? [entry.prototype] : []);
+    if (entry.prototypes.length < 3 && !entry.prototypes.some((existing) => geometrySimilarity(proto, existing) >= 0.96)) {
+      entry.prototypes.push(proto);
+    }
+    if (!entry.prototype || entry.prototype.fragmentSymbol) entry.prototype = proto;
+  }
+  return { ...dictionary, entries };
+}

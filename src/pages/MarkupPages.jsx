@@ -30,12 +30,25 @@ import { isNoteMark, mergeExtractedNotes } from "@/domain/takeoff/sheetNotes";
 import {
   applyReviewDecision,
   isUncertainDetection,
-  neighborReviewId,
   needsAccuracyReview,
   reviewQueue,
   reviewSummary,
   typeInstanceCount,
 } from "@/domain/takeoff/accuracyReview";
+import {
+  changeReviewDeviceType,
+  createManualDeviceMark,
+  moveReviewMark,
+  projectPrototypesFromCorrections,
+  resizeReviewBounds,
+} from "@/domain/takeoff/reviewActions";
+import {
+  describeSheetCoverage,
+  mergeReviewQueue,
+  neighborQueueId,
+  pagesCoverage,
+  planSheetCoverage,
+} from "@/domain/takeoff/sheetCoverage";
 import { DEFAULT_LINE_SIZE, DEFAULT_MARKER_SIZE, resolvedLineSize } from "@/domain/takeoff/sizes";
 import { OVERLAY_FONT_SIZE, layoutOverlayCallouts } from "@/domain/takeoff/overlayLayout";
 import { isSheetPanDrag, pointerDistance, sheetPanOffset, sheetPinchZoom } from "@/lib/sheetViewport";
@@ -95,8 +108,11 @@ export default function MarkupPages() {
   const [pageKinds, setPageKinds] = useState({});
   const [aiPages, setAiPages] = useState([]);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [confirmedCoverageIds, setConfirmedCoverageIds] = useState([]);
+  const [confirmedEmptySheets, setConfirmedEmptySheets] = useState({});
   const folders = useMemo(() => listProjectFolders(), []);
   const trade = session?.trade || "electrical";
+  const palette = useMemo(() => paletteForTrade(trade, drawingSymbols), [trade, drawingSymbols]);
 
   const calibration = session?.calibration || null;
   const reconciliation = useMemo(() => (
@@ -108,6 +124,16 @@ export default function MarkupPages() {
       trade,
     })
   ), [marks, drawingSymbols, aiPages, pageKinds, trade]);
+  const coverageOptions = useMemo(() => ({
+    pageKinds,
+    trade,
+    confirmedRegionIds: confirmedCoverageIds,
+    confirmedEmptySheets,
+  }), [pageKinds, trade, confirmedCoverageIds, confirmedEmptySheets]);
+  const coverage = useMemo(
+    () => pagesCoverage(aiPages, marks, coverageOptions),
+    [aiPages, marks, coverageOptions],
+  );
   const skippedSheets = useMemo(() => {
     if (session?.skippedSheets?.length) return session.skippedSheets;
     return (aiPages || [])
@@ -127,20 +153,37 @@ export default function MarkupPages() {
   const activePage = reviewPages.find((page) => page.id === pageId) || reviewPages[0] || null;
   const selected = marks.find((mark) => mark.id === selectedId) || null;
   const groups = activePage?.kind === "circuits" ? activePage.groups : [];
+  const sheetCoverage = useMemo(() => {
+    const sheet = activePage?.sourcePage;
+    const fromPages = coverage.sheets.find((item) => item.sheet === sheet);
+    if (fromPages) return fromPages;
+    const page = aiPages.find((item) => item.page === sheet);
+    return page ? planSheetCoverage(page, marks, coverageOptions) : null;
+  }, [coverage, aiPages, marks, activePage?.sourcePage, coverageOptions]);
   const sheetReview = useMemo(
-    () => reviewQueue(marks, activePage?.sourcePage),
-    [marks, activePage?.sourcePage],
+    () => mergeReviewQueue(reviewQueue(marks, activePage?.sourcePage), coverage, activePage?.sourcePage),
+    [marks, activePage?.sourcePage, coverage],
   );
-  const accuracyTotals = useMemo(
-    () => reviewSummary(marks, activePage?.sourcePage),
-    [marks, activePage?.sourcePage],
-  );
+  const accuracyTotals = useMemo(() => {
+    const base = reviewSummary(marks, activePage?.sourcePage);
+    const unscannedPending = (coverage.unscannedRegions || []).filter((region) => region.sheet === activePage?.sourcePage).length;
+    return {
+      ...base,
+      pending: base.pending + unscannedPending,
+      unscannedPending,
+    };
+  }, [marks, activePage?.sourcePage, coverage]);
+  const selectedReviewItem = selected
+    || sheetReview.find((item) => item.id === selectedId)
+    || null;
 
   useEffect(() => {
     if (!fileName) return;
     const stored = readTakeoffSession(fileName, fileSize);
     setSession(stored);
     setMarks(stored?.marks || []);
+    setConfirmedCoverageIds(Array.isArray(stored?.confirmedCoverageIds) ? stored.confirmedCoverageIds : []);
+    setConfirmedEmptySheets(stored?.confirmedEmptySheets && typeof stored.confirmedEmptySheets === "object" ? stored.confirmedEmptySheets : {});
     setDrawingName(fileName);
     if (stored?.marks?.length) setStatus(`Loaded ${stored.marks.length} takeoff marks. Review the AI markup pages, then edit anything that is wrong.`);
     else setStatus("No saved takeoff yet. Estim8r will create AI markup pages from the drawing if it is on this device.");
@@ -222,6 +265,7 @@ export default function MarkupPages() {
         drawingSymbols: palette.fromDrawing,
         maxHomeruns: stored?.maxHomeruns || 3,
         conduit: findConduitOption(stored?.conduitId || DEFAULT_CONDUIT_ID, stored?.trade || "electrical"),
+        projectPrototypes: projectPrototypesFromCorrections(stored?.marks || marks),
       });
       setAiPages(pages);
       persistMarks(planned.marks, {
@@ -253,6 +297,8 @@ export default function MarkupPages() {
       pageCount: pageCountFrom(nextMarks, nextSession),
       skippedSheets: nextSession?.skippedSheets || skippedSheets,
       reconciliation: nextSession?.reconciliation || reconciliation,
+      confirmedCoverageIds: nextSession?.confirmedCoverageIds || confirmedCoverageIds,
+      confirmedEmptySheets: nextSession?.confirmedEmptySheets || confirmedEmptySheets,
     };
     setMarks(nextMarks);
     setSession(payload);
@@ -286,25 +332,113 @@ export default function MarkupPages() {
     persistMarks(assignDeviceToConduit(marks, deviceId, conduitId), session, "Circuit grouping updated.");
   }
 
+  function coverageAfterConfirm(region) {
+    const nextIds = confirmedCoverageIds.includes(region.id)
+      ? confirmedCoverageIds
+      : [...confirmedCoverageIds, region.id];
+    const nextEmpty = { ...confirmedEmptySheets };
+    const page = aiPages.find((item) => item.page === region.sheet);
+    const preview = page
+      ? planSheetCoverage(page, marks, {
+        pageKinds,
+        trade,
+        confirmedRegionIds: nextIds,
+        confirmedEmptySheets: nextEmpty,
+      })
+      : null;
+    if (preview?.unscannedCount === 0 && preview.deviceCount === 0) {
+      nextEmpty[region.sheet] = true;
+    }
+    return { nextIds, nextEmpty };
+  }
+
   function openAccuracyReview() {
-    const pending = sheetReview.find((mark) => needsAccuracyReview(mark, marks, activePage?.sourcePage)) || sheetReview[0];
+    const pending = sheetReview.find((mark) => (
+      mark.type === "coverage" || needsAccuracyReview(mark, marks, activePage?.sourcePage)
+    )) || sheetReview[0];
     if (pending) setSelectedId(pending.id);
     setReviewOpen(true);
-    setStatus(`Accuracy review ${accuracyTotals.typesPending} type(s) · ${accuracyTotals.uncertainPending} uncertain. Do not treat this as bid-ready until review is finished.`);
+    setStatus(`Accuracy review ${accuracyTotals.typesPending} type(s) · ${accuracyTotals.uncertainPending} uncertain · ${accuracyTotals.unscannedPending || 0} unscanned. Do not treat this as bid-ready until review is finished.`);
   }
 
   function stepAccuracyReview(direction) {
-    const nextId = neighborReviewId(marks, selectedId, direction, activePage?.sourcePage);
+    const nextId = neighborQueueId(sheetReview, selectedId, direction);
     if (nextId) setSelectedId(nextId);
     setReviewOpen(true);
   }
 
+  function persistCoverage(nextIds, nextEmpty, message) {
+    setConfirmedCoverageIds(nextIds);
+    setConfirmedEmptySheets(nextEmpty);
+    persistMarks(marks, {
+      ...session,
+      confirmedCoverageIds: nextIds,
+      confirmedEmptySheets: nextEmpty,
+    }, message);
+  }
+
   function setReviewStatus(status) {
-    const current = marks.find((mark) => mark.id === selectedId);
+    const current = selectedReviewItem;
     if (!current) return;
+    if (current.type === "coverage") {
+      if (status === "accepted") {
+        const { nextIds, nextEmpty } = coverageAfterConfirm(current);
+        persistCoverage(nextIds, nextEmpty, "Region marked scanned. An empty sheet is not complete until every region has been looked at.");
+        const remaining = mergeReviewQueue(
+          reviewQueue(marks, activePage?.sourcePage),
+          pagesCoverage(aiPages, marks, {
+            pageKinds,
+            trade,
+            confirmedRegionIds: nextIds,
+            confirmedEmptySheets: nextEmpty,
+          }),
+          activePage?.sourcePage,
+        );
+        if (remaining[0]) setSelectedId(remaining[0].id);
+      } else {
+        setStatus("Region left unresolved. The sheet stays incomplete.");
+      }
+      return;
+    }
     persistMarks(applyReviewDecision(marks, current, status), session, status === "accepted" ? "Accepted that detection." : "Rejected that detection. It stays visible for audit.");
-    const nextId = neighborReviewId(applyReviewDecision(marks, current, status), selectedId, 1, activePage?.sourcePage);
+    const nextId = neighborQueueId(
+      mergeReviewQueue(reviewQueue(applyReviewDecision(marks, current, status), activePage?.sourcePage), coverage, activePage?.sourcePage),
+      selectedId,
+      1,
+    );
     if (nextId && nextId !== selectedId) setSelectedId(nextId);
+  }
+
+  function changeReviewType(nextSymbol) {
+    if (!selected || !nextSymbol) return;
+    persistMarks(changeReviewDeviceType(marks, selected, nextSymbol), session, `Changed to ${nextSymbol.abbr || nextSymbol.label}.`);
+  }
+
+  function moveSelectedReview(point) {
+    if (!selected || !point) return;
+    persistMarks(moveReviewMark(marks, selected, point), session);
+  }
+
+  function resizeSelectedReview(bounds) {
+    if (!selected) return;
+    persistMarks(resizeReviewBounds(marks, selected, bounds), session);
+  }
+
+  function addMissedDevice() {
+    const next = createManualDeviceMark({
+      sheet: activePage?.sourcePage || 1,
+      trade,
+      symbol: palette.symbols?.[0],
+      x: Number(selectedReviewItem?.x) || 50,
+      y: Number(selectedReviewItem?.y) || 50,
+    });
+    persistMarks(applyDeviceTypeColors([...marks, next]), session, `Added missed ${next.typeCode || "device"}.`);
+    if (selectedReviewItem?.type === "coverage") {
+      const { nextIds, nextEmpty } = coverageAfterConfirm(selectedReviewItem);
+      persistCoverage(nextIds, nextEmpty);
+    }
+    setSelectedId(next.id);
+    setReviewOpen(true);
   }
 
   function downloadMarkup() {
@@ -503,6 +637,8 @@ export default function MarkupPages() {
             {activePage?.kind === "reconciliation" ? (
               <div className="h-full overflow-auto p-4" data-testid="markup-reconciliation">
                 <h3 className="text-base font-bold">Plan counts versus printed schedule</h3>
+                <p className="mt-2 text-sm text-muted-foreground">Schedule qty is a check only. Installed takeoff stays the plan count.</p>
+                {sheetCoverage ? <p className="mt-2 text-sm text-muted-foreground">{describeSheetCoverage(sheetCoverage)}</p> : null}
                 <div className="mt-3"><ReconciliationPanel reconciliation={reconciliation} /></div>
               </div>
             ) : activePage?.kind === "skipped" ? (
@@ -631,22 +767,28 @@ export default function MarkupPages() {
           <div className="mt-4">
             <h3 className="text-sm font-bold">Plan vs schedule</h3>
             <p className="mt-1 text-[11px] text-muted-foreground">{describeReconciliation(reconciliation)}</p>
+            {sheetCoverage ? <p className="mt-1 text-[11px] text-muted-foreground">{describeSheetCoverage(sheetCoverage)}</p> : null}
           </div>
         </aside>
       </div>
       <AccuracyPopout
-        open={reviewOpen && Boolean(selected && isDeviceMark(selected))}
+        open={reviewOpen && Boolean(selectedReviewItem && (isDeviceMark(selectedReviewItem) || selectedReviewItem.type === "coverage"))}
         onOpenChange={setReviewOpen}
-        mark={selected && isDeviceMark(selected) ? selected : null}
+        mark={selectedReviewItem && (isDeviceMark(selectedReviewItem) || selectedReviewItem.type === "coverage") ? selectedReviewItem : null}
         fileBytes={fileBytes}
         index={Math.max(0, sheetReview.findIndex((mark) => mark.id === selectedId))}
         total={sheetReview.length}
-        instanceOnly={Boolean(selected && isUncertainDetection(selected))}
+        instanceOnly={Boolean(selectedReviewItem && (selectedReviewItem.type === "coverage" || isUncertainDetection(selectedReviewItem)))}
         typeCount={selected ? typeInstanceCount(marks, selected) : 1}
+        symbols={palette.symbols || []}
         onAccept={() => setReviewStatus("accepted")}
         onReject={() => setReviewStatus("rejected")}
         onPrev={() => stepAccuracyReview(-1)}
         onNext={() => stepAccuracyReview(1)}
+        onChangeType={changeReviewType}
+        onMove={moveSelectedReview}
+        onResize={resizeSelectedReview}
+        onAddMissed={addMissedDevice}
       />
     </div>
   );

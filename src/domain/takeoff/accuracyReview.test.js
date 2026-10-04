@@ -54,6 +54,14 @@ assert(crop.w >= 2.1 && crop.h >= 1.05, "crop includes the extracted outline");
 assert(crop.x < 22 && crop.x + crop.w > 22, "crop is centered on the device");
 assert(crop.x >= 0 && crop.x + crop.w <= 100, "crop stays on the sheet");
 
+const regionCrop = cropWindowForMark({
+  type: "coverage",
+  x: 15,
+  y: 23,
+  symbolBodyBounds: { x: 7, y: 10, w: 17.25, h: 26 },
+});
+assert(Math.abs(regionCrop.w - 17.25) < 0.01 && Math.abs(regionCrop.x - 7) < 0.01, "coverage crop uses the unresolved region bounds");
+
 const pixels = cropToViewportPixels({ x: 10, y: 20, w: 10, h: 5 }, { width: 2000, height: 1000 });
 assert(pixels.sx === 200 && pixels.sy === 200 && pixels.sw === 200 && pixels.sh === 50, "crop maps to clean PDF pixels");
 

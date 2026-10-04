@@ -4,6 +4,17 @@ import { deviceTypeKey, isDeviceMark } from "./deviceStyles.js";
 export const DETECT_SOURCE_ORIGINAL_PDF = "original-pdf";
 
 export function cropWindowForMark(mark, options = {}) {
+  if (mark?.type === "coverage" && mark.symbolBodyBounds) {
+    const bounds = mark.symbolBodyBounds;
+    const w = clamp(Number(bounds.w) || 10, 4, 40);
+    const h = clamp(Number(bounds.h) || 10, 4, 40);
+    return {
+      x: clamp(Number(bounds.x) || 0, 0, 100 - w),
+      y: clamp(Number(bounds.y) || 0, 0, 100 - h),
+      w,
+      h,
+    };
+  }
   const pad = Number.isFinite(Number(options.pad)) ? Number(options.pad) : 3.5;
   const outline = mark?.outline || {};
   const bodyW = Number(outline.w) || (outline.r ? Number(outline.r) * 2 : 0);

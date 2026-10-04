@@ -230,6 +230,7 @@ export function isPersistedPlanDetection(mark, pageKinds = {}) {
   if (!mark) return false;
   if (mark.type !== "count" && mark.type !== "drop") return false;
   if (mark.source === "legend") return false;
+  if (mark.layer === "review" || mark.symbol === "unknown" || String(mark.typeCode || "").toUpperCase() === "UNKNOWN") return false;
   if (isNonPlanSheetKind(pageKinds[mark.sheet])) return false;
   return true;
 }

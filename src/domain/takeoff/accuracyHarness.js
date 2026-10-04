@@ -1,4 +1,5 @@
 import { buildAiMarks } from "./aiTakeoff.js";
+import { bidDeviceMarks, isReviewOnlyMark } from "./detectionRecord.js";
 import { normalizeTypeMark, taggedEquipmentCode } from "./symbolDetection.js";
 import { paletteForTrade } from "./trades.js";
 
@@ -26,7 +27,10 @@ export function scoreTakeoffAccuracy(fixture, options = {}) {
     maxHomeruns: 8,
     conduit: options.conduit,
   });
-  const counts = (result.marks || []).filter((mark) => mark.type === "count" || mark.type === "drop");
+  const counts = bidDeviceMarks(result.marks);
+  const unresolvedCandidates = (result.marks || []).filter((mark) => (
+    (mark.type === "count" || mark.type === "drop") && isReviewOnlyMark(mark)
+  ));
   const truth = fixture.groundTruth || [];
   const used = new Set();
   const matches = [];
@@ -122,6 +126,8 @@ export function scoreTakeoffAccuracy(fixture, options = {}) {
     unmatchedTruth: truth.filter((_, index) => !used.has(index)),
     extraMarks: counts.filter((mark) => !matches.some((item) => item.mark === mark)),
     failedMarkers: matches.filter((item) => !item.onGeometry),
+    unresolvedCandidates,
+    unresolvedCount: unresolvedCandidates.length,
   };
 }
 
@@ -134,6 +140,7 @@ export function formatAccuracyReport(score) {
     `worst type ${(score.worstTypeRecall * 100).toFixed(2)}%`,
     `precision ${(score.detectionPrecision * 100).toFixed(2)}% (FP ${score.falsePositives})`,
     `marker accuracy ${(score.markerAccuracy * 100).toFixed(2)}%`,
+    `unresolved review ${score.unresolvedCount || 0}`,
     types,
   ].join("\n");
 }

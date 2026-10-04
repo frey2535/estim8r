@@ -1,3 +1,5 @@
+import { geometrySimilarity } from "./legendGeometry.js";
+
 function boundsToCandidate(minX, minY, maxX, maxY, width, height) {
   const wPx = maxX - minX + 1;
   const hPx = maxY - minY + 1;
@@ -53,4 +55,53 @@ export async function extractRasterSymbolCandidates(page, options = {}) {
     out.push(boundsToCandidate(minX*step,minY*step,Math.min(width-1,(maxX+1)*step),Math.min(height-1,(maxY+1)*step),width,height));
   }
   return out;
+}
+
+export function rasterCandidatesFromPage(page) {
+  if (Array.isArray(page?.rasterCandidates) && page.rasterCandidates.length) return page.rasterCandidates;
+  if (Array.isArray(page?.rasterPaths) && page.rasterPaths.length) return page.rasterPaths;
+  return (page?.paths || []).filter((path) => path?.source === "raster" || path?.outline?.source === "raster");
+}
+
+export function matchRasterToLegend(candidates, dictionary, options = {}) {
+  const threshold = Number(options.threshold) || 0.72;
+  const entries = (dictionary?.entries || []).filter((entry) => entry?.prototype);
+  if (!entries.length) return [];
+  const hits = [];
+  for (const candidate of candidates || []) {
+    let best = null;
+    let bestScore = 0;
+    let runner = 0;
+    for (const entry of entries) {
+      const protos = entry.prototypes?.length ? entry.prototypes : [entry.prototype];
+      const score = Math.max(...protos.map((proto) => geometrySimilarity(candidate, proto) || 0));
+      if (score > bestScore) {
+        runner = bestScore;
+        bestScore = score;
+        best = entry;
+      } else if (score > runner) {
+        runner = score;
+      }
+    }
+    if (!best || bestScore < threshold) continue;
+    hits.push({
+      geometry: {
+        ...candidate,
+        source: "raster",
+        outline: {
+          kind: candidate.kind || candidate.outline?.kind || "rect",
+          source: "raster",
+          w: candidate.w,
+          h: candidate.h,
+          r: candidate.r,
+          points: candidate.points || candidate.outline?.points || [],
+        },
+      },
+      entry: best,
+      score: bestScore,
+      margin: bestScore - runner,
+      ambiguous: bestScore - runner < 0.045,
+    });
+  }
+  return hits.sort((a, b) => b.score - a.score);
 }

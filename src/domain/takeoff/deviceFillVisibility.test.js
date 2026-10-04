@@ -3,11 +3,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildAiMarks } from "./aiTakeoff.js";
 import {
-  MIN_VISIBLE_FILL,
+  MAX_FIXTURE_FILL,
   applyDeviceTypeColors,
   deviceOutline,
   isCircuitMark,
   isDeviceMark,
+  maxFillExtent,
   outlineExtent,
   planOverlayMarks,
   readableFillColor,
@@ -45,7 +46,10 @@ for (const mark of devices) {
   const outline = deviceOutline(mark);
   const extent = outlineExtent(outline);
   const color = readableFillColor(mark.color);
-  assert(extent + 0.001 >= MIN_VISIBLE_FILL, `${mark.abbr || mark.typeCode} @${mark.sheet} fill is too small (${extent.toFixed(3)})`);
+  const cap = maxFillExtent(mark);
+  assert(extent <= cap + 0.001, `${mark.abbr || mark.typeCode} @${mark.sheet} fill ${extent.toFixed(3)} exceeds glyph cap ${cap}`);
+  assert(extent <= MAX_FIXTURE_FILL, `${mark.abbr || mark.typeCode} fill must not cover a room (${extent.toFixed(3)})`);
+  assert(extent >= 0.2, `${mark.abbr || mark.typeCode} fill vanished (${extent.toFixed(3)})`);
   assert(Number.isFinite(mark.x) && Number.isFinite(mark.y) && mark.x >= 0 && mark.x <= 100 && mark.y >= 0 && mark.y <= 100, `${mark.abbr || mark.typeCode} is off-sheet`);
   assert(color && color.toLowerCase() !== "#ffffff" && color.toLowerCase() !== "#fff", `${mark.abbr || mark.typeCode} fill must not be white (${color})`);
   assert(!mark.text, "device markers do not carry type-code text");

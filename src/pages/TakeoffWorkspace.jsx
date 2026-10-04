@@ -76,6 +76,7 @@ import {
 import { OVERLAY_FONT_SIZE, layoutOverlayCallouts } from "@/domain/takeoff/overlayLayout";
 import {
   CIRCUIT_COLOR,
+  DEVICE_CHIP_R,
   DEVICE_FILL_OPACITY,
   DEVICE_FILL_STROKE_PX,
   MIN_VISIBLE_FILL,
@@ -1936,23 +1937,21 @@ function OverlayLabel({ label, fill }) {
 function DeviceFill({ mark, selected, markerSize, focus = false }) {
   const outline = deviceOutline(mark, markerSize, { selected });
   const color = readableFillColor(mark.color || "#1e3a8a");
-  const opacity = focus ? 0.78 : Math.max(mark.fillOpacity ?? DEVICE_FILL_OPACITY, DEVICE_FILL_OPACITY);
+  const opacity = focus ? 0.7 : (mark.fillOpacity ?? DEVICE_FILL_OPACITY);
   const stroke = selected || focus ? "#ea580c" : color;
-  const strokeWidth = selected || focus ? DEVICE_FILL_STROKE_PX + 0.6 : DEVICE_FILL_STROKE_PX;
-  const minR = MIN_VISIBLE_FILL / 2;
+  const strokeWidth = selected || focus ? DEVICE_FILL_STROKE_PX + 0.4 : DEVICE_FILL_STROKE_PX;
   if (outline.kind === "composite" && outline.parts?.length) {
     return (
       <g>
         {outline.parts.map((part, index) => {
-          const partColor = color;
-          if (part.kind === "path" && part.points?.length >= 3) return <polygon key={index} points={part.points.map((point) => `${point.x},${point.y}`).join(" ")} fill={partColor} fillOpacity={opacity} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />;
+          if (part.kind === "path" && part.points?.length >= 3) return <polygon key={index} points={part.points.map((point) => `${point.x},${point.y}`).join(" ")} fill={color} fillOpacity={opacity} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />;
           if (part.kind === "circle") {
-            const r = Math.max(Number(part.r) || Math.max(part.w || 0, part.h || 0) / 2, minR);
-            return <circle key={index} cx={part.cx ?? mark.x} cy={part.cy ?? mark.y} r={r} fill={partColor} fillOpacity={opacity} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />;
+            const r = Number(part.r) || Math.max(part.w || 0, part.h || 0) / 2 || DEVICE_CHIP_R;
+            return <circle key={index} cx={part.cx ?? mark.x} cy={part.cy ?? mark.y} r={r} fill={color} fillOpacity={opacity} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />;
           }
-          const w = Math.max(Number(part.w) || 0, MIN_VISIBLE_FILL);
-          const h = Math.max(Number(part.h) || 0, MIN_VISIBLE_FILL * 0.7);
-          return <rect key={index} x={(part.cx ?? mark.x) - w / 2} y={(part.cy ?? mark.y) - h / 2} width={w} height={h} rx={0.08} fill={partColor} fillOpacity={opacity} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />;
+          const w = Number(part.w) || MIN_VISIBLE_FILL;
+          const h = Number(part.h) || MIN_VISIBLE_FILL * 0.7;
+          return <rect key={index} x={(part.cx ?? mark.x) - w / 2} y={(part.cy ?? mark.y) - h / 2} width={w} height={h} rx={0.06} fill={color} fillOpacity={opacity} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />;
         })}
       </g>
     );
@@ -1974,7 +1973,7 @@ function DeviceFill({ mark, selected, markerSize, focus = false }) {
       <circle
         cx={Number.isFinite(outline.cx) ? outline.cx : mark.x}
         cy={Number.isFinite(outline.cy) ? outline.cy : mark.y}
-        r={Math.max(Number(outline.r) || 0, minR)}
+        r={Number(outline.r) || DEVICE_CHIP_R}
         fill={color}
         fillOpacity={opacity}
         stroke={stroke}
@@ -1983,15 +1982,15 @@ function DeviceFill({ mark, selected, markerSize, focus = false }) {
       />
     );
   }
-  const width = Math.max(Number(outline.w) || 0, MIN_VISIBLE_FILL);
-  const height = Math.max(Number(outline.h) || 0, MIN_VISIBLE_FILL * 0.7);
+  const width = Number(outline.w) || MIN_VISIBLE_FILL;
+  const height = Number(outline.h) || MIN_VISIBLE_FILL * 0.7;
   return (
     <rect
       x={mark.x - width / 2}
       y={mark.y - height / 2}
       width={width}
       height={height}
-      rx={0.12}
+      rx={0.08}
       fill={color}
       fillOpacity={opacity}
       stroke={stroke}

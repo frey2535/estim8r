@@ -2107,10 +2107,15 @@ function OverlayLabel({ label, fill }) {
 
 function DeviceFill({ mark, selected, markerSize, focus = false }) {
   const outline = deviceOutline(mark, markerSize, { selected });
+  if (!outline) return null;
   const color = readableFillColor(mark.color || "#1e3a8a");
   const opacity = focus ? 0.7 : (mark.fillOpacity ?? DEVICE_FILL_OPACITY);
-  const stroke = selected || focus ? "#ea580c" : color;
-  const strokeWidth = selected || focus ? DEVICE_FILL_STROKE_PX + 0.4 : DEVICE_FILL_STROKE_PX;
+  const aiPaint = mark?.source === "ai";
+  // A colored SVG stroke is centered on the perimeter and therefore extends
+  // outside it. AI fills use no stroke so highlighted color stays inside the
+  // verified symbol body.
+  const stroke = aiPaint ? "none" : (selected || focus ? "#ea580c" : color);
+  const strokeWidth = aiPaint ? 0 : (selected || focus ? DEVICE_FILL_STROKE_PX + 0.4 : DEVICE_FILL_STROKE_PX);
   if (outline.kind === "composite" && outline.parts?.length) {
     return (
       <g>

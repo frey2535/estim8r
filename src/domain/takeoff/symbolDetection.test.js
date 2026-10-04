@@ -4,10 +4,13 @@ import { layoutOverlayCallouts } from "./overlayLayout.js";
 import { deviceOutline, hitTestDeviceFill } from "./deviceStyles.js";
 import {
   isCanDeviceText,
+  isDigitCodeNoteToken,
+  isKeyNoteNumberToken,
   isLegendClusterToken,
   isReferenceCallout,
   isScheduleNoteContext,
   isTitleBlockLetter,
+  isTypContextToken,
   persistedPlanDeviceCount,
   shouldAcceptPlanToken,
   snapFillToDevice,
@@ -49,6 +52,27 @@ assert(isScheduleNoteContext({ text: "1", x: 30, y: 10 }, [
   { text: "SCHEDULE", x: 38, y: 10 },
 ]), "SEE TYPE 1 SCHEDULE is a note, not a fixture");
 assert(!isScheduleNoteContext({ text: "GFI", x: 40, y: 50 }, [{ text: "TYP", x: 44, y: 50 }]), "TYP next to a real device is not dropped");
+assert(isTypContextToken({ text: "TYP." }, []), "TYP. itself is a note, not a device");
+assert(!isTypContextToken({ text: "GFI", x: 40, y: 50 }, [{ text: "TYP", x: 44, y: 50 }]), "GFI stays selectable next to TYP");
+assert(!isDigitCodeNoteToken({ text: "WP", x: 17.2, y: 69.4 }, [
+  { text: "6", x: 20, y: 70 },
+  { text: "DIGIT", x: 22, y: 70 },
+  { text: "CODE", x: 26, y: 70 },
+]), "WP is not a 6 DIGIT CODE note");
+assert(isDigitCodeNoteToken({ text: "6", x: 20, y: 70 }, [
+  { text: "6", x: 20, y: 70 },
+  { text: "DIGIT", x: 22, y: 70 },
+  { text: "CODE", x: 26, y: 70 },
+]), "the 6 in 6 DIGIT CODE is a note");
+assert(shouldAcceptPlanToken({ text: "WP", x: 17.2, y: 69.4 }, [
+  { text: "WP", x: 17.2, y: 69.4 },
+  { text: "DIGIT", x: 22, y: 70 },
+  { text: "CODE", x: 26, y: 70 },
+]), "weatherproof tags on the plan stay counts");
+assert(shouldAcceptPlanToken({ text: "SP", x: 33.8, y: 40 }, []), "special-purpose tags on the plan stay counts");
+const hexNotes = Array.from({ length: 12 }, (_, index) => ({ text: String(index + 1), x: 20 + index * 1.1, y: 81 }));
+assert(isKeyNoteNumberToken(hexNotes[0], hexNotes), "hex-note number rows are not type codes");
+assert(!shouldAcceptPlanToken(hexNotes[0], hexNotes), "hex-note digits are not plan devices");
 assert(!shouldScan({ kind: "legend", tokens: Array.from({ length: 120 }, (_, index) => ({ text: `R${index}` })) }, "electrical"), "large legends are never counted as plan sheets");
 assert(!shouldScan({ kind: "lighting-schedule", tokens: [{ text: "F1" }] }, "electrical"), "schedule sheets are never counted");
 assert(isCanDeviceText("Type 2 6\" can"), "can copy is detected");
@@ -61,6 +85,11 @@ const electrical = paletteForTrade("electrical");
 assert(matchTradeSymbol("R16.3", electrical.symbols) == null, "R16.3 does not match a light");
 assert(matchTradeSymbol("R34.3", electrical.symbols) == null, "R34.3 does not match a light");
 assert(matchTradeSymbol("2'-4\"", electrical.symbols) == null, "a dimension is not a 2x4");
+assert(matchTradeSymbol("SP", electrical.symbols, [], { planType: "power" })?.id === "special-rec", "SP on a power plan is a special-purpose receptacle");
+assert(matchTradeSymbol("SP", electrical.symbols)?.id !== "special-rec", "SP without a power plan stays the catalog collision");
+assert(matchTradeSymbol("FACP", electrical.symbols)?.id === "facp", "FACP is the fire-alarm panel");
+assert(matchTradeSymbol("1", electrical.symbols, [{ code: "1", symbol: { id: "2x4", label: "Type 1 2x4 troffer", category: "Lighting" } }], { planType: "power" }) == null, "lighting type 1 is not a device on a power plan");
+assert(matchTradeSymbol("DOORBELL", electrical.symbols, [], { planType: "power" })?.abbr === "DB", "doorbell on a power plan is counted");
 
 const falsePos = buildAiMarks({
   trade: "electrical",

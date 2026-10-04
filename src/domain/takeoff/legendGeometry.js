@@ -1,6 +1,7 @@
 
 import { pagePlanType } from "./drawing-docs.js";
 import { isJunkGeometry } from "./vectorSymbols.js";
+import { isPlanInterior, isPlotStampToken, normalizeTypeMark } from "./symbolDetection.js";
 
 const CATEGORY_ALLOW = new Set(["Lighting","Receptacles","Switches","Equipment","Panels / MCC","Fire Alarm","Low Voltage","HVAC"]);
 
@@ -250,10 +251,185 @@ export function attachLegendGeometryPrototypes(dictionary,pages=[]){
   return {...dictionary,entries};
 }
 
+export function looksLikeHexNoteGlyph(candidate) {
+  if (!candidate) return false;
+  const w = Number(candidate.w) || 0;
+  const h = Number(candidate.h) || 0;
+  const long = Math.max(w, h);
+  const short = Math.min(w, h);
+  const area = w * h;
+  return area >= 0.20 && area <= 0.38 && long >= 0.48 && long <= 0.74 && short >= 0.36 && short <= 0.52;
+}
+
+export function looksLikeReceptacleGlyph(candidate) {
+  if (!candidate || looksLikeHexNoteGlyph(candidate)) return false;
+  const w = Number(candidate.w) || 0;
+  const h = Number(candidate.h) || 0;
+  const long = Math.max(w, h);
+  const short = Math.min(w, h);
+  const area = w * h;
+  if (long < 0.10 || long > 0.40 || short < 0.08 || short > 0.32) return false;
+  if (area < 0.010 || area > 0.11) return false;
+  const aspect = long / (short || 1e-9);
+  if (aspect > 2.75) return false;
+  if (candidate.kind === "circle") return long < 0.36;
+  return candidate.kind === "rect" || candidate.kind === "path" || candidate.kind === "composite" || Boolean(candidate.outline);
+}
+
+export function looksLikeUnlabeledReceptacleGlyph(candidate) {
+  if (!looksLikeReceptacleGlyph(candidate)) return false;
+  const w = Number(candidate.w) || 0;
+  const h = Number(candidate.h) || 0;
+  const long = Math.max(w, h);
+  const short = Math.min(w, h);
+  const aspect = long / (short || 1e-9);
+  const strokeBox = long >= 0.20 && long <= 0.36 && short >= 0.10 && short <= 0.16 && aspect >= 1.7 && aspect <= 2.75;
+  const duplexBox = long >= 0.13 && long <= 0.24 && short >= 0.10 && short <= 0.20 && aspect >= 1.05 && aspect <= 1.75;
+  return strokeBox || duplexBox;
+}
+
+export function isHatchTickCluster(candidate, paths = []) {
+  if (!candidate) return false;
+  const w = Number(candidate.w) || 0;
+  const h = Number(candidate.h) || 0;
+  const cx = Number(candidate.cx) || 0;
+  const cy = Number(candidate.cy) || 0;
+  const siblings = (paths || []).filter((other) => {
+    if (Math.abs((Number(other.w) || 0) - w) > 0.028 || Math.abs((Number(other.h) || 0) - h) > 0.028) return false;
+    const dx = Math.abs((Number(other.cx) || 0) - cx);
+    const dy = Math.abs((Number(other.cy) || 0) - cy);
+    return dx <= 5.5 && dy <= 5.5;
+  });
+  if (siblings.length < 9) return false;
+  const xs = [...new Set(siblings.map((item) => (Number(item.cx) || 0).toFixed(1)))];
+  const ys = [...new Set(siblings.map((item) => (Number(item.cy) || 0).toFixed(1)))];
+  return xs.length >= 3 && ys.length >= 3;
+}
+
+function nearHexNoteGlyph(point, paths = []) {
+  const x = Number(point?.x ?? point?.cx) || 0;
+  const y = Number(point?.y ?? point?.cy) || 0;
+  return (paths || []).some((path) => looksLikeHexNoteGlyph(path)
+    && Math.hypot((Number(path.cx) || 0) - x, (Number(path.cy) || 0) - y) <= 0.55);
+}
+
+function nearNoteChrome(point, tokens = []) {
+  const x = Number(point?.x) || 0;
+  const y = Number(point?.y) || 0;
+  return (tokens || []).some((token) => {
+    const text = normalizeTypeMark(token.text);
+    if (!/^(digit|code|keynote|hex|typ\.?|see|schedule|qty)$/i.test(text)) return false;
+    return Math.hypot((Number(token.x) || 0) - x, (Number(token.y) || 0) - y) <= 1.35;
+  });
+}
+
+export function findNearbyReceptacleGlyph(point, paths = [], options = {}) {
+  const x = Number(point?.x ?? point?.cx) || 0;
+  const y = Number(point?.y ?? point?.cy) || 0;
+  const radius = Number(options.radius) || 1.15;
+  const hexClearance = Number(options.hexClearance) || 0.22;
+  return (paths || [])
+    .filter((path) => looksLikeReceptacleGlyph(path))
+    .filter((path) => !(paths || []).some((hex) => looksLikeHexNoteGlyph(hex)
+      && Math.hypot((Number(hex.cx) || 0) - (Number(path.cx) || 0), (Number(hex.cy) || 0) - (Number(path.cy) || 0)) < hexClearance))
+    .map((path) => ({ path, dist: Math.hypot((Number(path.cx) || 0) - x, (Number(path.cy) || 0) - y) }))
+    .filter((item) => item.dist <= radius)
+    .sort((a, b) => a.dist - b.dist)[0]?.path || null;
+}
+
+function classifyNearbyPowerLabel(point, tokens = []) {
+  let best = "";
+  let bestDist = 1.15;
+  for (const token of tokens || []) {
+    const text = normalizeTypeMark(token.text).toUpperCase();
+    const dist = Math.hypot((Number(token.x) || 0) - (Number(point?.x) || 0), (Number(token.y) || 0) - (Number(point?.y) || 0));
+    if (dist > bestDist) continue;
+    if (text === "WP" || text === "GFI/WP") { best = "WP"; bestDist = dist; }
+    else if (text === "SP" || text === "SPR") { best = "SP"; bestDist = dist; }
+    else if (text === "GFI" || text === "GFCI") { best = "GFI"; bestDist = dist; }
+    else if (text === "P2") { best = "P2"; bestDist = dist; }
+    else if (text === "DB" || text === "DOORBELL") { best = "DB"; bestDist = dist; }
+    else if (text === "OS") { best = "OS"; bestDist = dist; }
+  }
+  return best;
+}
+
+function glyphOutline(path) {
+  return path?.outline || {
+    kind: path?.kind || "rect",
+    source: "vector",
+    w: path?.w,
+    h: path?.h,
+    points: path?.points || [],
+  };
+}
+
+export function attachPowerGlyphPrototypes(dictionary, marks = [], page = null) {
+  const entries = (dictionary?.entries || []).map((entry) => ({ ...entry }));
+  const byCode = new Map(entries.map((entry) => [compact(entry.code), entry]));
+  for (const mark of marks || []) {
+    const code = compact(mark.typeCode || mark.abbr);
+    if (!/^(wp|sp|spr|gfi|gfiwp|os|r|p2|db)$/.test(code)) continue;
+    let entry = byCode.get(code);
+    if (!entry) {
+      entry = { code: String(mark.typeCode || mark.abbr || "").toUpperCase(), symbol: { id: mark.symbol, label: mark.symbolLabel, abbr: mark.abbr, category: mark.category, takeoffCategory: mark.category }, shapeHint: "rect" };
+      entries.push(entry);
+      byCode.set(code, entry);
+    }
+    const seed = findNearbyReceptacleGlyph({ x: mark.x, y: mark.y }, page?.paths || []);
+    if (!seed) continue;
+    const cluster = clusterSymbolGeometry(seed, (page?.paths || []).filter((path) => looksLikeReceptacleGlyph(path)), { maxSpan: 0.55, maxParts: 5, joinGap: 0.12 });
+    if (!cluster || looksLikeHexNoteGlyph(cluster) || !looksLikeReceptacleGlyph(cluster)) continue;
+    entry.prototype = {
+      ...cluster,
+      source: "vector",
+      outline: cluster.outline || glyphOutline(cluster),
+    };
+    entry.prototypes = [entry.prototype];
+    entry.shapeHint = code === "os" || code === "gfi" ? "circle" : "rect";
+  }
+  return { ...dictionary, entries };
+}
+
+export function scanUnlabeledPowerGlyphs(page, options = {}) {
+  const occupied = options.occupied || [];
+  const tokens = page?.tokens || [];
+  const paths = page?.paths || [];
+  const symbols = options.symbols || [];
+  const pick = (id) => (symbols || []).find((item) => item.id === id);
+  const duplex = pick("duplex");
+  const wp = pick("wp");
+  const gfi = pick("gfci");
+  const special = pick("special-rec") || duplex;
+  if (!duplex && !special) return [];
+  const hits = [];
+  for (const path of paths) {
+    if (!looksLikeUnlabeledReceptacleGlyph(path) || isHatchTickCluster(path, paths)) continue;
+    const placed = { x: path.cx, y: path.cy };
+    if (occupied.some((item) => Math.hypot((Number(item.x) || 0) - placed.x, (Number(item.y) || 0) - placed.y) < 0.34)) continue;
+    if (!isPlanInterior(placed) || isPlotStampToken(placed, tokens)) continue;
+    if (nearNoteChrome(placed, tokens) || nearHexNoteGlyph(placed, paths)) continue;
+    const label = classifyNearbyPowerLabel(placed, tokens);
+    const symbol = label === "WP" ? (wp || duplex)
+      : label === "GFI" ? (gfi || duplex)
+      : (label === "SP" || label === "P2" || label === "DB") ? (special || duplex)
+      : duplex;
+    if (!symbol) continue;
+    hits.push({
+      geometry: { ...path, outline: glyphOutline(path), source: "vector" },
+      entry: { code: label || "R", symbol, shapeHint: "rect" },
+      score: label ? 0.96 : 0.91,
+      margin: 0.08,
+      ambiguous: !label,
+    });
+  }
+  return hits;
+}
+
 function entryFamily(entry) {
-  const blob = `${entry?.symbol?.takeoffCategory || ""} ${entry?.symbol?.category || ""} ${entry?.symbol?.label || ""}`;
+  const blob = `${entry?.symbol?.takeoffCategory || ""} ${entry?.symbol?.category || ""} ${entry?.symbol?.label || ""} ${entry?.code || ""}`;
   if (/lighting|downlight|troffer|can light|fixture/i.test(blob) && !/recept|gfi|switch/i.test(blob)) return "lighting";
-  if (/recept|gfi|switch|outlet|duplex/i.test(blob)) return "power";
+  if (/recept|gfi|switch|outlet|duplex|weatherproof|special-purpose|\bwp\b|\bsp\b|\bspr\b/i.test(blob)) return "power";
   if (/equipment|panel|fan|hvac/i.test(blob)) return "power";
   return "";
 }

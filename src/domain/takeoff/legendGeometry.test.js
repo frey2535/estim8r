@@ -3,8 +3,13 @@ import {
   attachConfirmedGeometryPrototypes,
   attachFragmentPrototypes,
   clusterSymbolGeometry,
+  findNearbyReceptacleGlyph,
   geometrySimilarity,
   isDeviceFragment,
+  isHatchTickCluster,
+  looksLikeHexNoteGlyph,
+  looksLikeReceptacleGlyph,
+  looksLikeUnlabeledReceptacleGlyph,
   resolveGeometryMatch,
   scanPageByLegendGeometry,
 } from "./legendGeometry.js";
@@ -99,6 +104,17 @@ const slashHits = scanPageByLegendGeometry(
   { allowSlash: true, threshold: 0.9, strictSize: true, occupyRadius: 0.4, occupied: [{ x: 22.15, y: 22.2 }] },
 );
 assert(slashHits.some((hit) => Math.abs(hit.geometry.cx - 40.16) < 0.25), "unlabeled slashed-circle copy is recovered from fragments");
+
+const hex = part(26.18, 79.1, 0.443, 0.622, "path");
+const box = part(17.175, 69.326, 0.143, 0.200);
+const stroke = part(62.290, 72.591, 0.114, 0.276);
+assert(looksLikeHexNoteGlyph(hex), "printed hex keys are recognized");
+assert(!looksLikeReceptacleGlyph(hex), "hex keys are not receptacle glyphs");
+assert(looksLikeReceptacleGlyph(box) && looksLikeUnlabeledReceptacleGlyph(box), "duplex box is a receptacle glyph");
+assert(looksLikeReceptacleGlyph(stroke) && looksLikeUnlabeledReceptacleGlyph(stroke), "box-with-strokes is a receptacle glyph");
+assert(findNearbyReceptacleGlyph({ x: 17.214, y: 69.416 }, [hex, box]) === box, "WP/SP fills prefer the box, not the hex");
+const hatch = Array.from({ length: 12 }, (_, index) => part(12 + (index % 4) * 0.4, 16 + Math.floor(index / 4) * 0.4, 0.134, 0.187));
+assert(isHatchTickCluster(hatch[0], hatch), "stair/hatch tick lattices are not receptacles");
 
 if (!process.exitCode) console.log("legend geometry checks passed");
 

@@ -21,7 +21,7 @@ import { extractSheetNotes, notesToMarks } from "./sheetNotes.js";
 import { looksLikeCoverOrRendering, looksLikeElectricalPlan, looksLikeIndexPage, pagePlanType } from "./drawing-docs.js";
 import { associateGeometry, assignExclusiveGeometry, placeOnSymbolGeometry, shapeHintFromLabel, tagOnSymbolGeometry } from "./vectorSymbols.js";
 import { orthogonalizePolyline } from "./ortho.js";
-import { attachConfirmedGeometryPrototypes, attachFragmentPrototypes, attachLegendGeometryPrototypes, isEmergencyHatch, scanPageByLegendGeometry, snapToEntryPrototype } from "./legendGeometry.js";
+import { attachConfirmedGeometryPrototypes, attachFragmentPrototypes, attachLegendGeometryPrototypes, attachPowerGlyphPrototypes, findNearbyReceptacleGlyph, isEmergencyHatch, looksLikeHexNoteGlyph, scanPageByLegendGeometry, scanUnlabeledPowerGlyphs, snapToEntryPrototype } from "./legendGeometry.js";
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
 
 const STOP = new Set(["the", "and", "for", "with", "from", "this", "that", "sheet", "note", "see", "typ", "all", "new", "nic", "nts", "rev"]);
@@ -258,6 +258,7 @@ function shapeHintForToken(text, dictionary) {
   const compact = normalizeTakeoffText(normalizeTypeMark(text));
   if (!compact) return null;
   if (/^(gfi|gfiwp|os|vs)(?:\d+)?$/.test(compact)) return "circle";
+  if (/^(wp|sp|spr|r|p2)$/.test(compact)) return "rect";
   if (/^(vf|ef)\d*$/.test(compact)) return "rect";
   const entry = (dictionary?.entries || []).find((item) => normalizeTakeoffText(item.code) === compact);
   if (entry?.shapeHint) return entry.shapeHint;
@@ -365,6 +366,22 @@ export function matchTradeSymbol(text, symbols, aliases = [], options = {}) {
       || (symbols || []).find((item) => item.id === "gfci");
     if (gfi) return gfi;
   }
+  if (/^facp$/i.test(compact)) {
+    const facp = (symbols || []).find((item) => item.id === "facp");
+    if (facp) return facp;
+  }
+  if (compact === "sp" && options.planType === "power") {
+    const special = (symbols || []).find((item) => item.id === "special-rec");
+    if (special) return special;
+  }
+  if (/^p2$/i.test(compact) && options.planType === "power") {
+    const special = (symbols || []).find((item) => item.id === "special-rec" || item.id === "dedicated" || item.id === "duplex");
+    if (special) return special;
+  }
+  if (/^(db|bell|chime|doorbell)$/i.test(token) && options.planType === "power") {
+    const special = (symbols || []).find((item) => item.id === "special-rec" || item.id === "duplex");
+    if (special) return { ...special, id: special.id, label: "Doorbell", abbr: "DB" };
+  }
   if (isCanDeviceText(token) || isCanDeviceText(options.nearbyText)) {
     const can = resolveCanSymbol(symbols);
     if (can) return can;
@@ -382,6 +399,7 @@ export function matchTradeSymbol(text, symbols, aliases = [], options = {}) {
   const alias = (aliases || []).find((item) => normalizeTakeoffText(item.code) === compact);
   if (alias?.symbol) {
     if (options.sitePlan && isIndoorLightingAlias(alias) && /^[0-9A-Z]{1,3}$/i.test(token)) return null;
+    if (options.planType === "power" && isIndoorLightingAlias(alias) && /^\d{1,2}[A-Z]?$/i.test(token)) return null;
     return alias.symbol;
   }
   const hits = (symbols || []).filter((item) => (
@@ -734,6 +752,7 @@ export function buildAiMarks({
         sectionContext: token.sectionContext,
         nearbyText: token.nearbyText,
         sitePlan,
+        planType,
         reject: (item) => !shouldAcceptPlanToken({ ...token, text: item.text }, page.tokens),
       });
       if (!symbol) continue;
@@ -791,10 +810,21 @@ export function buildAiMarks({
       const hint = shapeHintForToken(token.text, dictionary)
         || (isCanDeviceText(token.text, token.nearbyText, symbol.label) ? "circle" : null);
       const entry = (dictionary.entries || []).find((item) => normalizeTakeoffText(item.code) === normalizeTakeoffText(normalizeTypeMark(token.text)));
-      let geometry = assigned.get(token) || placeOnSymbolGeometry(token, (page.paths || []).filter((item) => !usedGeometry.has(item)), {
-        shapeHint: hint,
-        rivals: hits.map((other) => other.token).filter((other) => other !== token),
-      }) || snapToEntryPrototype(token, page, entry, { used: usedGeometry }) || tagOnSymbolGeometry(token, { shapeHint: hint });
+      const printedCode = normalizeTypeMark(token.text).toUpperCase();
+      const powerGlyph = planType === "power" && /^(WP|SP|SPR|GFI|GFI\/WP|OS|R|P2|DB|DOORBELL)$/.test(printedCode)
+        ? findNearbyReceptacleGlyph(token, page.paths || [])
+        : null;
+      let geometry = powerGlyph
+        ? { ...powerGlyph, source: "vector", outline: powerGlyph.outline || { kind: powerGlyph.kind || "rect", source: "vector", w: powerGlyph.w, h: powerGlyph.h, points: powerGlyph.points || [] } }
+        : assigned.get(token) || placeOnSymbolGeometry(token, (page.paths || []).filter((item) => !usedGeometry.has(item)), {
+          shapeHint: hint,
+          rivals: hits.map((other) => other.token).filter((other) => other !== token),
+        }) || snapToEntryPrototype(token, page, entry, { used: usedGeometry }) || tagOnSymbolGeometry(token, { shapeHint: hint });
+      if (geometry && looksLikeHexNoteGlyph(geometry)) {
+        geometry = powerGlyph
+          ? { ...powerGlyph, source: "vector", outline: powerGlyph.outline || { kind: powerGlyph.kind || "rect", source: "vector", w: powerGlyph.w, h: powerGlyph.h } }
+          : tagOnSymbolGeometry(token, { shapeHint: hint || "rect" });
+      }
       if (hint === "circle" && geometry) {
         const away = Math.hypot((geometry.cx || 0) - token.x, (geometry.cy || 0) - token.y);
         const code = normalizeTypeMark(token.text).toUpperCase();
@@ -816,8 +846,9 @@ export function buildAiMarks({
       const geometryAnchored = geometrySource !== "text";
       const compact = normalizeTakeoffText(normalizeTypeMark(token.text));
       const fromLegend = aliases.some((alias) => normalizeTakeoffText(alias.code) === compact && alias.symbol?.id === symbol.id);
-      const typeCode = fromLegend
-        ? normalizeTypeMark(token.text).toUpperCase()
+      const printed = normalizeTypeMark(token.text).toUpperCase();
+      const typeCode = fromLegend || /^(WP|SP|SPR|GFI|GFI\/WP|OS|R|P2|DB|DOORBELL|FACP)$/.test(printed)
+        ? (printed === "DOORBELL" ? "DB" : printed)
         : (taggedEquipmentCode(token.text) || symbol.abbr || "").toUpperCase();
       const near = seen.some((item) => {
         if (item.sheet !== page.page) return false;
@@ -859,9 +890,27 @@ export function buildAiMarks({
     // After labeled hits exist, copy their extracted bodies and slash/tick
     // fragments across the same sheet to recover devices that have no printed type mark.
     const pageCounts = counts.filter((mark) => mark.sheet === page.page);
+    dictionary = attachPowerGlyphPrototypes(dictionary, pageCounts, page);
     dictionary = attachConfirmedGeometryPrototypes(dictionary, pageCounts);
     dictionary = attachFragmentPrototypes(dictionary, pageCounts, page);
     const occupied = seen.filter((item) => item.sheet === page.page);
+    const twinHits = planType === "power" ? [] : scanPageByLegendGeometry(page, {
+      ...dictionary,
+      entries: (dictionary.entries || []).filter((entry) => /^\d{1,2}e?$/i.test(entry.code || "") && /2x4|troffer/i.test(entry.symbol?.label || "")),
+    }, {
+      planType,
+      threshold: 0.9,
+      strictSize: true,
+      keepSeedBody: true,
+      twinHatch: true,
+      occupyRadius: 1.55,
+      occupied,
+    }).filter((hit) => {
+      const code = String(hit.entry?.code || "").toLowerCase();
+      if (!code.endsWith("e")) return true;
+      const nearby = (page.paths || []).filter((path) => Math.hypot((path.cx || 0) - hit.geometry.cx, (path.cy || 0) - hit.geometry.cy) <= 0.8);
+      return isEmergencyHatch(hit.geometry, nearby);
+    });
     const unlabeledHits = [
       ...scanPageByLegendGeometry(page, dictionary, {
         planType,
@@ -870,29 +919,16 @@ export function buildAiMarks({
         occupyRadius: 0.72,
         occupied,
       }),
-      ...scanPageByLegendGeometry(page, {
-        ...dictionary,
-        entries: (dictionary.entries || []).filter((entry) => /^\d{1,2}e?$/i.test(entry.code || "") && /2x4|troffer/i.test(entry.symbol?.label || "")),
-      }, {
-        planType,
-        threshold: 0.9,
-        strictSize: true,
-        keepSeedBody: true,
-        twinHatch: true,
-        occupyRadius: 1.55,
-        occupied,
-      }).filter((hit) => {
-        const code = String(hit.entry?.code || "").toLowerCase();
-        if (!code.endsWith("e")) return true;
-        const nearby = (page.paths || []).filter((path) => Math.hypot((path.cx || 0) - hit.geometry.cx, (path.cy || 0) - hit.geometry.cy) <= 0.8);
-        return isEmergencyHatch(hit.geometry, nearby);
-      }),
+      ...twinHits,
+      ...(planType === "power" ? scanUnlabeledPowerGlyphs(page, { occupied, symbols: matchSymbols }) : []),
     ];
     for (const visual of unlabeledHits) {
       const geometry = visual.geometry;
       const symbol = visual.entry.symbol;
       const placed = { x: geometry.cx, y: geometry.cy };
-      if (!placementAllowed(placed) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens) || placed.x > 64 || placed.y < 12) continue;
+      const titleBand = planType !== "power" && (placed.x > 64 || placed.y < 12);
+      if (!placementAllowed(placed) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens) || titleBand) continue;
+      if (looksLikeHexNoteGlyph(geometry)) continue;
       const duplicate = seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.34);
       if (duplicate) continue;
       counts.push({

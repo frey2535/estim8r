@@ -26,6 +26,8 @@ const PREFIX_TRADE = {
   hv: "hvac",
   a: "architectural",
   ad: "architectural",
+  g: "general",
+  fp: "fire-protection",
 };
 
 const TITLE_HINTS = [

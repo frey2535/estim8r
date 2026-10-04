@@ -58,4 +58,102 @@ assert(result.discrepancyCount >= 1, "the estimator sees the short count");
 assert(!/24 plan/.test(describeReconciliation(result)), "copy does not treat 24 as the takeoff");
 assert(/plan count/i.test(describeReconciliation(result)), "copy says the plan count is kept");
 
+const junkLegend = {
+  page: 48,
+  kind: "legend",
+  sheetId: "E001",
+  tokens: [
+    { text: "ELECTRICAL", x: 20, y: 8 },
+    { text: "LEGEND", x: 32, y: 8 },
+    { text: "QUANTITIES", x: 8, y: 14 },
+    { text: "SHOWN", x: 22, y: 14 },
+    { text: "ARE", x: 30, y: 14 },
+    { text: "APPROXIMATE", x: 36, y: 14 },
+    { text: "NO", x: 8, y: 18 },
+    { text: "QUANTITIES", x: 14, y: 18 },
+    { text: "1", x: 48, y: 18 },
+    { text: "ALL", x: 8, y: 22 },
+    { text: "FIXTURES", x: 14, y: 22 },
+    { text: "4", x: 48, y: 22 },
+    { text: "10,434 SF", x: 8, y: 26 },
+    { text: "FIRST", x: 22, y: 26 },
+    { text: "FLOOR", x: 30, y: 26 },
+    { text: "4", x: 48, y: 26 },
+    { text: "W4-2", x: 8, y: 30 },
+    { text: "WALL", x: 16, y: 30 },
+    { text: "TYPE", x: 22, y: 30 },
+    { text: "9", x: 48, y: 30 },
+    { text: "FX-10", x: 8, y: 34 },
+    { text: "FIRE", x: 16, y: 34 },
+    { text: "EXTINGUISHER", x: 22, y: 34 },
+    { text: "2", x: 48, y: 34 },
+    { text: "DS", x: 8, y: 38 },
+    { text: "DOWNSPOUT", x: 14, y: 38 },
+    { text: "9", x: 48, y: 38 },
+    { text: "TYPE", x: 8, y: 44 },
+    { text: "QTY", x: 48, y: 44 },
+    { text: "1", x: 8, y: 48 },
+    { text: "2x4", x: 14, y: 48 },
+    { text: "TROFFER", x: 22, y: 48 },
+    { text: "11", x: 48, y: 48 },
+  ],
+};
+const powerPlan = {
+  page: 50,
+  kind: "other",
+  sheetId: "E110",
+  title: "E110 POWER & SYSTEMS PLANS",
+  tokens: [
+    { text: "E110", x: 90, y: 92 },
+    { text: "POWER", x: 80, y: 90 },
+    { text: "&", x: 86, y: 90 },
+    { text: "SYSTEMS", x: 88, y: 90 },
+    { text: "PLANS", x: 94, y: 90 },
+  ],
+};
+const junkItems = scheduleItemsFromPages([junkLegend], "electrical");
+assert(!junkItems.some((item) => /ALL|NO|QUANTITIES|W4-2|FX-10|DS|10,434/i.test(String(item.abbr || item.type))), "legend notes are not fixture types");
+assert(junkItems.find((item) => item.abbr === "1")?.scheduleQty === 11, "real fixture type 1 qty stays a check");
+
+const architectural = {
+  page: 18,
+  kind: "drawing",
+  sheetId: "A111",
+  title: "A111 FIRST FLOOR PLAN",
+  tokens: [
+    { text: "A111", x: 90, y: 92 },
+    { text: "FIRST", x: 80, y: 90 },
+    { text: "FLOOR", x: 86, y: 90 },
+    { text: "PLAN", x: 92, y: 90 },
+  ],
+};
+const pottsvilleReview = reconcilePlanToSchedule({
+  marks: [
+    { type: "count", sheet: 50, category: "Receptacles", symbol: "duplex", symbolLabel: "Duplex receptacle", symbolBodyLocation: { x: 20, y: 30 } },
+    { type: "count", sheet: 50, category: "Receptacles", symbol: "duplex", symbolLabel: "Duplex receptacle", typeCode: "R", abbr: "R", symbolBodyLocation: { x: 24, y: 32 } },
+    { type: "count", sheet: 50, layer: "review", symbol: "unknown", typeCode: "UNKNOWN", category: "Receptacles", symbolBodyLocation: { x: 28, y: 34 } },
+    { type: "count", sheet: 18, category: "Receptacles", symbol: "duplex", abbr: "R" },
+  ],
+  scheduleItems: [
+    { type: "ALL", abbr: "ALL", scheduleQty: 4, label: "ALL FIXTURES" },
+    { type: "10,434 SF", abbr: "10,434 SF", scheduleQty: 4, label: "FIRST FLOOR" },
+    { type: "W4-2", abbr: "W4-2", scheduleQty: 9, label: "WALL TYPE" },
+    { type: "FX-10", abbr: "FX-10", scheduleQty: 2, label: "FIRE EXTINGUISHER" },
+    { type: "DS", abbr: "DS", scheduleQty: 9, label: "DOWNSPOUT" },
+    { type: "NO", abbr: "NO", scheduleQty: 1, label: "QUANTITIES" },
+    { type: "QUANTITIES", abbr: "QUANTITIES", scheduleQty: 7, label: "SHOWN ARE" },
+    { type: "1", abbr: "1", scheduleQty: 11, label: "2x4 TROFFER" },
+  ],
+  pages: [junkLegend, powerPlan, architectural],
+  pageKinds: { 18: "drawing", 48: "legend", 50: "other" },
+  trade: "electrical",
+});
+const junkTypes = pottsvilleReview.rows.filter((row) => /ALL|NO|QUANTITIES|W4-2|FX-10|^DS$|10,434|SF/i.test(row.type));
+assert(junkTypes.length === 0, `junk schedule types stay out of the table, got ${junkTypes.map((row) => row.type).join(",")}`);
+assert(!pottsvilleReview.rows.some((row) => row.status === "short" && /ALL|SF|W4|FX|DS|NO|QUANTIT/i.test(row.type)), "junk rows are not flagged short");
+assert(pottsvilleReview.rows.find((row) => row.type === "R")?.planCount === 3, `sheet 50 receptacles are the plan count, got ${pottsvilleReview.rows.find((row) => row.type === "R")?.planCount}`);
+assert(pottsvilleReview.rows.find((row) => row.type === "1")?.scheduleQty === 11, "printed type 1 qty remains a check");
+assert(pottsvilleReview.rows.find((row) => row.type === "1")?.planCount === 0, "missing lighting type stays 0 on the plan");
+assert(pottsvilleReview.rows.find((row) => row.type === "1")?.status === "short", "real missing fixture type can still show short");
+
 if (!process.exitCode) console.log("count reconciliation checks passed");

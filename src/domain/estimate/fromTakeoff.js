@@ -5,7 +5,7 @@ import { makeLaborSelection } from "../labor/selection.js";
 import { fillEmptyHeader, headerFromDrawings } from "./fromDrawings.js";
 import { applySavedLineOrder } from "./lineOrder.js";
 import { sourcesForRollupRow, summarizeLineSources } from "./takeoffSourceAudit.js";
-import { liveEstimateSourcesForRow } from "../takeoff/liveLinkedTakeoff.js";
+import { liveEstimateSourcesForRow, overlayBidMarks } from "../takeoff/liveLinkedTakeoff.js";
 
 export function estimateStorageKey(fileName, fileSize) {
   return `estim8r.estimate.v1:${fileName || "drawing"}:${fileSize || 0}`;
@@ -157,16 +157,20 @@ export function mergeEstimate(existing, incomingLines) {
     if (line.source === "drawing" && !line.quantityEdited && Number(line.quantity) === 0 && incomingLines.some((item) => item.source === "takeoff")) {
       continue;
     }
+    if ((line.source === "takeoff" || line.source === "drawing" || line.source === "true-takeoff") && !line.quantityEdited) {
+      continue;
+    }
     next.push(line);
   }
   return applySavedLineOrder(next, (existing?.lines || []).map((line) => line.id));
 }
 
-export function buildEstimateDraft({ fileName, fileSize, drawingDocs, rollup, pageCount, wageBook, markup, marks = [], runs = [] }) {
+export function buildEstimateDraft({ fileName, fileSize, drawingDocs, rollup, pageCount, wageBook, markup, marks = [], runs = [], pageKinds = {} }) {
   const crew = defaultCrew(wageBook);
   const rate = compositeWage(crew).rate || journeymanWage(crew);
-  const takeoffLines = linesFromRollup(rollup, rate, { marks, runs });
-  const drawingLines = takeoffLines.length ? [] : linesFromDrawing(drawingDocs, rate);
+  const bidMarks = overlayBidMarks(marks, pageKinds);
+  const takeoffLines = linesFromRollup(rollup, rate, { marks: bidMarks, runs });
+  const drawingLines = [];
   const base = fileName ? String(fileName).replace(/\.[^.]+$/, "") : "Drawing estimate";
   const fromDrawings = headerFromDrawings({ fileName, drawingDocs, markup });
   return {
@@ -203,8 +207,9 @@ export function syncEstimateDraft(existing, input) {
   const wageBook = input.wageBook || {};
   const crew = existing?.crew?.length ? existing.crew : defaultCrew(wageBook);
   const rate = compositeWage(crew).rate || journeymanWage(crew);
-  const takeoffLines = linesFromRollup(input.rollup, rate, { marks: input.marks || [], runs: input.runs || [] }).map((line) => applyRate(line, rate));
-  const drawingLines = takeoffLines.length ? [] : linesFromDrawing(input.drawingDocs, rate).map((line) => applyRate(line, rate));
+  const bidMarks = overlayBidMarks(input.marks || [], input.pageKinds || {});
+  const takeoffLines = linesFromRollup(input.rollup, rate, { marks: bidMarks, runs: input.runs || [] }).map((line) => applyRate(line, rate));
+  const drawingLines = [];
   const incoming = [...takeoffLines, ...drawingLines];
   if (!existing) return buildEstimateDraft(input);
   const fromDrawings = headerFromDrawings(input);

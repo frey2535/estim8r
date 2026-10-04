@@ -1,4 +1,5 @@
 import { DEVICE_SYMBOLS, DRAWING_CATEGORY } from "./catalog.js";
+import { looksLikeElectricalPlan } from "./drawing-docs.js";
 
 export const TRADES = [
   { id: "civil", label: "Civil" },
@@ -269,7 +270,8 @@ const LEGEND_SHEET_KINDS = new Set([
 export function pageKindsFromDocs(docs) {
   const map = {};
   for (const page of docs?.pages || []) {
-    if (page?.page) map[page.page] = page.kind;
+    if (!page?.page) continue;
+    map[page.page] = looksLikeElectricalPlan(page) ? "drawing" : page.kind;
   }
   return map;
 }

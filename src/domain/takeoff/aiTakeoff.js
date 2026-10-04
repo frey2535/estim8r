@@ -1,6 +1,6 @@
 import { attachDetectionRecord, isReviewOnlyMark, labelLocationFromToken, nearbyCircuitTag, reviewCandidateMark, REVIEW_VISUAL_THRESHOLD } from "./detectionRecord.js";
 import { applyDeviceTypeColors } from "./deviceStyles.js";
-import { isSheetChrome, pageDiscipline, pageMatchesTrade } from "./sheetDiscipline.js";
+import { findSheetId, isSheetChrome, pageDiscipline, pageMatchesTrade, tradeFromSheetId } from "./sheetDiscipline.js";
 import {
   fixtureSizeFromWholeToken,
   isCanDeviceText,
@@ -297,7 +297,12 @@ export function shouldScan(page, trade) {
   if (isNonPlanSheetKind(page.kind) || page.kind === "spec") {
     if (!(trade === "electrical" && looksLikeElectricalPlan(page))) return false;
   }
-  if (trade === "electrical") return looksLikeElectricalPlan(page);
+  if (trade === "electrical") {
+    const id = page.sheetId || findSheetId(page.tokens || []);
+    const fromId = tradeFromSheetId(id);
+    if (fromId && fromId !== "electrical") return false;
+    return looksLikeElectricalPlan(page);
+  }
   if (trade && !pageMatchesTrade(page, trade)) return false;
   return true;
 }

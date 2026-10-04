@@ -1,3 +1,5 @@
+import { isPersistedPlanDetection, isNonPlanSheetKind } from "./symbolDetection.js";
+
 const DEFAULT_BINDINGS = [
   { match: /duplex|receptacle|outlet/i, assemblyId: "device-duplex-receptacle" },
   { match: /switch/i, assemblyId: "device-switch" },
@@ -38,6 +40,19 @@ export function revisionDelta(previous = [], current = []) {
   const before = new Map(previous.map((m)=>[key(m),m])), after = new Map(current.map((m)=>[key(m),m]));
   return { added:[...after].filter(([k])=>!before.has(k)).map(([,m])=>m), removed:[...before].filter(([k])=>!after.has(k)).map(([,m])=>m), unchanged:[...after].filter(([k])=>before.has(k)).map(([,m])=>m) };
 }
+export function overlayBidMarks(marks = [], pageKinds = {}) {
+  return (marks || []).filter((mark) => {
+    if (mark?.type === "count" || mark?.type === "drop") {
+      return isPersistedPlanDetection(mark, pageKinds);
+    }
+    const drawn = (mark?.tool === "conduit" || mark?.type === "homerun" || mark?.type === "route")
+      && Array.isArray(mark.points)
+      && mark.points.length >= 2;
+    if (!drawn) return false;
+    return !isNonPlanSheetKind(pageKinds[mark.sheet]);
+  });
+}
+
 export function liveEstimateSourcesForRow(row, marks = []) {
   const key = String(row.category || "").toLowerCase()+"|"+String(row.symbol || "").toLowerCase();
   return marks.filter((m)=>String(m.category||"").toLowerCase()+"|"+String(m.symbolLabel||m.symbol||"").toLowerCase()===key)

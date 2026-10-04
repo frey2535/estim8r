@@ -1,4 +1,4 @@
-import { electricalSheetLooksLikePlan } from "./sheetDiscipline.js";
+import { electricalSheetLooksLikePlan, findSheetId, tradeFromSheetId } from "./sheetDiscipline.js";
 
 const LEGEND_RE = /electrical\s+legend|lighting\s+legend|symbol\s+legend|\blegend\b|abbreviation/i;
 const LIGHTING_SCHED_RE = /lighting\s+fixture\s+schedule|fixture\s+schedule|luminaire\s+schedule|lighting\s+schedule/i;
@@ -14,8 +14,16 @@ const COVERPLATE_RE = /\bcover\s*plates?\b/i;
 const RENDERING_RE = /\b(?:artist'?s\s+)?rendering\b|\b3d\s+views?\b|\barchitectural\s+perspectives?\b/i;
 const COMCHECK_RE = /\bcomcheck\b/i;
 const SITE_ELECTRICAL_PLAN_RE = /\belectrical\s+site\s+plans?\b|\bsite\s+(?:electrical|lighting)\s+plans?\b|\bsite\s+lighting\s+plans?\b/i;
-const SKIP = /^(symbol|symbols|description|type|manufacturer|model|remarks|notes|qty|quantity|mounting|voltage|watts|lamp|catalog)$/i;
+const SKIP = /^(symbol|symbols|description|type|manufacturer|model|remarks|notes|note|qty|quantity|quantities|mounting|voltage|watts|lamp|catalog|all|none|total)$/i;
 const TYPE_RE = /^(?:type\s*)?([a-z]{1,3}\d{0,3}[a-z]{0,2}|\d{1,3}[a-z]{0,3})$/i;
+const RESERVED_SCHEDULE_TYPES = new Set([
+  "ALL", "NO", "YES", "NOT", "AND", "THE", "FOR", "SEE", "TYP", "TYPE",
+  "QTY", "QUANTITY", "QUANTITIES", "NOTES", "NOTE", "TOTAL", "NONE",
+  "NIC", "NTS", "NEW", "EXISTING", "OR", "OF", "TO", "PER", "EACH",
+  "DS", "SF", "CF", "LF", "EA", "AFF", "AHJ", "NEC", "NFPA",
+]);
+const AREA_TYPE_RE = /\d[\d,]*\s*(?:sf|s\.f\.?|cf|lf)\b/i;
+const JUNK_NOTE_TYPE_RE = /^(?:W\d+(?:-\d+)?|FX-?\d+|FD-?\d+|FDC|PIV)$/i;
 
 function parseFraction(value) {
   const text = String(value || "").trim();
@@ -77,7 +85,10 @@ export function isIndexText(text) {
 
 export function isCoverOrRenderingText(text) {
   const blob = String(text || "");
-  if (isPlanTitleText(blob) || isIndexText(blob)) return false;
+  if (isIndexText(blob)) return false;
+  if (LIGHTING_PLAN_TITLE_RE.test(blob) || POWER_PLAN_TITLE_RE.test(blob) || SITE_ELECTRICAL_PLAN_RE.test(blob)) {
+    return false;
+  }
   if (RENDERING_RE.test(blob)) return true;
   if (COVER_SHEET_RE.test(blob)) return true;
   if (COVERPLATE_RE.test(blob)) return false;
@@ -85,7 +96,38 @@ export function isCoverOrRenderingText(text) {
 }
 
 export function pageTextBlob(page) {
-  return [page?.title, page?.sheetId, ...(page?.tokens || []).map((token) => token.text)].filter(Boolean).join(" ");
+  const tokenText = (page?.tokens || []).map((token) => token.text).filter(Boolean);
+  const parts = [page?.title, page?.sheetId, ...tokenText];
+  if (!tokenText.length && page?.text) parts.push(page.text);
+  return parts.filter(Boolean).join(" ");
+}
+
+export function isJunkScheduleType(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return true;
+  if (AREA_TYPE_RE.test(raw) || /,/.test(raw) || /\bsf\b/i.test(raw)) return true;
+  const key = raw.replace(/^type\s+/i, "").replace(/[.,;:()]+$/g, "").trim().toUpperCase();
+  if (!key || RESERVED_SCHEDULE_TYPES.has(key)) return true;
+  if (JUNK_NOTE_TYPE_RE.test(key.replace(/\s+/g, ""))) return true;
+  return false;
+}
+
+export function isPrintedFixtureType(value, label = "") {
+  if (isJunkScheduleType(value)) return false;
+  const key = String(value || "").replace(/^type\s+/i, "").replace(/[.,;:()]+$/g, "").trim().toUpperCase();
+  if (!/^(?:[A-Z]{1,3}\d{0,3}[A-Z]{0,2}|\d{1,3}[A-Z]{0,3}|GFI(?:\/WP)?)$/i.test(key)) return false;
+  if (/\b(?:square\s*feet|quantit|all fixtures|do not|see note)\b/i.test(label)) return false;
+  return true;
+}
+
+export function hasPrintedQtyHeader(rows = []) {
+  return (rows || []).some((row) => {
+    const text = String(row.text || "");
+    if (/\bno\s+quantit/i.test(text)) return false;
+    if (/\bquantities\b/i.test(text) && !/\bqty\b/i.test(text)) return false;
+    if (text.split(/\s+/).length > 10) return false;
+    return /\b(?:qty|quantity)\b/i.test(text);
+  });
 }
 
 export function looksLikeIndexPage(page) {
@@ -97,20 +139,36 @@ export function looksLikeIndexPage(page) {
 export function looksLikeCoverOrRendering(page) {
   if (!page) return false;
   if (/^(cover|rendering|photo|title)$/i.test(String(page.kind || ""))) return true;
-  return isCoverOrRenderingText(pageTextBlob(page));
+  const blob = pageTextBlob(page);
+  if (isCoverOrRenderingText(blob)) return true;
+  const id = page.sheetId || findSheetId(page.tokens || []);
+  if (!id && !isPlanTitleText(blob) && !COMCHECK_RE.test(blob) && (page.tokens || []).length > 0 && (page.tokens || []).length <= 140) {
+    if (/\bpreliminary\b|\bnot for construction\b|\bpermit set\b|\badd\s+\d+\s+set\b|\bcopyright\b/i.test(blob)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function looksLikeElectricalPlan(page) {
   if (!page) return false;
   if (looksLikeCoverOrRendering(page) || looksLikeIndexPage(page)) return false;
   const blob = pageTextBlob(page);
-  if (COMCHECK_RE.test(blob) && !isPlanTitleText(blob)) return false;
+  if (COMCHECK_RE.test(blob)) return false;
+  const id = page.sheetId || findSheetId(page.tokens || []);
+  const fromId = tradeFromSheetId(id);
+  if (fromId && fromId !== "electrical") return false;
+  if (STRONG_LEGEND_TITLE_RE.test(blob) && !LIGHTING_PLAN_TITLE_RE.test(blob) && !POWER_PLAN_TITLE_RE.test(blob) && !SITE_ELECTRICAL_PLAN_RE.test(blob)) {
+    return false;
+  }
+  if (/\babbreviations?\b/i.test(blob) && !LIGHTING_PLAN_TITLE_RE.test(blob) && !POWER_PLAN_TITLE_RE.test(blob)) {
+    return false;
+  }
   const electricalNamed = LIGHTING_PLAN_TITLE_RE.test(blob)
     || POWER_PLAN_TITLE_RE.test(blob)
     || SITE_ELECTRICAL_PLAN_RE.test(blob)
     || /\belectrical\s+(?:lighting|power|site)\b/i.test(blob);
   if (electricalNamed && !isIndexText(blob)) return true;
-  const id = String(page.sheetId || "").toUpperCase();
   if (electricalSheetLooksLikePlan(id)) {
     if (STRONG_LEGEND_TITLE_RE.test(blob) && !isPlanTitleText(blob)) return false;
     if (/\b(?:diagrams?\s*(?:&|and)\s*schedules?|panelboard\s+schedules?)\b/i.test(blob) && !isPlanTitleText(blob)) return false;
@@ -198,15 +256,17 @@ export function clusterTextRows(items, yTolerance = 3.5) {
 
 export function parseLegendRows(rows, options = {}) {
   const symbols = [];
-  const hasQtyColumn = Boolean(options.hasQtyColumn || (rows || []).some((row) => /\bqty\b|\bquantity\b/i.test(row.text || "")));
+  const hasQtyColumn = Boolean(options.hasQtyColumn || hasPrintedQtyHeader(rows));
   for (const row of rows) {
     const tokens = row.tokens;
     if (tokens.length < 2) continue;
     const abbr = tokens[0];
-    if (SKIP.test(abbr) || abbr.length > 12) continue;
+    if (SKIP.test(abbr) || abbr.length > 12 || isJunkScheduleType(abbr)) continue;
     const label = tokens.slice(1).join(" ").replace(/\s+/g, " ").trim();
     if (label.length < 4 || SKIP.test(label)) continue;
-    const scheduleQty = scheduleQuantityFromTokens(tokens, { hasQtyColumn, kind: "legend" });
+    const scheduleQty = isPrintedFixtureType(abbr, label)
+      ? scheduleQuantityFromTokens(tokens, { hasQtyColumn, kind: "legend" })
+      : null;
     symbols.push({
       id: `legend:${slug(abbr)}:${slug(label).slice(0, 40)}`,
       category: guessCategory(label),
@@ -244,7 +304,7 @@ function parsePrintedQty(text) {
 
 export function parseScheduleRows(rows, source, options = {}) {
   const items = [];
-  const hasQtyColumn = Boolean(options.hasQtyColumn || (rows || []).some((row) => /\bqty\b|\bquantity\b/i.test(row.text || "")));
+  const hasQtyColumn = Boolean(options.hasQtyColumn || hasPrintedQtyHeader(rows));
   for (const row of rows) {
     const tokens = row.tokens;
     if (!tokens.length) continue;
@@ -252,16 +312,17 @@ export function parseScheduleRows(rows, source, options = {}) {
     let rest = tokens;
     const first = tokens[0].replace(/\.$/, "").replace(/^['"‘’“”`]+|['"‘’“”`]+$/g, "");
     const typed = first.match(TYPE_RE);
-    if (typed && !SKIP.test(first)) {
+    if (typed && !SKIP.test(first) && !isJunkScheduleType(typed[1])) {
       type = typed[1].toUpperCase();
       rest = tokens.slice(1);
-    } else if (/^type$/i.test(tokens[0]) && tokens[1] && TYPE_RE.test(tokens[1])) {
+    } else if (/^type$/i.test(tokens[0]) && tokens[1] && TYPE_RE.test(tokens[1]) && !isJunkScheduleType(tokens[1])) {
       type = tokens[1].toUpperCase();
       rest = tokens.slice(2);
     }
     if (!type) continue;
     const label = rest.join(" ").replace(/\s+/g, " ").trim();
     if (!label || SKIP.test(label) || label.length < 3) continue;
+    if (!isPrintedFixtureType(type, label)) continue;
     const scheduleQty = scheduleQuantityFromTokens(tokens, { hasQtyColumn, kind: options.kind || source });
     items.push({
       id: `sched:${source}:${type}:${slug(label).slice(0, 40)}`,
@@ -324,7 +385,7 @@ export async function readDrawingDocuments(fileBytes) {
       notes.push(`Sheet ${pageNumber} looks like a ${kind.replaceAll("-", " ")} but has no extractable text layer. Type devices in manually — Estim8r will not invent them.`);
       continue;
     }
-    if (kind === "legend") symbols.push(...parseLegendRows(rows, { hasQtyColumn: rows.some((row) => /\bqty\b|\bquantity\b/i.test(row.text)) }).map((item) => ({ ...item, page: pageNumber })));
+    if (kind === "legend") symbols.push(...parseLegendRows(rows, { hasQtyColumn: hasPrintedQtyHeader(rows) }).map((item) => ({ ...item, page: pageNumber })));
     if (kind === "lighting-schedule" || kind === "device-schedule" || kind === "equipment-schedule" || kind === "spec") {
       scheduleItems.push(...parseScheduleRows(rows, kind).map((item) => ({ ...item, page: pageNumber })));
       if (kind === "spec" || kind === "legend") {

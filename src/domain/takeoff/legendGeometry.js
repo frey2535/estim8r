@@ -369,7 +369,7 @@ export function attachPowerGlyphPrototypes(dictionary, marks = [], page = null) 
   const byCode = new Map(entries.map((entry) => [compact(entry.code), entry]));
   for (const mark of marks || []) {
     const code = compact(mark.typeCode || mark.abbr);
-    if (!/^(wp|sp|spr|gfi|gfiwp|os|r|p2|db)$/.test(code)) continue;
+    if (!/^(wp|sp|spr|r|p2|db)$/.test(code)) continue;
     let entry = byCode.get(code);
     if (!entry) {
       entry = { code: String(mark.typeCode || mark.abbr || "").toUpperCase(), symbol: { id: mark.symbol, label: mark.symbolLabel, abbr: mark.abbr, category: mark.category, takeoffCategory: mark.category }, shapeHint: "rect" };
@@ -398,10 +398,8 @@ export function scanUnlabeledPowerGlyphs(page, options = {}) {
   const symbols = options.symbols || [];
   const pick = (id) => (symbols || []).find((item) => item.id === id);
   const duplex = pick("duplex");
-  const wp = pick("wp");
-  const gfi = pick("gfci");
-  const special = pick("special-rec") || duplex;
-  if (!duplex && !special) return [];
+  if (!duplex) return [];
+  const gfiHeavy = tokens.filter((token) => /^GFI/i.test(normalizeTypeMark(token.text))).length >= 8;
   const hits = [];
   for (const path of paths) {
     if (!looksLikeUnlabeledReceptacleGlyph(path) || isHatchTickCluster(path, paths)) continue;
@@ -409,18 +407,14 @@ export function scanUnlabeledPowerGlyphs(page, options = {}) {
     if (occupied.some((item) => Math.hypot((Number(item.x) || 0) - placed.x, (Number(item.y) || 0) - placed.y) < 0.34)) continue;
     if (!isPlanInterior(placed) || isPlotStampToken(placed, tokens)) continue;
     if (nearNoteChrome(placed, tokens) || nearHexNoteGlyph(placed, paths)) continue;
-    const label = classifyNearbyPowerLabel(placed, tokens);
-    const symbol = label === "WP" ? (wp || duplex)
-      : label === "GFI" ? (gfi || duplex)
-      : (label === "SP" || label === "P2" || label === "DB") ? (special || duplex)
-      : duplex;
-    if (!symbol) continue;
+    if (classifyNearbyPowerLabel(placed, tokens) || gfiHeavy) continue;
+    if (!duplex) continue;
     hits.push({
       geometry: { ...path, outline: glyphOutline(path), source: "vector" },
-      entry: { code: label || "R", symbol, shapeHint: "rect" },
-      score: label ? 0.96 : 0.91,
+      entry: { code: "R", symbol: duplex, shapeHint: "rect" },
+      score: 0.91,
       margin: 0.08,
-      ambiguous: !label,
+      ambiguous: true,
     });
   }
   return hits;

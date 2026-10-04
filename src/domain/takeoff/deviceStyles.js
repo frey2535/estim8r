@@ -241,7 +241,12 @@ export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
   const maxExtent = maxFillExtent(mark);
   if (mark?.outline && (["vector", "raster", "mixed", "text"].includes(mark.outline.source) || mark.outline.kind === "composite")) {
     if (isUsablePaintOutline(mark.outline, origin, maxExtent)) {
-      return scaleOutline(mark.outline, 1, origin);
+      const painted = scaleOutline(mark.outline, 1, origin);
+      const extent = outlineExtent(painted);
+      if (isPointDevice(mark) && extent > 0 && extent < MIN_VISIBLE_FILL) {
+        return scaleOutline(painted, MIN_VISIBLE_FILL / extent, origin);
+      }
+      return painted;
     }
   }
   return genericDeviceOutline(mark, markerSize);

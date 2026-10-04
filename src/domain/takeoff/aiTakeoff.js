@@ -367,8 +367,7 @@ export function matchTradeSymbol(text, symbols, aliases = [], options = {}) {
     if (gfi) return gfi;
   }
   if (/^facp$/i.test(compact)) {
-    const facp = (symbols || []).find((item) => item.id === "facp");
-    if (facp) return facp;
+    return (symbols || []).find((item) => item.id === "facp") || null;
   }
   if (compact === "sp" && options.planType === "power") {
     const special = (symbols || []).find((item) => item.id === "special-rec");
@@ -679,8 +678,9 @@ function isSitePlanPage(page) {
 }
 
 function isIndoorLightingAlias(alias) {
-  const blob = `${alias?.symbol?.id || ""} ${alias?.symbol?.label || ""} ${alias?.code || ""}`.toLowerCase();
-  if (/site|pole|area light|street|parking|flood/.test(blob)) return false;
+  const blob = `${alias?.symbol?.id || ""} ${alias?.symbol?.label || ""} ${alias?.code || ""} ${alias?.symbol?.category || ""} ${alias?.symbol?.takeoffCategory || ""}`.toLowerCase();
+  if (/site|pole|area light|street|parking|flood/.test(blob) && !/lighting fixture/.test(blob)) return false;
+  if (/\blighting\b/.test(blob) && !/recept|gfi|switch|sensor/.test(blob)) return true;
   return /troffer|downlight|strip|can light|2x4|2x2|1x4|recessed|surface/.test(blob);
 }
 
@@ -811,8 +811,10 @@ export function buildAiMarks({
         || (isCanDeviceText(token.text, token.nearbyText, symbol.label) ? "circle" : null);
       const entry = (dictionary.entries || []).find((item) => normalizeTakeoffText(item.code) === normalizeTakeoffText(normalizeTypeMark(token.text)));
       const printedCode = normalizeTypeMark(token.text).toUpperCase();
-      const powerGlyph = planType === "power" && /^(WP|SP|SPR|GFI|GFI\/WP|OS|R|P2|DB|DOORBELL)$/.test(printedCode)
-        ? findNearbyReceptacleGlyph(token, page.paths || [])
+      const powerDeviceTag = /^(WP|SP|SPR|P2|DB|DOORBELL)$/.test(printedCode)
+        || (planType === "power" && printedCode === "R");
+      const powerGlyph = powerDeviceTag
+        ? findNearbyReceptacleGlyph(token, page.paths || [], { radius: 0.62 })
         : null;
       let geometry = powerGlyph
         ? { ...powerGlyph, source: "vector", outline: powerGlyph.outline || { kind: powerGlyph.kind || "rect", source: "vector", w: powerGlyph.w, h: powerGlyph.h, points: powerGlyph.points || [] } }
@@ -824,6 +826,14 @@ export function buildAiMarks({
         geometry = powerGlyph
           ? { ...powerGlyph, source: "vector", outline: powerGlyph.outline || { kind: powerGlyph.kind || "rect", source: "vector", w: powerGlyph.w, h: powerGlyph.h } }
           : tagOnSymbolGeometry(token, { shapeHint: hint || "rect" });
+      }
+      if (geometry && powerDeviceTag) {
+        const away = Math.hypot((geometry.cx || 0) - token.x, (geometry.cy || 0) - token.y);
+        if (away > 0.62) {
+          geometry = powerGlyph
+            ? { ...powerGlyph, source: "vector", outline: powerGlyph.outline || { kind: powerGlyph.kind || "rect", source: "vector", w: powerGlyph.w, h: powerGlyph.h } }
+            : tagOnSymbolGeometry(token, { shapeHint: hint || "rect" });
+        }
       }
       if (hint === "circle" && geometry) {
         const away = Math.hypot((geometry.cx || 0) - token.x, (geometry.cy || 0) - token.y);
@@ -890,7 +900,7 @@ export function buildAiMarks({
     // After labeled hits exist, copy their extracted bodies and slash/tick
     // fragments across the same sheet to recover devices that have no printed type mark.
     const pageCounts = counts.filter((mark) => mark.sheet === page.page);
-    dictionary = attachPowerGlyphPrototypes(dictionary, pageCounts, page);
+    if (planType === "power") dictionary = attachPowerGlyphPrototypes(dictionary, pageCounts, page);
     dictionary = attachConfirmedGeometryPrototypes(dictionary, pageCounts);
     dictionary = attachFragmentPrototypes(dictionary, pageCounts, page);
     const occupied = seen.filter((item) => item.sheet === page.page);

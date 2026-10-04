@@ -87,7 +87,7 @@ assert(matchTradeSymbol("R34.3", electrical.symbols) == null, "R34.3 does not ma
 assert(matchTradeSymbol("2'-4\"", electrical.symbols) == null, "a dimension is not a 2x4");
 assert(matchTradeSymbol("SP", electrical.symbols, [], { planType: "power" })?.id === "special-rec", "SP on a power plan is a special-purpose receptacle");
 assert(matchTradeSymbol("SP", electrical.symbols)?.id !== "special-rec", "SP without a power plan stays the catalog collision");
-assert(matchTradeSymbol("FACP", electrical.symbols)?.id === "facp", "FACP is the fire-alarm panel");
+assert(matchTradeSymbol("FACP", electrical.symbols) == null, "FACP is not an electrical catalog match");
 assert(matchTradeSymbol("1", electrical.symbols, [{ code: "1", symbol: { id: "2x4", label: "Type 1 2x4 troffer", category: "Lighting" } }], { planType: "power" }) == null, "lighting type 1 is not a device on a power plan");
 assert(matchTradeSymbol("DOORBELL", electrical.symbols, [], { planType: "power" })?.abbr === "DB", "doorbell on a power plan is counted");
 
@@ -187,7 +187,8 @@ const troffers = buildAiMarks({
 });
 const troffer = troffers.marks.find((mark) => mark.type === "count");
 assert(troffer?.outlineSource === "vector" && deviceOutline(troffer).kind === "rect", "troffer fill is the extracted rectangle");
-assert(Math.abs(deviceOutline(troffer).w - trofferPaths[0].w) < 0.05, "troffer width is the drawn outline, not a smaller generic box");
+assert(Math.abs((troffer.outline?.w || 0) - trofferPaths[0].w) < 0.05, "troffer stores the drawn outline, not a smaller generic box");
+assert(deviceOutline(troffer).w <= 1.65, "painted troffer fill stays inside the Beam-tight cap");
 
 assert(hitTestDeviceFill(canMark, { x: canMark.x, y: canMark.y }), "every counted device is selectable");
 assert(hitTestDeviceFill(troffer, { x: troffer.x, y: troffer.y }), "extracted troffers stay selectable");

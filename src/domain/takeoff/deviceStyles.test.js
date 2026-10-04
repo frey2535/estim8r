@@ -1,7 +1,9 @@
 import {
   CIRCUIT_COLOR,
+  DEVICE_CHIP_R,
   DEVICE_FILL_OPACITY,
-  MIN_VISIBLE_FILL,
+  MAX_FIXTURE_FILL,
+  MAX_POINT_FILL,
   SCHEDULE_TYPE_COLORS,
   applyDeviceTypeColors,
   deviceOutline,
@@ -57,11 +59,11 @@ assert(fixture.kind === "rect" && fixture.w > fixture.h, "2x4 fill follows the f
 assert(fixture.w <= 1.4 && fixture.h <= 0.9, "fallback 2x4 fills stay small");
 const receptacle = deviceOutline({ symbol: "gfci", abbr: "GFI", symbolLabel: "GFCI receptacle" });
 assert(receptacle.kind === "circle", "receptacles use a circular outline");
-assert(receptacle.r * 2 >= MIN_VISIBLE_FILL, "fallback receptacle fills are large enough to see");
-assert(receptacle.r <= 0.8, "fallback receptacle fills stay on the symbol");
+assert(receptacle.r <= MAX_POINT_FILL / 2 + 0.02, "fallback receptacle fills stay inside the glyph");
+assert(receptacle.r >= 0.14, "fallback receptacle fills are still visible");
 const canFill = deviceOutline({ symbol: "downlight", abbr: "2", symbolLabel: "Type 2 8 inch recessed downlight" });
 assert(canFill.kind === "circle", "cans use a circular outline, not a 2x4");
-assert(canFill.r * 2 >= MIN_VISIBLE_FILL, "fallback can fills are large enough to see");
+assert(canFill.r <= DEVICE_CHIP_R + 0.05, "can fills stay a small circle");
 const slashFragment = deviceOutline({
   x: 22,
   y: 40,
@@ -70,7 +72,18 @@ const slashFragment = deviceOutline({
   outlineSource: "vector",
   outline: { kind: "circle", source: "vector", r: 0.03, w: 0.06, h: 0.09, points: [] },
 });
-assert(outlineExtent(slashFragment) >= MIN_VISIBLE_FILL, "tiny extracted slashes still paint a visible fill");
+assert(slashFragment.kind === "circle" && slashFragment.r <= MAX_POINT_FILL / 2, "tiny slashes become a chip, not a scaled slab");
+assert(outlineExtent(slashFragment) <= MAX_POINT_FILL, "tiny fragments are not inflated to a floor plate");
+const roomBox = deviceOutline({
+  x: 40,
+  y: 40,
+  type: "count",
+  abbr: "GFI",
+  symbol: "gfci",
+  outlineSource: "vector",
+  outline: { kind: "rect", source: "vector", w: 12, h: 8, points: [] },
+});
+assert(outlineExtent(roomBox) <= MAX_POINT_FILL, "room-sized boxes are replaced with a device chip");
 const offSheet = deviceOutline({
   x: 30,
   y: 40,
@@ -78,7 +91,7 @@ const offSheet = deviceOutline({
   abbr: "GFI",
   outline: { kind: "path", source: "vector", points: [{ x: 420, y: 280 }, { x: 430, y: 280 }, { x: 430, y: 290 }] },
 });
-assert(offSheet.kind === "circle" && offSheet.r * 2 >= MIN_VISIBLE_FILL, "off-screen outlines fall back to a visible fill on the symbol");
+assert(offSheet.kind === "circle" && offSheet.r <= MAX_POINT_FILL / 2, "off-screen outlines fall back to a chip on the symbol");
 const swatches = sheetTypeColorSwatches(colored.filter((mark) => mark.type === "count"));
 assert(swatches.length >= 3 && swatches.every((item) => item.color && item.color !== "#ffffff"), "left-rail type chips use real fill colors");
 assert(hitTestDeviceFill({ x: 10, y: 10, symbol: "2x4", abbr: "2x4" }, { x: 10.2, y: 10.1 }), "a 2x4 fill is selectable");
@@ -119,7 +132,7 @@ const extracted = deviceOutline({
   outlineSource: "vector",
   outline: { kind: "rect", source: "vector", w: 2.1, h: 1.05, points: [] },
 }, 0.4);
-assert(extracted.kind === "rect" && Math.abs(extracted.w - 2.1) < 0.01, "vector outlines keep the extracted size when the marker control changes");
+assert(extracted.kind === "rect" && outlineExtent(extracted) <= MAX_FIXTURE_FILL, "oversize extracted boxes do not paint as room slabs");
 assert(hitTestDeviceFill({
   x: 20,
   y: 36.5,

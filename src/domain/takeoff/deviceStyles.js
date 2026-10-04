@@ -1,9 +1,13 @@
 import { isCanDeviceText } from "./symbolDetection.js";
 import { pointHitsOutline, scaleOutline } from "./vectorSymbols.js";
 
-export const DEVICE_FILL_OPACITY = 0.55;
-export const MIN_VISIBLE_FILL = 0.7;
-export const DEVICE_FILL_STROKE_PX = 2;
+export const DEVICE_FILL_OPACITY = 0.45;
+export const MIN_VISIBLE_FILL = 0.28;
+export const MAX_POINT_FILL = 0.55;
+export const MAX_FIXTURE_FILL = 1.65;
+export const MAX_GENERIC_FILL = 0.95;
+export const DEVICE_CHIP_R = 0.2;
+export const DEVICE_FILL_STROKE_PX = 1;
 export const CIRCUIT_COLOR = "#64748b";
 export const SELECTED_OUTLINE_SCALE = 1;
 
@@ -173,38 +177,51 @@ function isOnSheet(x, y) {
   return Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x <= 100 && y >= 0 && y <= 100;
 }
 
-export function isUsablePaintOutline(outline, origin) {
+export function deviceFillBlob(mark) {
+  return `${mark?.symbol || ""} ${mark?.symbolLabel || ""} ${mark?.abbr || ""} ${mark?.typeCode || ""}`.toLowerCase();
+}
+
+export function isPointDevice(mark) {
+  const blob = deviceFillBlob(mark);
+  return isCanDeviceText(blob)
+    || /downlight|pendant|occup|sensor|switch|\bos\b|recept|gfci|gfi|duplex|outlet|\br\b|quad/.test(blob);
+}
+
+export function isFixtureDevice(mark) {
+  const blob = deviceFillBlob(mark);
+  return /2\s*[x×]\s*4|1\s*[x×]\s*4|2\s*[x×]\s*2|troffer|fixture/.test(blob);
+}
+
+export function maxFillExtent(mark) {
+  if (isFixtureDevice(mark)) return MAX_FIXTURE_FILL;
+  if (isPointDevice(mark)) return MAX_POINT_FILL;
+  return MAX_GENERIC_FILL;
+}
+
+export function isUsablePaintOutline(outline, origin, maxExtent = MAX_GENERIC_FILL) {
   if (!outline) return false;
   if (outline.kind === "path" && (outline.points || []).length < 3) return false;
   if (outline.kind === "composite" && !(outline.parts || []).length) return false;
   const extent = outlineExtent(outline);
-  if (extent < 0.22) return false;
+  if (extent < 0.14 || extent > maxExtent) return false;
   const center = outlineCenter(outline, origin);
   if (!isOnSheet(center.x, center.y)) return false;
   if (origin && Number.isFinite(origin.x) && Number.isFinite(origin.y)) {
-    if (Math.hypot(center.x - origin.x, center.y - origin.y) > 8) return false;
+    if (Math.hypot(center.x - origin.x, center.y - origin.y) > 0.95) return false;
   }
   return true;
 }
 
-function enlargeOutline(outline, origin, minExtent) {
-  const extent = outlineExtent(outline);
-  if (!outline || extent >= minExtent) return outline;
-  const factor = extent > 0.02 ? minExtent / extent : minExtent / 0.02;
-  return scaleOutline(outline, factor, origin);
-}
-
 function genericDeviceOutline(mark, markerSize = 0.55) {
-  const scale = Math.max(0.4, Number(markerSize) || 0.55) / 0.55;
-  const minR = MIN_VISIBLE_FILL / 2;
-  const blob = `${mark?.symbol || ""} ${mark?.symbolLabel || ""} ${mark?.abbr || ""} ${mark?.typeCode || ""}`;
-  if (isCanDeviceText(blob) || /downlight|pendant|high bay|low bay|occup|sensor|switch|\bos\b/.test(blob.toLowerCase())) {
-    return { kind: "circle", r: Math.max(minR, 0.36 * scale) };
+  const scale = Math.min(1.15, Math.max(0.7, Number(markerSize) || 0.55) / 0.55);
+  const blob = deviceFillBlob(mark);
+  if (isCanDeviceText(blob) || /downlight|pendant|high bay|low bay|occup|sensor|switch|\bos\b/.test(blob)) {
+    return { kind: "circle", r: DEVICE_CHIP_R * scale };
   }
-  if (/recept|gfci|gfi|duplex|outlet|\br\b|quad/.test(blob.toLowerCase())) {
-    return { kind: "circle", r: Math.max(minR, 0.36 * scale) };
+  if (/recept|gfci|gfi|duplex|outlet|\br\b|quad/.test(blob)) {
+    return { kind: "circle", r: 0.18 * scale };
   }
-  const size = blob.toLowerCase().match(/(\d)\s*[x×]\s*(\d)/);
+  const size = blob.match(/(\d)\s*[x×]\s*(\d)/);
   if (size) {
     const a = Number(size[1]);
     const b = Number(size[2]);
@@ -212,23 +229,19 @@ function genericDeviceOutline(mark, markerSize = 0.55) {
     const short = Math.min(a, b);
     return {
       kind: "rect",
-      w: Math.max(MIN_VISIBLE_FILL, 0.32 * long * scale),
-      h: Math.max(MIN_VISIBLE_FILL * 0.7, 0.28 * short * scale),
+      w: Math.min(MAX_FIXTURE_FILL, 0.28 * long * scale),
+      h: Math.min(MAX_FIXTURE_FILL * 0.7, 0.24 * short * scale),
     };
   }
-  return {
-    kind: "rect",
-    w: Math.max(MIN_VISIBLE_FILL, 0.62 * scale),
-    h: Math.max(MIN_VISIBLE_FILL * 0.7, 0.36 * scale),
-  };
+  return { kind: "circle", r: DEVICE_CHIP_R * scale };
 }
 
 export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
   const origin = { x: Number(mark?.x) || 0, y: Number(mark?.y) || 0 };
+  const maxExtent = maxFillExtent(mark);
   if (mark?.outline && (["vector", "raster", "mixed", "text"].includes(mark.outline.source) || mark.outline.kind === "composite")) {
-    if (isUsablePaintOutline(mark.outline, origin)) {
-      const painted = enlargeOutline(scaleOutline(mark.outline, 1, origin), origin, MIN_VISIBLE_FILL);
-      if (painted && outlineExtent(painted) >= MIN_VISIBLE_FILL - 0.01) return painted;
+    if (isUsablePaintOutline(mark.outline, origin, maxExtent)) {
+      return scaleOutline(mark.outline, 1, origin);
     }
   }
   return genericDeviceOutline(mark, markerSize);

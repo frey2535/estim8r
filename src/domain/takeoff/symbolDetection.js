@@ -4,8 +4,9 @@ const BARE_TYPE_RE = /^(?:\d{1,2}[a-z]?|[a-z])$/i;
 const LEGEND_HEADER_RE = /^(?:electrical\s+|lighting\s+|power\s+|device\s+|symbol\s+)?legend$|^abbreviations?$/i;
 const NOTE_WORD_RE = /^(see|schedule|sched|title|qty|quantity|refer)$/i;
 const NON_PLAN_KIND_RE = /legend|schedule|^spec$|oneline|riser|detail|cover|rendering|photo|^title$|index|comcheck|perspective|^other$/i;
-const CIRCUIT_TAG_RE = /^(?:LN|LP|PP|RP|H|P|L|EM)\d{1,2}$/i;
+const CIRCUIT_TAG_RE = /^(?:LN|LP|PP|RP|H|L|EM)\d{1,2}$|^P\d{2}$/i;
 const TAGGED_EQUIP_RE = /^(VF|EF)(?:[- ]?\d+)?$/i;
+const POWER_DEVICE_RE = /^(?:gfi(?:\/wp)?|wp|os|vs|sp|spr|r|p[1-9]|db|doorbell|facp|ef|vf|ts|sw|cam)$/i;
 
 export function normalizeTypeMark(text) {
   return String(text || "")
@@ -95,6 +96,10 @@ export function isBareTypeCode(text) {
   return BARE_TYPE_RE.test(normalizeTypeMark(text));
 }
 
+export function isPowerDeviceCode(text) {
+  return POWER_DEVICE_RE.test(normalizeTypeMark(text));
+}
+
 export function isQuotedTypeMark(text) {
   return /^['"‘’“”`].+['"‘’“”`]$/.test(String(text || "").trim());
 }
@@ -161,6 +166,51 @@ export function isLegendClusterToken(token, tokens = []) {
   });
 }
 
+export function isTypContextToken(token, tokens = []) {
+  const self = normalizeTypeMark(token?.text);
+  if (isPowerDeviceCode(self)) return false;
+  if (/^typ\.?$/i.test(self)) return true;
+  return (tokens || []).some((other) => {
+    if (other === token) return false;
+    if (!/^typ\.?$/i.test(normalizeTypeMark(other.text))) return false;
+    const dist = Math.hypot((Number(other.x) || 0) - (Number(token?.x) || 0), (Number(other.y) || 0) - (Number(token?.y) || 0));
+    if (dist > 3.2) return false;
+    return isBareTypeCode(token?.text) || /^\d{1,2}$/.test(self);
+  });
+}
+
+export function isDigitCodeNoteToken(token, tokens = []) {
+  const self = normalizeTypeMark(token?.text);
+  if (/^(digit|code|keynote|hex|keycode)$/i.test(self)) return true;
+  if (isPowerDeviceCode(self)) return false;
+  if (!/^\d{1,2}$/.test(self) && !isBareTypeCode(self)) return false;
+  return (tokens || []).some((other) => {
+    if (other === token) return false;
+    const nearby = normalizeTypeMark(other.text);
+    if (!/^(digit|code|keynote|hex|keycode)$/i.test(nearby)) return false;
+    return Math.hypot((Number(other.x) || 0) - (Number(token?.x) || 0), (Number(other.y) || 0) - (Number(token?.y) || 0)) <= 2.8;
+  });
+}
+
+export function isKeyNoteNumberToken(token, tokens = []) {
+  const text = normalizeTypeMark(token?.text);
+  if (!/^\d{1,2}$/.test(text)) return false;
+  const x = Number(token?.x) || 0;
+  const y = Number(token?.y) || 0;
+  const digits = (tokens || []).filter((other) => {
+    if (!/^\d{1,2}$/.test(normalizeTypeMark(other.text))) return false;
+    const dx = Math.abs((Number(other.x) || 0) - x);
+    const dy = Math.abs((Number(other.y) || 0) - y);
+    return dx <= 16 && dy <= 10;
+  });
+  if (digits.length < 8) return false;
+  const xs = digits.map((item) => Number(item.x) || 0);
+  const ys = digits.map((item) => Number(item.y) || 0);
+  const xSpan = Math.max(...xs) - Math.min(...xs);
+  const ySpan = Math.max(...ys) - Math.min(...ys);
+  return (xSpan < 9 && ySpan > 2.4) || (ySpan < 4.2 && xSpan > 5);
+}
+
 export function isScheduleNoteContext(token, tokens = []) {
   if (!isBareTypeCode(token?.text)) return false;
   return (tokens || []).some((other) => {
@@ -202,6 +252,9 @@ export function shouldAcceptPlanToken(token, tokens = []) {
   if (isSheetGridTick(token)) return false;
   if (isNotesClusterToken(token, tokens)) return false;
   if (isZoneNoteContext(token, tokens)) return false;
+  if (isTypContextToken(token, tokens) || isTypContextToken(marked, tokens)) return false;
+  if (isDigitCodeNoteToken(token, tokens) || isDigitCodeNoteToken(marked, tokens)) return false;
+  if (isKeyNoteNumberToken(token, tokens) || isKeyNoteNumberToken(marked, tokens)) return false;
   if (isUnquotedCircuitBesideQuotedType(token, tokens)) return false;
   if (/^EM$/i.test(marked.text) && (tokens || []).some((other) => {
     const dx = Math.abs((Number(other.x) || 0) - (Number(token?.x) || 0));

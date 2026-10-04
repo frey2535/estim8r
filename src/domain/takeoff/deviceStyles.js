@@ -53,7 +53,9 @@ export function isCircuitMark(mark) {
 }
 
 export function planOverlayMarks(marks, options = {}) {
-  const list = marks || [];
+  // Review/unknown AI candidates belong in the review queue, never painted on
+  // the normal bid drawing.
+  const list = (marks || []).filter((mark) => !isReviewOnlyMark(mark));
   if (options.devicesOnly) return list.filter((mark) => !isCircuitMark(mark));
   if (options.circuitsOnly) return list.filter((mark) => isCircuitMark(mark) || mark?.type === "note");
   // Device-count sheets stay devices-only. Conduit belongs on conduit/circuit pages
@@ -246,22 +248,34 @@ export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
     y: Number(mark?.symbolBodyLocation?.y ?? mark?.y) || 0,
   };
   const maxExtent = maxFillExtent(mark);
-  if (mark?.outline && (["vector", "raster", "mixed", "text"].includes(mark.outline.source) || mark.outline.kind === "composite")) {
-    if (isUsablePaintOutline(mark.outline, origin, maxExtent)) {
-      const painted = scaleOutline(mark.outline, 1, origin);
-      const extent = outlineExtent(painted);
-      if (isPointDevice(mark) && extent > 0 && extent < MIN_VISIBLE_FILL) {
-        return scaleOutline(painted, MIN_VISIBLE_FILL / extent, origin);
-      }
-      return painted;
-    }
+  const source = String(mark?.outline?.source || mark?.outlineSource || "").toLowerCase();
+  const trustedAiSource = source === "vector" || source === "raster" || source === "mixed";
+  const usable = mark?.outline && isUsablePaintOutline(mark.outline, origin, maxExtent);
+
+  if (mark?.source === "ai") {
+    // AI is never allowed to invent a visual marker. It may paint only the
+    // measured symbol body returned by vector/raster analysis.
+    if (!trustedAiSource || !usable) return null;
+    return scaleOutline(mark.outline, 1, origin);
   }
+
+  if (usable) {
+    const painted = scaleOutline(mark.outline, 1, origin);
+    const extent = outlineExtent(painted);
+    if (isPointDevice(mark) && extent > 0 && extent < MIN_VISIBLE_FILL) {
+      return scaleOutline(painted, MIN_VISIBLE_FILL / extent, origin);
+    }
+    return painted;
+  }
+
+  // Generic shapes are reserved for intentional manual marks only.
   return genericDeviceOutline(mark, markerSize);
 }
 
 export function hitTestDeviceFill(mark, point, markerSize = 0.55) {
   if (!mark || !point) return false;
   const outline = deviceOutline(mark, markerSize);
+  if (!outline) return false;
   return pointHitsOutline(outline, { x: mark.x, y: mark.y }, point, 0.55);
 }
 

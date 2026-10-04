@@ -20,4 +20,9 @@ const bid=overlayBidMarks([
 ], {48:"legend",50:"drawing"});
 assert(bid.some((m)=>m.id==="ok") && bid.some((m)=>m.id==="run"), "overlay bid keeps plan devices and traced conduit");
 assert(!bid.some((m)=>m.id==="rev" || m.id==="leg"), "review/legend marks are not bid quantities");
+const invented = overlayBidMarks([
+  {id:"ai-run",source:"ai",tool:"conduit",type:"route",sheet:50,points:[{x:10,y:10},{x:80,y:80}],symbolLabel:'3/4" EMT'},
+  {id:"gen",type:"count",sheet:50,x:82,y:40,category:"Panels / MCC",symbol:"generator",typeCode:"G"},
+], {50:"drawing"});
+assert(!invented.some((m)=>m.id==="ai-run"), "AI homeruns invented from notes are not bid conduit");
 if(!process.exitCode) console.log("live linked takeoff checks passed");

@@ -5,6 +5,7 @@ const LEGEND_HEADER_RE = /^(?:electrical\s+|lighting\s+|power\s+|device\s+|symbo
 const NOTE_WORD_RE = /^(see|schedule|sched|title|qty|quantity|refer)$/i;
 const NON_PLAN_KIND_RE = /legend|schedule|^spec$|oneline|riser|detail|cover|rendering|photo|^title$|index|comcheck|perspective|^other$/i;
 const CIRCUIT_TAG_RE = /^(?:LN|LP|PP|RP|H|L|EM)\d{1,2}$|^P\d{2}$/i;
+const LIGHTING_FIXTURE_CODE_RE = /^(?:[FLX]\d{1,2}[A-Z]?|L\d{1,2}[A-Z]?|OS|[1-4]E?)$/i;
 const TAGGED_EQUIP_RE = /^(VF|EF)(?:[- ]?\d+)?$/i;
 const POWER_DEVICE_RE = /^(?:gfi(?:\/wp)?|wp|os|vs|sp|spr|r|p[1-9]|db|doorbell|facp|ef|vf|ts|sw|cam)$/i;
 
@@ -54,6 +55,20 @@ export function isPlanInterior(token) {
   const y = Number(token?.y);
   if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
   return x >= 7 && x <= 76 && y >= 10 && y <= 88;
+}
+
+export function isNotesOrTitleBand(token) {
+  const x = Number(token?.x);
+  if (!Number.isFinite(x)) return false;
+  return x >= 78;
+}
+
+export function isLightingFixtureCode(text) {
+  return LIGHTING_FIXTURE_CODE_RE.test(normalizeTypeMark(text));
+}
+
+export function isAbbreviationJunkType(value) {
+  return /^(AC|FFE|ELEC|EL|MECH|ARCH|GEN|PNL)$/i.test(normalizeTypeMark(value));
 }
 
 export function isZoneNoteContext(token, tokens = []) {
@@ -150,6 +165,17 @@ export function isCircuitCalloutToken(token, tokens = []) {
   const text = normalizeTypeMark(token?.text);
   if (!text) return false;
   if (isQuotedTypeMark(token?.text)) return false;
+  if (/^L\d{1,2}[A-Z]?$/i.test(text)) {
+    const paired = (tokens || []).some((other) => {
+      if (other === token) return false;
+      const dx = Math.abs((Number(other.x) || 0) - (Number(token?.x) || 0));
+      const dy = Math.abs((Number(other.y) || 0) - (Number(token?.y) || 0));
+      if (dx > 1.6 || dy > 0.7) return false;
+      const nearby = normalizeTypeMark(other.text);
+      return nearby === "-" || /^\d{2}$/.test(nearby);
+    });
+    if (!paired) return false;
+  }
   if (CIRCUIT_TAG_RE.test(text) && !TAGGED_EQUIP_RE.test(text)) return true;
   if (!/^\d{1,2}[A-Z]?$/i.test(text)) return false;
   return (tokens || []).some((other) => {
@@ -158,7 +184,7 @@ export function isCircuitCalloutToken(token, tokens = []) {
     const dy = Math.abs((Number(other.y) || 0) - (Number(token?.y) || 0));
     if (dx > 2.4 || dy > 1.2) return false;
     const nearby = normalizeTypeMark(other.text);
-    return CIRCUIT_TAG_RE.test(nearby) || nearby === "-";
+    return (CIRCUIT_TAG_RE.test(nearby) && !isLightingFixtureCode(nearby)) || nearby === "-";
   });
 }
 
@@ -280,9 +306,24 @@ export function shouldAcceptPlanToken(token, tokens = [], options = {}) {
   if (isLegendClusterToken(token, tokens) || isLegendClusterToken(marked, tokens)) return false;
   if (isFixtureLegendStripToken(token, tokens) || isFixtureLegendStripToken(marked, tokens)) return false;
   if (isScheduleNoteContext(token, tokens) || isScheduleNoteContext(marked, tokens)) return false;
+  if (!options.sitePlan && (isNotesOrTitleBand(token) || isNotesOrTitleBand(marked))) return false;
   if (isCircuitCalloutToken(token, tokens)) {
-    const lightingType = options.planType === "lighting" && /^\d{1,2}E?$/.test(marked.text);
+    const lightingType = options.planType === "lighting" && isLightingFixtureCode(marked.text);
     if (!(lightingType && hasNearbyFixtureBody(token, options.paths))) return false;
+  }
+  if (
+    options.planType === "lighting"
+    && /^\d{1,2}$/.test(marked.text)
+    && (tokens || []).some((other) => {
+      if (other === token) return false;
+      const dx = Math.abs((Number(other.x) || 0) - (Number(token?.x) || 0));
+      const dy = Math.abs((Number(other.y) || 0) - (Number(token?.y) || 0));
+      if (dx > 2.2 || dy > 2.2) return false;
+      return /^(?:P|LP|PP|RP)\d{1,2}(?:-\d+)?$/i.test(normalizeTypeMark(other.text));
+    })
+    && !hasNearbyFixtureBody(token, options.paths)
+  ) {
+    return false;
   }
   if (isSheetGridTick(token)) return false;
   if (isNotesClusterToken(token, tokens)) return false;

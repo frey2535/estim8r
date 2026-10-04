@@ -1,6 +1,6 @@
 import { isPrintedFixtureType, looksLikeElectricalPlan, parseScheduleRows, scheduleQuantityFromTokens } from "./drawing-docs.js";
 import { pageMatchesTrade } from "./sheetDiscipline.js";
-import { isNonPlanSheetKind, normalizeTypeMark, taggedEquipmentCode } from "./symbolDetection.js";
+import { isAbbreviationJunkType, isNonPlanSheetKind, isNotesOrTitleBand, normalizeTypeMark, taggedEquipmentCode } from "./symbolDetection.js";
 
 export { scheduleQuantityFromTokens };
 
@@ -14,10 +14,13 @@ export function typeKey(value) {
 
 export function markTypeKey(mark) {
   const typed = typeKey(mark?.typeCode || mark?.abbr);
-  if (typed && typed !== "?" && typed !== "UNKNOWN") return typed;
+  if (typed && typed !== "?" && typed !== "UNKNOWN" && !isAbbreviationJunkType(typed) && isPrintedFixtureType(typed)) {
+    return typed;
+  }
   const symbol = normalizeTypeMark(mark?.symbol).toUpperCase();
   const category = String(mark?.category || "");
   const label = String(mark?.symbolLabel || "");
+  if (isAbbreviationJunkType(typed) || isAbbreviationJunkType(symbol)) return "";
   const receptacle = /recept|duplex|gfi/i.test(`${symbol} ${category} ${label}`);
   if (receptacle) {
     if (/gfi/i.test(`${symbol} ${label} ${typed}`)) return "GFI";
@@ -25,8 +28,10 @@ export function markTypeKey(mark) {
     if (/\bSP\b/.test(symbol) || /^SP$/i.test(typed)) return "SP";
     return "R";
   }
-  if (symbol && symbol !== "UNKNOWN" && symbol !== "?" && isPrintedFixtureType(symbol)) return typeKey(symbol);
-  if (/switch/i.test(category)) return typed || "SW";
+  if (symbol && symbol !== "UNKNOWN" && symbol !== "?" && isPrintedFixtureType(symbol) && !isAbbreviationJunkType(symbol)) {
+    return typeKey(symbol);
+  }
+  if (/switch/i.test(category) && typed && !isAbbreviationJunkType(typed)) return typed;
   return "";
 }
 
@@ -43,8 +48,11 @@ export function isPlanCountMark(mark, pageKinds = {}, pages = []) {
   if (!mark) return false;
   if (mark.type !== "count" && mark.type !== "drop") return false;
   if (mark.source === "legend") return false;
+  if (isNotesOrTitleBand(mark)) return false;
   if (!sheetAllowsPlanCount(mark, pageKinds, pages)) return false;
-  return Boolean(markTypeKey(mark));
+  const key = markTypeKey(mark);
+  if (!key || isAbbreviationJunkType(key)) return false;
+  return true;
 }
 
 function tokenRows(tokens = []) {

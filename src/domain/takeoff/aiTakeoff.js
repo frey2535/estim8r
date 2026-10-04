@@ -4,7 +4,9 @@ import { findSheetId, isSheetChrome, pageDiscipline, pageMatchesTrade, tradeFrom
 import {
   fixtureSizeFromWholeToken,
   isCanDeviceText,
+  isLightingFixtureCode,
   isNonPlanSheetKind,
+  isNotesOrTitleBand,
   isPlanInterior,
   isPlotStampToken,
   isQuotedTypeMark,
@@ -267,9 +269,93 @@ function shapeHintForToken(text, dictionary) {
   return shapeHintFromLabel(`${entry?.symbol?.label || ""} ${text}`);
 }
 
-function placementAllowed(point) {
+function placementAllowed(point, options = {}) {
   if (!point) return false;
-  return !isSheetChrome(point) && !isTitleBlockLetter(point);
+  if (isSheetChrome(point) || isTitleBlockLetter(point)) return false;
+  if (!options.sitePlan && isNotesOrTitleBand(point)) return false;
+  return true;
+}
+
+function nearbyLightingTypeCode(placed, tokens = []) {
+  let best = "";
+  let bestDist = 1.15;
+  for (const token of tokens || []) {
+    const code = normalizeTypeMark(token.text).toUpperCase();
+    if (!/^(?:[FLX]\d{1,2}[A-Z]?|L\d{1,2}[A-Z]?|OS)$/i.test(code)) continue;
+    const dist = Math.hypot((Number(token.x) || 0) - placed.x, (Number(token.y) || 0) - placed.y);
+    if (dist < bestDist) {
+      best = code === "OS" ? "OS" : code;
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
+function lightingSymbolForCode(code, symbols) {
+  const printed = String(code || "").toUpperCase();
+  if (printed === "OS") {
+    return (symbols || []).find((item) => item.id === "occ" || item.abbr === "OS") || resolveCanSymbol(symbols);
+  }
+  return resolveCanSymbol(symbols)
+    || (symbols || []).find((item) => item.category === "Lighting")
+    || null;
+}
+
+function typedLightingBodyMark({
+  trade,
+  sheet,
+  geometry,
+  placed,
+  tokens,
+  symbols,
+  color,
+  sources = [],
+  scores = {},
+}) {
+  const typeCode = nearbyLightingTypeCode(placed, tokens);
+  const symbol = typeCode ? lightingSymbolForCode(typeCode, symbols) : null;
+  if (!typeCode || !symbol) {
+    return reviewCandidateMark({
+      trade,
+      sheet,
+      geometry,
+      reason: "unlabeled-lighting-can",
+      sources,
+      scores,
+    });
+  }
+  return attachDetectionRecord({
+    id: newId(),
+    source: "ai",
+    trade,
+    type: "count",
+    sheet,
+    x: placed.x,
+    y: placed.y,
+    category: symbol.takeoffCategory || symbol.category || (typeCode === "OS" ? "Switches" : "Lighting"),
+    symbol: symbol.id,
+    symbolLabel: symbol.label,
+    abbr: symbol.abbr || typeCode,
+    typeCode,
+    color,
+    matchedFrom: "drawing",
+    outline: geometry?.outline || null,
+    outlineSource: geometry?.outline?.source || geometry?.source || "vector",
+    detectSource: DETECT_SOURCE_ORIGINAL_PDF,
+    confidence: "medium",
+    reviewStatus: "pending",
+    layer: "device",
+  }, {
+    geometry,
+    symbolBodyLocation: placed,
+    labelLocation: null,
+    detectionSources: [...sources, "nearby-type-tag"],
+    visualMatchScore: scores.visual || 0,
+    vectorMatchScore: scores.vector || 0,
+    legendMatchScore: scores.legend || 0,
+    requiresReview: false,
+    reviewReason: "",
+  });
 }
 
 function phrasesFromTokens(tokens) {
@@ -401,6 +487,9 @@ export function matchTradeSymbol(text, symbols, aliases = [], options = {}) {
   if (fixture) return fixture;
   if (options.sectionContext && /^[a-z]{1,2}$/.test(compact)) return null;
   const words = token.split(/\s+/).filter(Boolean);
+  if (/^(generator|panelboard|panelboards|exhaustfan|exhaustfans?)$/i.test(compact) && options.planType !== "site") {
+    return null;
+  }
   if (words.length < 5) {
     const synonym = findSynonym(symbols, token);
     if (synonym) return synonym;
@@ -419,7 +508,12 @@ export function matchTradeSymbol(text, symbols, aliases = [], options = {}) {
     && item.abbr.length >= 2
     && item.category !== "Raceway"
   ));
-  if (!hits.length) return null;
+  if (!hits.length) {
+    if (options.planType === "lighting" && isLightingFixtureCode(token)) {
+      return lightingSymbolForCode(token, symbols);
+    }
+    return null;
+  }
   hits.sort((a, b) => {
     const rank = (item) => (item.category === "Panels / MCC" || item.id === "facp" || item.id === "ahu" ? 1 : 0);
     return rank(b) - rank(a) || b.abbr.length - a.abbr.length;
@@ -686,7 +780,8 @@ function nearbyText(token, tokens) {
 
 function isSitePlanPage(page) {
   const blob = `${page?.title || ""} ${page?.sheetId || ""} ${(page?.tokens || []).map((token) => token.text).join(" ")}`;
-  return /\belectrical site plan\b|\bsite lighting\b/i.test(blob) && !/\bfloor plan\b/i.test(blob);
+  if (/^ES\d/i.test(String(page?.sheetId || ""))) return true;
+  return /\belectrical site plan\b|\bsite lighting\b|\bsite plan\b/i.test(blob) && !/\bfloor plan\b/i.test(blob);
 }
 
 function isIndoorLightingAlias(alias) {
@@ -760,7 +855,7 @@ export function buildAiMarks({
     if (!shouldScan(page, trade)) continue;
     const sitePlan = isSitePlanPage(page);
     const planType = pagePlanType(page);
-    const pageCandidates = collectMatchCandidates(page, { planType, paths: page.paths || [] });
+    const pageCandidates = collectMatchCandidates(page, { planType, paths: page.paths || [], sitePlan });
     const hits = [];
     for (const token of pageCandidates) {
       const symbol = matchTradeSymbol(token.text, matchSymbols, aliases, {
@@ -768,7 +863,7 @@ export function buildAiMarks({
         nearbyText: token.nearbyText,
         sitePlan,
         planType,
-        reject: (item) => !shouldAcceptPlanToken({ ...token, text: item.text }, page.tokens, { planType, paths: page.paths || [] }),
+        reject: (item) => !shouldAcceptPlanToken({ ...token, text: item.text }, page.tokens, { planType, paths: page.paths || [], sitePlan }),
       });
       if (!symbol) continue;
       hits.push({ token, symbol });
@@ -788,15 +883,18 @@ export function buildAiMarks({
       const geometry = visual.geometry;
       const symbol = visual.entry.symbol;
       const placed = { x: geometry.cx, y: geometry.cy };
-      if (!placementAllowed(placed)) continue;
+      if (!placementAllowed(placed, { sitePlan })) continue;
       const duplicate = seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.34);
       if (duplicate) continue;
       if (planType === "lighting") {
-        const review = reviewCandidateMark({
+        const review = typedLightingBodyMark({
           trade,
           sheet: page.page,
           geometry,
-          reason: visual.ambiguous ? "detector-disagreement" : "unconfirmed-lighting-copy",
+          placed,
+          tokens: page.tokens,
+          symbols: matchSymbols,
+          color,
           sources: ["legend-geometry"],
           scores: { visual: visual.score, legend: visual.score, vector: visual.score },
         });
@@ -912,7 +1010,7 @@ export function buildAiMarks({
       // the device — place the fill there instead of inventing an offset or
       // dropping the count. Chrome/title-block stays dropped. A classified
       // token with no symbol body stays as UNKNOWN/REVIEW instead of vanishing.
-      if (geometryPoint && !placementAllowed(geometryPoint)) continue;
+      if (geometryPoint && !placementAllowed(geometryPoint, { sitePlan })) continue;
       if (!geometryPoint) {
         const review = reviewCandidateMark({
           trade,
@@ -934,7 +1032,7 @@ export function buildAiMarks({
       const compact = normalizeTakeoffText(normalizeTypeMark(token.text));
       const fromLegend = aliases.some((alias) => normalizeTakeoffText(alias.code) === compact && alias.symbol?.id === symbol.id);
       const printed = normalizeTypeMark(token.text).toUpperCase();
-      const typeCode = fromLegend || /^(WP|SP|SPR|GFI|GFI\/WP|OS|R|P2|DB|DOORBELL|FACP)$/.test(printed)
+      const typeCode = fromLegend || isLightingFixtureCode(printed) || /^(WP|SP|SPR|GFI|GFI\/WP|OS|R|P2|DB|DOORBELL|FACP)$/.test(printed)
         ? (printed === "DOORBELL" ? "DB" : printed)
         : (taggedEquipmentCode(token.text) || symbol.abbr || "").toUpperCase();
       const near = seen.some((item) => {
@@ -1028,7 +1126,7 @@ export function buildAiMarks({
       const symbol = visual.entry.symbol;
       const placed = { x: geometry.cx, y: geometry.cy };
       const titleBand = planType !== "power" && (placed.x > 64 || placed.y < 12);
-      if (!placementAllowed(placed) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens) || titleBand) continue;
+      if (!placementAllowed(placed, { sitePlan }) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens) || titleBand) continue;
       if (looksLikeHexNoteGlyph(geometry)) continue;
       const existingIndex = counts.findIndex((mark) => mark.sheet === page.page && distance(mark, placed) < 0.34);
       const existing = existingIndex >= 0 ? counts[existingIndex] : null;
@@ -1106,7 +1204,7 @@ export function buildAiMarks({
       const geometry = visual.geometry;
       const placed = { x: geometry.cx, y: geometry.cy };
       const titleBand = planType !== "power" && (placed.x > 64 || placed.y < 12);
-      if (!placementAllowed(placed) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens) || titleBand) continue;
+      if (!placementAllowed(placed, { sitePlan }) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens) || titleBand) continue;
       if (looksLikeHexNoteGlyph(geometry) || isHatchTickCluster(geometry, page.paths || [])) continue;
       const duplicate = seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.34);
       if (duplicate) continue;
@@ -1129,7 +1227,7 @@ export function buildAiMarks({
       const geometry = visual.geometry;
       const placed = { x: geometry.cx, y: geometry.cy };
       const titleBand = planType !== "power" && (placed.x > 64 || placed.y < 12);
-      if (!placementAllowed(placed) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens) || titleBand) continue;
+      if (!placementAllowed(placed, { sitePlan }) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens) || titleBand) continue;
       if (looksLikeHexNoteGlyph(geometry) || isHatchTickCluster(geometry, page.paths || [])) continue;
       const existing = counts.find((mark) => mark.sheet === page.page && distance(mark, placed) < 0.4);
       if (existing) {
@@ -1195,14 +1293,17 @@ export function buildAiMarks({
       for (const path of page.paths || []) {
         if (!looksLikeRecessedCanBody(path)) continue;
         const placed = { x: path.cx, y: path.cy };
-        if (!placementAllowed(placed) || !isPlanInterior(placed) || placed.x > 64 || placed.y < 12) continue;
+        if (!placementAllowed(placed, { sitePlan }) || !isPlanInterior(placed) || placed.x > 64 || placed.y < 12) continue;
         if (isPlotStampToken(placed, page.tokens)) continue;
         if (seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.55)) continue;
-        const review = reviewCandidateMark({
+        const review = typedLightingBodyMark({
           trade,
           sheet: page.page,
           geometry: path,
-          reason: "unlabeled-lighting-can",
+          placed,
+          tokens: page.tokens,
+          symbols: matchSymbols,
+          color,
           sources: ["vector"],
           scores: { visual: 0.7, vector: 0.75 },
         });

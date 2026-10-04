@@ -123,7 +123,14 @@ const extraType3 = bid.filter((mark) => String(mark.typeCode || "") === "3" && !
   || Math.hypot((mark.labelLocation?.x ?? 999) - token.x, (mark.labelLocation?.y ?? 999) - token.y) < 0.45
 )));
 assert(extraType3.length === 0, `type 3 extras that are not the accepted plan 3 must not bid, got ${extraType3.length}`);
-const leftoverCanReview = review.some((mark) => Math.hypot(mark.x - 58.74, mark.y - 81.86) < 0.7);
-assert(leftoverCanReview, "unlabeled can at 58.74,81.86 stays REVIEW when it is not bid-confident");
+const leftoverCan = (result.marks || []).find((mark) => mark.sheet === 52 && Math.hypot(mark.x - 58.74, mark.y - 81.86) < 0.7);
+assert(leftoverCan && String(leftoverCan.typeCode || "").toUpperCase() === "F1", `can at 58.74,81.86 takes the printed F1 tag, got ${leftoverCan?.typeCode}`);
+const printedCanTags = (e210?.tokens || []).filter((token) => /^(L1|F1|X1|L3|L5A|L5B|OS)$/i.test(normalizeTypeMark(token.text)));
+const typedPrinted = printedCanTags.filter((token) => (result.marks || []).some((mark) => (
+  mark.sheet === 52
+  && String(mark.typeCode || "").toUpperCase() === normalizeTypeMark(token.text).toUpperCase()
+  && (Math.hypot(mark.x - token.x, mark.y - token.y) < 1.8 || Math.hypot((mark.labelLocation?.x ?? 999) - token.x, (mark.labelLocation?.y ?? 999) - token.y) < 0.45)
+)));
+assert(typedPrinted.length >= 8, `printed L1/F1/OS/X1 tags next to bodies stay typed, got ${typedPrinted.length}/${printedCanTags.length}`);
 
 if (!process.exitCode) console.log("e210 lighting fixture-level checks passed");

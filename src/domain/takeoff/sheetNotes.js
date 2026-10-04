@@ -1,6 +1,7 @@
 import { pageMatchesTrade } from "./sheetDiscipline.js";
 
 const NOTE_HEADER_RE = /^(?:general\s+|electrical\s+|drawing\s+|key\s+|sheet\s+)?notes?$/i;
+const KEYNOTE_HEADER_RE = /\bkey\s*notes?\b/i;
 const NUMBERED_NOTE_RE = /^(\d{1,2})[.)]\s*(.{6,})$/;
 const SENTENCE_NOTE_RE = /^(?:provide|install|all|each|contractor|verify|coordinate|refer|mount|connect)\b/i;
 
@@ -34,8 +35,17 @@ function phrasesFromTokens(tokens = []) {
 
 function isNotesSheetKind(kind) {
   const value = String(kind || "");
-  if (/schedule|oneline|riser|detail/.test(value)) return false;
-  return /legend|^spec$|drawing/.test(value) || !value;
+  if (/schedule|oneline|riser|detail|legend|^spec$/.test(value)) return false;
+  return /drawing/.test(value) || !value;
+}
+
+function skipKeynotePage(page) {
+  const id = String(page?.sheetId || "").toUpperCase();
+  const blob = [page?.title, page?.sheetId, ...(page?.tokens || []).map((token) => token.text)].filter(Boolean).join(" ");
+  if (page?.kind === "legend" || page?.kind === "spec") return true;
+  if (/^E0\d/i.test(id) || /\blegend\b|\babbreviations?\b/i.test(blob) && !/\b(?:lighting|power)\s+plans?\b/i.test(blob)) return true;
+  if (/^ES\d/i.test(id) || (/\bsite\s+plan\b/i.test(blob) && !/\bfloor plan\b/i.test(blob))) return true;
+  return false;
 }
 
 export function isNoteMark(mark) {
@@ -47,10 +57,15 @@ export function extractSheetNotes(pages, trade) {
   const seen = new Set();
   for (const page of pages || []) {
     if (!isNotesSheetKind(page.kind)) continue;
+    if (skipKeynotePage(page)) continue;
     if (trade && page.kind === "drawing" && !pageMatchesTrade(page, trade)) continue;
     if (trade && page.kind !== "drawing" && !pageMatchesTrade(page, trade)) continue;
     const tokens = page.tokens || [];
-    const headerTokens = tokens.filter((token) => NOTE_HEADER_RE.test(String(token.text || "").trim()));
+    const headerTokens = tokens.filter((token) => {
+      const text = String(token.text || "").trim();
+      if (KEYNOTE_HEADER_RE.test(text)) return false;
+      return NOTE_HEADER_RE.test(text);
+    });
     if (!headerTokens.length && page.kind !== "spec") continue;
     const scoped = headerTokens.length
       ? tokens.filter((token) => headerTokens.some((header) => {

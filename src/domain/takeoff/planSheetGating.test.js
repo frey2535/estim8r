@@ -9,6 +9,7 @@ import {
   looksLikeElectricalPlan,
   looksLikeIndexPage,
 } from "./drawing-docs.js";
+import { extractSheetNotes } from "./sheetNotes.js";
 import { isNonPlanSheetKind } from "./symbolDetection.js";
 import { paletteForTrade } from "./trades.js";
 
@@ -184,6 +185,14 @@ assert((bySheet.get(48) || 0) === 0, `legend E001 page 48 must have 0 device mar
 assert((bySheet.get(50) || 0) > 0, "power plan E110 page 50 must have device marks");
 assert((bySheet.get(52) || 0) > 0, "lighting plan E210 page 52 must have device marks");
 assert(!(pottsville.marks || []).some((mark) => mark.sheet === 1), "no marks land on a cover page number");
+assert((pottsville.marks || []).filter((mark) => mark.sheet === 48).length === 0, "E001 has 0 notes and 0 devices");
+assert((pottsville.marks || []).filter((mark) => mark.sheet === 55 && (mark.type === "note" || mark.type === "count")).length === 0, "ES100 keynotes stay 0");
+assert(extractSheetNotes(fixture.pages || [], "electrical").every((note) => note.sheet !== 48 && note.sheet !== 55), "extracted notes skip E001 and ES100");
+const e110NoteBand = (pottsville.marks || []).filter((mark) => mark.sheet === 50 && (mark.type === "count" || mark.type === "drop") && Number(mark.x) >= 80);
+assert(e110NoteBand.length === 0, `E110 notes/title band is not devices, got ${e110NoteBand.length}`);
+assert(!(pottsville.marks || []).some((mark) => mark.sheet === 50 && /generator|panelboard/i.test(`${mark.symbol} ${mark.symbolLabel} ${mark.typeCode}`)), "E110 does not mark generator/panelboard note words");
+const e210Typed = (pottsville.marks || []).filter((mark) => mark.sheet === 52 && /^(L1|F1|X1|L3|L5A|L5B|OS)$/i.test(String(mark.typeCode || "")));
+assert(e210Typed.length >= 8, `E210 printed L1/F1/OS/X1 cans are typed, got ${e210Typed.length}`);
 
-console.log(`plan sheet gating: cover=${coverMarks.length} extractedCover=${extractedCoverMarks.length} E001=${bySheet.get(48) || 0} E110=${bySheet.get(50) || 0} E210=${bySheet.get(52) || 0}`);
+console.log(`plan sheet gating: cover=${coverMarks.length} extractedCover=${extractedCoverMarks.length} E001=${bySheet.get(48) || 0} E110=${bySheet.get(50) || 0} E210=${bySheet.get(52) || 0} e210Typed=${e210Typed.length}`);
 if (!process.exitCode) console.log("plan sheet gating checks passed");

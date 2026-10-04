@@ -109,7 +109,7 @@ Takeoff (`/takeoff`) and markup (`/markup`) are the bid-critical drawing tools.
 - Quantities persisted to the estimate are **plan detections**, not the legend/schedule qty column. A plan-vs-schedule table shows mismatches for review.
 - Markup pages split **notes**, **devices by type**, **conduit runs**, and **circuits per conduit**. Conduit stays off device-count sheets.
 - Non-electrical sheets are skipped. VF/EF count as electrical equipment. Device dropdowns stay on the selected trade and only list types found on the plan. Markers do not print type codes. Model numbers are only listed when the drawing or catalog already has them.
-- Accuracy is measured on the Soccer Pavilion fixture (`node src/domain/takeoff/soccerPavilionAccuracy.test.js`). The UI shows pending/accepted/rejected review counts and does not claim 99% without those numbers.
+- Accuracy is measured on the Soccer Pavilion and Pottsville fixtures (`node src/domain/takeoff/soccerPavilionAccuracy.test.js`, `node src/domain/takeoff/expandedCorpusAccuracy.test.js`). The UI shows pending/accepted/rejected review counts and does not claim 99% without those numbers. Classes without a real fixture are skipped and documented, not invented.
 - Empty, loading, and error states are shown on desktop and phone. Local development without Supabase uses a localhost estimator so `/takeoff` and `/markup` can be exercised.
 
 The Estimates folder **Markup pages** button opens `/markup`. Edits write back to the takeoff.
@@ -153,4 +153,6 @@ node src/domain/takeoff/junctionHardware.test.js
 node src/domain/takeoff/quantities.hardware.test.js
 node src/domain/takeoff/markupPages.test.js
 node src/domain/takeoff/sizes.test.js
+node src/domain/takeoff/soccerPavilionAccuracy.test.js
+node src/domain/takeoff/expandedCorpusAccuracy.test.js
 ```

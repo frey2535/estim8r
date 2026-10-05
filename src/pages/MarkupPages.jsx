@@ -55,8 +55,9 @@ import { isSheetPanDrag, pointerDistance, sheetPanOffset, sheetPinchZoom } from 
 import {
   CIRCUIT_COLOR,
   DEVICE_FILL_OPACITY,
+  DEVICE_FILL_STROKE_PX,
   applyDeviceTypeColors,
-  deviceOutline,
+  displayDeviceOutline,
   isCircuitMark,
   isDeviceMark,
 } from "@/domain/takeoff/deviceStyles";
@@ -818,21 +819,23 @@ function ReviewOverlay({ marks, selectedId }) {
       })}
       {devices.map((mark) => {
         const selected = mark.id === selectedId;
-        const outline = deviceOutline(mark, DEFAULT_MARKER_SIZE, { selected });
+        const outline = displayDeviceOutline(mark, DEFAULT_MARKER_SIZE, { selected });
+        if (!outline) return null;
         const color = mark.color || "#1e3a8a";
         const stroke = selected ? "#ea580c" : color;
+        const strokeWidth = selected ? DEVICE_FILL_STROKE_PX + 0.55 : DEVICE_FILL_STROKE_PX;
         if (outline.kind === "path" && outline.points?.length >= 3) {
           return (
-            <polygon key={mark.id} points={outline.points.map((point) => `${point.x},${point.y}`).join(" ")} fill={color} fillOpacity={DEVICE_FILL_OPACITY} stroke={stroke} strokeWidth={selected ? 0.28 : 0.12} vectorEffect="non-scaling-stroke" />
+            <polygon key={mark.id} points={outline.points.map((point) => `${point.x},${point.y}`).join(" ")} fill={color} fillOpacity={DEVICE_FILL_OPACITY} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
           );
         }
         if (outline.kind === "circle") {
           return (
-            <circle key={mark.id} cx={mark.x} cy={mark.y} r={outline.r} fill={color} fillOpacity={DEVICE_FILL_OPACITY} stroke={stroke} strokeWidth={selected ? 0.28 : 0.12} vectorEffect="non-scaling-stroke" />
+            <circle key={mark.id} cx={outline.cx ?? mark.x} cy={outline.cy ?? mark.y} r={outline.r} fill={color} fillOpacity={DEVICE_FILL_OPACITY} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
           );
         }
         return (
-          <rect key={mark.id} x={mark.x - outline.w / 2} y={mark.y - outline.h / 2} width={outline.w} height={outline.h} rx={0.12} fill={color} fillOpacity={DEVICE_FILL_OPACITY} stroke={stroke} strokeWidth={selected ? 0.28 : 0.12} vectorEffect="non-scaling-stroke" />
+          <rect key={mark.id} x={(outline.cx ?? mark.x) - outline.w / 2} y={(outline.cy ?? mark.y) - outline.h / 2} width={outline.w} height={outline.h} rx={0.08} fill={color} fillOpacity={DEVICE_FILL_OPACITY} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
         );
       })}
       {notes.map((mark) => (

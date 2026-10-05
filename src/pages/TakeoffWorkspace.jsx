@@ -96,10 +96,11 @@ import {
   DEVICE_FILL_STROKE_PX,
   MIN_VISIBLE_FILL,
   applyDeviceTypeColors,
-  deviceOutline,
+  displayDeviceOutline,
   hitTestDeviceFill,
   isCircuitMark,
   isDeviceMark,
+  marksForTrade,
   planOverlayMarks,
   readableFillColor,
   selectMarkAtPoint,
@@ -269,11 +270,17 @@ export default function TakeoffWorkspace() {
     }
   }, [trade, conduitChoices, conduitId]);
 
+  useEffect(() => {
+    setSelectedId(null);
+    setIsolationMode(false);
+  }, [trade]);
+
 
   const activeTool = toolByKey(tool);
+  const tradeMarks = useMemo(() => marksForTrade(marks, trade), [marks, trade]);
   const sheetMarks = useMemo(
-    () => marks.filter((mark) => (mark.sheet || 1) === (sheetMeta.page || 1)),
-    [marks, sheetMeta.page],
+    () => tradeMarks.filter((mark) => (mark.sheet || 1) === (sheetMeta.page || 1)),
+    [tradeMarks, sheetMeta.page],
   );
   const overlayMarks = useMemo(() => planOverlayMarks(sheetMarks), [sheetMarks]);
   const visibleOverlayMarks = useMemo(() => isolationMode && selectedId ? overlayMarks.filter((mark) => mark.id === selectedId) : overlayMarks, [overlayMarks, isolationMode, selectedId]);
@@ -295,25 +302,25 @@ export default function TakeoffWorkspace() {
     return page ? planSheetCoverage(page, marks, coverageOptions) : null;
   }, [coverage, aiPages, marks, sheetMeta.page, coverageOptions]);
   const sheetReview = useMemo(
-    () => mergeReviewQueue(reviewQueue(marks, sheetMeta.page), coverage, sheetMeta.page),
-    [marks, sheetMeta.page, coverage],
+    () => mergeReviewQueue(reviewQueue(tradeMarks, sheetMeta.page), coverage, sheetMeta.page),
+    [tradeMarks, sheetMeta.page, coverage],
   );
   const accuracyTotals = useMemo(() => {
-    const base = reviewSummary(marks, sheetMeta.page);
+    const base = reviewSummary(tradeMarks, sheetMeta.page);
     const unscannedPending = (coverage.unscannedRegions || []).filter((region) => region.sheet === sheetMeta.page).length;
     return {
       ...base,
       pending: base.pending + unscannedPending,
       unscannedPending,
     };
-  }, [marks, sheetMeta.page, coverage]);
+  }, [tradeMarks, sheetMeta.page, coverage]);
   const reconciliation = useMemo(() => reconcilePlanToSchedule({
-    marks,
+    marks: tradeMarks,
     scheduleItems: drawingSymbols,
     pages: aiPages,
     pageKinds,
     trade,
-  }), [marks, drawingSymbols, aiPages, pageKinds, trade]);
+  }), [tradeMarks, drawingSymbols, aiPages, pageKinds, trade]);
   const reviewSymbols = useMemo(() => {
     const seen = new Set();
     const out = [];
@@ -333,8 +340,8 @@ export default function TakeoffWorkspace() {
     ? sheetAspect(viewerRef.current.clientWidth, viewerRef.current.clientHeight)
     : 1;
   const rollup = useMemo(
-    () => rollupTakeoff(marks, calibrations, aspect),
-    [marks, calibrations, aspect],
+    () => rollupTakeoff(tradeMarks, calibrations, aspect),
+    [tradeMarks, calibrations, aspect],
   );
   const editedRollup = useMemo(() => applyScheduleEdits(rollup, scheduleEdits), [rollup, scheduleEdits]);
   const bidMarks = useMemo(() => overlayBidMarks(marks, pageKinds), [marks, pageKinds]);
@@ -388,7 +395,7 @@ export default function TakeoffWorkspace() {
     ? previewOrthogonalSegment(draftPoints, hoverPoint)
     : (hoverPoint && draftPoints.length ? [...draftPoints, hoverPoint] : draftPoints);
   const draftFeet = feetFromPercent(polylineLength(draftPreview, aspect), calibration);
-  const hardwareTotals = useMemo(() => junctionHardwareTotals(marks), [marks]);
+  const hardwareTotals = useMemo(() => junctionHardwareTotals(tradeMarks), [tradeMarks]);
   const imageDisplay = fitSheetSize(
     imageSize.width,
     imageSize.height,
@@ -2054,7 +2061,7 @@ export default function TakeoffWorkspace() {
           runs={runs}
           drawingDocs={drawingDocs}
           trade={trade}
-          marks={marks}
+          marks={tradeMarks}
           pageKinds={pageKinds}
           selected={selectedMark}
           conduitOptions={conduitChoices}
@@ -2141,16 +2148,14 @@ function OverlayLabel({ label, fill }) {
 }
 
 function DeviceFill({ mark, selected, markerSize, focus = false }) {
-  const outline = deviceOutline(mark, markerSize, { selected });
+  const outline = displayDeviceOutline(mark, markerSize, { selected });
   if (!outline) return null;
   const color = readableFillColor(mark.color || "#1e3a8a");
-  const opacity = focus ? 0.7 : (mark.fillOpacity ?? DEVICE_FILL_OPACITY);
-  const aiPaint = mark?.source === "ai";
-  // A colored SVG stroke is centered on the perimeter and therefore extends
-  // outside it. AI fills use no stroke so highlighted color stays inside the
-  // verified symbol body.
-  const stroke = aiPaint ? "none" : (selected || focus ? "#ea580c" : color);
-  const strokeWidth = aiPaint ? 0 : (selected || focus ? DEVICE_FILL_STROKE_PX + 0.4 : DEVICE_FILL_STROKE_PX);
+  const opacity = focus ? 0.34 : (mark.fillOpacity ?? DEVICE_FILL_OPACITY);
+  // A crisp hairline plus a light fill keeps the detected body visible while
+  // leaving its printed symbol and nearby plan notes readable.
+  const stroke = selected || focus ? "#ea580c" : color;
+  const strokeWidth = selected || focus ? DEVICE_FILL_STROKE_PX + 0.55 : DEVICE_FILL_STROKE_PX;
   if (outline.kind === "composite" && outline.parts?.length) {
     return (
       <g>
@@ -2195,10 +2200,12 @@ function DeviceFill({ mark, selected, markerSize, focus = false }) {
   }
   const width = Number(outline.w) || MIN_VISIBLE_FILL;
   const height = Number(outline.h) || MIN_VISIBLE_FILL * 0.7;
+  const centerX = Number.isFinite(outline.cx) ? outline.cx : mark.x;
+  const centerY = Number.isFinite(outline.cy) ? outline.cy : mark.y;
   return (
     <rect
-      x={mark.x - width / 2}
-      y={mark.y - height / 2}
+      x={centerX - width / 2}
+      y={centerY - height / 2}
       width={width}
       height={height}
       rx={0.08}

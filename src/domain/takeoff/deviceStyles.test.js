@@ -6,8 +6,10 @@ import {
   MAX_POINT_FILL,
   SCHEDULE_TYPE_COLORS,
   applyDeviceTypeColors,
+  displayDeviceOutline,
   deviceOutline,
   hitTestDeviceFill,
+  marksForTrade,
   outlineExtent,
   planOverlayMarks,
   readableFillColor,
@@ -54,9 +56,26 @@ assert(readableFillColor("#86efac") !== "#86efac", "pale type tints are darkened
 assert(scheduleTypeColor("GFI") === SCHEDULE_TYPE_COLORS.gfi, "GFI has its own fill color");
 assert(scheduleTypeColor("OS") === SCHEDULE_TYPE_COLORS.os, "OS has its own fill color");
 
+const tradeIsolation = marksForTrade([
+  { id: "legacy-electrical" },
+  { id: "electrical", trade: "electrical" },
+  { id: "plumbing", trade: "plumbing" },
+], "electrical");
+assert(tradeIsolation.length === 2, "the overlay contains only the selected trade");
+assert(!tradeIsolation.some((mark) => mark.id === "plumbing"), "another trade never leaks onto the active drawing");
+
 const fixture = deviceOutline({ symbol: "2x4", abbr: "2x4" });
 assert(fixture.kind === "rect" && fixture.w > fixture.h, "2x4 fill follows the fixture outline");
 assert(fixture.w <= 1.4 && fixture.h <= 0.9, "fallback 2x4 fills stay small");
+const compactFixture = displayDeviceOutline({
+  x: 20,
+  y: 20,
+  symbol: "2x4",
+  abbr: "2x4",
+  outlineSource: "vector",
+  outline: { kind: "rect", source: "vector", w: 1.5, h: 0.8 },
+});
+assert(outlineExtent(compactFixture) <= 0.9, "display geometry stays compact without rejecting the detected fixture");
 const receptacle = deviceOutline({ symbol: "gfci", abbr: "GFI", symbolLabel: "GFCI receptacle" });
 assert(receptacle.kind === "circle", "receptacles use a circular outline");
 assert(receptacle.r <= MAX_POINT_FILL / 2 + 0.02, "fallback receptacle fills stay inside the glyph");

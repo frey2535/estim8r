@@ -2,10 +2,12 @@ import { estimateContentFingerprint } from "./projectDocuments.js";
 import {
   buildEstimatePdf,
   createEstimatePdfPreview,
+  DEFAULT_DOCUMENT_TITLE,
   estimateHasPdfLines,
   estimatePdfFileName,
   estimatePdfPreviewKey,
   estimatePresentation,
+  normalizeDocumentTitle,
   presentationHasInternals,
 } from "./estimatePdf.js";
 
@@ -18,6 +20,7 @@ function assert(cond, message) {
 
 const estimate = {
   id: "est_pdf",
+  itemized: true,
   header: {
     projectName: "Soccer Pavilion",
     estimateNumber: "257031",
@@ -46,7 +49,12 @@ const estimate = {
   }],
 };
 
+assert(DEFAULT_DOCUMENT_TITLE === "Electrical", "default document title is Electrical");
+assert(normalizeDocumentTitle("Electrical Estimate") === "Electrical", "legacy Electrical Estimate becomes Electrical");
+assert(normalizeDocumentTitle("Custom Bid") === "Custom Bid", "custom document titles stay");
+
 const presentation = estimatePresentation(estimate);
+assert(presentation.documentTitle === "Electrical", "PDF heading defaults to Electrical");
 assert(presentation.title === "Soccer Pavilion", "presentation keeps the project name");
 assert(presentation.totals.material === 48, `material ${presentation.totals.material}`);
 assert(Math.abs(presentation.totals.labor - 179.52) < 0.001, `labor ${presentation.totals.labor}`);
@@ -74,6 +82,8 @@ const built = buildEstimatePdf(estimate, {
 });
 assert(built.fileName === "Soccer-Pavilion-257031.pdf", "built PDF keeps the file name");
 assert(built.doc.getNumberOfPages() >= 1, "PDF has a page");
+assert(built.strings.includes(DEFAULT_DOCUMENT_TITLE), "PDF prints the Electrical heading");
+assert(!built.strings.includes("Electrical Estimate"), "PDF heading no longer says Electrical Estimate");
 assert(built.strings.includes("Current Flow Electric"), "PDF prints company name");
 assert(built.strings.includes("CITY OF SHELBYVILLE"), "PDF prints title-block company");
 assert(built.strings.includes("Duplex receptacle"), "PDF prints line items");

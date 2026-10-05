@@ -38,6 +38,9 @@ import SupplierPriceIntelligence from "@/components/estimate/SupplierPriceIntell
 import LiveSupplierCatalog from "@/components/estimate/LiveSupplierCatalog";
 import EstimateQualityGate from "@/components/estimate/EstimateQualityGate";
 import { applySupplierOfferToLine, LIVE_CATALOG_SOURCE_TYPE } from "@/domain/estimate/liveSupplierCatalog";
+import CompanyLogo from "@/components/estimate/CompanyLogo";
+import LogoStretchControls from "@/components/estimate/LogoStretchControls";
+import { readCompanyBranding, writeCompanyBranding } from "@/domain/estimate/branding";
 
 function blankLine(rate) {
   return {
@@ -104,6 +107,7 @@ export default function EstimateBuilder() {
   const [supplierPriceBooks, setSupplierPriceBooks] = useState([]);
   const [pdfDesign, setPdfDesign] = useState(DEFAULT_PDF_DESIGN);
   const [laborRefreshReport, setLaborRefreshReport] = useState(null);
+  const [branding, setBranding] = useState(() => readCompanyBranding());
   const wage = compositeWage(crew);
 
   useEffect(() => {
@@ -439,11 +443,25 @@ export default function EstimateBuilder() {
     if (named) applyCrew(crewFromNamed(named));
   }
 
+  function patchBrandingStretch(key, value) {
+    setBranding((current) => writeCompanyBranding({ ...current, [key]: value }));
+  }
+
   return (
     <div className="w-full min-w-0 space-y-5 py-2">
-      <div>
+      <div className="flex flex-wrap items-start gap-4">
+        <div className="w-full max-w-xs space-y-2 rounded-2xl border border-border bg-card p-3 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Company logo</p>
+          <CompanyLogo branding={branding} design={pdfDesign} />
+          <LogoStretchControls
+            stretchX={branding.logoStretchX}
+            stretchY={branding.logoStretchY}
+            onChange={patchBrandingStretch}
+          />
+        </div>
+        <div className="min-w-0 flex-1">
         <p className="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-orange-500">Estimate Builder</p>
-        <h1 className="text-3xl font-black">Electrical Estimate</h1>
+        <h1 className="text-3xl font-black">{pdfDesign.documentTitle || "Electrical"}</h1>
         <p className="text-sm text-muted-foreground">
           Add items, quantities, labor, and markup here. Drawings and takeoff are optional and do not have to be started to save.
           {isDrawingFileName(meta.fileName) ? ` Drawing: ${meta.fileName}.` : ""}
@@ -451,6 +469,7 @@ export default function EstimateBuilder() {
         <Link to="/takeoff" className="mt-2 inline-block text-sm font-semibold text-blue-600 dark:text-orange-500">Back to takeoff</Link>
         <div className="mt-3">
           {ready && <SaveProjectDocuments estimate={draft} onProjectName={(name) => setHeaderField("projectName", name)} />}
+        </div>
         </div>
       </div>
 

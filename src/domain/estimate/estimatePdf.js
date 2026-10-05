@@ -1,8 +1,17 @@
 import { jsPDF } from "jspdf";
-import { brandingLayout, companyLines, normalizeBranding } from "./branding.js";
+import { brandingLayout, companyLines, normalizeBranding, resolveLogoBox } from "./branding.js";
 import { estimateGrandTotal } from "./projectDocuments.js";
 import { includedLines, resolveVisibleTotals, TOTAL_OPTIONS } from "./presentation.js";
 import { estimateLineLaborCost } from "./manualLineLabor.js";
+
+export const DEFAULT_DOCUMENT_TITLE = "Electrical";
+export const LEGACY_DOCUMENT_TITLE = "Electrical Estimate";
+
+export function normalizeDocumentTitle(value) {
+  const text = String(value ?? "").trim();
+  if (!text || text === LEGACY_DOCUMENT_TITLE) return DEFAULT_DOCUMENT_TITLE;
+  return text;
+}
 
 const HIDDEN_LABELS = [
   "employee class",
@@ -74,8 +83,8 @@ export function estimatePresentation(estimate) {
         notes: "",
       }];
   return {
-    title: header.projectName || "Electrical Estimate",
-    documentTitle: design.documentTitle || "Electrical Estimate",
+    title: header.projectName || "",
+    documentTitle: normalizeDocumentTitle(design.documentTitle),
     subtitle: design.subtitle || "",
     estimateNumber: header.estimateNumber || "",
     projectAddress: header.projectAddress || "",
@@ -150,7 +159,26 @@ function wrap(doc, value, width) {
 export function buildEstimatePdf(estimate, brandingInput) {
   const branding = brandingLayout(normalizeBranding(brandingInput));
   const presentation = estimatePresentation(estimate);
-  const design = { showProjectCard: true, showScope: true, showDescription: true, showQuantity: true, showUnit: true, showMaterial: true, showLabor: true, showAmount: true, showNotes: true, showPageNumbers: true, tableStyle: "grid", density: "comfortable", titleSize: 18, bodySize: 9, margin: 40, footerText: "", ...(estimate?.pdfDesign || {}) };
+  const design = {
+    showProjectCard: true,
+    showScope: true,
+    showDescription: true,
+    showQuantity: true,
+    showUnit: true,
+    showMaterial: true,
+    showLabor: true,
+    showAmount: true,
+    showNotes: true,
+    showPageNumbers: true,
+    tableStyle: "grid",
+    density: "comfortable",
+    titleSize: 18,
+    bodySize: 9,
+    margin: 40,
+    footerText: "",
+    ...(estimate?.pdfDesign || {}),
+  };
+  design.documentTitle = normalizeDocumentTitle(design.documentTitle);
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   const margin = Math.max(20, Math.min(72, Number(design.margin) || 40));
   const page = { width: 612, height: 792, left: margin, right: 612 - margin };
@@ -203,9 +231,7 @@ export function buildEstimatePdf(estimate, brandingInput) {
     const logoPosition = ["left", "center", "right"].includes(design.logoPosition) ? design.logoPosition : "left";
     const logoOffsetX = Math.max(-180, Math.min(180, Number(design.logoOffsetX) || 0));
     const logoOffsetY = Math.max(-30, Math.min(30, Number(design.logoOffsetY) || 0));
-    const logoSize = Number(design.logoSizePt) > 0 ? Math.max(16, Math.min(140, Number(design.logoSizePt))) : branding.logo;
-    const logoWidth = Number(design.logoWidthPt) > 0 ? Math.max(16, Math.min(220, Number(design.logoWidthPt))) : logoSize;
-    const logoHeight = Number(design.logoHeightPt) > 0 ? Math.max(16, Math.min(140, Number(design.logoHeightPt))) : logoSize;
+    const { width: logoWidth, height: logoHeight } = resolveLogoBox(branding, design);
     let logoX = pad;
     if (logoPosition === "center") logoX = (page.width - logoWidth) / 2;
     if (logoPosition === "right") logoX = page.width - pad - logoWidth;

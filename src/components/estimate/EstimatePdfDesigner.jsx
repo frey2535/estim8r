@@ -1,9 +1,13 @@
 import React, { useMemo, useState } from "react";
 import { Eye, EyeOff, RotateCcw } from "lucide-react";
+import { DEFAULT_DOCUMENT_TITLE, normalizeDocumentTitle } from "@/domain/estimate/estimatePdf";
+import CompanyLogo from "./CompanyLogo";
 import EstimatePdfPreview from "./EstimatePdfPreview";
+import LogoStretchControls from "./LogoStretchControls";
+import { readCompanyBranding } from "@/domain/estimate/branding";
 
 export const DEFAULT_PDF_DESIGN = {
-  documentTitle: "Electrical Estimate",
+  documentTitle: DEFAULT_DOCUMENT_TITLE,
   subtitle: "",
   showProjectCard: true,
   showScope: true,
@@ -31,6 +35,8 @@ export const DEFAULT_PDF_DESIGN = {
   logoSizePt: 0,
   logoWidthPt: 0,
   logoHeightPt: 0,
+  logoStretchX: 0,
+  logoStretchY: 0,
   headerTitle: "",
   headerDetails: "",
   hideHeaderTitle: false,
@@ -44,7 +50,11 @@ export const DEFAULT_PDF_DESIGN = {
 };
 
 export function normalizePdfDesign(value = {}) {
-  return { ...DEFAULT_PDF_DESIGN, ...(value && typeof value === "object" ? value : {}) };
+  const next = { ...DEFAULT_PDF_DESIGN, ...(value && typeof value === "object" ? value : {}) };
+  next.documentTitle = normalizeDocumentTitle(next.documentTitle);
+  next.logoStretchX = Number(next.logoStretchX) || 0;
+  next.logoStretchY = Number(next.logoStretchY) || 0;
+  return next;
 }
 
 export default function EstimatePdfDesigner({ estimate, design, onChange }) {
@@ -52,6 +62,9 @@ export default function EstimatePdfDesigner({ estimate, design, onChange }) {
   const value = useMemo(() => normalizePdfDesign(design), [design]);
   const patch = (key, next) => onChange?.({ ...value, [key]: next });
   const previewEstimate = useMemo(() => ({ ...estimate, pdfDesign: value }), [estimate, value]);
+  const branding = readCompanyBranding();
+  const stretchX = value.logoStretchX || branding.logoStretchX;
+  const stretchY = value.logoStretchY || branding.logoStretchY;
 
   return <section className="rounded-2xl border border-border bg-card shadow-sm">
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
@@ -65,8 +78,36 @@ export default function EstimatePdfDesigner({ estimate, design, onChange }) {
           <Text label="Subtitle" value={value.subtitle} set={(v)=>patch("subtitle",v)} />
           <Text label="Footer text" value={value.footerText} set={(v)=>patch("footerText",v)} />
         </Group>
-        <Group title="Header">\n          <Toggle label="Show header" value={value.showHeader !== false} set={(v)=>patch("showHeader",v)} />\n          <Text label="Header title override" value={value.headerTitle} set={(v)=>patch("headerTitle",v)} />\n          <Toggle label="Show header title" value={!value.hideHeaderTitle} set={(v)=>patch("hideHeaderTitle",!v)} />\n          <Text label="Header details override" value={value.headerDetails} set={(v)=>patch("headerDetails",v)} />\n          <Toggle label="Show header details" value={!value.hideHeaderDetails} set={(v)=>patch("hideHeaderDetails",!v)} />\n          <Select label="Company text alignment" value={value.headerCompanyAlign || "left"} set={(v)=>patch("headerCompanyAlign",v)} options={[["left","Left"],["center","Center"],["right","Right"]]} />\n          <Select label="Logo position" value={value.logoPosition || "left"} set={(v)=>patch("logoPosition",v)} options={[["left","Left"],["center","Center"],["right","Right"]]} />\n          <Range label={"Logo proportional size · "+(value.logoSizePt || 0)+" pt"+(value.logoSizePt ? "" : " (company default)")} min={0} max={140} value={value.logoSizePt || 0} set={(v)=>patch("logoSizePt",Number(v))} />\n          <Range label={"Logo width · "+(value.logoWidthPt || 0)+" pt"+(value.logoWidthPt ? "" : " (auto)")} min={0} max={220} value={value.logoWidthPt || 0} set={(v)=>patch("logoWidthPt",Number(v))} />\n          <Range label={"Logo height · "+(value.logoHeightPt || 0)+" pt"+(value.logoHeightPt ? "" : " (auto)")} min={0} max={140} value={value.logoHeightPt || 0} set={(v)=>patch("logoHeightPt",Number(v))} />\n          <Range label={"Logo horizontal · "+(value.logoOffsetX || 0)+" pt"} min={-180} max={180} value={value.logoOffsetX || 0} set={(v)=>patch("logoOffsetX",Number(v))} />\n          <Range label={"Logo vertical · "+(value.logoOffsetY || 0)+" pt"} min={-30} max={30} value={value.logoOffsetY || 0} set={(v)=>patch("logoOffsetY",Number(v))} />\n        </Group>\n        <Group title="Sections">
-          <Toggle label="Project & customer card" value={value.showProjectCard} set={(v)=>patch("showProjectCard",v)} />\n          <Toggle label="Company contact card" value={value.showCompanyCard !== false} set={(v)=>patch("showCompanyCard",v)} />\n          <Text label="Employee name" value={value.companyEmployeeName} set={(v)=>patch("companyEmployeeName",v)} />\n          <Text label="Employee title" value={value.companyEmployeeTitle} set={(v)=>patch("companyEmployeeTitle",v)} />\n          <Text label="Employee email" value={value.companyEmployeeEmail} set={(v)=>patch("companyEmployeeEmail",v)} />\n          <Text label="Employee phone" value={value.companyEmployeePhone} set={(v)=>patch("companyEmployeePhone",v)} />
+        <Group title="Header">
+          <Toggle label="Show header" value={value.showHeader !== false} set={(v)=>patch("showHeader",v)} />
+          <Text label="Header title override" value={value.headerTitle} set={(v)=>patch("headerTitle",v)} />
+          <Toggle label="Show header title" value={!value.hideHeaderTitle} set={(v)=>patch("hideHeaderTitle",!v)} />
+          <Text label="Header details override" value={value.headerDetails} set={(v)=>patch("headerDetails",v)} />
+          <Toggle label="Show header details" value={!value.hideHeaderDetails} set={(v)=>patch("hideHeaderDetails",!v)} />
+          <Select label="Company text alignment" value={value.headerCompanyAlign || "left"} set={(v)=>patch("headerCompanyAlign",v)} options={[["left","Left"],["center","Center"],["right","Right"]]} />
+          <Select label="Logo position" value={value.logoPosition || "left"} set={(v)=>patch("logoPosition",v)} options={[["left","Left"],["center","Center"],["right","Right"]]} />
+          <div className="rounded-lg border border-border bg-muted/30 p-2">
+            <p className="mb-2 text-xs font-bold">Logo stretch preview</p>
+            <CompanyLogo branding={branding} design={value} />
+          </div>
+          <LogoStretchControls
+            stretchX={stretchX}
+            stretchY={stretchY}
+            onChange={(key, next) => patch(key, next)}
+          />
+          <Range label={"Logo proportional size · "+(value.logoSizePt || 0)+" pt"+(value.logoSizePt ? "" : " (company default)")} min={0} max={140} value={value.logoSizePt || 0} set={(v)=>patch("logoSizePt",Number(v))} />
+          <Range label={"Logo width override · "+(value.logoWidthPt || 0)+" pt"+(value.logoWidthPt ? "" : " (use horizontal stretch)")} min={0} max={280} value={value.logoWidthPt || 0} set={(v)=>patch("logoWidthPt",Number(v))} />
+          <Range label={"Logo height override · "+(value.logoHeightPt || 0)+" pt"+(value.logoHeightPt ? "" : " (use vertical stretch)")} min={0} max={200} value={value.logoHeightPt || 0} set={(v)=>patch("logoHeightPt",Number(v))} />
+          <Range label={"Logo horizontal · "+(value.logoOffsetX || 0)+" pt"} min={-180} max={180} value={value.logoOffsetX || 0} set={(v)=>patch("logoOffsetX",Number(v))} />
+          <Range label={"Logo vertical · "+(value.logoOffsetY || 0)+" pt"} min={-30} max={30} value={value.logoOffsetY || 0} set={(v)=>patch("logoOffsetY",Number(v))} />
+        </Group>
+        <Group title="Sections">
+          <Toggle label="Project & customer card" value={value.showProjectCard} set={(v)=>patch("showProjectCard",v)} />
+          <Toggle label="Company contact card" value={value.showCompanyCard !== false} set={(v)=>patch("showCompanyCard",v)} />
+          <Text label="Employee name" value={value.companyEmployeeName} set={(v)=>patch("companyEmployeeName",v)} />
+          <Text label="Employee title" value={value.companyEmployeeTitle} set={(v)=>patch("companyEmployeeTitle",v)} />
+          <Text label="Employee email" value={value.companyEmployeeEmail} set={(v)=>patch("companyEmployeeEmail",v)} />
+          <Text label="Employee phone" value={value.companyEmployeePhone} set={(v)=>patch("companyEmployeePhone",v)} />
           <Toggle label="Scope notes" value={value.showScope} set={(v)=>patch("showScope",v)} />
           <Toggle label="Line notes" value={value.showNotes} set={(v)=>patch("showNotes",v)} />
           <Toggle label="Page numbers" value={value.showPageNumbers} set={(v)=>patch("showPageNumbers",v)} />\n          <Toggle label="Contractor & customer signatures" value={value.showSignatures !== false} set={(v)=>patch("showSignatures",v)} />

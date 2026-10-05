@@ -38,6 +38,8 @@ export const DEFAULT_BRANDING = {
   headerSize: "medium",
   cardSize: "comfortable",
   logoSize: "medium",
+  logoStretchX: 100,
+  logoStretchY: 100,
 };
 
 const HEX = /^#([0-9a-f]{6})$/i;
@@ -53,6 +55,12 @@ function color(value, fallback) {
 
 function oneOf(value, options, fallback) {
   return options.some((option) => option.id === value) ? value : fallback;
+}
+
+export function clampLogoStretch(value, fallback = DEFAULT_BRANDING.logoStretchX) {
+  const next = Number(value);
+  if (!Number.isFinite(next) || next <= 0) return fallback;
+  return Math.max(20, Math.min(400, Math.round(next)));
 }
 
 export function normalizeBranding(input = {}) {
@@ -77,6 +85,8 @@ export function normalizeBranding(input = {}) {
     headerSize: oneOf(source.headerSize, SIZE_OPTIONS, DEFAULT_BRANDING.headerSize),
     cardSize: oneOf(source.cardSize, CARD_SIZE_OPTIONS, DEFAULT_BRANDING.cardSize),
     logoSize: oneOf(source.logoSize, SIZE_OPTIONS, DEFAULT_BRANDING.logoSize),
+    logoStretchX: clampLogoStretch(source.logoStretchX),
+    logoStretchY: clampLogoStretch(source.logoStretchY),
   };
 }
 
@@ -87,7 +97,29 @@ export function brandingLayout(branding = DEFAULT_BRANDING) {
   const cardRadius = { compact: 6, comfortable: 10, spacious: 14 }[next.cardSize];
   const logo = { small: 36, medium: 52, large: 72 }[next.logoSize];
   const font = FONT_OPTIONS.find((option) => option.id === next.fontFamily)?.pdf || "helvetica";
-  return { ...next, headerHeight, cardPad, cardRadius, logo, font };
+  const logoWidth = Math.max(8, logo * next.logoStretchX / 100);
+  const logoHeight = Math.max(8, logo * next.logoStretchY / 100);
+  return { ...next, headerHeight, cardPad, cardRadius, logo, logoWidth, logoHeight, font };
+}
+
+export function resolveLogoBox(brandingInput = DEFAULT_BRANDING, design = {}) {
+  const branding = brandingLayout(brandingInput);
+  const base = Number(design.logoSizePt) > 0
+    ? Math.max(16, Math.min(140, Number(design.logoSizePt)))
+    : branding.logo;
+  const stretchX = Number(design.logoStretchX) > 0
+    ? clampLogoStretch(design.logoStretchX)
+    : branding.logoStretchX;
+  const stretchY = Number(design.logoStretchY) > 0
+    ? clampLogoStretch(design.logoStretchY)
+    : branding.logoStretchY;
+  const width = Number(design.logoWidthPt) > 0
+    ? Math.max(16, Math.min(280, Number(design.logoWidthPt)))
+    : Math.max(8, base * stretchX / 100);
+  const height = Number(design.logoHeightPt) > 0
+    ? Math.max(16, Math.min(200, Number(design.logoHeightPt)))
+    : Math.max(8, base * stretchY / 100);
+  return { width, height, stretchX, stretchY, base };
 }
 
 function storage() {

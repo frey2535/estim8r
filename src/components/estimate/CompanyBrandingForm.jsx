@@ -9,6 +9,8 @@ import {
   readCompanyBranding,
   writeCompanyBranding,
 } from "@/domain/estimate/branding";
+import CompanyLogo from "./CompanyLogo";
+import LogoStretchControls from "./LogoStretchControls";
 
 function ColorField({ label, value, onChange }) {
   return (
@@ -60,7 +62,13 @@ export default function CompanyBrandingForm({ showEstimateLink = false }) {
   }, []);
 
   function patch(key, value) {
-    setBranding((current) => ({ ...current, [key]: value }));
+    setBranding((current) => {
+      const next = { ...current, [key]: value };
+      if (key === "logoStretchX" || key === "logoStretchY") {
+        return writeCompanyBranding(next);
+      }
+      return next;
+    });
     setStatus("");
   }
 
@@ -130,19 +138,20 @@ export default function CompanyBrandingForm({ showEstimateLink = false }) {
 
       <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
         <h3 className="mb-3 text-sm font-bold">Company logo</h3>
-        <div className="flex flex-wrap items-center gap-4">
-          {branding.logoDataUrl ? (
-            <img src={branding.logoDataUrl} alt="Company logo" className="h-16 w-16 rounded-lg border border-border object-contain bg-white" />
-          ) : (
-            <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-border text-xs text-muted-foreground">No logo</div>
-          )}
-          <div className="space-y-2">
+        <div className="flex flex-wrap items-start gap-4">
+          <CompanyLogo branding={branding} />
+          <div className="min-w-[14rem] flex-1 space-y-3">
             <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => void onLogo(e)} className="block text-sm" />
             {branding.logoDataUrl ? (
               <button type="button" onClick={() => patch("logoDataUrl", "")} className="text-sm font-semibold text-destructive">
                 Remove logo
               </button>
             ) : null}
+            <LogoStretchControls
+              stretchX={branding.logoStretchX}
+              stretchY={branding.logoStretchY}
+              onChange={patch}
+            />
           </div>
         </div>
       </section>
@@ -164,8 +173,9 @@ export default function CompanyBrandingForm({ showEstimateLink = false }) {
           <SelectField label="Logo size" value={branding.logoSize} options={SIZE_OPTIONS} onChange={(v) => patch("logoSize", v)} />
         </div>
         <div className="mt-4 overflow-hidden rounded-xl border border-border">
-          <div className="px-4 py-3 text-sm font-bold" style={{ background: branding.headerColor, color: branding.headerTextColor }}>
-            {branding.companyName || "Company header preview"}
+          <div className="flex items-center gap-3 px-4 py-3 text-sm font-bold" style={{ background: branding.headerColor, color: branding.headerTextColor }}>
+            <CompanyLogo branding={branding} />
+            <span>{branding.companyName || "Company header preview"}</span>
           </div>
           <div className="p-4 text-sm" style={{ background: branding.pageColor, color: branding.textColor }}>
             <div className="rounded-lg" style={{ background: branding.cardColor, padding: branding.cardSize === "compact" ? 8 : branding.cardSize === "spacious" ? 20 : 14 }}>

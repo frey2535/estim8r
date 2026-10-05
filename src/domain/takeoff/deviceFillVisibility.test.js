@@ -5,7 +5,7 @@ import { buildAiMarks } from "./aiTakeoff.js";
 import {
   MAX_FIXTURE_FILL,
   applyDeviceTypeColors,
-  deviceOutline,
+  displayDeviceOutline,
   isCircuitMark,
   isDeviceMark,
   maxFillExtent,
@@ -36,14 +36,14 @@ const planned = buildAiMarks({
   maxHomeruns: 8,
 });
 const colored = applyDeviceTypeColors(planned.marks || []);
-const devices = colored.filter(isDeviceMark);
+const devices = planOverlayMarks(colored).filter(isDeviceMark);
 assert(devices.length >= 8, `Pottsville AI must count devices, got ${devices.length}`);
 
 const powerPages = (fixture.pages || []).filter((page) => /power/i.test(`${page.title || ""} ${page.kind || ""}`));
 assert(powerPages.length >= 1, "fixture includes a power sheet");
 
 for (const mark of devices) {
-  const outline = deviceOutline(mark);
+  const outline = displayDeviceOutline(mark);
   const extent = outlineExtent(outline);
   const color = readableFillColor(mark.color);
   const cap = maxFillExtent(mark);
@@ -56,7 +56,7 @@ for (const mark of devices) {
 }
 
 for (const page of powerPages) {
-  const sheetMarks = colored.filter((mark) => (mark.sheet || 1) === page.page);
+  const sheetMarks = planOverlayMarks(colored.filter((mark) => (mark.sheet || 1) === page.page));
   const overlay = planOverlayMarks(sheetMarks);
   const sheetDevices = overlay.filter(isDeviceMark);
   if (!sheetDevices.length) continue;

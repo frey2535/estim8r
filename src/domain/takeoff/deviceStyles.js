@@ -291,16 +291,28 @@ export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
 
 export function displayDeviceOutline(mark, markerSize = 0.55, options = {}) {
   const outline = deviceOutline(mark, markerSize, options);
-  if (!outline) return null;
+  if (!outline) {
+    // A classified, bid-counted AI device may have a reliable body location
+    // even when PDF extraction cannot recover its exact vector perimeter.
+    // Paint a compact locator at that body instead of silently showing no
+    // mark at all. UNKNOWN/review candidates remain excluded from the plan.
+    const x = Number(mark?.symbolBodyLocation?.x ?? mark?.x);
+    const y = Number(mark?.symbolBodyLocation?.y ?? mark?.y);
+    if (mark?.source !== "ai" || isReviewOnlyMark(mark) || !isDeviceMark(mark)
+      || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+    return { kind: "circle", cx: x, cy: y, r: DEVICE_CHIP_R, source: "location-fallback" };
+  }
   const displayMax = isFixtureDevice(mark)
     ? MAX_DISPLAY_FIXTURE_FILL
     : isPointDevice(mark) ? MAX_DISPLAY_POINT_FILL : MAX_DISPLAY_GENERIC_FILL;
   const extent = outlineExtent(outline);
-  if (!extent || extent <= displayMax) return outline;
   const origin = {
     x: Number(mark?.symbolBodyLocation?.x ?? mark?.x) || 0,
     y: Number(mark?.symbolBodyLocation?.y ?? mark?.y) || 0,
   };
+  if (!extent) return outline;
+  if (extent < MIN_VISIBLE_FILL) return scaleOutline(outline, MIN_VISIBLE_FILL / extent, origin);
+  if (extent <= displayMax) return outline;
   return scaleOutline(outline, displayMax / extent, origin);
 }
 

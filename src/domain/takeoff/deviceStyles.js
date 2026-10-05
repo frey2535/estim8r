@@ -2,13 +2,18 @@ import { isReviewOnlyMark } from "./detectionRecord.js";
 import { isCanDeviceText } from "./symbolDetection.js";
 import { pointHitsOutline, scaleOutline } from "./vectorSymbols.js";
 
-export const DEVICE_FILL_OPACITY = 0.45;
+// Detection color should identify a symbol, not replace the printed symbol
+// with a solid block that hides the drawing underneath.
+export const DEVICE_FILL_OPACITY = 0.2;
 export const MIN_VISIBLE_FILL = 0.28;
 export const MAX_POINT_FILL = 0.55;
 export const MAX_FIXTURE_FILL = 1.65;
 export const MAX_GENERIC_FILL = 0.95;
-export const DEVICE_CHIP_R = 0.2;
-export const DEVICE_FILL_STROKE_PX = 1;
+export const DEVICE_CHIP_R = 0.16;
+export const DEVICE_FILL_STROKE_PX = 1.25;
+export const MAX_DISPLAY_POINT_FILL = 0.42;
+export const MAX_DISPLAY_FIXTURE_FILL = 0.9;
+export const MAX_DISPLAY_GENERIC_FILL = 0.62;
 export const CIRCUIT_COLOR = "#64748b";
 export const SELECTED_OUTLINE_SCALE = 1;
 
@@ -50,6 +55,18 @@ export function isCircuitMark(mark) {
     || mark?.tool === "circuit"
     || mark?.type === "homerun"
     || (mark?.type === "route" && mark?.tool !== "polyline");
+}
+
+export function markBelongsToTrade(mark, trade) {
+  if (!mark || !trade) return true;
+  // Old saved electrical takeoffs predate the trade field. Preserve those,
+  // but never leak a positively identified different trade into the view.
+  const markTrade = String(mark.trade || "electrical").toLowerCase();
+  return markTrade === String(trade).toLowerCase();
+}
+
+export function marksForTrade(marks, trade) {
+  return (marks || []).filter((mark) => markBelongsToTrade(mark, trade));
 }
 
 export function planOverlayMarks(marks, options = {}) {
@@ -270,6 +287,21 @@ export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
 
   // Generic shapes are reserved for intentional manual marks only.
   return genericDeviceOutline(mark, markerSize);
+}
+
+export function displayDeviceOutline(mark, markerSize = 0.55, options = {}) {
+  const outline = deviceOutline(mark, markerSize, options);
+  if (!outline) return null;
+  const displayMax = isFixtureDevice(mark)
+    ? MAX_DISPLAY_FIXTURE_FILL
+    : isPointDevice(mark) ? MAX_DISPLAY_POINT_FILL : MAX_DISPLAY_GENERIC_FILL;
+  const extent = outlineExtent(outline);
+  if (!extent || extent <= displayMax) return outline;
+  const origin = {
+    x: Number(mark?.symbolBodyLocation?.x ?? mark?.x) || 0,
+    y: Number(mark?.symbolBodyLocation?.y ?? mark?.y) || 0,
+  };
+  return scaleOutline(outline, displayMax / extent, origin);
 }
 
 export function hitTestDeviceFill(mark, point, markerSize = 0.55) {

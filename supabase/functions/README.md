@@ -12,7 +12,7 @@ Required secrets (set only the catalogs you use):
 - `ELEMENT14_API_KEY`, optional `ELEMENT14_STORE_ID` (default `us`)
 
 ```bash
-supabase functions deploy search-supplier-catalog
+supabase functions deploy search-supplier-catalog --project-ref gqdxvctvufalunaaopyj
 ```
 
-The function requires a signed-in `Authorization` header. Empty credentials return no prices; it does not invent them.
+Do not run `supabase db push` of Estim8r migrations against this shared project. The function requires a signed-in `Authorization` header. Empty credentials return no prices; it does not invent them.

@@ -1,33 +1,61 @@
 import { requireSupabase, supabase } from "./supabaseClient";
+import {
+  LIVE_CATALOG_DEV_PROXY,
+  LIVE_CATALOG_FUNCTION,
+  isStaticHostCatalogRejection,
+  shouldUseLiveCatalogDevProxy,
+} from "./liveSupplierCatalogHost";
 
-export const LIVE_CATALOG_DEV_PROXY = "/api/live-supplier-catalog";
+export { LIVE_CATALOG_DEV_PROXY, LIVE_CATALOG_FUNCTION };
 
-async function readJson(response) {
+function currentHostname() {
+  if (typeof window === "undefined") return "";
+  return window.location.hostname || "";
+}
+
+async function parseCatalogResponse(response) {
   const text = await response.text();
   try {
-    return text ? JSON.parse(text) : {};
+    return { json: true, payload: text ? JSON.parse(text) : {}, text };
   } catch {
-    throw new Error(text || "Live catalog returned a non-JSON response.");
+    return { json: false, payload: null, text };
   }
+}
+
+async function searchViaDevProxy(body) {
+  const response = await fetch(LIVE_CATALOG_DEV_PROXY, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body),
+  });
+  const parsed = await parseCatalogResponse(response);
+  if (isStaticHostCatalogRejection(response, parsed.text)) {
+    return null;
+  }
+  if (parsed.json && (response.ok || parsed.payload?.configured || Array.isArray(parsed.payload?.results))) {
+    return parsed.payload;
+  }
+  if (parsed.json) {
+    throw new Error(parsed.payload?.message || `Live catalog search failed (${response.status}).`);
+  }
+  throw new Error("Live catalog returned a non-JSON response.");
 }
 
 export async function searchLiveSupplierCatalog({ query, quantity = 1, limit = 8 } = {}) {
   const body = { query, quantity, limit };
-  try {
-    const response = await fetch(LIVE_CATALOG_DEV_PROXY, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (response.ok) return readJson(response);
-    if (response.status !== 404) {
-      const payload = await readJson(response);
-      if (payload?.configured || Array.isArray(payload?.results)) return payload;
-      throw new Error(payload?.message || `Live catalog search failed (${response.status}).`);
-    }
-  } catch (error) {
-    if (error?.message && !/fetch|Failed|Network|404/i.test(error.message) && !error.message.includes("non-JSON")) {
-      throw error;
+  const useProxy = shouldUseLiveCatalogDevProxy({
+    isDev: Boolean(import.meta.env?.DEV),
+    hostname: currentHostname(),
+  });
+
+  if (useProxy) {
+    try {
+      const proxied = await searchViaDevProxy(body);
+      if (proxied) return proxied;
+    } catch (error) {
+      if (error?.message && !/fetch|Failed|Network|404|405|non-JSON/i.test(error.message)) {
+        throw error;
+      }
     }
   }
 
@@ -41,7 +69,7 @@ export async function searchLiveSupplierCatalog({ query, quantity = 1, limit = 8
     };
   }
 
-  const { data, error } = await requireSupabase().functions.invoke("search-supplier-catalog", { body });
+  const { data, error } = await requireSupabase().functions.invoke(LIVE_CATALOG_FUNCTION, { body });
   if (error) {
     throw new Error(error.message || "Live catalog search failed.");
   }

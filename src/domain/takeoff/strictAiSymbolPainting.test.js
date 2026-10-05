@@ -1,4 +1,4 @@
-import { deviceOutline, planOverlayMarks } from "./deviceStyles.js";
+import { deviceOutline, displayDeviceOutline, planOverlayMarks } from "./deviceStyles.js";
 
 function assert(condition, message) {
   if (!condition) {
@@ -66,6 +66,9 @@ const manual = {
 assert(!planOverlayMarks([review, aiVector]).some((mark) => mark.id === "review"), "review candidates must not paint on normal plan");
 assert(deviceOutline(aiWithoutGeometry) === null, "AI without symbol-body geometry must not paint a fallback mark");
 assert(deviceOutline(aiTextOnly) === null, "text-only AI detection must not paint a fallback mark");
+assert(displayDeviceOutline(aiWithoutGeometry)?.kind === "circle", "accepted AI detection without geometry gets a compact visible locator");
+assert(displayDeviceOutline(aiTextOnly)?.kind === "circle", "accepted text-located AI detection gets a compact visible locator");
+assert(displayDeviceOutline(review) === null, "review-only AI candidates remain hidden from the plan");
 
 const outline = deviceOutline(aiVector);
 assert(outline, "trusted vector AI symbol must paint");

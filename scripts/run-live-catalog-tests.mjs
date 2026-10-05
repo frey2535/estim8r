@@ -12,6 +12,10 @@ import {
   pickUnitPrice,
 } from "../src/domain/estimate/liveSupplierCatalog.js";
 import { searchLiveSupplierCatalogs } from "../src/domain/estimate/liveSupplierCatalogSearch.js";
+import {
+  isStaticHostCatalogRejection,
+  shouldUseLiveCatalogDevProxy,
+} from "../src/api/liveSupplierCatalogHost.js";
 
 assert.equal(money(null), null);
 assert.equal(money("n/a"), null);
@@ -79,5 +83,8 @@ assert.equal(normalizeNexarResponse({
 assert.equal(normalizeElement14Response({
   keywordSearchReturn: { products: [{ sku: "11X123", translatedManufacturerPartNumber: "WH20-14", displayName: "THHN 14 AWG", prices: [{ from: 1, cost: 0.18 }] }] },
 })[0].unitCost, 0.18);
+
+assert.equal(shouldUseLiveCatalogDevProxy({ isDev: false, hostname: "estim8r.currentflowconsulting.org" }), false);
+assert.equal(isStaticHostCatalogRejection({ status: 405 }, "<html><head><title>405 Not Allowed</title></head></html>"), true);
 
 console.log("live catalog tests passed");

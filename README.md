@@ -29,9 +29,9 @@ Estimate Builder → **Supplier Prices** searches official distributor catalogs 
 
 Do **not** prefix these with `VITE_`. Keys stay on the server.
 
-Local (`npm run dev`): the Vite proxy at `/api/live-supplier-catalog` reads the secrets from `.env` / `.env.local`.
+Local (`npm run dev`): the Vite proxy at `POST /api/live-supplier-catalog` reads the secrets from `.env` / `.env.local`. GitHub Pages (and its Fastly/nginx edge) only serves GET/HEAD, so that same POST on `https://estim8r.currentflowconsulting.org/api/live-supplier-catalog` returns `405 Not Allowed`. Production never uses that path.
 
-Production: store the same names as Supabase function secrets and deploy the proxy:
+Production: the Supplier Prices tab calls the `search-supplier-catalog` Edge Function. Store the same secret names and deploy the function (do not `supabase db push` the Estim8r migration history onto the shared project):
 
 ```bash
 supabase secrets set MOUSER_API_KEY=...

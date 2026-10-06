@@ -58,7 +58,7 @@ VITE_BUILDR_URL=http://localhost:5173
 VITE_BUILDR_API_URL=http://localhost:3001
 ```
 
-GitHub Pages builds pass `VITE_BUILDR_URL` and `VITE_BUILDR_API_URL` from repository secrets. A production build without those values falls back to `https://buildrpm.com` so Save can still POST `/estim8r/account-status` and `/estim8r/save-project-docs`.
+GitHub Pages builds pass `VITE_BUILDR_URL` and `VITE_BUILDR_API_URL` from repository secrets. A production build without those values — or with localhost secrets left over from local README examples — falls back to `https://buildrpm.com` so `/from-buildr` SSO verify and Save can still POST `/functions/verifyFamilyAppSSOToken`, `/estim8r/account-status`, and `/estim8r/save-project-docs`. Local `npm run dev` still uses localhost.
 
 `/from-buildr` is the company landing from the Buildr sidebar. It reuses the existing Buildr SSO verify endpoint plus email / company ID. Employees with an Access Control grant enter the company Estim8r; they do not download or install their own copy. This does not require `supabase db push` of full migration history.
 

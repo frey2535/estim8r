@@ -2,8 +2,13 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { verifyBuildrFamilyAppSso } from "@/api/buildrBridge";
 import { persistBuildrCompanyId } from "@/lib/buildrCompany";
-import { buildrFamilyAccessCopy, writeBuildrFamilyAccess } from "@/lib/buildrFamilyAccess";
-import { normalizeEmail } from "@/lib/platformIdentity";
+import {
+  buildrFamilyAccessCopy,
+  canEnterCompanyEstim8r,
+  readBuildrHandoffParams,
+  writeBuildrFamilyAccess,
+} from "@/lib/buildrFamilyAccess";
+import { hasPlatformAccess, normalizeEmail } from "@/lib/platformIdentity";
 import { useAuth } from "@/lib/AuthContext";
 import AuthLayout from "@/components/AuthLayout";
 import { Button } from "@/components/ui/button";
@@ -11,7 +16,7 @@ import { Button } from "@/components/ui/button";
 export default function FromBuildr() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const { isAuthenticated, isLoadingAuth, user, checkAppState } = useAuth();
+  const { isAuthenticated, isLoadingAuth, user, checkAppState, hasProductAccess } = useAuth();
   const [status, setStatus] = useState("checking");
   const [copy, setCopy] = useState(buildrFamilyAccessCopy(""));
 
@@ -19,11 +24,29 @@ export default function FromBuildr() {
     let cancelled = false;
 
     async function enterCompanyApp() {
-      const token = String(params.get("sso_token") || "").trim();
-      const companyId = String(params.get("company_id") || "").trim();
-      const emailHint = normalizeEmail(params.get("email"));
+      const search = typeof window !== "undefined" ? window.location.search : params.toString();
+      const hash = typeof window !== "undefined" ? window.location.hash : "";
+      const handoff = readBuildrHandoffParams(search, hash);
+      const token = handoff.token;
+      const companyId = handoff.companyId;
+      const emailHint = handoff.email;
+      const alreadyInCompany = canEnterCompanyEstim8r({
+        isAuthenticated,
+        hasProductAccess,
+        hasPlatformAccess: hasPlatformAccess(user),
+        user,
+      });
 
       if (!token) {
+        if (isLoadingAuth) return;
+        if (alreadyInCompany) {
+          if (companyId) {
+            writeBuildrFamilyAccess({ email: user.email, companyId });
+            await persistBuildrCompanyId(companyId, user);
+          }
+          navigate("/", { replace: true });
+          return;
+        }
         if (!cancelled) {
           setCopy(buildrFamilyAccessCopy(""));
           setStatus("error");
@@ -35,6 +58,15 @@ export default function FromBuildr() {
       if (cancelled) return;
 
       if (!verified?.valid) {
+        if (isLoadingAuth) return;
+        if (alreadyInCompany) {
+          if (companyId) {
+            writeBuildrFamilyAccess({ email: user.email, companyId });
+            await persistBuildrCompanyId(companyId, user);
+          }
+          navigate("/", { replace: true });
+          return;
+        }
         setCopy(buildrFamilyAccessCopy(verified?.error));
         setStatus("error");
         return;
@@ -43,6 +75,14 @@ export default function FromBuildr() {
       const email = normalizeEmail(verified.email || emailHint);
       const resolvedCompanyId = String(verified.company_id || companyId || "").trim();
       if (!email || !resolvedCompanyId) {
+        if (alreadyInCompany && (email || user?.email) && (resolvedCompanyId || companyId)) {
+          const fallbackEmail = email || normalizeEmail(user.email);
+          const fallbackCompanyId = resolvedCompanyId || companyId;
+          writeBuildrFamilyAccess({ email: fallbackEmail, companyId: fallbackCompanyId });
+          await persistBuildrCompanyId(fallbackCompanyId, user);
+          navigate("/", { replace: true });
+          return;
+        }
         setCopy(buildrFamilyAccessCopy(""));
         setStatus("error");
         return;
@@ -53,7 +93,7 @@ export default function FromBuildr() {
       if (isLoadingAuth) return;
 
       if (isAuthenticated && user?.email) {
-        if (normalizeEmail(user.email) !== email) {
+        if (normalizeEmail(user.email) !== email && !hasPlatformAccess(user) && !alreadyInCompany) {
           setCopy(buildrFamilyAccessCopy("email_mismatch"));
           setStatus("error");
           return;
@@ -71,7 +111,7 @@ export default function FromBuildr() {
     return () => {
       cancelled = true;
     };
-  }, [params, isAuthenticated, isLoadingAuth, user, checkAppState, navigate]);
+  }, [params, isAuthenticated, isLoadingAuth, user, hasProductAccess, checkAppState, navigate]);
 
   if (status === "error") {
     return (

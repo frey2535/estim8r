@@ -92,3 +92,35 @@ export function hasBuildrCompanyGrant(user, store = storage(), now = Date.now())
   }
   return access.email === normalizeEmail(user?.email);
 }
+
+export function readBuildrHandoffParams(search = "", hash = "") {
+  const query = new URLSearchParams(String(search || "").replace(/^\?/, ""));
+  const fragment = new URLSearchParams(String(hash || "").replace(/^#/, ""));
+  const first = (...keys) => {
+    for (const source of [query, fragment]) {
+      for (const key of keys) {
+        const value = String(source.get(key) || "").trim();
+        if (value) return value;
+      }
+    }
+    return "";
+  };
+  return {
+    token: first("sso_token", "token"),
+    companyId: first("company_id", "app_tenant_binding_company_id"),
+    email: normalizeEmail(first("email")),
+    returnApp: first("returnApp"),
+  };
+}
+
+export function canEnterCompanyEstim8r({
+  isAuthenticated,
+  hasProductAccess,
+  hasPlatformAccess = false,
+  user,
+  store = storage(),
+  now = Date.now(),
+} = {}) {
+  if (!isAuthenticated || !user?.email) return false;
+  return Boolean(hasProductAccess || hasPlatformAccess || hasBuildrCompanyGrant(user, store, now));
+}

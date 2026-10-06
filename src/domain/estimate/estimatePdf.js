@@ -228,7 +228,7 @@ export function buildEstimatePdf(estimate, brandingInput) {
   };
   design.documentTitle = normalizeDocumentTitle(design.documentTitle);
 
-  const headerBg = rgbTuple(branding.headerColor, [17, 24, 39]);
+  const headerBg = rgbTuple(design.headerFillColor || branding.headerColor, [17, 24, 39]);
   const darkHeader = isDarkRgb(headerBg);
   const headerText = darkHeader ? [255, 255, 255] : [17, 24, 39];
   const headerSub = darkHeader ? [209, 213, 219] : [55, 65, 81];
@@ -239,6 +239,7 @@ export function buildEstimatePdf(estimate, brandingInput) {
   const stripe = [249, 250, 251];
   const cardFill = rgbTuple(design.cardFillColor || branding.cardColor || "#f8fafc", [248, 250, 252]);
   const pageBorder = rgbTuple(design.pageBorderColor || "#111827", [17, 24, 39]);
+  const headerBorder = rgbTuple(design.headerBorderColor || "#111827", [17, 24, 39]);
   const font = branding.font;
   const baseSize = Math.min(10, Math.max(9, Number(design.bodySize) || 10));
 
@@ -312,6 +313,15 @@ export function buildEstimatePdf(estimate, brandingInput) {
   if (showHeader) {
     doc.setFillColor(...headerBg);
     doc.rect(0, 0, pageW, headerH, "F");
+    if (design.headerBorderEnabled) {
+      const lineWidth = Math.max(0.25, Number(design.headerBorderWidth) || 1);
+      doc.setDrawColor(...headerBorder);
+      doc.setLineWidth(lineWidth);
+      // Keep the entire stroke visible on the page instead of clipping half
+      // of it beyond the document edge.
+      const inset = lineWidth / 2;
+      doc.rect(inset, inset, pageW - lineWidth, Math.max(0, headerH - lineWidth), "S");
+    }
     y = headerPad;
     if (branding.logoDataUrl) {
       try {

@@ -1,11 +1,17 @@
 import { jsPDF } from "jspdf";
-import { brandingLayout, companyLines, normalizeBranding, resolveLogoBox } from "./branding.js";
+import { brandingLayout, normalizeBranding, resolveLogoBox } from "./branding.js";
 import { estimateGrandTotal } from "./projectDocuments.js";
 import { includedLines, resolveVisibleTotals, TOTAL_OPTIONS } from "./presentation.js";
 import { estimateLineLaborCost } from "./manualLineLabor.js";
 
 export const DEFAULT_DOCUMENT_TITLE = "Electrical";
 export const LEGACY_DOCUMENT_TITLE = "Electrical Estimate";
+export const DEFAULT_SCOPE_TEXT = "This estimate is valid for 30 days and is not an invoice.";
+export const DEFAULT_TERMS_TEXT =
+  "This estimate is valid for 30 days and is not an invoice. Pricing may change if scope, site conditions, or materials change.";
+
+const SCOPE_SAME_PAGE_MAX_LINES = 15;
+const SIG_BLOCK_H = 86;
 
 export function normalizeDocumentTitle(value) {
   const text = String(value ?? "").trim();
@@ -23,17 +29,40 @@ const HIDDEN_LABELS = [
   "journeyman",
 ];
 
-function hexRgb(hex) {
-  const value = String(hex || "").replace("#", "");
-  return {
-    r: parseInt(value.slice(0, 2), 16) || 0,
-    g: parseInt(value.slice(2, 4), 16) || 0,
-    b: parseInt(value.slice(4, 6), 16) || 0,
-  };
+function hexRgb(hex, fallback = [17, 24, 39]) {
+  const raw = String(hex || "").trim();
+  const match = raw.match(/^#?([0-9a-f]{6})$/i);
+  if (!match) return { r: fallback[0], g: fallback[1], b: fallback[2] };
+  const n = parseInt(match[1], 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+function rgbTuple(hex, fallback) {
+  const { r, g, b } = hexRgb(hex, fallback);
+  return [r, g, b];
+}
+
+function isDarkRgb([r, g, b]) {
+  return r * 0.299 + g * 0.587 + b * 0.114 < 128;
+}
+
+function softFill(docBg, docText, mix = 0.03) {
+  return [
+    Math.min(255, Math.round(docBg[0] * (1 - mix) + docText[0] * mix)),
+    Math.min(255, Math.round(docBg[1] * (1 - mix) + docText[1] * mix)),
+    Math.min(255, Math.round(docBg[2] * (1 - mix) + docText[2] * mix)),
+  ];
 }
 
 function money(value) {
   return `$${(Number(value) || 0).toFixed(2)}`;
+}
+
+function fmtDate(value) {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+  return parsed.toLocaleDateString();
 }
 
 function safeName(value, fallback) {
@@ -59,6 +88,7 @@ export function estimatePresentation(estimate) {
         const qty = Number(line.quantity) || 0;
         const material = qty * (Number(line.materialUnitCost) || 0);
         const labor = estimateLineLaborCost(line);
+        const amount = material + labor;
         return {
           itemType: line.itemType || "",
           category: line.category || "",
@@ -67,7 +97,8 @@ export function estimatePresentation(estimate) {
           unit: line.unit || "",
           material,
           labor,
-          amount: material + labor,
+          unitPrice: qty ? amount / qty : amount,
+          amount,
           notes: line.notes || "",
         };
       })
@@ -79,6 +110,7 @@ export function estimatePresentation(estimate) {
         unit: "LS",
         material: 0,
         labor: 0,
+        unitPrice: moneyTotals.total,
         amount: moneyTotals.total,
         notes: "",
       }];
@@ -87,6 +119,7 @@ export function estimatePresentation(estimate) {
     documentTitle: normalizeDocumentTitle(design.documentTitle),
     subtitle: design.subtitle || "",
     estimateNumber: header.estimateNumber || "",
+    estimateDate: header.estimateDate || header.issueDate || "",
     projectAddress: header.projectAddress || "",
     customerCompany: header.customerCompany || "",
     customerName: header.customerName || "",
@@ -95,12 +128,15 @@ export function estimatePresentation(estimate) {
     estimatorName: header.estimatorName || "",
     bidDue: header.bidDue || "",
     scopeNotes: header.scopeNotes || "",
+    terms: String(design.terms || "").trim(),
     lines,
     totals: Object.fromEntries(
       TOTAL_OPTIONS
         .filter((option) => visible[option.key])
         .map((option) => [option.key, moneyTotals[option.key]]),
     ),
+    grandTotal: moneyTotals.total,
+    subtotal: lines.reduce((sum, line) => sum + (Number(line.amount) || 0), 0),
   };
 }
 
@@ -113,7 +149,7 @@ export function estimateHasPdfLines(estimate) {
   return includedLines(estimate).some((line) => {
     const label = String(line?.description || line?.itemType || line?.category || line?.notes || "").trim();
     const qty = Number(line?.quantity) || 0;
-    const material = qty * (Number(line?.materialUnitCost) || 0);
+    const material = qty * (Number(line.materialUnitCost) || 0);
     const labor = estimateLineLaborCost(line);
     return Boolean(label || material || labor);
   });
@@ -150,344 +186,425 @@ function logoFormat(dataUrl) {
   return "PNG";
 }
 
-function wrap(doc, value, width) {
-  const text = String(value || "");
-  if (!text) return [];
-  return doc.splitTextToSize(text, width);
+function estimateContacts(branding, design) {
+  const office = {
+    title: "Office",
+    name: branding.companyName,
+    phone: branding.companyPhone,
+    email: branding.companyEmail,
+  };
+  const employeeName = String(design.companyEmployeeName || "").trim();
+  const employeePhone = String(design.companyEmployeePhone || "").trim();
+  const employeeEmail = String(design.companyEmployeeEmail || "").trim();
+  const employeeTitle = String(design.companyEmployeeTitle || "").trim();
+  const employee = {
+    title: employeeTitle || "Estimator",
+    name: employeeName,
+    phone: employeePhone,
+    email: employeeEmail,
+  };
+  const contacts = [];
+  if (office.name || office.phone || office.email) contacts.push(office);
+  if (design.showCompanyCard !== false && (employeeName || employeePhone || employeeEmail || employeeTitle)) {
+    contacts.push(employee);
+  }
+  return contacts.slice(0, 4);
 }
 
+/**
+ * Customer PDF layout matches Buildr created-estimate documents
+ * (src/lib/documentPdf.js kind=estimate). Estim8r stays standalone.
+ */
 export function buildEstimatePdf(estimate, brandingInput) {
   const branding = brandingLayout(normalizeBranding(brandingInput));
   const presentation = estimatePresentation(estimate);
   const design = {
+    showHeader: true,
     showProjectCard: true,
     showScope: true,
-    showDescription: true,
-    showQuantity: true,
-    showUnit: true,
-    showMaterial: true,
-    showLabor: true,
-    showAmount: true,
-    showNotes: true,
-    showPageNumbers: true,
-    tableStyle: "grid",
-    density: "comfortable",
-    titleSize: 18,
-    bodySize: 9,
-    margin: 40,
-    footerText: "",
+    showSignatures: true,
+    showCompanyCard: true,
     ...(estimate?.pdfDesign || {}),
   };
   design.documentTitle = normalizeDocumentTitle(design.documentTitle);
-  const doc = new jsPDF({ unit: "pt", format: "letter" });
-  const margin = Math.max(20, Math.min(72, Number(design.margin) || 40));
-  const page = { width: 612, height: 792, left: margin, right: 612 - margin };
+
+  const headerBg = rgbTuple(branding.headerColor, [17, 24, 39]);
+  const darkHeader = isDarkRgb(headerBg);
+  const headerText = darkHeader ? [255, 255, 255] : [17, 24, 39];
+  const headerSub = darkHeader ? [209, 213, 219] : [55, 65, 81];
+  const headerAccent = darkHeader ? [249, 115, 22] : [234, 88, 12];
+  const docBg = rgbTuple(branding.pageColor, [255, 255, 255]);
+  const docText = rgbTuple(branding.textColor, [17, 24, 39]);
+  const border = [229, 231, 235];
+  const stripe = [249, 250, 251];
+  const font = branding.font;
+  const baseSize = Math.min(10, Math.max(9, Number(design.bodySize) || 10));
+
+  const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "letter" });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 36;
+  const contentW = pageW - margin * 2;
+  const footerReserve = 30;
+  const bottomLimit = pageH - footerReserve;
   const strings = [];
-  const color = (hex) => hexRgb(hex);
+
+  const box = resolveLogoBox(branding, design);
+  let logoW = box.width;
+  let logoH = box.height;
+  const maxLogoH = 80;
+  const maxLogoW = pageW - 72;
+  if (logoW > maxLogoW || logoH > maxLogoH) {
+    const scale = Math.min(maxLogoW / Math.max(logoW, 1), maxLogoH / Math.max(logoH, 1));
+    logoW *= scale;
+    logoH *= scale;
+  }
+  const reservedLogoH = branding.logoDataUrl ? logoH : 52;
+  const headerPad = 16;
+  const showHeader = design.showHeader !== false;
+  const headerH = showHeader ? headerPad * 2 + reservedLogoH + 48 : 0;
 
   function write(text, x, y, options) {
+    if (Array.isArray(text)) {
+      const lines = text.map((line) => String(line ?? "")).filter(Boolean);
+      lines.forEach((line) => strings.push(line));
+      if (lines.length) doc.text(text, x, y, options);
+      return;
+    }
     const value = String(text ?? "");
-    if (!value) return 0;
+    if (!value) return;
     strings.push(value);
     doc.text(value, x, y, options);
-    return doc.getTextDimensions(value).h;
   }
 
-  function fitWrite(text, x, y, maxWidth, options = {}) {
-    const value = String(text ?? "");
-    if (!value) return 0;
-    const minSize = Number(options.minSize) || 6.5;
-    const originalSize = doc.getFontSize();
-    let size = originalSize;
-    while (size > minSize && doc.getTextWidth(value) > maxWidth) {
-      size = Math.max(minSize, size - 0.5);
-      doc.setFontSize(size);
-    }
-    write(value, x, y, options.textOptions);
-    doc.setFontSize(originalSize);
-    return size;
-  }
+  let allowPageBreak = false;
+  let y = 0;
 
-  function fill(hex) {
-    const rgb = color(hex);
-    doc.setFillColor(rgb.r, rgb.g, rgb.b);
-  }
+  const ensureSpace = (needed) => {
+    if (y + needed <= bottomLimit) return;
+    if (!allowPageBreak) return;
+    doc.addPage();
+    doc.setFillColor(...docBg);
+    doc.rect(0, 0, pageW, pageH, "F");
+    y = 48;
+  };
 
-  function ink(hex) {
-    const rgb = color(hex);
-    doc.setTextColor(rgb.r, rgb.g, rgb.b);
-  }
+  doc.setFillColor(...docBg);
+  doc.rect(0, 0, pageW, pageH, "F");
 
-  function pageBackground() {
-    fill(branding.pageColor);
-    doc.rect(0, 0, page.width, page.height, "F");
-  }
-
-  function headerBar(y = 0) {
-    if (design.showHeader === false) return y;
-    fill(branding.headerColor);
-    doc.rect(0, y, page.width, branding.headerHeight, "F");
-    const pad = 18;
-    const logoPosition = ["left", "center", "right"].includes(design.logoPosition) ? design.logoPosition : "left";
-    const logoOffsetX = Math.max(-180, Math.min(180, Number(design.logoOffsetX) || 0));
-    const logoOffsetY = Math.max(-30, Math.min(30, Number(design.logoOffsetY) || 0));
-    const { width: logoWidth, height: logoHeight } = resolveLogoBox(branding, design);
-    let logoX = pad;
-    if (logoPosition === "center") logoX = (page.width - logoWidth) / 2;
-    if (logoPosition === "right") logoX = page.width - pad - logoWidth;
-    logoX = Math.max(0, Math.min(page.width - logoWidth, logoX + logoOffsetX));
-    const logoY = Math.max(y, Math.min(y + branding.headerHeight - logoHeight, y + (branding.headerHeight - logoHeight) / 2 + logoOffsetY));
+  if (showHeader) {
+    doc.setFillColor(...headerBg);
+    doc.rect(0, 0, pageW, headerH, "F");
+    y = headerPad;
     if (branding.logoDataUrl) {
       try {
-        doc.addImage(branding.logoDataUrl, logoFormat(branding.logoDataUrl), logoX, logoY, logoWidth, logoHeight);
+        doc.addImage(
+          branding.logoDataUrl,
+          logoFormat(branding.logoDataUrl),
+          (pageW - logoW) / 2,
+          y,
+          logoW,
+          logoH,
+        );
+        y += logoH + 8;
       } catch {
-        /* skip a broken logo rather than failing the PDF */
+        doc.setFont(font, "bold");
+        doc.setFontSize(14);
+        doc.setTextColor(...headerText);
+        write(branding.companyName || "Company", pageW / 2, y + 14, { align: "center" });
+        y += 26;
       }
+    } else {
+      doc.setFont(font, "bold");
+      doc.setFontSize(14);
+      doc.setTextColor(...headerText);
+      write(branding.companyName || "Company", pageW / 2, y + 14, { align: "center" });
+      y += 26;
     }
 
-    const align = ["left", "center", "right"].includes(design.headerCompanyAlign) ? design.headerCompanyAlign : "left";
-    const textX = align === "center" ? page.width / 2 : align === "right" ? page.width - pad : pad;
-    const textOptions = align === "left" ? undefined : { align };
-    const leftLogoGap = branding.logoDataUrl && logoPosition === "left" && align === "left" ? logoWidth + 12 : 0;
-    const companyX = textX + leftLogoGap;
-    doc.setFont(branding.font, "bold");
-    doc.setFontSize(branding.headerSize === "small" ? 14 : branding.headerSize === "large" ? 22 : 18);
-    ink(branding.headerTextColor);
-    const headerTitle = String(design.headerTitle || "").trim() || branding.companyName || "Estimate";
-    if (!design.hideHeaderTitle) write(headerTitle, companyX, y + 28, textOptions);
-    doc.setFont(branding.font, "normal");
-    doc.setFontSize(Number(design.bodySize) || 9);
-    let lineY = y + 44;
-    const customDetails = String(design.headerDetails || "").trim();
-    const detailLines = customDetails ? customDetails.split(/\\r?\\n/).map((line) => line.trim()).filter(Boolean) : companyLines(branding);
-    if (!design.hideHeaderDetails) {
-      for (const line of detailLines) {
-        write(line, companyX, lineY, textOptions);
-        lineY += 12;
-      }
-    }
-    return y + branding.headerHeight;
+    doc.setDrawColor(...headerAccent);
+    doc.setLineWidth(1);
+    doc.line(margin + 48, y, pageW - margin - 48, y);
+    y += 10;
+
+    const contacts = estimateContacts(branding, design);
+    const colW = contentW / Math.max(contacts.length, 1);
+    contacts.forEach((contact, index) => {
+      const cx = margin + colW * index + colW / 2;
+      doc.setFont(font, "bold");
+      doc.setFontSize(7);
+      doc.setTextColor(...headerAccent);
+      write(String(contact.title || "Contact").toUpperCase(), cx, y, { align: "center" });
+      doc.setFont(font, "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(...headerText);
+      write(String(contact.name || branding.companyName || ""), cx, y + 11, { align: "center" });
+      doc.setFont(font, "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(...headerSub);
+      if (contact.phone) write(String(contact.phone), cx, y + 22, { align: "center" });
+      if (contact.email) write(String(contact.email), cx, y + 32, { align: "center" });
+    });
   }
 
-  function card(x, y, width, height) {
-    fill(branding.cardColor);
-    doc.roundedRect(x, y, width, height, branding.cardRadius, branding.cardRadius, "F");
-  }
+  const scopeText = design.showScope === false
+    ? ""
+    : (presentation.scopeNotes || DEFAULT_SCOPE_TEXT);
+  const scopeLines = scopeText ? doc.splitTextToSize(String(scopeText), contentW - 22) : [];
+  const scopeLineCount = scopeLines.length;
+  const termsText = presentation.terms || design.footerText || DEFAULT_TERMS_TEXT;
+  const termsLines = termsText ? doc.splitTextToSize(termsText, contentW - 40) : [];
+  const items = presentation.lines.length
+    ? presentation.lines
+    : [{ description: "No line items yet", quantity: 0, unitPrice: 0, amount: 0 }];
 
-  pageBackground();
-  let cursor = headerBar(0) + 18;
-  const cardWidth = page.right - page.left;
-  doc.setFont(branding.font, "bold");
-  doc.setFontSize(Number(design.titleSize) || 18);
-  ink(branding.secondaryColor);
-  write(presentation.documentTitle, page.left, cursor);
-  cursor += (Number(design.titleSize) || 18) + 4;
-  if (presentation.subtitle) { doc.setFont(branding.font, "normal"); doc.setFontSize(Number(design.bodySize) || 9); write(presentation.subtitle, page.left, cursor); cursor += 16; }
+  const titleBlockH = 40;
+  const cardH = 60;
+  const scopeLineH = 11;
+  const scopeH = scopeLines.length ? scopeLines.length * scopeLineH + 30 : 0;
+  const rowH = 19;
+  const tableH = rowH + items.length * rowH;
+  const totalsH = 36;
+  const termsH = termsLines.length ? termsLines.length * 10 + 14 : 0;
+  const sigH = design.showSignatures === false ? 0 : SIG_BLOCK_H;
 
-  const infoLines = [
-    ["Project", presentation.title, "Estimate #", presentation.estimateNumber],
-    ["Address", presentation.projectAddress, "Customer", presentation.customerCompany],
-    ["Contact", presentation.customerName, "Phone", presentation.customerPhone],
-    ["Email", presentation.customerEmail, "Estimator", presentation.estimatorName],
-    ["Bid due", presentation.bidDue, "", ""],
-  ].filter((row) => row[1] || row[3]);
-  const noteLines = wrap(doc, presentation.scopeNotes, cardWidth - branding.cardPad * 2);
-  const infoColWidth = cardWidth / 2 - branding.cardPad - 14;
-  const preparedInfoLines = infoLines.map(([leftLabel, leftValue, rightLabel, rightValue]) => {
-    const leftLines = wrap(doc, leftValue || "—", infoColWidth);
-    const rightLines = rightLabel ? wrap(doc, rightValue || "—", infoColWidth) : [];
-    return { leftLabel, leftLines, rightLabel, rightLines, height: 13 + Math.max(leftLines.length, rightLines.length, 1) * 10 };
-  });
-  const infoHeight = Math.max(62, 14 + preparedInfoLines.reduce((sum, row) => sum + row.height, 0) + 10);
-  if (design.showProjectCard) card(page.left, cursor, cardWidth, Math.max(72, infoHeight));
-  doc.setFont(branding.font, "bold");
-  doc.setFontSize(11);
-  ink(branding.secondaryColor);
-  if (design.showProjectCard) write("Project & customer", page.left + branding.cardPad, cursor + 16);
-  let infoY = cursor + 36;
-  doc.setFontSize(9);
-  for (const row of preparedInfoLines) {
-    doc.setFont(branding.font, "bold");
-    ink(branding.secondaryColor);
-    write(row.leftLabel, page.left + branding.cardPad, infoY);
-    if (row.rightLabel) write(row.rightLabel, page.left + cardWidth / 2, infoY);
-    doc.setFont(branding.font, "normal");
-    ink(branding.textColor);
-    row.leftLines.forEach((part, index) => write(part, page.left + branding.cardPad, infoY + 10 + index * 10));
-    row.rightLines.forEach((part, index) => write(part, page.left + cardWidth / 2, infoY + 10 + index * 10));
-    infoY += row.height;
-  }
-  cursor += infoHeight + 9;
+  const bodyStart = headerH + 8;
+  const fixed = titleBlockH + cardH + scopeH + tableH + totalsH + termsH + sigH;
+  const slots = 6;
+  const available = Math.max(0, bottomLimit - bodyStart - fixed);
+  const unit = available / slots;
+  const clampGap = (base, share, min, max) => Math.round(Math.min(max, Math.max(min, base + share)));
+  const gapTitle = clampGap(10, unit * 0.9, 10, 28);
+  const gapCards = clampGap(8, unit, 8, 26);
+  const gapScope = clampGap(8, unit, 8, 24);
+  const gapTable = clampGap(8, unit, 8, 22);
+  const gapTotals = clampGap(10, unit, 10, 26);
+  const gapTerms = clampGap(12, unit * 1.1, 12, 32);
 
-  if (design.showCompanyCard !== false) {
-    const employee = [
-      ["Name", design.companyEmployeeName || presentation.estimatorName || ""],
-      ["Title", design.companyEmployeeTitle || ""],
-      ["Email", design.companyEmployeeEmail || ""],
-      ["Phone", design.companyEmployeePhone || ""],
-    ].filter((row) => row[1]);
-    if (employee.length) {
-      const employeeHeight = 28 + employee.length * 14;
-      ensureSpace(employeeHeight + 14);
-      card(page.left, cursor, cardWidth, employeeHeight);
-      doc.setFont(branding.font, "bold");
-      doc.setFontSize(11);
-      ink(branding.secondaryColor);
-      write("Company contact", page.left + branding.cardPad, cursor + branding.cardPad);
-      let employeeY = cursor + branding.cardPad + 16;
-      doc.setFontSize(Number(design.bodySize) || 9);
-      employee.forEach(([label, value]) => {
-        doc.setFont(branding.font, "bold");
-        write(label, page.left + branding.cardPad, employeeY);
-        doc.setFont(branding.font, "normal");
-        ink(branding.textColor);
-        fitWrite(value, page.left + 90, employeeY, cardWidth - 110, { minSize: 7 });
-        ink(branding.secondaryColor);
-        employeeY += 14;
-      });
-      cursor += employeeHeight + 9;
-    }
-  }
+  y = headerH + gapTitle;
+  const templateTitle = String(presentation.documentTitle || DEFAULT_DOCUMENT_TITLE).toUpperCase();
 
-  if (design.showScope && noteLines.length) {
-    const scopeHeight = branding.cardPad * 2 + 18 + noteLines.length * 12;
-    card(page.left, cursor, cardWidth, scopeHeight);
-    doc.setFont(branding.font, "bold");
-    doc.setFontSize(11);
-    ink(branding.secondaryColor);
-    write("Scope", page.left + branding.cardPad, cursor + branding.cardPad);
-    doc.setFont(branding.font, "normal");
-    doc.setFontSize(Number(design.bodySize) || 9);
-    ink(branding.textColor);
-    noteLines.forEach((line, index) => write(line, page.left + branding.cardPad, cursor + branding.cardPad + 16 + index * 12));
-    cursor += scopeHeight + 18;
-  } else {
-    cursor += 4;
-  }
+  doc.setFont(font, "bold");
+  doc.setFontSize(17);
+  doc.setTextColor(...docText);
+  write(templateTitle, margin, y);
 
-  const availableWidth = page.right - page.left;
-  const requestedColumns = estimate?.itemized === false
-    ? [
-        { key: "description", label: "Description", weight: 3.5, align: "left" },
-        { key: "amount", label: "Total", weight: 1.0, align: "right" },
-      ]
-    : [
-        design.showItemType ? { key: "itemType", label: "Type", weight: 1.0, align: "left" } : null,
-        design.showCategory ? { key: "category", label: "Category", weight: 1.0, align: "left" } : null,
-        design.showDescription !== false ? { key: "description", label: "Item", weight: 2.5, align: "left" } : null,
-        design.showQuantity !== false ? { key: "quantity", label: "Qty", weight: 0.65, align: "right" } : null,
-        design.showUnit !== false ? { key: "unit", label: "Unit", weight: 0.65, align: "left" } : null,
-        design.showMaterial !== false ? { key: "material", label: "Material", weight: 1.0, align: "right" } : null,
-        design.showLabor !== false ? { key: "labor", label: "Labor", weight: 1.0, align: "right" } : null,
-        design.showAmount !== false ? { key: "amount", label: "Amount", weight: 1.0, align: "right" } : null,
-      ].filter(Boolean);
-  const weightTotal = requestedColumns.reduce((sum, column) => sum + column.weight, 0) || 1;
-  const columns = requestedColumns.map((column) => ({ ...column, width: availableWidth * column.weight / weightTotal }));
+  const muted = softFill(docBg, docText, 0.45);
+  doc.setFont(font, "normal");
+  doc.setFontSize(baseSize - 1);
+  doc.setTextColor(...muted);
+  write(`#${presentation.estimateNumber || "—"}`, margin, y + 14);
+  doc.setTextColor(...docText);
 
-  function ensureSpace(needed) {
-    if (cursor + needed < 750) return;
-    doc.addPage();
-    pageBackground();
-    cursor = headerBar(0) + 16;
-  }
+  const rightX = pageW - margin;
+  doc.setFont(font, "normal");
+  doc.setFontSize(baseSize - 1);
+  write("Estimate Date", rightX, y - 2, { align: "right" });
+  doc.setFont(font, "bold");
+  write(fmtDate(presentation.estimateDate), rightX, y + 10, { align: "right" });
+  doc.setFont(font, "normal");
+  write("Valid Until", rightX, y + 22, { align: "right" });
+  doc.setFont(font, "bold");
+  write(fmtDate(presentation.bidDue), rightX, y + 34, { align: "right" });
 
-  function cellValue(line, key) {
-    if (key === "quantity") return Number(line.quantity || 0).toFixed(2);
-    if (key === "material" || key === "labor" || key === "amount") return money(line[key]);
-    return line[key] || "";
-  }
+  y = headerH + gapTitle + titleBlockH + gapCards;
 
-  function drawTableHeader() {
-    fill(branding.primaryColor);
-    doc.rect(page.left, cursor, cardWidth, 22, "F");
-    doc.setFont(branding.font, "bold");
+  if (design.showProjectCard !== false) {
+    const half = (contentW - 14) / 2;
+    doc.setFillColor(...softFill(docBg, docText, 0.035));
+    doc.roundedRect(margin, y, half, cardH, 5, 5, "F");
+    doc.roundedRect(margin + half + 14, y, half, cardH, 5, 5, "F");
+    doc.setDrawColor(...border);
+    doc.setLineWidth(0.5);
+    doc.roundedRect(margin, y, half, cardH, 5, 5, "S");
+    doc.roundedRect(margin + half + 14, y, half, cardH, 5, 5, "S");
+
+    doc.setFont(font, "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(...muted);
+    write("BILL TO", margin + 12, y + 16);
+    doc.setFont(font, "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...docText);
+    write(presentation.customerName || presentation.customerCompany || "—", margin + 12, y + 32);
+    doc.setFont(font, "normal");
     doc.setFontSize(8);
-    ink(branding.headerTextColor);
-    let x = page.left;
-    for (const column of columns) {
-      write(column.label, column.align === "right" ? x + column.width - 8 : x + 8, cursor + 15, {
-        align: column.align === "right" ? "right" : "left",
-      });
-      x += column.width;
+    doc.setTextColor(...muted);
+    write(presentation.customerEmail || "", margin + 12, y + 46);
+
+    const px = margin + half + 14;
+    doc.setFont(font, "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(...muted);
+    write("PROJECT", px + 12, y + 16);
+    doc.setFont(font, "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...docText);
+    write(doc.splitTextToSize(presentation.title || "—", half - 24)[0] || "—", px + 12, y + 32);
+    doc.setFont(font, "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...muted);
+    if (presentation.projectAddress) {
+      write(doc.splitTextToSize(presentation.projectAddress, half - 24)[0], px + 12, y + 46);
     }
-    cursor += 22;
+    y += cardH + gapScope;
+  } else {
+    y += Math.max(0, gapScope - 4);
   }
 
-  ensureSpace(80);
-  doc.setFont(branding.font, "bold");
-  doc.setFontSize(12);
-  ink(branding.secondaryColor);
-  write("Estimate", page.left, cursor);
-  cursor += 16;
+  if (scopeLines.length) {
+    doc.setFillColor(...softFill(docBg, docText, 0.04));
+    doc.roundedRect(margin, y, contentW, scopeH, 5, 5, "F");
+    doc.setDrawColor(...border);
+    doc.setLineWidth(0.5);
+    doc.roundedRect(margin, y, contentW, scopeH, 5, 5, "S");
+    doc.setFont(font, "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(...muted);
+    write("SCOPE OF WORK", margin + 12, y + 15);
+    doc.setFont(font, "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...docText);
+    write(scopeLines, margin + 12, y + 28);
+    y += scopeH + gapTable;
+  } else {
+    y += Math.max(0, gapTable - 4);
+  }
+
+  const keepSignaturesOnPage = scopeLineCount > 0 && scopeLineCount <= SCOPE_SAME_PAGE_MAX_LINES;
+  allowPageBreak = false;
+
+  const cols = [
+    { key: "desc", label: "Description", w: contentW * 0.5 },
+    { key: "qty", label: "Qty", w: contentW * 0.12, align: "center" },
+    { key: "unit", label: "Unit Price", w: contentW * 0.19, align: "right" },
+    { key: "total", label: "Total", w: contentW * 0.19, align: "right" },
+  ];
+
+  const drawTableHeader = () => {
+    doc.setFillColor(...softFill(docBg, docText, 0.07));
+    doc.rect(margin, y, contentW, rowH, "F");
+    doc.setDrawColor(...border);
+    doc.setLineWidth(0.6);
+    doc.rect(margin, y, contentW, rowH, "S");
+    let x = margin;
+    doc.setFont(font, "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(...docText);
+    cols.forEach((col) => {
+      const tx = col.align === "right" ? x + col.w - 7 : col.align === "center" ? x + col.w / 2 : x + 7;
+      write(col.label, tx, y + 13, col.align ? { align: col.align } : undefined);
+      x += col.w;
+    });
+    y += rowH;
+  };
+
+  ensureSpace(rowH + 8);
   drawTableHeader();
 
-  const rows = presentation.lines.length
-    ? presentation.lines
-    : [{ description: "No line items yet", quantity: 0, unit: "", material: 0, labor: 0, amount: 0 }];
-
-  rows.forEach((line, index) => {
-    const cellLines = columns.map((column) => wrap(doc, cellValue(line, column.key) || (column === columns[0] ? "Item" : ""), Math.max(24, column.width - 16)));
-    const maxLines = Math.max(1, ...cellLines.map((parts) => parts.length));
-    const height = Math.max(22, maxLines * 11 + 10);
-    ensureSpace(height + 8);
-    if (index % 2 === 0) {
-      fill(branding.cardColor);
-      doc.rect(page.left, cursor, cardWidth, height, "F");
+  items.forEach((item, index) => {
+    ensureSpace(rowH + 4);
+    if (index % 2 === 1) {
+      doc.setFillColor(...stripe);
+      doc.rect(margin, y, contentW, rowH, "F");
+    } else {
+      doc.setFillColor(...docBg);
+      doc.rect(margin, y, contentW, rowH, "F");
     }
-    doc.setFont(branding.font, "normal");
+    doc.setDrawColor(...border);
+    doc.rect(margin, y, contentW, rowH, "S");
+    const description = String(item.description || item.itemType || item.category || "");
+    const values = [
+      description,
+      item.quantity === "" || item.quantity == null ? "" : String(item.quantity),
+      item.unitPrice != null && item.unitPrice !== "" ? money(item.unitPrice) : "",
+      money(item.amount),
+    ];
+    let x = margin;
+    doc.setFont(font, "normal");
     doc.setFontSize(8);
-    ink(branding.textColor);
-    let x = page.left;
-    columns.forEach((column, columnIndex) => {
-      const parts = cellLines[columnIndex];
-      const textX = column.align === "right" ? x + column.width - 8 : x + 8;
-      parts.forEach((part, partIndex) => write(part, textX, cursor + 14 + partIndex * 11, {
-        align: column.align === "right" ? "right" : "left",
-      }));
-      x += column.width;
+    doc.setTextColor(...docText);
+    cols.forEach((col, colIndex) => {
+      const tx = col.align === "right" ? x + col.w - 7 : col.align === "center" ? x + col.w / 2 : x + 7;
+      const text = colIndex === 0 ? doc.splitTextToSize(values[colIndex], col.w - 12)[0] : values[colIndex];
+      write(text || "", tx, y + 13, col.align ? { align: col.align } : undefined);
+      x += col.w;
     });
-    cursor += height;
+    y += rowH;
   });
 
-  cursor += 16;
-  const totalRows = TOTAL_OPTIONS.filter((option) => option.key in presentation.totals);
-  const totalsHeight = branding.cardPad * 2 + Math.max(22, totalRows.length * 22 + 12);
-  ensureSpace(totalsHeight + 8);
-  card(page.right - 240, cursor, 240, totalsHeight);
-  totalRows.forEach((option, index) => {
-    const y = cursor + branding.cardPad + 16 + index * 22;
-    const last = option.key === "total";
-    doc.setFont(branding.font, last ? "bold" : "normal");
-    doc.setFontSize(last ? 12 : 10);
-    ink(last ? branding.accentColor : branding.textColor);
-    write(option.label, page.right - 228, y);
-    fitWrite(money(presentation.totals[option.key]), page.right - 16, y, 120, { minSize: 8, textOptions: { align: "right" } });
-  });
+  y += gapTotals;
+  const totalsX = pageW - margin - 190;
+  ensureSpace(totalsH);
+  doc.setFont(font, "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...docText);
+  write("Subtotal", totalsX, y);
+  write(money(presentation.subtotal), pageW - margin, y, { align: "right" });
+  y += 13;
+  doc.setDrawColor(...border);
+  doc.setLineWidth(1.1);
+  doc.line(totalsX, y, pageW - margin, y);
+  y += 14;
+  doc.setFont(font, "bold");
+  doc.setFontSize(11);
+  write("ESTIMATE TOTAL", totalsX, y);
+  doc.setTextColor(22, 163, 74);
+  write(money(presentation.grandTotal), pageW - margin, y, { align: "right" });
+  doc.setTextColor(...docText);
+  y += gapTerms;
 
-  cursor += totalsHeight;
+  if (termsLines.length && y + termsH + sigH <= bottomLimit) {
+    doc.setFont(font, "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(...docText);
+    write("Terms:", margin, y);
+    doc.setFont(font, "normal");
+    doc.setTextColor(...muted);
+    write(termsLines, margin + 40, y);
+    y += termsH;
+  }
 
   if (design.showSignatures !== false) {
-    const signatureHeight = 88;
-    ensureSpace(signatureHeight + 10);
-    cursor += 8;
-    const gap = 28;
-    const sigWidth = (cardWidth - gap) / 2;
-    doc.setDrawColor(...Object.values(color(branding.textColor)));
-    doc.setLineWidth(0.7);
-    doc.line(page.left, cursor + 34, page.left + sigWidth, cursor + 34);
-    doc.line(page.left + sigWidth + gap, cursor + 34, page.right, cursor + 34);
-    doc.setFont(branding.font, "normal");
-    doc.setFontSize(8);
-    ink(branding.textColor);
-    write("Contractor signature", page.left, cursor + 47);
-    write("Customer signature", page.left + sigWidth + gap, cursor + 47);
-    const dateWidth = 90;
-    doc.line(page.left, cursor + 72, page.left + dateWidth, cursor + 72);
-    doc.line(page.left + sigWidth + gap, cursor + 72, page.left + sigWidth + gap + dateWidth, cursor + 72);
-    write("Date", page.left, cursor + 84);
-    write("Date", page.left + sigWidth + gap, cursor + 84);
-    cursor += signatureHeight;
+    if (!keepSignaturesOnPage && scopeLineCount > SCOPE_SAME_PAGE_MAX_LINES) {
+      allowPageBreak = true;
+    }
+    const remaining = bottomLimit - y - sigH;
+    if (remaining > 8) y += Math.min(remaining, gapTerms);
+    if (y + sigH > bottomLimit) y = Math.max(headerH + 8, bottomLimit - sigH);
+
+    const sigW = (contentW - 24) / 2;
+    const leftSigX = margin;
+    const rightSigX = margin + sigW + 24;
+    const sigTop = y;
+    const contractorName = design.companyEmployeeName || presentation.estimatorName || branding.companyName || "";
+    const customerName = presentation.customerName || presentation.customerCompany || "";
+
+    const drawSigBlock = (x, label, name) => {
+      doc.setFont(font, "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(...docText);
+      write(label, x, sigTop);
+      const lineY = sigTop + 44;
+      doc.setDrawColor(...docText);
+      doc.setLineWidth(0.75);
+      doc.line(x, lineY, x + sigW, lineY);
+      doc.setFont(font, "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(...muted);
+      write(name || "______________________________", x, lineY + 12);
+      write("Date: ____________________", x, lineY + 24);
+    };
+
+    drawSigBlock(leftSigX, "Contractor Signature", contractorName);
+    drawSigBlock(rightSigX, "Customer Signature", customerName);
   }
+
+  doc.setFont(font, "normal");
+  doc.setFontSize(7);
+  doc.setTextColor(...muted);
+  const footer = [branding.companyName, branding.companyPhone, branding.companyEmail].filter(Boolean).join(" · ");
+  if (footer) write(footer, pageW / 2, pageH - 14, { align: "center" });
 
   return {
     doc,

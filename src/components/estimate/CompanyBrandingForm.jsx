@@ -97,7 +97,7 @@ export default function CompanyBrandingForm({ showEstimateLink = false }) {
       <div>
         <h2 className="text-lg font-bold">Estimate PDF branding</h2>
         <p className="text-sm text-muted-foreground">
-          These company settings apply to every downloaded or printed estimate PDF. They do not appear on the Labor & markup tab.
+          These company settings apply to every downloaded or printed estimate PDF. The printed page uses the Buildr created-estimate layout. They do not appear on the Labor & markup tab.
         </p>
         {showEstimateLink ? (
           <Link to="/estimates/new" className="mt-2 inline-block text-sm font-semibold text-blue-600 dark:text-orange-500">

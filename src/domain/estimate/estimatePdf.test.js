@@ -82,14 +82,29 @@ const built = buildEstimatePdf(estimate, {
 });
 assert(built.fileName === "Soccer-Pavilion-257031.pdf", "built PDF keeps the file name");
 assert(built.doc.getNumberOfPages() >= 1, "PDF has a page");
-assert(built.strings.includes(DEFAULT_DOCUMENT_TITLE), "PDF prints the Electrical heading");
+assert(built.strings.includes("ELECTRICAL"), "PDF prints the Electrical heading in Buildr title case");
 assert(!built.strings.includes("Electrical Estimate"), "PDF heading no longer says Electrical Estimate");
+assert(!built.strings.includes("PROJECT ESTIMATE"), "PDF keeps Electrical instead of Buildr's default title");
+assert(built.strings.includes("OFFICE"), "PDF prints the Buildr Office contact label");
+assert(!built.strings.includes("ESTIMATOR"), "default header does not invent an Estimator column");
 assert(built.strings.includes("Current Flow Electric"), "PDF prints company name");
 assert(built.strings.includes("CITY OF SHELBYVILLE"), "PDF prints title-block company");
 assert(built.strings.includes("Duplex receptacle"), "PDF prints line items");
-assert(built.strings.includes("Total"), "PDF prints the customer total");
-assert(built.strings.includes("Material Total"), "PDF prints the material total");
-assert(built.strings.includes("Labor Total"), "PDF prints the labor total");
+assert(built.strings.includes("BILL TO"), "PDF uses Buildr Bill To card");
+assert(built.strings.includes("PROJECT"), "PDF uses Buildr Project card");
+assert(built.strings.includes("SCOPE OF WORK"), "PDF uses Buildr scope chrome");
+assert(built.strings.includes("Description"), "PDF uses Buildr description column");
+assert(built.strings.includes("Qty"), "PDF uses Buildr qty column");
+assert(built.strings.includes("Unit Price"), "PDF uses Buildr unit price column");
+assert(built.strings.includes("Total"), "PDF prints the line-item Total column");
+assert(built.strings.includes("Subtotal"), "PDF prints Buildr subtotal");
+assert(built.strings.includes("ESTIMATE TOTAL"), "PDF prints Buildr estimate total");
+assert(built.strings.includes("Estimate Date"), "PDF prints Buildr date label");
+assert(built.strings.includes("Valid Until"), "PDF prints Buildr valid-until label");
+assert(built.strings.includes("Contractor Signature"), "PDF prints contractor signature");
+assert(built.strings.includes("Customer Signature"), "PDF prints customer signature");
+assert(!built.strings.includes("Material Total"), "customer PDF omits material total label");
+assert(!built.strings.includes("Labor Total"), "customer PDF omits labor total label");
 assert(!built.strings.some((line) => /employee class|productivity|overhead|profit|journeyman|crew rate/i.test(line)), "PDF omits internals");
 
 const bytes = built.doc.output("arraybuffer");
@@ -123,7 +138,8 @@ const withOverhead = estimatePresentation({ ...estimate, visibleTotals: { overhe
 assert(withOverhead.totals.overhead > 0, "opt-in overhead total is present");
 assert(withOverhead.totals.profit > 0, "opt-in profit total is present");
 const overheadPdf = buildEstimatePdf({ ...estimate, visibleTotals: { overhead: true } }, { companyName: "Current Flow Electric" });
-assert(overheadPdf.strings.includes("Overhead"), "opt-in overhead prints on the PDF");
+assert(!overheadPdf.strings.includes("Overhead"), "customer PDF matches Buildr and omits overhead");
+assert(!overheadPdf.strings.includes("Profit"), "customer PDF matches Buildr and omits profit");
 
 const before = estimateContentFingerprint(estimate);
 const branded = { ...estimate };
@@ -160,5 +176,10 @@ assert(key !== estimatePdfPreviewKey({
 }, branding), "preview key follows the header");
 assert(key !== estimatePdfPreviewKey({ ...estimate, overhead: 25, profit: 20 }, branding), "preview key follows markup");
 assert(key !== estimatePdfPreviewKey(estimate, { ...branding, companyName: "Other Electric" }), "preview key follows branding");
+assert(key !== estimatePdfPreviewKey(estimate, { ...branding, logoStretchX: 220, logoStretchY: 70 }), "preview key follows independent logo stretch");
+
+const stretched = buildEstimatePdf(estimate, { ...branding, logoStretchX: 220, logoStretchY: 70, logoDataUrl: "" });
+assert(stretched.strings.includes("ELECTRICAL"), "stretched logo PDF still prints Electrical");
+assert(stretched.strings.includes("Current Flow Electric"), "missing logo still prints the company name in the header");
 
 if (!process.exitCode) console.log("estimate PDF checks passed");

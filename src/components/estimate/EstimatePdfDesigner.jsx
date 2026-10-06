@@ -26,6 +26,7 @@ export const DEFAULT_PDF_DESIGN = {
   bodySize: 9,
   margin: 40,
   footerText: "",
+  terms: "",
   showPageNumbers: true,
   showHeader: true,
   headerCompanyAlign: "left",
@@ -68,7 +69,7 @@ export default function EstimatePdfDesigner({ estimate, design, onChange }) {
 
   return <section className="rounded-2xl border border-border bg-card shadow-sm">
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
-      <div><h2 className="text-lg font-black">PDF Designer</h2><p className="text-xs text-muted-foreground">Edit the customer estimate and see the actual generated PDF update while you work.</p></div>
+      <div><h2 className="text-lg font-black">PDF Designer</h2><p className="text-xs text-muted-foreground">Customer PDF uses the Buildr created-estimate layout. Heading stays Electrical. Logo stretch is independent on each axis.</p></div>
       <div className="flex gap-2"><EstimatePdfPreview estimate={previewEstimate} live embedded /><button type="button" onClick={() => onChange?.(DEFAULT_PDF_DESIGN)} className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-bold"><RotateCcw className="h-3.5 w-3.5"/> Reset layout</button></div>
     </div>
     <div className="grid gap-5 p-4 xl:grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)]">
@@ -77,6 +78,7 @@ export default function EstimatePdfDesigner({ estimate, design, onChange }) {
           <Text label="Document title" value={value.documentTitle} set={(v)=>patch("documentTitle",v)} />
           <Text label="Subtitle" value={value.subtitle} set={(v)=>patch("subtitle",v)} />
           <Text label="Footer text" value={value.footerText} set={(v)=>patch("footerText",v)} />
+          <Text label="Terms" value={value.terms} set={(v)=>patch("terms",v)} />
         </Group>
         <Group title="Header">
           <Toggle label="Show header" value={value.showHeader !== false} set={(v)=>patch("showHeader",v)} />
@@ -113,6 +115,7 @@ export default function EstimatePdfDesigner({ estimate, design, onChange }) {
           <Toggle label="Page numbers" value={value.showPageNumbers} set={(v)=>patch("showPageNumbers",v)} />\n          <Toggle label="Contractor & customer signatures" value={value.showSignatures !== false} set={(v)=>patch("showSignatures",v)} />
         </Group>
         <Group title="Estimate columns">
+          <p className="text-xs text-muted-foreground">Printed table is Buildr&apos;s Description, Qty, Unit Price, and Total. These toggles stay for the on-screen estimate only.</p>
           {[
             ["showItemType","Type"],["showCategory","Category"],["showDescription","Description"],["showQuantity","Quantity"],
             ["showUnit","Unit"],["showMaterial","Material"],["showLabor","Labor"],["showAmount","Amount"]

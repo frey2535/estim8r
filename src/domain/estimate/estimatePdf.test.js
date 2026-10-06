@@ -182,4 +182,33 @@ const stretched = buildEstimatePdf(estimate, { ...branding, logoStretchX: 220, l
 assert(stretched.strings.includes("ELECTRICAL"), "stretched logo PDF still prints Electrical");
 assert(stretched.strings.includes("Current Flow Electric"), "missing logo still prints the company name in the header");
 
+const customLayout = buildEstimatePdf({
+  ...estimate,
+  pdfDesign: {
+    pageBorderEnabled: true,
+    pageBorderColor: "#ff0000",
+    pageBorderWidth: 2,
+    pageBorderInset: 12,
+    headerHeightPt: 72,
+    headerPaddingPt: 4,
+    cardHeightPt: 44,
+    cardPaddingPt: 6,
+    cardRadiusPt: 2,
+    cardBorderEnabled: true,
+    cardBorderColor: "#0000ff",
+    cardBorderWidth: 1.5,
+    cardFillEnabled: true,
+    cardFillColor: "#eeeeee",
+    gapTitlePt: 2,
+    gapCardsPt: 3,
+    gapScopePt: 4,
+    gapTablePt: 5,
+    gapTotalsPt: 6,
+    gapTermsPt: 7,
+    signatureTopGapPt: 8,
+  },
+}, { ...branding, logoDataUrl: "" });
+assert(customLayout.doc.getNumberOfPages() >= 1, "custom PDF layout still renders");
+assert(customLayout.strings.includes("ELECTRICAL"), "custom PDF layout preserves title");
+
 if (!process.exitCode) console.log("estimate PDF checks passed");

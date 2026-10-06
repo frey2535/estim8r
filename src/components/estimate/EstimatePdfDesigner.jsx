@@ -48,6 +48,39 @@ export const DEFAULT_PDF_DESIGN = {
   companyEmployeeEmail: "",
   companyEmployeePhone: "",
   showSignatures: true,
+
+  // Page
+  pageBorderEnabled: false,
+  pageBorderColor: "#111827",
+  pageBorderWidth: 1,
+  pageBorderInset: 10,
+
+  // Header
+  headerHeightPt: 0,
+  headerPaddingPt: 10,
+  headerBottomGapPt: 10,
+  headerDividerEnabled: true,
+  headerDividerWidth: 1,
+
+  // Cards / section chrome
+  cardHeightPt: 60,
+  cardPaddingPt: 12,
+  cardRadiusPt: 5,
+  cardBorderEnabled: true,
+  cardBorderColor: "#e5e7eb",
+  cardBorderWidth: 0.5,
+  cardFillEnabled: true,
+  cardFillColor: "#f8fafc",
+
+  // Spacing
+  gapTitlePt: 10,
+  gapCardsPt: 10,
+  gapScopePt: 10,
+  gapTablePt: 10,
+  gapTotalsPt: 12,
+  gapTermsPt: 14,
+  signatureTopGapPt: 18,
+  sectionSpacingMode: "custom",
 };
 
 export function normalizePdfDesign(value = {}) {
@@ -55,6 +88,12 @@ export function normalizePdfDesign(value = {}) {
   next.documentTitle = normalizeDocumentTitle(next.documentTitle);
   next.logoStretchX = Number(next.logoStretchX) || 0;
   next.logoStretchY = Number(next.logoStretchY) || 0;
+  [
+    "pageBorderWidth", "pageBorderInset", "headerHeightPt", "headerPaddingPt",
+    "headerBottomGapPt", "headerDividerWidth", "cardHeightPt", "cardPaddingPt",
+    "cardRadiusPt", "cardBorderWidth", "gapTitlePt", "gapCardsPt", "gapScopePt",
+    "gapTablePt", "gapTotalsPt", "gapTermsPt", "signatureTopGapPt",
+  ].forEach((key) => { next[key] = Number(next[key]) || 0; });
   return next;
 }
 
@@ -122,13 +161,51 @@ export default function EstimatePdfDesigner({ estimate, design, onChange }) {
           ].map(([key,label])=><Toggle key={key} label={label} value={value[key]} set={(v)=>patch(key,v)} />)}
         </Group>
         <button type="button" onClick={()=>setShowAdvanced(v=>!v)} className="text-sm font-bold text-blue-600 dark:text-orange-500">{showAdvanced ? "Hide advanced layout" : "Advanced layout"}</button>
-        {showAdvanced ? <Group title="Layout">
-          <Select label="Table style" value={value.tableStyle} set={(v)=>patch("tableStyle",v)} options={[["grid","Grid"],["clean","Clean"],["striped","Striped"]]} />
-          <Select label="Row density" value={value.density} set={(v)=>patch("density",v)} options={[["compact","Compact"],["comfortable","Comfortable"],["spacious","Spacious"]]} />
-          <Range label={"Title size · "+value.titleSize+" pt"} min={12} max={28} value={value.titleSize} set={(v)=>patch("titleSize",Number(v))} />
-          <Range label={"Body size · "+value.bodySize+" pt"} min={7} max={12} value={value.bodySize} set={(v)=>patch("bodySize",Number(v))} />
-          <Range label={"Page margin · "+value.margin+" pt"} min={20} max={72} value={value.margin} set={(v)=>patch("margin",Number(v))} />
-        </Group> : null}
+        {showAdvanced ? <div className="space-y-4">
+          <Group title="Page">
+            <Range label={"Page margin · "+value.margin+" pt"} min={18} max={72} value={value.margin} set={(v)=>patch("margin",Number(v))} />
+            <Toggle label="Page outline" value={value.pageBorderEnabled} set={(v)=>patch("pageBorderEnabled",v)} />
+            <Color label="Page outline color" value={value.pageBorderColor} set={(v)=>patch("pageBorderColor",v)} />
+            <Range label={"Page outline width · "+value.pageBorderWidth+" pt"} min={0} max={6} step={0.25} value={value.pageBorderWidth} set={(v)=>patch("pageBorderWidth",Number(v))} />
+            <Range label={"Page outline inset · "+value.pageBorderInset+" pt"} min={0} max={36} value={value.pageBorderInset} set={(v)=>patch("pageBorderInset",Number(v))} />
+          </Group>
+
+          <Group title="Header size & spacing">
+            <Range label={"Header height · "+(value.headerHeightPt || "Auto")+" pt"} min={0} max={220} value={value.headerHeightPt} set={(v)=>patch("headerHeightPt",Number(v))} />
+            <Range label={"Header inner padding · "+value.headerPaddingPt+" pt"} min={0} max={40} value={value.headerPaddingPt} set={(v)=>patch("headerPaddingPt",Number(v))} />
+            <Range label={"Space below header · "+value.headerBottomGapPt+" pt"} min={0} max={60} value={value.headerBottomGapPt} set={(v)=>patch("headerBottomGapPt",Number(v))} />
+            <Toggle label="Header divider" value={value.headerDividerEnabled !== false} set={(v)=>patch("headerDividerEnabled",v)} />
+            <Range label={"Header divider width · "+value.headerDividerWidth+" pt"} min={0} max={6} step={0.25} value={value.headerDividerWidth} set={(v)=>patch("headerDividerWidth",Number(v))} />
+          </Group>
+
+          <Group title="Cards">
+            <Range label={"Card height · "+value.cardHeightPt+" pt"} min={36} max={140} value={value.cardHeightPt} set={(v)=>patch("cardHeightPt",Number(v))} />
+            <Range label={"Card padding · "+value.cardPaddingPt+" pt"} min={2} max={30} value={value.cardPaddingPt} set={(v)=>patch("cardPaddingPt",Number(v))} />
+            <Range label={"Card corner radius · "+value.cardRadiusPt+" pt"} min={0} max={24} value={value.cardRadiusPt} set={(v)=>patch("cardRadiusPt",Number(v))} />
+            <Toggle label="Card fill" value={value.cardFillEnabled !== false} set={(v)=>patch("cardFillEnabled",v)} />
+            <Color label="Card fill color" value={value.cardFillColor} set={(v)=>patch("cardFillColor",v)} />
+            <Toggle label="Card outline" value={value.cardBorderEnabled !== false} set={(v)=>patch("cardBorderEnabled",v)} />
+            <Color label="Card outline color" value={value.cardBorderColor} set={(v)=>patch("cardBorderColor",v)} />
+            <Range label={"Card outline width · "+value.cardBorderWidth+" pt"} min={0} max={6} step={0.25} value={value.cardBorderWidth} set={(v)=>patch("cardBorderWidth",Number(v))} />
+          </Group>
+
+          <Group title="Section spacing">
+            <Range label={"Title → cards · "+value.gapTitlePt+" pt"} min={0} max={60} value={value.gapTitlePt} set={(v)=>patch("gapTitlePt",Number(v))} />
+            <Range label={"Cards spacing · "+value.gapCardsPt+" pt"} min={0} max={60} value={value.gapCardsPt} set={(v)=>patch("gapCardsPt",Number(v))} />
+            <Range label={"Cards → scope · "+value.gapScopePt+" pt"} min={0} max={60} value={value.gapScopePt} set={(v)=>patch("gapScopePt",Number(v))} />
+            <Range label={"Scope → table · "+value.gapTablePt+" pt"} min={0} max={60} value={value.gapTablePt} set={(v)=>patch("gapTablePt",Number(v))} />
+            <Range label={"Table → totals · "+value.gapTotalsPt+" pt"} min={0} max={60} value={value.gapTotalsPt} set={(v)=>patch("gapTotalsPt",Number(v))} />
+            <Range label={"Totals → terms · "+value.gapTermsPt+" pt"} min={0} max={80} value={value.gapTermsPt} set={(v)=>patch("gapTermsPt",Number(v))} />
+            <Range label={"Terms → signatures · "+value.signatureTopGapPt+" pt"} min={0} max={100} value={value.signatureTopGapPt} set={(v)=>patch("signatureTopGapPt",Number(v))} />
+          </Group>
+
+          <Group title="Typography & table">
+            <Select label="Table style" value={value.tableStyle} set={(v)=>patch("tableStyle",v)} options={[["grid","Grid"],["clean","Clean"],["striped","Striped"]]} />
+            <Select label="Row density" value={value.density} set={(v)=>patch("density",v)} options={[["compact","Compact"],["comfortable","Comfortable"],["spacious","Spacious"]]} />
+            <Range label={"Title size · "+value.titleSize+" pt"} min={12} max={32} value={value.titleSize} set={(v)=>patch("titleSize",Number(v))} />
+            <Range label={"Body size · "+value.bodySize+" pt"} min={6} max={14} value={value.bodySize} set={(v)=>patch("bodySize",Number(v))} />
+          </Group>
+        </div> : null}
       </div>
       <div className="min-h-[42rem] rounded-xl border border-border bg-muted/30 p-2">
         <EstimatePdfPreview estimate={previewEstimate} live embedded />
@@ -140,4 +217,5 @@ function Group({title,children}){return <div className="space-y-2 rounded-xl bor
 function Text({label,value,set}){return <label className="block"><span className="mb-1 block text-xs font-bold">{label}</span><input value={value||""} onChange={e=>set(e.target.value)} className="w-full rounded-md border border-input bg-background px-2 py-2 text-sm"/></label>}
 function Toggle({label,value,set}){return <label className="flex items-center justify-between gap-3 text-sm"><span>{label}</span><button type="button" onClick={()=>set(!value)} className={value?"text-blue-600 dark:text-orange-500":"text-muted-foreground"}>{value?<Eye className="h-4 w-4"/>:<EyeOff className="h-4 w-4"/>}</button></label>}
 function Select({label,value,set,options}){return <label className="block"><span className="mb-1 block text-xs font-bold">{label}</span><select value={value} onChange={e=>set(e.target.value)} className="w-full rounded-md border border-input bg-background px-2 py-2 text-sm">{options.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>}
-function Range({label,min,max,value,set}){return <label className="block"><span className="mb-1 block text-xs font-bold">{label}</span><input type="range" min={min} max={max} value={value} onChange={e=>set(e.target.value)} className="w-full"/></label>}
+function Range({label,min,max,step=1,value,set}){return <label className="block"><span className="mb-1 block text-xs font-bold">{label}</span><input type="range" min={min} max={max} step={step} value={value} onChange={e=>set(e.target.value)} className="w-full"/></label>}
+function Color({label,value,set}){return <label className="flex items-center justify-between gap-3"><span className="text-xs font-bold">{label}</span><span className="flex items-center gap-2"><input type="color" value={value||"#000000"} onChange={e=>set(e.target.value)} className="h-8 w-10 cursor-pointer rounded border border-input bg-background p-1"/><input value={value||""} onChange={e=>set(e.target.value)} className="w-24 rounded-md border border-input bg-background px-2 py-1.5 text-xs"/></span></label>}

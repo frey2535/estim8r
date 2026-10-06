@@ -186,22 +186,26 @@ function logoFormat(dataUrl) {
   return "PNG";
 }
 
-function estimateContacts(branding, design, presentation) {
+function estimateContacts(branding, design) {
   const office = {
     title: "Office",
     name: branding.companyName,
     phone: branding.companyPhone,
     email: branding.companyEmail,
   };
+  const employeeName = String(design.companyEmployeeName || "").trim();
+  const employeePhone = String(design.companyEmployeePhone || "").trim();
+  const employeeEmail = String(design.companyEmployeeEmail || "").trim();
+  const employeeTitle = String(design.companyEmployeeTitle || "").trim();
   const employee = {
-    title: String(design.companyEmployeeTitle || "Estimator").trim() || "Estimator",
-    name: String(design.companyEmployeeName || presentation.estimatorName || "").trim(),
-    phone: String(design.companyEmployeePhone || "").trim(),
-    email: String(design.companyEmployeeEmail || "").trim(),
+    title: employeeTitle || "Estimator",
+    name: employeeName,
+    phone: employeePhone,
+    email: employeeEmail,
   };
   const contacts = [];
   if (office.name || office.phone || office.email) contacts.push(office);
-  if (design.showCompanyCard !== false && (employee.name || employee.phone || employee.email)) {
+  if (design.showCompanyCard !== false && (employeeName || employeePhone || employeeEmail || employeeTitle)) {
     contacts.push(employee);
   }
   return contacts.slice(0, 4);
@@ -323,7 +327,7 @@ export function buildEstimatePdf(estimate, brandingInput) {
     doc.line(margin + 48, y, pageW - margin - 48, y);
     y += 10;
 
-    const contacts = estimateContacts(branding, design, presentation);
+    const contacts = estimateContacts(branding, design);
     const colW = contentW / Math.max(contacts.length, 1);
     contacts.forEach((contact, index) => {
       const cx = margin + colW * index + colW / 2;

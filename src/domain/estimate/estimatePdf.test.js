@@ -85,6 +85,8 @@ assert(built.doc.getNumberOfPages() >= 1, "PDF has a page");
 assert(built.strings.includes("ELECTRICAL"), "PDF prints the Electrical heading in Buildr title case");
 assert(!built.strings.includes("Electrical Estimate"), "PDF heading no longer says Electrical Estimate");
 assert(!built.strings.includes("PROJECT ESTIMATE"), "PDF keeps Electrical instead of Buildr's default title");
+assert(built.strings.includes("OFFICE"), "PDF prints the Buildr Office contact label");
+assert(!built.strings.includes("ESTIMATOR"), "default header does not invent an Estimator column");
 assert(built.strings.includes("Current Flow Electric"), "PDF prints company name");
 assert(built.strings.includes("CITY OF SHELBYVILLE"), "PDF prints title-block company");
 assert(built.strings.includes("Duplex receptacle"), "PDF prints line items");

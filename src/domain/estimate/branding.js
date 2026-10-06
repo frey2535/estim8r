@@ -29,7 +29,7 @@ export const DEFAULT_BRANDING = {
   primaryColor: "#1d4ed8",
   secondaryColor: "#0f172a",
   textColor: "#0f172a",
-  headerColor: "#1d4ed8",
+  headerColor: "#111827",
   headerTextColor: "#ffffff",
   cardColor: "#f8fafc",
   pageColor: "#ffffff",

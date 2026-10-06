@@ -235,15 +235,17 @@ export function buildEstimatePdf(estimate, brandingInput) {
   const headerAccent = darkHeader ? [249, 115, 22] : [234, 88, 12];
   const docBg = rgbTuple(branding.pageColor, [255, 255, 255]);
   const docText = rgbTuple(branding.textColor, [17, 24, 39]);
-  const border = [229, 231, 235];
+  const border = rgbTuple(design.cardBorderColor || "#e5e7eb", [229, 231, 235]);
   const stripe = [249, 250, 251];
+  const cardFill = rgbTuple(design.cardFillColor || branding.cardColor || "#f8fafc", [248, 250, 252]);
+  const pageBorder = rgbTuple(design.pageBorderColor || "#111827", [17, 24, 39]);
   const font = branding.font;
   const baseSize = Math.min(10, Math.max(9, Number(design.bodySize) || 10));
 
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "letter" });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
-  const margin = 36;
+  const margin = Math.max(18, Math.min(72, Number(design.margin) || 36));
   const contentW = pageW - margin * 2;
   const footerReserve = 30;
   const bottomLimit = pageH - footerReserve;
@@ -260,9 +262,12 @@ export function buildEstimatePdf(estimate, brandingInput) {
     logoH *= scale;
   }
   const reservedLogoH = branding.logoDataUrl ? logoH : 52;
-  const headerPad = 16;
+  const headerPad = Math.max(0, Math.min(40, Number(design.headerPaddingPt) || 10));
   const showHeader = design.showHeader !== false;
-  const headerH = showHeader ? headerPad * 2 + reservedLogoH + 48 : 0;
+  const autoHeaderH = headerPad * 2 + reservedLogoH + 42;
+  const headerH = showHeader
+    ? Math.max(36, Math.min(220, Number(design.headerHeightPt) > 0 ? Number(design.headerHeightPt) : autoHeaderH))
+    : 0;
 
   function write(text, x, y, options) {
     if (Array.isArray(text)) {
@@ -286,11 +291,23 @@ export function buildEstimatePdf(estimate, brandingInput) {
     doc.addPage();
     doc.setFillColor(...docBg);
     doc.rect(0, 0, pageW, pageH, "F");
-    y = 48;
+    if (design.pageBorderEnabled) {
+      const inset = Math.max(0, Math.min(36, Number(design.pageBorderInset) || 0));
+      doc.setDrawColor(...pageBorder);
+      doc.setLineWidth(Math.max(0.25, Number(design.pageBorderWidth) || 1));
+      doc.rect(inset, inset, pageW - inset * 2, pageH - inset * 2, "S");
+    }
+    y = Math.max(24, margin);
   };
 
   doc.setFillColor(...docBg);
   doc.rect(0, 0, pageW, pageH, "F");
+  if (design.pageBorderEnabled) {
+    const inset = Math.max(0, Math.min(36, Number(design.pageBorderInset) || 0));
+    doc.setDrawColor(...pageBorder);
+    doc.setLineWidth(Math.max(0.25, Number(design.pageBorderWidth) || 1));
+    doc.rect(inset, inset, pageW - inset * 2, pageH - inset * 2, "S");
+  }
 
   if (showHeader) {
     doc.setFillColor(...headerBg);
@@ -322,10 +339,12 @@ export function buildEstimatePdf(estimate, brandingInput) {
       y += 26;
     }
 
-    doc.setDrawColor(...headerAccent);
-    doc.setLineWidth(1);
-    doc.line(margin + 48, y, pageW - margin - 48, y);
-    y += 10;
+    if (design.headerDividerEnabled !== false) {
+      doc.setDrawColor(...headerAccent);
+      doc.setLineWidth(Math.max(0.25, Number(design.headerDividerWidth) || 1));
+      doc.line(margin + 48, y, pageW - margin - 48, y);
+    }
+    y += Math.max(4, Number(design.headerBottomGapPt) || 10);
 
     const contacts = estimateContacts(branding, design);
     const colW = contentW / Math.max(contacts.length, 1);
@@ -359,33 +378,29 @@ export function buildEstimatePdf(estimate, brandingInput) {
     : [{ description: "No line items yet", quantity: 0, unitPrice: 0, amount: 0 }];
 
   const titleBlockH = 40;
-  const cardH = 60;
+  const cardH = Math.max(36, Math.min(140, Number(design.cardHeightPt) || 60));
+  const cardPad = Math.max(2, Math.min(30, Number(design.cardPaddingPt) || 12));
+  const cardRadius = Math.max(0, Math.min(24, Number(design.cardRadiusPt) || 5));
   const scopeLineH = 11;
-  const scopeH = scopeLines.length ? scopeLines.length * scopeLineH + 30 : 0;
-  const rowH = 19;
+  const scopeH = scopeLines.length ? scopeLines.length * scopeLineH + Math.max(18, cardPad * 2 + 8) : 0;
+  const rowH = { compact: 15, comfortable: 19, spacious: 24 }[design.density] || 19;
   const tableH = rowH + items.length * rowH;
   const totalsH = 36;
   const termsH = termsLines.length ? termsLines.length * 10 + 14 : 0;
   const sigH = design.showSignatures === false ? 0 : SIG_BLOCK_H;
 
-  const bodyStart = headerH + 8;
-  const fixed = titleBlockH + cardH + scopeH + tableH + totalsH + termsH + sigH;
-  const slots = 6;
-  const available = Math.max(0, bottomLimit - bodyStart - fixed);
-  const unit = available / slots;
-  const clampGap = (base, share, min, max) => Math.round(Math.min(max, Math.max(min, base + share)));
-  const gapTitle = clampGap(10, unit * 0.9, 10, 28);
-  const gapCards = clampGap(8, unit, 8, 26);
-  const gapScope = clampGap(8, unit, 8, 24);
-  const gapTable = clampGap(8, unit, 8, 22);
-  const gapTotals = clampGap(10, unit, 10, 26);
-  const gapTerms = clampGap(12, unit * 1.1, 12, 32);
+  const gapTitle = Math.max(0, Math.min(60, Number(design.gapTitlePt) || 10));
+  const gapCards = Math.max(0, Math.min(60, Number(design.gapCardsPt) || 10));
+  const gapScope = Math.max(0, Math.min(60, Number(design.gapScopePt) || 10));
+  const gapTable = Math.max(0, Math.min(60, Number(design.gapTablePt) || 10));
+  const gapTotals = Math.max(0, Math.min(60, Number(design.gapTotalsPt) || 12));
+  const gapTerms = Math.max(0, Math.min(80, Number(design.gapTermsPt) || 14));
 
   y = headerH + gapTitle;
   const templateTitle = String(presentation.documentTitle || DEFAULT_DOCUMENT_TITLE).toUpperCase();
 
   doc.setFont(font, "bold");
-  doc.setFontSize(17);
+  doc.setFontSize(Math.max(12, Math.min(32, Number(design.titleSize) || 17)));
   doc.setTextColor(...docText);
   write(templateTitle, margin, y);
 
@@ -411,41 +426,45 @@ export function buildEstimatePdf(estimate, brandingInput) {
 
   if (design.showProjectCard !== false) {
     const half = (contentW - 14) / 2;
-    doc.setFillColor(...softFill(docBg, docText, 0.035));
-    doc.roundedRect(margin, y, half, cardH, 5, 5, "F");
-    doc.roundedRect(margin + half + 14, y, half, cardH, 5, 5, "F");
-    doc.setDrawColor(...border);
-    doc.setLineWidth(0.5);
-    doc.roundedRect(margin, y, half, cardH, 5, 5, "S");
-    doc.roundedRect(margin + half + 14, y, half, cardH, 5, 5, "S");
+    if (design.cardFillEnabled !== false) {
+      doc.setFillColor(...cardFill);
+      doc.roundedRect(margin, y, half, cardH, cardRadius, cardRadius, "F");
+      doc.roundedRect(margin + half + 14, y, half, cardH, cardRadius, cardRadius, "F");
+    }
+    if (design.cardBorderEnabled !== false) {
+      doc.setDrawColor(...border);
+      doc.setLineWidth(Math.max(0.25, Number(design.cardBorderWidth) || 0.5));
+      doc.roundedRect(margin, y, half, cardH, cardRadius, cardRadius, "S");
+      doc.roundedRect(margin + half + 14, y, half, cardH, cardRadius, cardRadius, "S");
+    }
 
     doc.setFont(font, "bold");
     doc.setFontSize(7);
     doc.setTextColor(...muted);
-    write("BILL TO", margin + 12, y + 16);
+    write("BILL TO", margin + cardPad, y + Math.min(cardH - 8, cardPad + 4));
     doc.setFont(font, "bold");
     doc.setFontSize(10);
     doc.setTextColor(...docText);
-    write(presentation.customerName || presentation.customerCompany || "—", margin + 12, y + 32);
+    write(presentation.customerName || presentation.customerCompany || "—", margin + cardPad, y + Math.min(cardH - 20, cardPad + 20));
     doc.setFont(font, "normal");
     doc.setFontSize(8);
     doc.setTextColor(...muted);
-    write(presentation.customerEmail || "", margin + 12, y + 46);
+    write(presentation.customerEmail || "", margin + cardPad, y + Math.min(cardH - 6, cardPad + 34));
 
     const px = margin + half + 14;
     doc.setFont(font, "bold");
     doc.setFontSize(7);
     doc.setTextColor(...muted);
-    write("PROJECT", px + 12, y + 16);
+    write("PROJECT", px + cardPad, y + Math.min(cardH - 8, cardPad + 4));
     doc.setFont(font, "bold");
     doc.setFontSize(10);
     doc.setTextColor(...docText);
-    write(doc.splitTextToSize(presentation.title || "—", half - 24)[0] || "—", px + 12, y + 32);
+    write(doc.splitTextToSize(presentation.title || "—", half - cardPad * 2)[0] || "—", px + cardPad, y + Math.min(cardH - 20, cardPad + 20));
     doc.setFont(font, "normal");
     doc.setFontSize(8);
     doc.setTextColor(...muted);
     if (presentation.projectAddress) {
-      write(doc.splitTextToSize(presentation.projectAddress, half - 24)[0], px + 12, y + 46);
+      write(doc.splitTextToSize(presentation.projectAddress, half - cardPad * 2)[0], px + cardPad, y + Math.min(cardH - 6, cardPad + 34));
     }
     y += cardH + gapScope;
   } else {
@@ -453,19 +472,23 @@ export function buildEstimatePdf(estimate, brandingInput) {
   }
 
   if (scopeLines.length) {
-    doc.setFillColor(...softFill(docBg, docText, 0.04));
-    doc.roundedRect(margin, y, contentW, scopeH, 5, 5, "F");
-    doc.setDrawColor(...border);
-    doc.setLineWidth(0.5);
-    doc.roundedRect(margin, y, contentW, scopeH, 5, 5, "S");
+    if (design.cardFillEnabled !== false) {
+      doc.setFillColor(...cardFill);
+      doc.roundedRect(margin, y, contentW, scopeH, cardRadius, cardRadius, "F");
+    }
+    if (design.cardBorderEnabled !== false) {
+      doc.setDrawColor(...border);
+      doc.setLineWidth(Math.max(0.25, Number(design.cardBorderWidth) || 0.5));
+      doc.roundedRect(margin, y, contentW, scopeH, cardRadius, cardRadius, "S");
+    }
     doc.setFont(font, "bold");
     doc.setFontSize(7);
     doc.setTextColor(...muted);
-    write("SCOPE OF WORK", margin + 12, y + 15);
+    write("SCOPE OF WORK", margin + cardPad, y + Math.max(12, cardPad));
     doc.setFont(font, "normal");
     doc.setFontSize(8.5);
     doc.setTextColor(...docText);
-    write(scopeLines, margin + 12, y + 28);
+    write(scopeLines, margin + cardPad, y + Math.max(24, cardPad + 13));
     y += scopeH + gapTable;
   } else {
     y += Math.max(0, gapTable - 4);
@@ -576,6 +599,7 @@ export function buildEstimatePdf(estimate, brandingInput) {
     const sigW = (contentW - 24) / 2;
     const leftSigX = margin;
     const rightSigX = margin + sigW + 24;
+    y += Math.max(0, Math.min(100, Number(design.signatureTopGapPt) || 18));
     const sigTop = y;
     const contractorName = design.companyEmployeeName || presentation.estimatorName || branding.companyName || "";
     const customerName = presentation.customerName || presentation.customerCompany || "";

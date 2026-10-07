@@ -1,61 +1,21 @@
+import { AUDITED_LABOR_ITEMS } from "../labor/auditedLibrary.js";
+
 function norm(value) {
   return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 function materialIs(item, ...needles) {
-  const mat = norm(item?.material_type);
+  const mat = norm(item?.material_type || item?.materialType);
   return needles.some((needle) => mat === norm(needle));
 }
 
 function materialHas(item, ...needles) {
-  const mat = norm(item?.material_type);
-  const name = norm(item?.item_name);
+  const mat = norm(item?.material_type || item?.materialType);
+  const name = norm(item?.item_name || item?.itemName);
   return needles.some((needle) => {
     const token = norm(needle);
     return mat.includes(token) || name.includes(token);
   });
-}
-
-function racewayInstall(item, ...materials) {
-  return item?.category === "Raceways"
-    && item?.subcategory === "Conduit Installation"
-    && materialIs(item, ...materials);
-}
-
-function racewayFittings(item, ...materials) {
-  return item?.category === "Raceways"
-    && item?.subcategory === "Fittings"
-    && materialIs(item, ...materials);
-}
-
-function conductorPull(item, ...materials) {
-  return item?.category === "Conductors"
-    && item?.subcategory === "Building Wire"
-    && materialHas(item, ...materials);
-}
-
-function cableInstall(item, ...materials) {
-  return item?.category === "Conductors"
-    && item?.subcategory === "Cable Installation"
-    && materialHas(item, ...materials);
-}
-
-function lightingFixture(item) {
-  if (item?.category !== "Lighting") return false;
-  return !/contactor|control panel|sensor/i.test(item.item_name || "");
-}
-
-function deviceKind(item, kind) {
-  if (item?.category !== "Devices") return false;
-  const blob = `${item.material_type || ""} ${item.item_name || ""}`.toLowerCase();
-  if (kind === "receptacle") return blob.includes("receptacle");
-  if (kind === "switch") return /switch|dimmer/.test(blob);
-  return true;
-}
-
-function generatorInstall(item) {
-  return item?.category === "Emergency Power"
-    && (item?.subcategory === "Generators" || materialIs(item, "Generator"));
 }
 
 export const LINE_TYPES = [
@@ -75,70 +35,120 @@ export const LINE_TYPES = [
   "Other",
 ];
 
-const CATEGORY_DEFS = [
-  { type: "Conduit", label: "EMT conduit", match: (item) => racewayInstall(item, "EMT") },
-  { type: "Conduit", label: "PVC conduit", match: (item) => racewayInstall(item, "PVC Sch 40", "PVC Sch 80") },
-  { type: "Conduit", label: "GRC / RMC", match: (item) => racewayInstall(item, "RMC Steel", "RMC Aluminum") },
-  { type: "Conduit", label: "IMC", match: (item) => racewayInstall(item, "IMC") },
-  { type: "Conduit", label: "FMC / flex", match: (item) => racewayInstall(item, "FMC") },
-  { type: "Conduit", label: "LFMC", match: (item) => racewayInstall(item, "LFMC") },
-  { type: "Conduit", label: "ENT", match: (item) => racewayInstall(item, "ENT") },
-  { type: "Conduit", label: "HDPE", match: (item) => racewayInstall(item, "HDPE") },
-  { type: "Conduit", label: "Fiberglass / RTRC", match: (item) => racewayInstall(item, "RTRC/Fiberglass") },
-  { type: "Conduit", label: "PVC-coated RMC", match: (item) => racewayInstall(item, "PVC Coated RMC") },
-  { type: "Conduit", label: "EMT fittings", match: (item) => racewayFittings(item, "EMT") },
-  { type: "Conduit", label: "PVC fittings", match: (item) => racewayFittings(item, "PVC Sch 40", "PVC Sch 80") },
-  { type: "Conduit", label: "GRC fittings", match: (item) => racewayFittings(item, "RMC Steel", "RMC Aluminum") },
-  { type: "Wire", label: "THHN", match: (item) => conductorPull(item, "THHN") },
-  { type: "Wire", label: "XHHW", match: (item) => conductorPull(item, "XHHW") },
-  { type: "Wire", label: "MC", match: (item) => cableInstall(item, "MC cable") },
-  { type: "Wire", label: "AC", match: (item) => cableInstall(item, "AC cable") },
-  { type: "Wire", label: "NM-B", match: (item) => cableInstall(item, "NM-B") },
-  { type: "Wire", label: "SER", match: (item) => cableInstall(item, "SER") },
-  { type: "Wire", label: "Tray cable", match: (item) => cableInstall(item, "Tray cable") },
-  { type: "Wire", label: "VFD cable", match: (item) => cableInstall(item, "VFD") },
-  { type: "Wire", label: "SOOW", match: (item) => cableInstall(item, "SOOW") },
-  { type: "Wire", label: "MV cable", match: (item) => cableInstall(item, "MV cable") },
-  { type: "Fixture", label: "Lighting", match: lightingFixture },
-  { type: "Fixture", label: "Site lighting", match: (item) => item?.category === "Site Lighting & Signs" },
-  { type: "Device", label: "Receptacles", match: (item) => deviceKind(item, "receptacle") },
-  { type: "Device", label: "Switches", match: (item) => deviceKind(item, "switch") },
-  { type: "Device", label: "Devices", match: (item) => item?.category === "Devices" },
-  { type: "Gear", label: "Panels", match: (item) => item?.category === "Distribution" && /panel/i.test(`${item.subcategory} ${item.material_type}`) },
-  { type: "Gear", label: "Transformers", match: (item) => item?.category === "Distribution" && /transformer/i.test(`${item.subcategory} ${item.material_type}`) },
-  { type: "Gear", label: "Switchgear", match: (item) => item?.category === "Distribution" && /switchgear|switchboard/i.test(`${item.subcategory} ${item.material_type}`) },
-  { type: "Gear", label: "Breakers", match: (item) => item?.category === "Distribution" && /breaker/i.test(`${item.subcategory} ${item.material_type}`) },
-  { type: "Gear", label: "Generator installation", match: generatorInstall },
-  { type: "Box", label: "Boxes", match: (item) => item?.category === "Boxes" },
-  { type: "Equipment", label: "Equipment connections", match: (item) => item?.category === "Equipment Connections" },
-  { type: "Equipment", label: "Motors", match: (item) => item?.category === "Motors" || item?.category === "Motor Control" },
-  { type: "Equipment", label: "Generator installation", match: generatorInstall },
-  { type: "Labor", label: "Generator installation", match: generatorInstall },
-  { type: "Fire alarm", label: "Fire alarm", match: (item) => item?.category === "Life Safety" },
-  { type: "Low voltage", label: "Communications", match: (item) => item?.category === "Communications" },
-  { type: "Low voltage", label: "Security", match: (item) => item?.category === "Security" },
-  { type: "Low voltage", label: "Fiber", match: (item) => item?.category === "Fiber Optics" },
-];
-
-export const DEFAULT_CATEGORY_FOR_TYPE = {
-  Conduit: "EMT conduit",
-  Wire: "THHN",
-  Fixture: "Lighting",
-  Device: "Receptacles",
-  Gear: "Panels",
-  Box: "Boxes",
-  Equipment: "Equipment connections",
-  "Fire alarm": "Fire alarm",
-  "Low voltage": "Communications",
+/** Every uploaded manual category maps to a line Type. Nothing is left off. */
+export const TYPE_FOR_LIBRARY_CATEGORY = {
+  Raceways: "Conduit",
+  Conductors: "Wire",
+  Lighting: "Fixture",
+  "Site Lighting & Signs": "Fixture",
+  Devices: "Device",
+  Distribution: "Gear",
+  Boxes: "Box",
+  "Equipment Connections": "Equipment",
+  Motors: "Equipment",
+  "Motor Control": "Equipment",
+  "Emergency Power": "Equipment",
+  "EV Charging": "Equipment",
+  "Renewable Energy": "Equipment",
+  "Marine/Marina": "Equipment",
+  "Special Systems": "Equipment",
+  "Life Safety": "Fire alarm",
+  Communications: "Low voltage",
+  Security: "Low voltage",
+  "Fiber Optics": "Low voltage",
+  Automation: "Low voltage",
+  Grounding: "Labor",
+  "Site/Earthwork": "Labor",
+  Demolition: "Labor",
+  Prefabrication: "Labor",
+  "Project Labor": "Labor",
+  "Testing & Commissioning": "Labor",
+  Residential: "Labor",
 };
 
-export function categoriesForType(type) {
-  return CATEGORY_DEFS.filter((row) => row.type === type).map((row) => row.label);
+/** Saved-estimate labels from the old allow-list. Match existing rows only. */
+const LEGACY_CATEGORY_MATCHERS = [
+  { type: "Conduit", label: "EMT conduit", match: (item) => item.category === "Raceways" && item.subcategory === "Conduit Installation" && materialIs(item, "EMT") },
+  { type: "Conduit", label: "PVC conduit", match: (item) => item.category === "Raceways" && item.subcategory === "Conduit Installation" && materialIs(item, "PVC Sch 40", "PVC Sch 80") },
+  { type: "Conduit", label: "GRC / RMC", match: (item) => item.category === "Raceways" && item.subcategory === "Conduit Installation" && materialIs(item, "RMC Steel", "RMC Aluminum") },
+  { type: "Conduit", label: "IMC", match: (item) => item.category === "Raceways" && item.subcategory === "Conduit Installation" && materialIs(item, "IMC") },
+  { type: "Conduit", label: "FMC / flex", match: (item) => item.category === "Raceways" && item.subcategory === "Conduit Installation" && materialIs(item, "FMC") },
+  { type: "Conduit", label: "LFMC", match: (item) => item.category === "Raceways" && item.subcategory === "Conduit Installation" && materialIs(item, "LFMC") },
+  { type: "Conduit", label: "ENT", match: (item) => item.category === "Raceways" && item.subcategory === "Conduit Installation" && materialIs(item, "ENT") },
+  { type: "Conduit", label: "HDPE", match: (item) => item.category === "Raceways" && item.subcategory === "Conduit Installation" && materialIs(item, "HDPE") },
+  { type: "Conduit", label: "Fiberglass / RTRC", match: (item) => item.category === "Raceways" && item.subcategory === "Conduit Installation" && materialIs(item, "RTRC/Fiberglass") },
+  { type: "Conduit", label: "PVC-coated RMC", match: (item) => item.category === "Raceways" && item.subcategory === "Conduit Installation" && materialIs(item, "PVC Coated RMC") },
+  { type: "Conduit", label: "EMT fittings", match: (item) => item.category === "Raceways" && item.subcategory === "Fittings" && materialIs(item, "EMT") },
+  { type: "Conduit", label: "PVC fittings", match: (item) => item.category === "Raceways" && item.subcategory === "Fittings" && materialIs(item, "PVC Sch 40", "PVC Sch 80") },
+  { type: "Conduit", label: "GRC fittings", match: (item) => item.category === "Raceways" && item.subcategory === "Fittings" && materialIs(item, "RMC Steel", "RMC Aluminum") },
+  { type: "Wire", label: "THHN", match: (item) => item.category === "Conductors" && materialHas(item, "THHN") },
+  { type: "Wire", label: "XHHW", match: (item) => item.category === "Conductors" && materialHas(item, "XHHW") },
+  { type: "Wire", label: "MC", match: (item) => materialHas(item, "MC cable") },
+  { type: "Device", label: "Receptacles", match: (item) => item.category === "Devices" && /receptacle/i.test(`${item.item_name || item.itemName || ""} ${item.material_type || ""}`) },
+  { type: "Device", label: "Switches", match: (item) => item.category === "Devices" && /switch|dimmer/i.test(`${item.item_name || item.itemName || ""} ${item.material_type || ""}`) },
+  { type: "Gear", label: "Panels", match: (item) => item.category === "Distribution" && /panel/i.test(`${item.subcategory} ${item.material_type}`) },
+  { type: "Gear", label: "Transformers", match: (item) => item.category === "Distribution" && /transformer/i.test(`${item.subcategory} ${item.material_type} ${item.item_name || ""}`) },
+  { type: "Gear", label: "Switchgear", match: (item) => item.category === "Distribution" && /switchgear|switchboard/i.test(`${item.subcategory} ${item.material_type}`) },
+  { type: "Gear", label: "Breakers", match: (item) => item.category === "Distribution" && /breaker/i.test(`${item.subcategory} ${item.material_type} ${item.item_name || ""}`) },
+  { type: "Equipment", label: "Generator installation", match: (item) => item.category === "Emergency Power" && (item.subcategory === "Generators" || materialIs(item, "Generator")) },
+  { type: "Gear", label: "Generator installation", match: (item) => item.category === "Emergency Power" && (item.subcategory === "Generators" || materialIs(item, "Generator")) },
+  { type: "Labor", label: "Generator installation", match: (item) => item.category === "Emergency Power" && (item.subcategory === "Generators" || materialIs(item, "Generator")) },
+];
+
+function libraryCategory(item) {
+  return String(item?.category || "").trim();
 }
 
-export function findCategoryDef(type, category) {
-  const label = String(category || "").trim();
-  return CATEGORY_DEFS.find((row) => row.type === type && row.label.toLowerCase() === label.toLowerCase()) || null;
+function librarySubcategory(item) {
+  return String(item?.subcategory || "").trim();
+}
+
+function itemName(item) {
+  return String(item?.item_name || item?.itemName || "");
+}
+
+export function lineTypeForLibraryItem(item) {
+  const category = libraryCategory(item);
+  if (!category) return "";
+  return TYPE_FOR_LIBRARY_CATEGORY[category] || "Labor";
+}
+
+function activityLabelsForItem(item) {
+  const type = lineTypeForLibraryItem(item);
+  const blob = `${librarySubcategory(item)} ${itemName(item)}`.toLowerCase();
+  const labels = [];
+  if (type === "Equipment") {
+    if (/terminat/.test(blob)) labels.push("Equipment terminations");
+    if (/install|set\/connect|set\/install|connect/.test(blob)) labels.push("Equipment installation");
+  }
+  return labels;
+}
+
+export function workCategoriesForItem(item) {
+  const labels = [];
+  const category = libraryCategory(item);
+  const subcategory = librarySubcategory(item);
+  if (category) labels.push(category);
+  if (subcategory) labels.push(subcategory);
+  labels.push(...activityLabelsForItem(item));
+  return [...new Set(labels.filter(Boolean))];
+}
+
+function catalogItems(items) {
+  const rows = Array.isArray(items) && items.length ? items : AUDITED_LABOR_ITEMS;
+  return rows.filter((item) => item && item.active !== false);
+}
+
+function categoryEquals(left, right) {
+  return norm(left) === norm(right);
+}
+
+function matchesLegacyCategory(item, type, category) {
+  return LEGACY_CATEGORY_MATCHERS.some((row) => (
+    row.type === type
+    && categoryEquals(row.label, category)
+    && row.match(item)
+  ));
 }
 
 export function laborItemMatchesLine(item, { itemType, category } = {}) {
@@ -146,25 +156,44 @@ export function laborItemMatchesLine(item, { itemType, category } = {}) {
   const type = String(itemType || "").trim();
   const cat = String(category || "").trim();
   if (!type) return false;
-  if (cat) {
-    const def = findCategoryDef(type, cat);
-    return def ? def.match(item) : false;
+  if (lineTypeForLibraryItem(item) !== type) {
+    return Boolean(cat && matchesLegacyCategory(item, type, cat));
   }
-  return CATEGORY_DEFS.some((row) => row.type === type && row.match(item));
+  if (!cat) return true;
+  if (workCategoriesForItem(item).some((label) => categoryEquals(label, cat))) return true;
+  return matchesLegacyCategory(item, type, cat);
 }
 
 export function laborItemsForLine(items = [], line = {}) {
-  return (items || []).filter((item) => laborItemMatchesLine(item, line));
+  return catalogItems(items).filter((item) => laborItemMatchesLine(item, line));
 }
 
-export function defaultCategoryForType(type) {
-  const categories = categoriesForType(type);
-  if (!categories.length) return "";
-  return DEFAULT_CATEGORY_FOR_TYPE[type] || categories[0];
+export function categoriesForType(type, items) {
+  const wanted = String(type || "").trim();
+  if (!wanted) return [];
+  const labels = new Set();
+  for (const item of catalogItems(items)) {
+    if (lineTypeForLibraryItem(item) !== wanted) continue;
+    for (const label of workCategoriesForItem(item)) labels.add(label);
+  }
+  return [...labels].sort((a, b) => a.localeCompare(b));
+}
+
+export function defaultCategoryForType() {
+  return "";
 }
 
 export function laborPickerPlaceholder(line) {
   if (!line?.itemType) return "Select Type first";
-  if (!line?.category) return `Select a ${line.itemType} category`;
+  if (!line?.category) return `Search ${line.itemType} labor…`;
   return `Search ${line.category}…`;
+}
+
+export function unmappedLibraryCategories(items) {
+  const missing = new Set();
+  for (const item of catalogItems(items)) {
+    const category = libraryCategory(item);
+    if (category && !TYPE_FOR_LIBRARY_CATEGORY[category]) missing.add(category);
+  }
+  return [...missing].sort();
 }

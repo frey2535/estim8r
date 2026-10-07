@@ -3,7 +3,10 @@ import {
   categoriesForType,
   laborItemMatchesLine,
   laborItemsForLine,
+  lineTypeForLibraryItem,
   LINE_TYPES,
+  TYPE_FOR_LIBRARY_CATEGORY,
+  unmappedLibraryCategories,
 } from "./lineLaborCatalog.js";
 import { filterLaborLibrary } from "./manualLineLabor.js";
 
@@ -14,61 +17,66 @@ function assert(cond, message) {
   }
 }
 
-assert(LINE_TYPES.includes("Conduit") && LINE_TYPES.includes("Wire") && LINE_TYPES.includes("Fixture"), "core types exist");
-assert(categoriesForType("Conduit").includes("EMT conduit"), "EMT conduit category");
-assert(categoriesForType("Conduit").includes("PVC conduit"), "PVC conduit category");
-assert(categoriesForType("Conduit").includes("GRC / RMC"), "GRC category");
-assert(categoriesForType("Wire").includes("THHN") && categoriesForType("Wire").includes("XHHW") && categoriesForType("Wire").includes("MC"), "wire categories");
-assert(categoriesForType("Fixture").includes("Lighting"), "lighting category");
-assert(categoriesForType("Device").includes("Receptacles") && categoriesForType("Device").includes("Devices"), "device categories");
+const active = AUDITED_LABOR_ITEMS.filter((row) => row.active !== false);
 
-const emt = laborItemsForLine(AUDITED_LABOR_ITEMS, { itemType: "Conduit", category: "EMT conduit" });
-assert(emt.length > 0 && emt.every((row) => row.material_type === "EMT" && row.subcategory === "Conduit Installation"), `EMT conduit is only EMT install, got ${emt.length}`);
-assert(emt.some((row) => row.id === "EL-00039"), "1/2 EMT install is in the EMT conduit list");
-assert(!emt.some((row) => /pvc|thhn|fixture|receptacle/i.test(`${row.material_type} ${row.item_name}`)), "EMT conduit list has no PVC, wire, or fixtures");
-assert(!emt.some((row) => row.subcategory === "Fittings"), "EMT conduit list excludes fittings");
+assert(LINE_TYPES.includes("Equipment") && LINE_TYPES.includes("Conduit"), "core types exist");
+assert(unmappedLibraryCategories(active).length === 0, `every manual category has a Type: ${unmappedLibraryCategories(active).join(", ")}`);
 
-const pvc = laborItemsForLine(AUDITED_LABOR_ITEMS, { itemType: "Conduit", category: "PVC conduit" });
-assert(pvc.some((row) => row.id === "EL-00576"), "3/4 PVC install is in PVC conduit");
-assert(pvc.every((row) => /PVC Sch/i.test(row.material_type) && row.subcategory === "Conduit Installation"), "PVC conduit is only PVC install");
+const mappedCategories = new Set(active.map((row) => row.category));
+for (const category of mappedCategories) {
+  assert(TYPE_FOR_LIBRARY_CATEGORY[category], `Type map covers ${category}`);
+}
 
-const grc = laborItemsForLine(AUDITED_LABOR_ITEMS, { itemType: "Conduit", category: "GRC / RMC" });
-assert(grc.length > 0 && grc.every((row) => /RMC/i.test(row.material_type) && row.subcategory === "Conduit Installation"), "GRC / RMC is only rigid install");
+const reachable = new Set();
+for (const type of LINE_TYPES) {
+  for (const item of laborItemsForLine(active, { itemType: type })) reachable.add(item.id);
+}
+const missing = active.filter((row) => !reachable.has(row.id));
+assert(missing.length === 0, `every uploaded row is selectable by Type, missing ${missing.slice(0, 8).map((row) => `${row.id} ${row.category}`).join("; ")}`);
 
-const thhn = laborItemsForLine(AUDITED_LABOR_ITEMS, { itemType: "Wire", category: "THHN" });
-assert(thhn.length > 0 && thhn.every((row) => /THHN/i.test(row.material_type)), "THHN list is only THHN");
-assert(!thhn.some((row) => /XHHW|MC cable/i.test(row.material_type)), "THHN list excludes XHHW and MC");
+const equipment = laborItemsForLine(active, { itemType: "Equipment" });
+const equipmentManual = active.filter((row) => lineTypeForLibraryItem(row) === "Equipment");
+assert(equipment.length === equipmentManual.length && equipment.length > 0, `Type Equipment lists all equipment labor, got ${equipment.length} vs ${equipmentManual.length}`);
+assert(equipment.some((row) => row.id === "EL-01842"), "Type Equipment includes 10 kW generator");
+assert(equipment.some((row) => row.category === "Equipment Connections"), "Type Equipment includes Equipment Connections");
+assert(equipment.some((row) => row.category === "Motors"), "Type Equipment includes Motors");
+assert(equipment.some((row) => row.category === "EV Charging"), "Type Equipment includes EV Charging");
 
-const xhhw = laborItemsForLine(AUDITED_LABOR_ITEMS, { itemType: "Wire", category: "XHHW" });
-assert(xhhw.length > 0 && xhhw.every((row) => /XHHW/i.test(row.material_type)), "XHHW list is only XHHW");
+const equipmentCats = categoriesForType("Equipment", active);
+assert(equipmentCats.includes("Equipment installation"), "work categories include Equipment installation");
+assert(equipmentCats.includes("Equipment terminations"), "work categories include Equipment terminations");
+assert(equipmentCats.includes("Equipment Connections"), "work categories include Equipment Connections");
+assert(equipmentCats.includes("Generators"), "work categories include Generators");
+assert(equipmentCats.includes("Motor Connections"), "work categories include Motor Connections");
+assert(equipmentCats.includes("Emergency Power"), "work categories include Emergency Power");
 
-const mc = laborItemsForLine(AUDITED_LABOR_ITEMS, { itemType: "Wire", category: "MC" });
-assert(mc.length > 0 && mc.every((row) => /MC cable/i.test(row.material_type)), "MC list is only MC cable");
+const installs = laborItemsForLine(active, { itemType: "Equipment", category: "Equipment installation" });
+assert(installs.length > 0 && installs.every((row) => lineTypeForLibraryItem(row) === "Equipment"), "Equipment installation is equipment rows only");
+assert(installs.some((row) => row.id === "EL-01842"), "Equipment installation includes set/connect generator");
+assert(installs.some((row) => row.category === "Equipment Connections"), "Equipment installation includes Equipment Connections");
 
-const lights = laborItemsForLine(AUDITED_LABOR_ITEMS, { itemType: "Fixture", category: "Lighting" });
-assert(lights.some((row) => row.id === "EL-01527"), "flood light is a lighting fixture");
-assert(lights.every((row) => row.category === "Lighting" && !/contactor|control panel|sensor/i.test(row.item_name)), "Lighting is fixture-install rows only");
-assert(!lights.some((row) => row.category === "Devices" || row.category === "Raceways"), "Lighting excludes devices and conduit");
+const terminations = laborItemsForLine(active, { itemType: "Equipment", category: "Equipment terminations" });
+assert(terminations.length > 0 && terminations.every((row) => /terminat/i.test(`${row.subcategory} ${row.item_name}`)), "Equipment terminations are termination rows");
 
-const recs = laborItemsForLine(AUDITED_LABOR_ITEMS, { itemType: "Device", category: "Receptacles" });
-assert(recs.length > 0 && recs.every((row) => /receptacle/i.test(row.item_name)), "Receptacles list is only receptacles");
+const generators = laborItemsForLine(active, { itemType: "Equipment", category: "Generators" });
+assert(generators.length === 8 && generators.every((row) => row.subcategory === "Generators"), `Generators subcategory is the 8 generator rows, got ${generators.length}`);
 
-const none = laborItemsForLine(AUDITED_LABOR_ITEMS, { itemType: "", category: "" });
+const conduitInstall = laborItemsForLine(active, { itemType: "Conduit", category: "Conduit Installation" });
+assert(conduitInstall.length > 0 && conduitInstall.every((row) => row.subcategory === "Conduit Installation"), "Conduit Installation is the manual work category");
+assert(conduitInstall.some((row) => row.id === "EL-00039"), "1/2 EMT install is under Conduit Installation");
+assert(conduitInstall.some((row) => /PVC Sch/i.test(row.material_type)), "Conduit Installation includes PVC, not only EMT");
+
+const emtLegacy = laborItemsForLine(active, { itemType: "Conduit", category: "EMT conduit" });
+assert(emtLegacy.some((row) => row.id === "EL-00039"), "saved EMT conduit lines still match");
+assert(emtLegacy.every((row) => row.material_type === "EMT" && row.subcategory === "Conduit Installation"), "EMT conduit alias stays EMT install only");
+
+assert(filterLaborLibrary(active, "emt").length === 0, "unscoped typeahead is empty");
+assert(filterLaborLibrary(active, "1/2", { itemType: "Conduit", category: "EMT conduit" }).some((row) => row.id === "EL-00039"), "legacy typeahead still finds 1/2 EMT");
+assert(filterLaborLibrary(active, "generator", { itemType: "Equipment" }).some((row) => row.id === "EL-01842"), "Type Equipment typeahead finds generator without a category");
+assert(filterLaborLibrary(active, "", { itemType: "Equipment" }).length === equipment.length, "empty Equipment search lists every equipment row");
+assert(!laborItemMatchesLine(active.find((row) => row.id === "EL-01372"), { itemType: "Conduit", category: "Conduit Installation" }), "THHN does not match Conduit");
+
+const none = laborItemsForLine(active, { itemType: "", category: "" });
 assert(none.length === 0, "no type does not dump the full library");
-assert(filterLaborLibrary(AUDITED_LABOR_ITEMS, "emt").length === 0, "unscoped typeahead is empty");
-assert(filterLaborLibrary(AUDITED_LABOR_ITEMS, "1/2", { itemType: "Conduit", category: "EMT conduit" }).some((row) => row.id === "EL-00039"), "scoped typeahead still finds 1/2 EMT");
-assert(!laborItemMatchesLine(AUDITED_LABOR_ITEMS.find((row) => row.id === "EL-01372"), { itemType: "Conduit", category: "EMT conduit" }), "THHN does not match EMT conduit");
-
-assert(categoriesForType("Equipment").includes("Generator installation"), "Equipment has Generator installation");
-assert(categoriesForType("Gear").includes("Generator installation"), "Gear has Generator installation");
-assert(categoriesForType("Labor").includes("Generator installation"), "Labor has Generator installation");
-
-const generators = laborItemsForLine(AUDITED_LABOR_ITEMS, { itemType: "Equipment", category: "Generator installation" });
-assert(generators.length === 8 && generators.every((row) => row.category === "Emergency Power" && row.subcategory === "Generators"), `Generator installation is the 8 Emergency Power generator rows, got ${generators.length}`);
-assert(generators.some((row) => row.id === "EL-01842"), "10 kW set/connect generator is in Generator installation");
-assert(!generators.some((row) => /ups/i.test(`${row.item_name} ${row.subcategory}`)), "Generator installation excludes UPS");
-assert(!laborItemsForLine(AUDITED_LABOR_ITEMS, { itemType: "Equipment", category: "Equipment connections" }).some((row) => /generator/i.test(row.item_name)), "Equipment connections still excludes generators");
-assert(laborItemsForLine(AUDITED_LABOR_ITEMS, { itemType: "Labor", category: "Generator installation" }).some((row) => row.id === "EL-01845"), "Labor type lists generator installation");
-assert(filterLaborLibrary(AUDITED_LABOR_ITEMS, "100 kW", { itemType: "Gear", category: "Generator installation" }).some((row) => row.id === "EL-01845"), "typeahead finds 100 kW generator under Gear");
 
 if (!process.exitCode) console.log("line labor catalog checks passed");

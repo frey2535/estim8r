@@ -20,7 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DEFAULT_VISIBLE_TOTALS, resolveVisibleTotals, setAllLinesIncluded, TOTAL_OPTIONS } from "@/domain/estimate/presentation";
 import { calculateBidByScope, calculateWorkCategoryBreakdown } from "@/domain/estimate/trueElectricalTakeoff";
 import { applyLibraryItemToLine, applyManualLineLabor, clearLaborPick, hydrateManualLineLabor, laborPickStillMatches, shouldHydrateManualLabor } from "@/domain/estimate/manualLineLabor";
-import { categoriesForType, defaultCategoryForType, laborItemMatchesLine } from "@/domain/estimate/lineLaborCatalog";
+import { categoriesForType, laborItemMatchesLine } from "@/domain/estimate/lineLaborCatalog";
 import EstimateLineCard from "@/components/estimate/EstimateLineCard";
 import EstimateSupplyQuote from "@/components/estimate/EstimateSupplyQuote";
 import LaborMarketCompare from "@/components/labor/LaborMarketCompare";
@@ -319,8 +319,8 @@ export default function EstimateBuilder() {
       if (key === "laborRate") next.laborRateEdited = true;
       if (key === "materialUnitCost") next.materialCostEdited = true;
       if (key === "itemType") {
-        const options = categoriesForType(value);
-        next.category = options.includes(next.category) ? next.category : defaultCategoryForType(value);
+        const options = categoriesForType(value, library);
+        next.category = options.includes(next.category) ? next.category : "";
         if (!laborPickStillMatches(next, library)) return clearLaborPick(next);
         return next;
       }

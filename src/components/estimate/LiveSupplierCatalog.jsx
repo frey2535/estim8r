@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { searchLiveSupplierCatalog } from "@/api/liveSupplierCatalog";
 import { catalogQueryForLine, pickAutoApplyOffer } from "@/domain/estimate/liveSupplierCatalog";
+import { supplierPublicSearches } from "@/domain/estimate/supplierWebSearch";
 
 export default function LiveSupplierCatalog({ lines = [], onApplyPrice }) {
   const defaultQuery = useMemo(() => {
@@ -102,6 +103,7 @@ export default function LiveSupplierCatalog({ lines = [], onApplyPrice }) {
   const results = payload?.results || [];
   const configured = payload?.configured || [];
   const diagnostics = payload?.diagnostics || [];
+  const publicSearches = supplierPublicSearches(query);
 
   return (
     <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -169,6 +171,20 @@ export default function LiveSupplierCatalog({ lines = [], onApplyPrice }) {
           ))}
         </div>
       ) : null}
+      <div className="mt-4 rounded-xl border border-border p-3">
+        <div className="font-bold">No API credentials? Search supplier websites</div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          These links search each supplier's public website for the exact model, SKU, or description you entered.
+          Open the supplier result, verify the current price, then enter/apply that verified price in Estim8r.
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {publicSearches.map((row) => (
+            <a key={row.id} href={row.url} target="_blank" rel="noreferrer" className="rounded-md border border-border px-2 py-1 text-xs font-bold hover:bg-muted">
+              Search {row.supplier}
+            </a>
+          ))}
+        </div>
+      </div>
       <div className="mt-4 space-y-2">
         {results.map((offer) => (
           <div key={offer.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border p-3">

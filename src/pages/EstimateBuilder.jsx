@@ -86,6 +86,7 @@ export default function EstimateBuilder() {
   const [crew, setCrew] = useState(() => defaultCrew());
   const [lines, setLines] = useState(() => [blankLine(68)]);
   const [contingency, setContingency] = useState(0);
+  const [materialMarkup, setMaterialMarkup] = useState(0);
   const [overhead, setOverhead] = useState(10);
   const [profit, setProfit] = useState(10);
   const [bondInsurance, setBondInsurance] = useState(0);
@@ -123,6 +124,7 @@ export default function EstimateBuilder() {
         }))
         : [blankLine(compositeWage(nextCrew).rate)]);
       setContingency(stored.contingency ?? 0);
+      setMaterialMarkup(stored.materialMarkup ?? 0);
       setOverhead(stored.overhead ?? 10);
       setProfit(stored.profit ?? 10);
       setBondInsurance(stored.bondInsurance ?? 0);
@@ -143,6 +145,7 @@ export default function EstimateBuilder() {
       setCrew(nextCrew);
       setLines([blankLine(compositeWage(nextCrew).rate)]);
       setContingency(0);
+      setMaterialMarkup(0);
       setOverhead(10);
       setProfit(10);
       setBondInsurance(0);
@@ -202,6 +205,7 @@ export default function EstimateBuilder() {
       factors,
       namedCrewId,
       contingency: Number(contingency) || 0,
+      materialMarkup: Number(materialMarkup) || 0,
       overhead: Number(overhead) || 0,
       profit: Number(profit) || 0,
       bondInsurance: Number(bondInsurance) || 0,
@@ -217,7 +221,7 @@ export default function EstimateBuilder() {
       supplierPriceBooks,
       pdfDesign,
     });
-  }, [ready, header, crew, lines, contingency, overhead, profit, bondInsurance, itemized, visibleTotals, meta, factors, namedCrewId, trueTakeoff, completenessChecklist, assemblies, installationConditions, supplierPriceBooks, pdfDesign, storageFileName, storedEstimateId, storedBuildrProjectId, storedBuildrInvoiceId]);
+  }, [ready, header, crew, lines, contingency, materialMarkup, overhead, profit, bondInsurance, itemized, visibleTotals, meta, factors, namedCrewId, trueTakeoff, completenessChecklist, assemblies, installationConditions, supplierPriceBooks, pdfDesign, storageFileName, storedEstimateId, storedBuildrProjectId, storedBuildrInvoiceId]);
 
   const draft = useMemo(() => ({
     version: 1,
@@ -230,6 +234,7 @@ export default function EstimateBuilder() {
     factors,
     namedCrewId,
     contingency: Number(contingency) || 0,
+    materialMarkup: Number(materialMarkup) || 0,
     overhead: Number(overhead) || 0,
     profit: Number(profit) || 0,
     bondInsurance: Number(bondInsurance) || 0,
@@ -244,7 +249,7 @@ export default function EstimateBuilder() {
     installationConditions,
     supplierPriceBooks,
     pdfDesign,
-  }), [header, crew, factors, namedCrewId, contingency, overhead, profit, bondInsurance, lines, itemized, visibleTotals, meta, trueTakeoff, completenessChecklist, assemblies, installationConditions, supplierPriceBooks, pdfDesign, storageFileName, storedEstimateId, storedBuildrProjectId, storedBuildrInvoiceId]);
+  }), [header, crew, factors, namedCrewId, contingency, materialMarkup, overhead, profit, bondInsurance, lines, itemized, visibleTotals, meta, trueTakeoff, completenessChecklist, assemblies, installationConditions, supplierPriceBooks, pdfDesign, storageFileName, storedEstimateId, storedBuildrProjectId, storedBuildrInvoiceId]);
 
   const supplyQuote = useMemo(() => buildEstimateSupplyQuote({
     lines,
@@ -264,12 +269,13 @@ export default function EstimateBuilder() {
     trueTakeoff?.analysis
       ? calculateBidByScope(lines, {
           contingency: Number(contingency) || 0,
+          materialMarkup: Number(materialMarkup) || 0,
           overhead: Number(overhead) || 0,
           profit: Number(profit) || 0,
           bondInsurance: Number(bondInsurance) || 0,
         })
       : {}
-  ), [trueTakeoff, lines, contingency, overhead, profit, bondInsurance]);
+  ), [trueTakeoff, lines, contingency, materialMarkup, overhead, profit, bondInsurance]);
   const workCategoryTotals = useMemo(
     () => calculateWorkCategoryBreakdown(lines),
     [lines],
@@ -736,6 +742,7 @@ export default function EstimateBuilder() {
         <div className="min-w-0 rounded-2xl border border-border bg-card p-4">
           <h2 className="font-bold">Bid markups</h2>
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label="Material markup %" type="number" value={materialMarkup} set={setMaterialMarkup} />
             <Field label="Contingency %" type="number" value={contingency} set={setContingency} />
             <Field label="Overhead %" type="number" value={overhead} set={setOverhead} />
             <Field label="Profit %" type="number" value={profit} set={setProfit} />

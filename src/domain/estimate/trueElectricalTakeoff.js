@@ -7,6 +7,7 @@ import { estimateLineHours, estimateLineLaborCost } from "./manualLineLabor.js";
 export const DEFAULT_TRUE_BID_SETTINGS = Object.freeze({
   laborRate: 72,
   contingency: 3,
+  materialMarkup: 0,
   overhead: 10,
   profit: 8,
   bondInsurance: 1.5,
@@ -426,13 +427,15 @@ export function calculateTrueBidSummary(lines, settings = DEFAULT_TRUE_BID_SETTI
     acc.labor += labor;
     return acc;
   }, { material: 0, hours: 0, labor: 0 });
-  const direct = totals.material + totals.labor;
+  const markedMaterial = totals.material * (1 + (num(settings.materialMarkup) / 100));
+  const direct = markedMaterial + totals.labor;
   const contingency = direct * (num(settings.contingency) / 100);
   const overhead = (direct + contingency) * (num(settings.overhead) / 100);
   const profit = (direct + contingency + overhead) * (num(settings.profit) / 100);
   const bondInsurance = (direct + contingency + overhead + profit) * (num(settings.bondInsurance) / 100);
   return {
     ...Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, money(value)])),
+    material: money(markedMaterial),
     direct: money(direct),
     contingency: money(contingency),
     overhead: money(overhead),
@@ -498,6 +501,7 @@ export function buildTrueElectricalEstimateDraft(existing, {
     overhead: num(settings.overhead),
     profit: num(settings.profit),
     contingency: num(settings.contingency),
+    materialMarkup: num(settings.materialMarkup),
     bondInsurance: num(settings.bondInsurance),
     trueTakeoff: {
       analysis,

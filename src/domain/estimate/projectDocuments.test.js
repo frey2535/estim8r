@@ -113,7 +113,16 @@ assert(decideSaveDestination({
   canUseBuildr: false,
   matchingProject: null,
   linkedCompanyId: "co_1",
-}).action === "local", "a linked company the login cannot use still saves locally");
+}).action === "local", "a linked company without a live Buildr session still saves locally");
+assert(
+  !String(decideSaveDestination({
+    hasBuildrAccount: true,
+    canUseBuildr: false,
+    matchingProject: null,
+    linkedCompanyId: "co_1",
+  }).warning || "").includes("cannot use that company yet"),
+  "a valid linked account is not told it cannot use the company",
+);
 
 assert(canSaveProjectDocuments({ fileName: "plan.pdf", projectName: "Main Hospital" }) === true, "drawing plus project name can save");
 assert(canSaveProjectDocuments({ fileName: "", projectName: "Main Hospital" }) === true, "a named estimate can save without a drawing");

@@ -112,6 +112,50 @@ function ratioScore(a,b){
   const r=Math.max(a,b)/Math.min(a,b);
   if(r<=1.2)return 1;if(r<=1.45)return .8;if(r<=1.8)return .55;if(r<=2.3)return .25;return 0;
 }
+
+function layoutDistanceScore(layoutA=[], layoutB=[]){
+  if(!layoutA.length||!layoutB.length)return 0.5;
+  const scoreOneWay=(A,B)=>{
+    let total=0;
+    for(const a of A){
+      let best=Infinity;
+      for(const b of B){
+        const kindPenalty=a.kind===b.kind?0:0.18;
+        const d=Math.hypot((a.dx||0)-(b.dx||0),(a.dy||0)-(b.dy||0))
+          + Math.abs((a.w||0)-(b.w||0))*0.55
+          + Math.abs((a.h||0)-(b.h||0))*0.55
+          + kindPenalty;
+        if(d<best)best=d;
+      }
+      total+=best;
+    }
+    return total/Math.max(1,A.length);
+  };
+  const raw=(scoreOneWay(layoutA,layoutB)+scoreOneWay(layoutB,layoutA))/2;
+  return Math.max(0,Math.min(1,1-raw/1.25));
+}
+
+function rotateLayout(layout=[],turns=0){
+  const t=((turns%4)+4)%4;
+  return layout.map((part)=>{
+    let dx=part.dx||0,dy=part.dy||0,w=part.w||0,h=part.h||0;
+    for(let i=0;i<t;i+=1){
+      const nextDx=-dy;
+      const nextDy=dx;
+      dx=nextDx;dy=nextDy;
+      const nextW=h;h=w;w=nextW;
+    }
+    return {...part,dx,dy,w,h};
+  });
+}
+
+function bestLayoutScore(A,B){
+  let best=0;
+  for(let turns=0;turns<4;turns+=1){
+    best=Math.max(best,layoutDistanceScore(A.layout||[],rotateLayout(B.layout||[],turns)));
+  }
+  return best;
+}
 export function geometrySimilarity(a,b){
   const A=a?.signature||geometrySignature(a), B=b?.signature||geometrySignature(b);
   if(!A||!B)return 0;
@@ -122,7 +166,8 @@ export function geometrySimilarity(a,b){
   let kind=0,total=0;
   for(const k of keys){kind+=Math.min(A.kinds[k]||0,B.kinds[k]||0);total+=Math.max(A.kinds[k]||0,B.kinds[k]||0);}
   kind=total?kind/total:0;
-  return aspect*.28+size*.28+count*.22+kind*.22;
+  const layout=bestLayoutScore(A,B);
+  return aspect*.18+size*.20+count*.16+kind*.16+layout*.30;
 }
 
 export function bodySimilarity(a, b) {
@@ -239,14 +284,26 @@ export function attachLegendGeometryPrototypes(dictionary,pages=[]){
     const category=entry.symbol?.takeoffCategory||entry.symbol?.category||"";
     if(category&&!CATEGORY_ALLOW.has(category))continue;
     const sourcePages=pages.filter((p)=>String(p.kind||"").includes("legend")||String(p.kind||"").includes("schedule"));
-    let prototype=null;
+    const prototypes=[];
     for(const page of sourcePages){
       const seed=seedNearLegendEntry(entry,page);
       if(!seed)continue;
-      prototype=clusterSymbolGeometry(seed,page.paths||[],{maxSpan:2.8});
-      if(prototype)break;
+      const seedLong=Math.max(Number(seed.w)||0,Number(seed.h)||0,0.2);
+      const prototype=clusterSymbolGeometry(seed,page.paths||[],{
+        maxSpan:Math.max(0.7,Math.min(1.8,seedLong*2.4)),
+        joinGap:Math.max(0.08,Math.min(0.28,seedLong*0.55)),
+        maxParts:10,
+      });
+      if(!prototype)continue;
+      if(!prototypes.some((existing)=>geometrySimilarity(existing,prototype)>=0.97)){
+        prototypes.push(prototype);
+      }
+      if(prototypes.length>=3)break;
     }
-    if(prototype)entry.prototype=prototype;
+    if(prototypes.length){
+      entry.prototypes=prototypes;
+      entry.prototype=prototypes[0];
+    }
   }
   return {...dictionary,entries};
 }

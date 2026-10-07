@@ -593,7 +593,7 @@ export default function EstimateBuilder() {
           </DragDropContext>
         </div>
         {includeTotalsCard ? (
-          <div className="border-t border-border p-4">
+          <div data-testid="estimate-included-totals" className="border-t border-border p-4">
             <h3 className="font-bold">Totals on this estimate</h3>
             <div className="mt-3">
               {visibleTotalRows(draft, totals).map((row) => (

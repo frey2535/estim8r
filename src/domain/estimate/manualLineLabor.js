@@ -21,7 +21,7 @@ export function laborItemSearchText(item) {
     .toLowerCase();
 }
 
-export function filterLaborLibrary(items = [], query = "", { limit = 80, itemType, category } = {}) {
+export function filterLaborLibrary(items = [], query = "", { limit = 2500, itemType, category } = {}) {
   const scoped = (itemType || category)
     ? laborItemsForLine(items, { itemType, category })
     : [];

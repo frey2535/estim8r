@@ -157,7 +157,7 @@ export default function EstimateLineCard({
             <Field label="Category">
               <Sel
                 value={row.category}
-                vals={categoriesForType(row.itemType)}
+                vals={categoriesForType(row.itemType, library)}
                 set={(v) => onPatch?.(row.id, "category", v)}
                 placeholder={row.itemType ? "Category" : "Type first"}
               />

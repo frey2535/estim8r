@@ -167,6 +167,43 @@ export default function TakeoffInspector({
               </Field>
             </>
           ) : null}
+          {selectedIsMarker ? (
+            <div className="rounded-md border border-border bg-muted/30 p-2">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Symbol fill</div>
+              <label className="mt-1 flex items-center gap-2 text-[11px] font-semibold">
+                <input
+                  type="checkbox"
+                  checked={selected.fillEnabled !== false && selected.fillMode !== "off"}
+                  onChange={(e) => onUpdateMark(selected.id, { fillEnabled: e.target.checked, fillMode: e.target.checked ? "inside" : "off" })}
+                />
+                Fill inside printed symbol lines
+              </label>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <Field label="Fill opacity">
+                  <input
+                    type="range"
+                    min="0.08"
+                    max="0.75"
+                    step="0.01"
+                    value={selected.fillOpacity ?? 0.34}
+                    onChange={(e) => onUpdateMark(selected.id, { fillOpacity: Number(e.target.value) })}
+                    className="w-full"
+                  />
+                </Field>
+                <Field label="Inside inset">
+                  <input
+                    type="range"
+                    min="0.55"
+                    max="1"
+                    step="0.01"
+                    value={selected.fillInset ?? 0.86}
+                    onChange={(e) => onUpdateMark(selected.id, { fillInset: Number(e.target.value) })}
+                    className="w-full"
+                  />
+                </Field>
+              </div>
+            </div>
+          ) : null}
           <div className="grid grid-cols-2 gap-2">
             <Field label="Color">
               <input type="color" className="h-8 w-full" value={selected.color || "#2563eb"} onChange={(e) => onUpdateMark(selected.id, { color: e.target.value })} />

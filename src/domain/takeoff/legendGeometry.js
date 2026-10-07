@@ -711,7 +711,7 @@ export function snapToEntryPrototype(token, page, entry, options = {}) {
 }
 
 export function scanPageByLegendGeometry(page,dictionary,options={}){
-  const threshold=Number(options.threshold)||0.82;
+  const threshold=Number(options.threshold)||0.76;
   const entries=(dictionary?.entries||[]).filter((e)=>{
     if(!e.prototype) return false;
     if (!options.planType) return true;
@@ -722,48 +722,115 @@ export function scanPageByLegendGeometry(page,dictionary,options={}){
   const planType=options.planType||pagePlanType(page);
   const occupied=options.occupied||[];
   const paths=(page?.paths||[]).filter((p)=>allowCandidate(p,options));
-  const clusters=[];
-  // Do not globally consume primitives here. A single primitive can be the seed
-  // for several nearby symbol hypotheses; consuming it after the first cluster
-  // caused one fixture family to dominate a sheet and hid other device types.
-  const seenClusterKeys=new Set();
-  const clusterOpts = options.allowSlash
-    ? { allowSlash: true, maxSpan: 0.85, joinGap: 0.26, maxParts: 6 }
-    : { maxSpan: 2.8, keepSeedBody: Boolean(options.keepSeedBody) };
+  const hypotheses=[];
+  const seen=new Set();
+
   for(const seed of paths){
     if (options.allowSlash && !isDeviceFragment(seed) && isJunkGeometry(seed)) continue;
     if (options.twinHatch && !looksLikeTroffer(seed)) continue;
-    const cluster=clusterSymbolGeometry(seed,paths,clusterOpts);
-    if(!cluster)continue;
-    if (options.allowSlash) {
-      const long = Math.max(cluster.w || 0, cluster.h || 0);
-      if (long < 0.1 || long > 0.98) continue;
+
+    for(const entry of entries){
+      const protos=entry.prototypes?.length?entry.prototypes:[entry.prototype];
+      for(const proto of protos){
+        if(!proto) continue;
+        const pLong=Math.max(Number(proto.w)||0,Number(proto.h)||0,0.18);
+        const pShort=Math.max(0.08,Math.min(Number(proto.w)||0,Number(proto.h)||0,pLong));
+        const seedLong=Math.max(Number(seed.w)||0,Number(seed.h)||0,0.02);
+        if(options.strictSize && (seedLong>pLong*1.75 || seedLong<pShort*0.15)) continue;
+        const cluster=clusterSymbolGeometry(seed,paths,{
+          allowSlash:Boolean(options.allowSlash),
+          keepSeedBody:Boolean(options.keepSeedBody),
+          maxSpan:Math.max(0.42,Math.min(2.5,pLong*1.42)),
+          joinGap:Math.max(0.06,Math.min(0.38,pShort*0.72)),
+          maxParts:Math.max(4,Math.min(14,(proto.parts?.length||1)+5)),
+        });
+        if(!cluster) continue;
+        const distKey=[entry.symbol?.id||entry.code,cluster.cx.toFixed(2),cluster.cy.toFixed(2),cluster.w.toFixed(2),cluster.h.toFixed(2),cluster.parts?.length||1].join(":");
+        if(seen.has(distKey)) continue;
+        seen.add(distKey);
+        const nearby=(page?.paths||[]).filter((path)=>Math.hypot((path.cx||0)-cluster.cx,(path.cy||0)-cluster.cy)<=Math.max(0.5,pLong*0.9));
+        const geom=geometrySimilarity(cluster,proto);
+        const body=bodySimilarity(cluster,proto);
+        const sizeOk=sizeCompatible(cluster,proto);
+        const score=Math.max(geom, options.bodyOnly ? body : 0)
+          + planTypeScore(entry,planType)
+          + emergencyTwinAdjustment(cluster,entry,nearby);
+        hypotheses.push({cluster,entry,raw:geom,score,sizeOk,nearby});
+      }
     }
-    const key=[cluster.cx.toFixed(2),cluster.cy.toFixed(2),cluster.w.toFixed(2),cluster.h.toFixed(2),cluster.parts?.length||1].join(":");
-    if(seenClusterKeys.has(key))continue;
-    seenClusterKeys.add(key);
-    clusters.push(cluster);
   }
+
   const hits=[];
-  for(const cluster of clusters){
-    if(occupied.some((point)=>Math.hypot((point.x||0)-cluster.cx,(point.y||0)-cluster.cy)<(Number(options.occupyRadius)||0.34))) continue;
-    const nearby = (page?.paths || []).filter((path) => Math.hypot((path.cx || 0) - cluster.cx, (path.cy || 0) - cluster.cy) <= 0.7);
-    const resolved=resolveGeometryMatch(cluster,entries,{
-      planType,
-      strictSize:options.strictSize,
-      bodyOnly:options.bodyOnly,
-      nearby,
+  hypotheses.sort((a,b)=>b.score-a.score);
+  for(const row of hypotheses){
+    if(row.raw < threshold) continue;
+    if(options.strictSize && !row.sizeOk) continue;
+    const cluster=row.cluster;
+    if(occupied.some((point)=>Math.hypot((point.x||0)-cluster.cx,(point.y||0)-cluster.cy)<(Number(options.occupyRadius)||0.26))) continue;
+    if(hits.some((hit)=>Math.hypot(hit.geometry.cx-cluster.cx,hit.geometry.cy-cluster.cy)<0.20)) continue;
+
+    const rivals=hypotheses.filter((other)=>other!==row && Math.hypot(other.cluster.cx-cluster.cx,other.cluster.cy-cluster.cy)<0.22);
+    const runner=rivals[0];
+    const margin=row.score-(runner?.score||0);
+    hits.push({
+      geometry:cluster,
+      entry:row.entry,
+      score:row.raw,
+      margin,
+      ambiguous:Boolean(runner && margin<0.035),
     });
-    if(resolved&&resolved.score>=threshold){
-      hits.push({geometry:cluster,entry:resolved.entry,score:resolved.score,margin:resolved.margin,ambiguous:resolved.ambiguous});
+  }
+  return hits;
+}
+
+export function pickInteractiveSymbolGeometry(page, point, options = {}) {
+  if (!page || !point) return null;
+  const paths=(page.paths||[]).filter((path)=>allowCandidate(path,{allowSlash:true}));
+  const radius=Number(options.radius)||1.25;
+  const nearby=paths
+    .map((path)=>({path,dist:Math.hypot((path.cx||0)-point.x,(path.cy||0)-point.y)}))
+    .filter((row)=>row.dist<=radius)
+    .sort((a,b)=>a.dist-b.dist)
+    .slice(0,18);
+  if(!nearby.length) return null;
+
+  let best=null;
+  let bestScore=-Infinity;
+  for(const row of nearby){
+    const seed=row.path;
+    const seedLong=Math.max(Number(seed.w)||0,Number(seed.h)||0,0.16);
+    for(const span of [Math.max(0.42,seedLong*1.7),Math.max(0.7,seedLong*2.5),1.35]){
+      const cluster=clusterSymbolGeometry(seed,paths,{
+        allowSlash:true,
+        maxSpan:Math.min(2.2,span),
+        joinGap:Math.max(0.08,Math.min(0.32,seedLong*0.7)),
+        maxParts:12,
+      });
+      if(!cluster) continue;
+      const long=Math.max(Number(cluster.w)||0,Number(cluster.h)||0);
+      const short=Math.min(Number(cluster.w)||0,Number(cluster.h)||0);
+      if(long<0.10||long>2.4||short<0.04) continue;
+      const d=Math.hypot(cluster.cx-point.x,cluster.cy-point.y);
+      const contains = Math.abs(point.x-cluster.cx)<=Math.max(0.12,(cluster.w||0)/2+0.12)
+        && Math.abs(point.y-cluster.cy)<=Math.max(0.12,(cluster.h||0)/2+0.12);
+      const partBonus=Math.min(0.45,(cluster.parts?.length||1)*0.045);
+      const score=(contains?2.2:0.8)-d*1.4+partBonus-Math.max(0,long-1.6)*0.25;
+      if(score>bestScore){best=cluster;bestScore=score;}
     }
   }
-  // Keep the strongest hypothesis for the same physical footprint, but do not
-  // suppress distinct nearby symbols.
-  return hits.sort((a,b)=>b.score-a.score).filter((hit,index,all)=>!all.slice(0,index).some((other)=>
-    Math.hypot(other.geometry.cx-hit.geometry.cx,other.geometry.cy-hit.geometry.cy)<0.16 &&
-    other.entry.symbol?.id===hit.entry.symbol?.id
-  ));
+  return best;
+}
+
+export function matchGeometryToLegend(cluster, dictionary, options = {}) {
+  if(!cluster) return null;
+  const entries=(dictionary?.entries||[]).filter((entry)=>entry?.prototype);
+  if(!entries.length) return null;
+  return resolveGeometryMatch(cluster, entries, {
+    planType: options.planType || "",
+    strictSize: false,
+    bodyOnly: false,
+    nearby: options.nearby || [],
+  });
 }
 
 export function attachProjectPrototypes(dictionary, prototypes = []) {

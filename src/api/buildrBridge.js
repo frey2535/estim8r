@@ -46,6 +46,76 @@ export function isBuildrConfigured() {
   return Boolean(buildrApiUrl());
 }
 
+export const BUILDR_SESSION_STORAGE_KEY = "estim8r.buildrSession.v1";
+
+export function buildrSessionStorageKey(email) {
+  const normalized = String(email || "").trim().toLowerCase();
+  return normalized ? `${BUILDR_SESSION_STORAGE_KEY}:${normalized}` : BUILDR_SESSION_STORAGE_KEY;
+}
+
+export function buildrAuthHeaders(token) {
+  const value = String(token || "").trim();
+  return value ? { Authorization: `Bearer ${value}` } : {};
+}
+
+function jwtExpiryMs(token) {
+  try {
+    const payload = String(token || "").split(".")[1] || "";
+    const json = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+    return Number(json?.exp || 0) * 1000;
+  } catch {
+    return 0;
+  }
+}
+
+function sessionStore() {
+  try {
+    if (typeof localStorage !== "undefined") return localStorage;
+  } catch {
+    /* private mode */
+  }
+  return null;
+}
+
+export function readBuildrSessionToken(email, store = sessionStore(), now = Date.now()) {
+  if (!store) return "";
+  try {
+    const raw = store.getItem(buildrSessionStorageKey(email));
+    if (!raw) return "";
+    const parsed = JSON.parse(raw);
+    const token = String(parsed?.token || "").trim();
+    const expiresAt = Number(parsed?.expiresAt || 0);
+    if (!token) return "";
+    if (expiresAt && expiresAt <= now) {
+      store.removeItem(buildrSessionStorageKey(email));
+      return "";
+    }
+    return token;
+  } catch {
+    return "";
+  }
+}
+
+export function writeBuildrSessionToken(email, token, store = sessionStore()) {
+  const value = String(token || "").trim();
+  if (!store || !email || !value) return "";
+  try {
+    store.setItem(buildrSessionStorageKey(email), JSON.stringify({
+      token: value,
+      expiresAt: jwtExpiryMs(value) || Date.now() + 7 * 24 * 60 * 60 * 1000,
+    }));
+  } catch {
+    /* ignore quota / private mode */
+  }
+  return value;
+}
+
+function persistReturnedBuildrToken(email, data, store = sessionStore()) {
+  const token = String(data?.buildr_token || data?.token || "").trim();
+  if (email && token) writeBuildrSessionToken(email, token, store);
+  return token;
+}
+
 async function readJson(response) {
   try {
     return await response.json();
@@ -81,19 +151,24 @@ export async function verifyBuildrFamilyAppSso(token, audience = "estim8r") {
     return { valid: false, error: "token_required" };
   }
   const verified = await postFamilyAppSsoVerify(api, token, audience);
-  if (verified?.valid) return verified;
+  if (verified?.valid) {
+    persistReturnedBuildrToken(verified.email, verified);
+    return verified;
+  }
   const production = DEFAULT_BUILDR_PRODUCTION_URL;
   if (
     import.meta.env.PROD &&
     api !== production &&
     (verified?.error === "buildr_unavailable" || isLoopbackBuildrUrl(api))
   ) {
-    return postFamilyAppSsoVerify(production, token, audience);
+    const fallback = await postFamilyAppSsoVerify(production, token, audience);
+    if (fallback?.valid) persistReturnedBuildrToken(fallback.email, fallback);
+    return fallback;
   }
   return verified;
 }
 
-export async function fetchBuildrAccountStatus(email, companyId) {
+export async function fetchBuildrAccountStatus(email, companyId, { ssoToken } = {}) {
   const api = buildrApiUrl();
   if (!api || !email) {
     return { configured: Boolean(api), hasAccount: false, canUseBuildr: false, projects: [] };
@@ -102,10 +177,18 @@ export async function fetchBuildrAccountStatus(email, companyId) {
     const response = await fetch(`${api}/estim8r/account-status`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, companyId: companyId || undefined }),
+      headers: {
+        "Content-Type": "application/json",
+        ...buildrAuthHeaders(readBuildrSessionToken(email)),
+      },
+      body: JSON.stringify({
+        email,
+        companyId: companyId || undefined,
+        ssoToken: ssoToken || undefined,
+      }),
     });
     const data = await readJson(response);
+    persistReturnedBuildrToken(email, data);
     if (!response.ok) {
       return { configured: true, hasAccount: false, canUseBuildr: false, projects: [], error: data.message || data.error };
     }
@@ -140,6 +223,11 @@ export async function saveBuildrProjectDocuments({
   estim8rEstimateId,
   buildrProjectId,
   buildrInvoiceId,
+  customerCompany,
+  customerName,
+  customerEmail,
+  customerPhone,
+  ssoToken,
 }) {
   const api = buildrApiUrl();
   if (!api) throw new Error("Buildr is not configured.");
@@ -152,6 +240,11 @@ export async function saveBuildrProjectDocuments({
   if (estim8rEstimateId) form.append("estim8rEstimateId", estim8rEstimateId);
   if (buildrProjectId) form.append("buildrProjectId", buildrProjectId);
   if (buildrInvoiceId) form.append("buildrInvoiceId", buildrInvoiceId);
+  if (customerCompany) form.append("customerCompany", customerCompany);
+  if (customerName) form.append("customerName", customerName);
+  if (customerEmail) form.append("customerEmail", customerEmail);
+  if (customerPhone) form.append("customerPhone", customerPhone);
+  if (ssoToken) form.append("ssoToken", ssoToken);
   form.append(
     "estimate",
     new Blob([JSON.stringify(estimate || {}, null, 2)], { type: "application/json" }),
@@ -170,9 +263,11 @@ export async function saveBuildrProjectDocuments({
   const response = await fetch(`${api}/estim8r/save-project-docs`, {
     method: "POST",
     credentials: "include",
+    headers: buildrAuthHeaders(readBuildrSessionToken(email)),
     body: form,
   });
   const data = await readJson(response);
+  persistReturnedBuildrToken(email, data);
   if (!response.ok) {
     throw new Error(data.message || data.error || "Buildr could not save the project documents.");
   }

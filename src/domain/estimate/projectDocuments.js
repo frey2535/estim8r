@@ -18,6 +18,23 @@ export function matchProjectByName(projects, projectName) {
   return (projects || []).find((project) => projectFolderKey(project.name) === key) || null;
 }
 
+export function matchCompanyProject(projects, { projectId, projectName, projectAddress } = {}) {
+  const rows = projects || [];
+  const id = String(projectId || "").trim();
+  if (id) {
+    const byId = rows.find((project) => project.id === id);
+    if (byId) return byId;
+  }
+  const byName = matchProjectByName(rows, projectName);
+  if (byName) return byName;
+  const address = String(projectAddress || "").trim().toLowerCase().replace(/\s+/g, " ");
+  if (!address) return null;
+  const matches = rows.filter((project) => (
+    String(project.address || "").trim().toLowerCase().replace(/\s+/g, " ") === address
+  ));
+  return matches.length === 1 ? matches[0] : null;
+}
+
 export function decideSaveDestination({
   hasBuildrAccount,
   canUseBuildr,
@@ -26,29 +43,27 @@ export function decideSaveDestination({
   linkedCompanyId,
   accountError,
 } = {}) {
-  const linked = Boolean(String(linkedCompanyId || "").trim());
-  if (existingProjectId) {
+  if (existingProjectId && !accountError) {
     return { action: "buildr", project: matchingProject || { id: existingProjectId } };
   }
-  if (accountError && (linked || canUseBuildr || hasBuildrAccount)) {
-    return { action: "error", error: `Could not reach Buildr: ${accountError}` };
-  }
-  if (matchingProject && (hasBuildrAccount || canUseBuildr || linked)) {
+  if (matchingProject && canUseBuildr) {
     return { action: "buildr", project: matchingProject };
   }
-  if (canUseBuildr && !matchingProject) {
+  if (canUseBuildr && !matchingProject && !accountError) {
     return { action: "prompt" };
   }
-  if (linked && !hasBuildrAccount && !canUseBuildr) {
+  if (accountError) {
     return {
-      action: "error",
-      error: "Buildr did not find this company or email. Check Settings → Buildr company, then Save again.",
+      action: "local",
+      warning: `Could not reach Buildr: ${accountError}`,
     };
   }
-  if (linked && hasBuildrAccount && !canUseBuildr) {
+  if (linkedCompanyId && !canUseBuildr) {
     return {
-      action: "error",
-      error: "This Buildr login cannot use the linked company yet. The estimate was not sent to Buildr.",
+      action: "local",
+      warning: hasBuildrAccount
+        ? "Buildr is linked but this login cannot use that company yet."
+        : "Buildr is not available for this company, so the estimate stayed in Estim8r.",
     };
   }
   return { action: "local" };

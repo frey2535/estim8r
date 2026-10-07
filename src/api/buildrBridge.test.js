@@ -1,8 +1,12 @@
 import {
   DEFAULT_BUILDR_PRODUCTION_URL,
+  buildrAuthHeaders,
+  buildrSessionStorageKey,
   isLoopbackBuildrUrl,
+  readBuildrSessionToken,
   resolveBuildrApiUrl,
   resolveBuildrAppUrl,
+  writeBuildrSessionToken,
 } from "./buildrBridge.js";
 
 function assert(cond, message) {
@@ -43,5 +47,19 @@ assert(
     "http://localhost:3001",
   "local development still uses localhost",
 );
+
+assert(buildrSessionStorageKey("Estimator@DayOne.test") === "estim8r.buildrSession.v1:estimator@dayone.test", "session key is email-scoped");
+assert(buildrAuthHeaders("tok_1").Authorization === "Bearer tok_1", "Buildr calls send the stored session");
+assert(Object.keys(buildrAuthHeaders("")).length === 0, "no Authorization header without a session");
+
+const memory = new Map();
+const store = {
+  getItem: (key) => (memory.has(key) ? memory.get(key) : null),
+  setItem: (key, value) => { memory.set(key, String(value)); },
+  removeItem: (key) => { memory.delete(key); },
+};
+writeBuildrSessionToken("estimator@dayone.test", "sess_1", store);
+assert(readBuildrSessionToken("Estimator@DayOne.test", store) === "sess_1", "stored Buildr session is reused");
+assert(readBuildrSessionToken("estimator@dayone.test", store, Date.now() + 8 * 24 * 60 * 60 * 1000) === "", "expired Buildr session is dropped");
 
 if (!process.exitCode) console.log("buildr bridge checks passed");

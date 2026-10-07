@@ -22,7 +22,7 @@ import {
   estimateFileNameForSave,
   getDrawingFile,
   isDrawingFileName,
-  matchProjectByName,
+  matchCompanyProject,
   readTakeoffSession,
   saveRequiresProjectName,
   upsertProjectFolder,
@@ -138,6 +138,10 @@ export default function SaveProjectDocuments({ estimate, onProjectName }) {
       estim8rEstimateId: current.id,
       buildrProjectId: current.buildrSync?.projectId || estimate?.buildrSync?.projectId || null,
       buildrInvoiceId: current.buildrSync?.invoiceId || estimate?.buildrSync?.invoiceId || null,
+      customerCompany: current.header?.customerCompany || estimate?.header?.customerCompany || "",
+      customerName: current.header?.customerName || estimate?.header?.customerName || "",
+      customerEmail: current.header?.customerEmail || estimate?.header?.customerEmail || "",
+      customerPhone: current.header?.customerPhone || estimate?.header?.customerPhone || "",
     });
     const sync = persistSync(result, name);
     await saveLocal({
@@ -178,27 +182,28 @@ export default function SaveProjectDocuments({ estimate, onProjectName }) {
       if (!buildrApiUrl()) {
         await saveLocal({ savedTo: "estim8r" }, name);
         lastRun.current = fingerprint;
-        if (expectBuildr) {
-          setErrorStatus("Buildr is not configured, so this estimate could not sync. It was saved in Estim8r only.");
-          return;
-        }
-        setOk("Saved in the Estimates folder under this project name.");
+        setOk(expectBuildr
+          ? "Saved in Estim8r. Buildr is not configured in this session, so it was not synced."
+          : "Saved in the Estimates folder under this project name.");
         return;
       }
 
       if (!user?.email) {
         await saveLocal({ savedTo: "estim8r" }, name);
-        if (expectBuildr) {
-          setErrorStatus("Sign in so Save can send this estimate to Buildr. It was saved in Estim8r only.");
-          return;
-        }
         lastRun.current = fingerprint;
-        setOk("Saved in the Estimates folder under this project name.");
+        setOk(expectBuildr
+          ? "Saved in Estim8r. Sign in to send this estimate to Buildr."
+          : "Saved in the Estimates folder under this project name.");
         return;
       }
 
+      await saveLocal({ savedTo: "estim8r" }, name);
       const account = await fetchBuildrAccountStatus(user.email, companyId);
-      const matchingProject = matchProjectByName(account.projects, name);
+      const matchingProject = matchCompanyProject(account.projects, {
+        projectId: existingProjectId,
+        projectName: name,
+        projectAddress,
+      });
       const decision = decideSaveDestination({
         hasBuildrAccount: account.hasAccount,
         canUseBuildr: account.canUseBuildr,
@@ -208,8 +213,8 @@ export default function SaveProjectDocuments({ estimate, onProjectName }) {
         accountError: account.error,
       });
       if (decision.action === "error") {
-        await saveLocal({ savedTo: "estim8r" }, name);
-        setErrorStatus(`${decision.error} The estimate was saved in Estim8r only.`);
+        lastRun.current = fingerprint;
+        setErrorStatus(`${decision.error} The estimate was saved in Estim8r.`);
         return;
       }
       if (decision.action === "buildr") {
@@ -222,7 +227,6 @@ export default function SaveProjectDocuments({ estimate, onProjectName }) {
       }
       if (decision.action === "prompt") {
         if (!force && sessionStorage.getItem(promptKey(name)) === "declined") {
-          await saveLocal({ savedTo: "estim8r" }, name);
           lastRun.current = fingerprint;
           setOk("Saved in the Estimates folder under this project name.");
           return;
@@ -233,16 +237,16 @@ export default function SaveProjectDocuments({ estimate, onProjectName }) {
         }
         return;
       }
-      await saveLocal({ savedTo: "estim8r" }, name);
       lastRun.current = fingerprint;
-      if (account.error) {
-        setErrorStatus(`Could not reach Buildr: ${account.error} The estimate was saved in Estim8r only.`);
-        return;
-      }
-      setOk("Saved in the Estimates folder under this project name.");
+      setOk(decision.warning
+        ? `${decision.warning} Saved in Estim8r.`
+        : "Saved in the Estimates folder under this project name.");
     } catch (error) {
       await saveLocal({ savedTo: "estim8r" }, name);
-      setErrorStatus(error?.message || "Buildr could not save this estimate. It was saved in Estim8r only.");
+      lastRun.current = fingerprint;
+      setOk(error?.message
+        ? `${error.message} The estimate was still saved in Estim8r.`
+        : "Buildr could not save this estimate. It was still saved in Estim8r.");
     } finally {
       setBusy(false);
     }
@@ -369,10 +373,10 @@ export default function SaveProjectDocuments({ estimate, onProjectName }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Create this project in Buildr?</AlertDialogTitle>
             <AlertDialogDescription>
-              You can use Buildr, but there is no project named “{projectName}” yet.
+              No Buildr project matches “{projectName}” for this company.
               {hasDrawing
-                ? " Create it now so Estim8r and Buildr can save the drawings, estimate, and markup pages on that project’s Estimate tab?"
-                : " Create it now so Estim8r and Buildr can save this estimate on that project’s Estimate tab?"}
+                ? " Create one from the Project and Customer cards and save the drawings, estimate, and markup pages on that project’s Estimate tab?"
+                : " Create one from the Project and Customer cards and save this estimate on that project’s Estimate tab?"}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

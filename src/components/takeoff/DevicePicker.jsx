@@ -16,6 +16,7 @@ export default function DevicePicker({
   onQuery,
   compact = false,
   availableSymbols = [],
+  onManualMark,
 }) {
   const detected = symbolsOnDrawingForTrade(trade, marks, { pageKinds });
   const merged = new Map();
@@ -79,6 +80,16 @@ export default function DevicePicker({
         ))}
       </select>
       <p className="text-[11px] text-muted-foreground">{visible.length} {tradeLabel} symbol type{visible.length === 1 ? "" : "s"} available from the project legend/catalog</p>
+      {onManualMark ? (
+        <button
+          type="button"
+          onClick={onManualMark}
+          disabled={!symbolId && !visible[0]?.id}
+          className="w-full rounded-lg border border-blue-600 bg-blue-50 px-2 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-40 dark:border-orange-500 dark:bg-orange-500/10 dark:text-orange-300"
+        >
+          Mark missed symbol manually
+        </button>
+      ) : null}
     </div>
   );
 }

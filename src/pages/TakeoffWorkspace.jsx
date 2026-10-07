@@ -26,7 +26,7 @@ import {
 } from "@/domain/takeoff/junctionHardware";
 import { drawingSymbolsFromDocs, printedScaleCalibration, readDrawingDocuments } from "@/domain/takeoff/drawing-docs";
 import { paletteForTrade, pageKindsFromDocs, symbolsOnDrawingForTrade, tradeById, conduitOptionsForTrade, findConduitOption, TRADES, DEFAULT_CONDUIT_ID } from "@/domain/takeoff/trades";
-import { buildAiMarks } from "@/domain/takeoff/aiTakeoff";
+import { buildAiMarks, legendDictionaryFromPages } from "@/domain/takeoff/aiTakeoff";
 import { readAiPages } from "@/domain/takeoff/aiPages";
 import { hydratePagesRaster } from "@/domain/takeoff/rasterSymbols";
 import { pickInteractiveSymbolGeometry, matchGeometryToLegend, attachLegendGeometryPrototypes } from "@/domain/takeoff/legendGeometry";
@@ -247,13 +247,14 @@ export default function TakeoffWorkspace() {
   const isPdf = file?.type === "application/pdf" || file?.name?.toLowerCase().endsWith(".pdf");
   const drawingSymbols = useMemo(() => drawingSymbolsFromDocs(drawingDocs), [drawingDocs]);
   const legendDictionary = useMemo(() => {
-    const entries = drawingSymbols.map((symbol) => ({
-      code: symbol.abbr || symbol.type || "",
-      symbol,
-      shapeHint: symbol.shapeHint || "",
-    }));
-    return attachLegendGeometryPrototypes({ entries }, aiPages);
-  }, [drawingSymbols, aiPages]);
+    const base = legendDictionaryFromPages(
+      aiPages,
+      drawingSymbols,
+      paletteForTrade(trade, drawingSymbols).symbols,
+      trade,
+    );
+    return attachLegendGeometryPrototypes(base, aiPages);
+  }, [drawingSymbols, aiPages, trade]);
   const palette = useMemo(() => paletteForTrade(trade, drawingSymbols), [trade, drawingSymbols]);
   const pageKinds = useMemo(() => pageKindsFromDocs(drawingDocs), [drawingDocs]);
   const drawingTypes = useMemo(

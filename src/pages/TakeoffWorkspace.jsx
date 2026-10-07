@@ -1870,6 +1870,7 @@ export default function TakeoffWorkspace() {
               onSymbol={setSymbolId}
               query={symbolQuery}
               onQuery={setSymbolQuery}
+              onManualMark={() => { setTool("count"); setStatus(`Manual symbol marking: choose a legend symbol, then click the missed printed symbol. Estim8r will snap the fill to its extracted geometry.`); }}
             />
           </div>
           <div className="mt-3 rounded-lg bg-muted p-3 text-xs leading-5 text-muted-foreground">
@@ -1918,6 +1919,7 @@ export default function TakeoffWorkspace() {
               onSymbol={setSymbolId}
               query={symbolQuery}
               onQuery={setSymbolQuery}
+              onManualMark={() => { setTool("count"); setStatus(`Manual symbol marking: choose a legend symbol, then click the missed printed symbol. Estim8r will snap the fill to its extracted geometry.`); }}
             />
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-2 py-1.5">
@@ -1978,7 +1980,12 @@ export default function TakeoffWorkspace() {
                   const point = drawingPoint(event);
                   if (!point) return;
                   const hovered = selectMarkAtPoint(overlayMarks, point, { markerSize: penSize });
-                  setHoveredDeviceId(hovered && isDeviceMark(hovered) ? hovered.id : null);
+                  if (hovered && isDeviceMark(hovered)) {
+                    setHoveredDeviceId(hovered.id);
+                  } else {
+                    const object = hitDrawingObject(drawingObjects, point, sheetMeta.page);
+                    setHoveredDeviceId(object ? `object:${object.objectId || object.id}` : null);
+                  }
                   if (!["conduit", "polyline", "linear", "measure", "homerun"].includes(tool)) return;
                   if (tool === "conduit") {
                     const prev = hoverPoint;
@@ -2055,7 +2062,10 @@ export default function TakeoffWorkspace() {
                   lengthFor={(mark) => markLengthFeet(mark, calibration, aspect)}
                 />
                 {(() => {
-                  const hovered = visibleOverlayMarks.find((mark) => mark.id === hoveredDeviceId && isDeviceMark(mark));
+                  const hovered = visibleOverlayMarks.find((mark) => mark.id === hoveredDeviceId && isDeviceMark(mark))
+                    || (String(hoveredDeviceId || "").startsWith("object:")
+                      ? drawingObjects.find((item) => `object:${item.objectId || item.id}` === hoveredDeviceId)
+                      : null);
                   if (!hovered) return null;
                   const legend = drawingSymbols.find((item) => (
                     item.id === hovered.symbol
@@ -2069,7 +2079,9 @@ export default function TakeoffWorkspace() {
                       style={{ left: `${x}%`, top: `${y}%`, transform: "translate(10px, 10px)" }}
                     >
                       <div className="font-black">{hovered.typeCode || hovered.abbr || "Symbol"} · {legend?.label || hovered.symbolLabel || "Device"}</div>
-                      <div className="mt-1 text-[11px] text-slate-600">{legend?.category || hovered.category || ""}</div>
+                      <div className="mt-1 text-[11px] text-slate-600">{legend?.label || hovered.symbolLabel || "No legend description available yet."}</div>
+                      <div className="mt-1 text-[10px] font-semibold text-slate-500">{legend?.category || hovered.category || ""}</div>
+                      {hovered.requiresClassification ? <div className="mt-1 text-[10px] font-bold text-amber-700">Unclassified geometry — choose the correct legend symbol and mark it manually.</div> : null}
                       {legend?.source ? <div className="mt-1 text-[10px] text-slate-500">Legend source: {legend.source}</div> : null}
                       {legend?.page ? <div className="text-[10px] text-slate-500">Legend/schedule sheet {legend.page}</div> : null}
                     </div>

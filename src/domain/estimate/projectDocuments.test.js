@@ -169,8 +169,10 @@ const markedMaterial = estimateGrandTotal({
   lines: [{ quantity: 2, materialUnitCost: 50, laborMhPerUnit: 1, laborRate: 50 }],
 });
 assert(markedMaterial.material === 125, `material markup ${markedMaterial.material}`);
+assert(markedMaterial.materialMarkup === 25, `material markup dollars ${markedMaterial.materialMarkup}`);
 assert(markedMaterial.labor === 100, `material markup leaves labor ${markedMaterial.labor}`);
 assert(Math.abs(markedMaterial.total - 225) < 0.001, `material markup grand ${markedMaterial.total}`);
+assert(money.materialMarkup === 0, "material markup dollars stay 0 when the rate is unset");
 assert(
   estimateContentFingerprint({ id: "est_abc", materialMarkup: 15, lines: [{ quantity: 1 }] })
     !== estimateContentFingerprint({ id: "est_abc", materialMarkup: 0, lines: [{ quantity: 1 }] }),

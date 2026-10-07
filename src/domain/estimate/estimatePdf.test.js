@@ -1,4 +1,5 @@
 import { estimateContentFingerprint } from "./projectDocuments.js";
+import { resolveVisibleTotals } from "./presentation.js";
 import {
   buildEstimatePdf,
   createEstimatePdfPreview,
@@ -64,6 +65,9 @@ assert(markedPresentation.totals.material === 60, `PDF material includes materia
 assert(markedPresentation.grandTotal > presentation.grandTotal, "PDF grand total follows material markup");
 assert(!("overhead" in presentation.totals), "presentation totals omit overhead");
 assert(!("profit" in presentation.totals), "presentation totals omit profit");
+assert(!("materialMarkup" in presentation.totals), "presentation totals omit material markup unless opted in");
+assert(resolveVisibleTotals({}).materialMarkup === false, "existing estimates hide the material markup line");
+assert(resolveVisibleTotals({ visibleTotals: { material: true } }).materialMarkup === false, "saved totals without the key stay hidden");
 assert(!("crew" in presentation), "presentation omits crew");
 assert(!("factors" in presentation), "presentation omits productivity factors");
 assert(!presentation.lines[0].laborRate, "line presentation omits wage");
@@ -140,6 +144,9 @@ assert(itemized.totals.material === 48, "itemized material ignores unchecked lin
 const withOverhead = estimatePresentation({ ...estimate, visibleTotals: { overhead: true, profit: true } });
 assert(withOverhead.totals.overhead > 0, "opt-in overhead total is present");
 assert(withOverhead.totals.profit > 0, "opt-in profit total is present");
+const withMarkupLine = estimatePresentation({ ...estimate, materialMarkup: 25, visibleTotals: { materialMarkup: true } });
+assert(withMarkupLine.totals.materialMarkup === 12, `opt-in material markup line ${withMarkupLine.totals.materialMarkup}`);
+assert(withMarkupLine.totals.material === 60, "opt-in material line still includes the marked-up material total");
 const overheadPdf = buildEstimatePdf({ ...estimate, visibleTotals: { overhead: true } }, { companyName: "Current Flow Electric" });
 assert(!overheadPdf.strings.includes("Overhead"), "customer PDF matches Buildr and omits overhead");
 assert(!overheadPdf.strings.includes("Profit"), "customer PDF matches Buildr and omits profit");

@@ -15,14 +15,23 @@ export default function DevicePicker({
   query,
   onQuery,
   compact = false,
+  availableSymbols = [],
+  onManualMark,
 }) {
-  const poolAll = symbolsOnDrawingForTrade(trade, marks, { pageKinds });
-  const cats = [...new Set(poolAll.map((item) => item.category).filter(Boolean))];
+  const detected = symbolsOnDrawingForTrade(trade, marks, { pageKinds });
+  const merged = new Map();
+  for (const item of [...availableSymbols, ...detected]) {
+    if (!item?.id || (item.trade && item.trade !== trade)) continue;
+    merged.set(item.id, item);
+  }
+  const poolAll = [...merged.values()];
+  const cats = [...new Set(poolAll.map((item) => item.takeoffCategory || item.category).filter(Boolean))];
   const activeCategory = cats.includes(category) ? category : "";
-  const pool = symbolsOnDrawingForTrade(trade, marks, {
-    pageKinds,
-    category: activeCategory || undefined,
-  }).filter((item) => item.trade === trade);
+  const pool = poolAll.filter((item) => {
+    if (item.trade && item.trade !== trade) return false;
+    if (!activeCategory) return true;
+    return (item.takeoffCategory || item.category) === activeCategory;
+  });
   const visible = filterSymbols(pool, compact ? "" : query).filter((item) => item.trade === trade);
   const tradeLabel = trades.find((item) => item.id === trade)?.label || trade;
   return (
@@ -70,7 +79,17 @@ export default function DevicePicker({
           </option>
         ))}
       </select>
-      <p className="text-[11px] text-muted-foreground">{visible.length} {tradeLabel} type{visible.length === 1 ? "" : "s"} on this drawing</p>
+      <p className="text-[11px] text-muted-foreground">{visible.length} {tradeLabel} symbol type{visible.length === 1 ? "" : "s"} available from the project legend/catalog</p>
+      {onManualMark ? (
+        <button
+          type="button"
+          onClick={onManualMark}
+          disabled={!symbolId && !visible[0]?.id}
+          className="w-full rounded-lg border border-blue-600 bg-blue-50 px-2 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-40 dark:border-orange-500 dark:bg-orange-500/10 dark:text-orange-300"
+        >
+          Mark missed symbol manually
+        </button>
+      ) : null}
     </div>
   );
 }

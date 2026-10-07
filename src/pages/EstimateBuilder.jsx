@@ -2,18 +2,18 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { DragDropContext, Draggable, Droppable } from "@hello-pangea/dnd";
 import { Plus } from "lucide-react";
-import { compositeWage, defaultCrew } from "@/domain/labor/employeeClasses";
-import { openEstimateSession, readEstimate, writeEstimate, writeWageBook } from "@/domain/estimate/estimateStore";
+import { compositeWage, defaultCrew, SHOP_HOURLY_RATE } from "@/domain/labor/employeeClasses";
+import { openEstimateSession, persistShopWageBook, readEstimate, readShopWageBook, writeEstimate } from "@/domain/estimate/estimateStore";
 import { estimateFileNameForSave, estimateGrandTotal, isDrawingFileName } from "@/domain/estimate/projectDocuments";
 import SaveProjectDocuments from "@/components/estimate/SaveProjectDocuments";
 import EstimatePdfActions from "@/components/estimate/EstimatePdfActions";
 import EstimatePdfDesigner, { DEFAULT_PDF_DESIGN, normalizePdfDesign } from "@/components/estimate/EstimatePdfDesigner";
-import { listCompanyLaborUnits, listCustomLabor, listLaborLibrary, listNamedCrews, saveLaborRates, saveNamedCrew } from "@/api/laborRepository";
+import { listCompanyLaborUnits, listCustomLabor, listLaborLibrary, listLaborRates, listNamedCrews, saveLaborRates, saveNamedCrew } from "@/api/laborRepository";
 import { defaultProductivityFactors, setFactorMultiplier } from "@/domain/labor/productivity";
 import { applySelectionToLine, buildLaborSourceOptions, makeLaborSelection } from "@/domain/labor/selection";
 import { findCustomLabor } from "@/domain/labor/customLabor";
 import { crewFromNamed, namedFromCrew } from "@/domain/labor/crews";
-import { defaultLaborRates } from "@/domain/labor/rates";
+import { applyRatesToCrew, defaultLaborRates, ratesToWageBook, resolveShopRates } from "@/domain/labor/rates";
 import ProductivityFactorEditor from "@/components/labor/ProductivityFactorEditor";
 import NamedCrewPicker from "@/components/labor/NamedCrewPicker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -83,8 +83,8 @@ export default function EstimateBuilder() {
   const openFile = params.get("file") || "";
   const openSize = Number(params.get("size") || 0);
   const [header, setHeader] = useState(emptyHeader);
-  const [crew, setCrew] = useState(() => defaultCrew());
-  const [lines, setLines] = useState(() => [blankLine(68)]);
+  const [crew, setCrew] = useState(() => defaultCrew(readShopWageBook()));
+  const [lines, setLines] = useState(() => [blankLine(compositeWage(defaultCrew(readShopWageBook())).rate || SHOP_HOURLY_RATE)]);
   const [contingency, setContingency] = useState(0);
   const [materialMarkup, setMaterialMarkup] = useState(0);
   const [overhead, setOverhead] = useState(10);
@@ -114,8 +114,9 @@ export default function EstimateBuilder() {
 
   useEffect(() => {
     const stored = openEstimateSession({ fileName: openFile, fileSize: openSize });
+    const shop = readShopWageBook();
     if (stored) {
-      const nextCrew = stored.crew?.length ? stored.crew : defaultCrew();
+      const nextCrew = applyRatesToCrew(stored.crew?.length ? stored.crew : defaultCrew(shop), defaultLaborRates(shop));
       setHeader({ ...emptyHeader, ...stored.header });
       setCrew(nextCrew);
       setLines(stored.lines?.length
@@ -142,7 +143,7 @@ export default function EstimateBuilder() {
       setSupplierPriceBooks(stored.supplierPriceBooks || []);
       setPdfDesign(normalizePdfDesign(stored.pdfDesign));
     } else {
-      const nextCrew = defaultCrew();
+      const nextCrew = defaultCrew(shop);
       setHeader({ ...emptyHeader });
       setCrew(nextCrew);
       setLines([blankLine(compositeWage(nextCrew).rate)]);
@@ -172,6 +173,15 @@ export default function EstimateBuilder() {
     listCompanyLaborUnits().then(setCompanyUnits).catch(() => setCompanyUnits([]));
     listCustomLabor().then(setCustomUnits).catch(() => setCustomUnits([]));
     listNamedCrews().then(setNamedCrews).catch(() => setNamedCrews([]));
+    listLaborRates(readShopWageBook()).then((rates) => {
+      const shop = ratesToWageBook(resolveShopRates(rates));
+      setCrew((current) => {
+        const next = applyRatesToCrew(current, defaultLaborRates(shop));
+        const rate = compositeWage(next).rate;
+        setLines((lines) => lines.map((line) => (line.laborRateEdited ? line : { ...line, laborRate: rate })));
+        return next;
+      });
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -195,7 +205,6 @@ export default function EstimateBuilder() {
 
   useEffect(() => {
     if (!ready) return;
-    writeWageBook(crew);
     if (!storageFileName) return;
     writeEstimate({
       version: 1,
@@ -298,6 +307,7 @@ export default function EstimateBuilder() {
     const rate = compositeWage(next).rate;
     setCrew(next);
     setLines((current) => current.map((line) => (line.laborRateEdited ? line : { ...line, laborRate: rate })));
+    persistShopWageBook(next);
     saveLaborRates(defaultLaborRates(Object.fromEntries(next.map((row) => [row.id, row.wage]))));
   }
 
@@ -708,7 +718,7 @@ export default function EstimateBuilder() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-lg font-bold">Employee class &amp; wage</h2>
-            <p className="text-xs text-muted-foreground">Select one or more classes. Default is Journeyman at the Journeyman wage. Wages are dollars per man-hour. These values stay off the estimate and the PDF.</p>
+            <p className="text-xs text-muted-foreground">Select one or more classes. Default is Journeyman at the shop rate ($95/MH until you change it). A changed wage stays saved until you edit it again. These values stay off the estimate and the PDF.</p>
           </div>
           <p className="text-sm font-bold">Crew rate ${wage.rate.toFixed(2)}/MH · {wage.label}</p>
         </div>

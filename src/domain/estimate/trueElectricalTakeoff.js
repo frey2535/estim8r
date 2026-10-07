@@ -5,7 +5,7 @@ import { compositeWage, defaultCrew, journeymanWage } from "../labor/employeeCla
 import { estimateLineHours, estimateLineLaborCost } from "./manualLineLabor.js";
 
 export const DEFAULT_TRUE_BID_SETTINGS = Object.freeze({
-  laborRate: 72,
+  laborRate: 95,
   contingency: 3,
   materialMarkup: 0,
   overhead: 10,

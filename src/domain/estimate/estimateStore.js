@@ -4,6 +4,7 @@ import {
   estimateStorageKey,
   syncEstimateDraft,
 } from "./fromTakeoff.js";
+import { LABOR_RATES_KEY, defaultLaborRates, ratesToWageBook, resolveShopRates } from "../labor/rates.js";
 import { makeEstimateId } from "./projectDocuments.js";
 
 function readJson(key) {
@@ -16,7 +17,11 @@ function readJson(key) {
 }
 
 export function readWageBook() {
-  return readJson(WAGE_BOOK_KEY) || {};
+  return readShopWageBook();
+}
+
+export function readShopWageBook() {
+  return ratesToWageBook(resolveShopRates(readJson(LABOR_RATES_KEY) || [], readJson(WAGE_BOOK_KEY) || {}));
 }
 
 export function writeWageBook(crew) {
@@ -24,10 +29,15 @@ export function writeWageBook(crew) {
   for (const row of crew || []) book[row.id] = Number(row.wage) || 0;
   try {
     localStorage.setItem(WAGE_BOOK_KEY, JSON.stringify(book));
+    localStorage.setItem(LABOR_RATES_KEY, JSON.stringify(defaultLaborRates(book)));
   } catch {
     /* private mode */
   }
   return book;
+}
+
+export function persistShopWageBook(crew) {
+  return writeWageBook(crew);
 }
 
 export function readEstimate(fileName, fileSize) {
@@ -83,7 +93,6 @@ export function writeEstimate(draft) {
   const key = estimateStorageKey(next.fileName, next.fileSize);
   localStorage.setItem(key, JSON.stringify(next));
   localStorage.setItem(ACTIVE_ESTIMATE_KEY, key);
-  if (next.crew) writeWageBook(next.crew);
   return next;
 }
 
@@ -97,7 +106,7 @@ export function syncStoredEstimate({ fileName, fileSize, drawingDocs, rollup, pa
     rollup,
     pageCount,
     markup,
-    wageBook: readWageBook(),
+    wageBook: readShopWageBook(),
     marks,
     runs,
     pageKinds,

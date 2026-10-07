@@ -14,11 +14,13 @@ function assert(cond, message) {
 const crew = defaultCrew();
 assert(crew.filter((row) => row.selected).length === 1, "only journeyman selected by default");
 assert(crew.find((row) => row.selected).id === "journeyman", "default class is journeyman");
+assert(crew.every((row) => row.wage === 95), "every class starts at the $95 shop rate");
+assert(compositeWage(crew).rate === 95, "default crew rate is $95");
 assert(compositeWage(crew).rate === journeymanWage(crew), "default rate is journeyman wage");
 
 const both = crew.map((row) => (
   row.id === "foreman" || row.id === "journeyman"
-    ? { ...row, selected: true, headcount: 1 }
+    ? { ...row, selected: true, headcount: 1, wage: row.id === "foreman" ? 85 : 68 }
     : { ...row, selected: false, headcount: 0 }
 ));
 const blended = compositeWage(both);

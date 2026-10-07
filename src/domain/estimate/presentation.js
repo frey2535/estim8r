@@ -24,6 +24,21 @@ export function resolveVisibleTotals(estimate) {
   return { ...DEFAULT_VISIBLE_TOTALS, ...(estimate?.visibleTotals || {}) };
 }
 
+export function includeTotalsCard(estimate) {
+  return estimate?.includeTotalsCard === true;
+}
+
+export function visibleTotalRows(estimate, moneyTotals) {
+  const visible = resolveVisibleTotals(estimate);
+  return TOTAL_OPTIONS
+    .filter((option) => visible[option.key])
+    .map((option) => ({
+      key: option.key,
+      label: option.label,
+      value: Number(moneyTotals?.[option.key]) || 0,
+    }));
+}
+
 export function lineIncluded(line, estimate) {
   if (!estimate?.itemized) return true;
   return line?.included !== false;

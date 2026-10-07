@@ -1,5 +1,5 @@
 import { estimateContentFingerprint } from "./projectDocuments.js";
-import { resolveVisibleTotals } from "./presentation.js";
+import { includeTotalsCard, resolveVisibleTotals } from "./presentation.js";
 import {
   buildEstimatePdf,
   createEstimatePdfPreview,
@@ -66,6 +66,9 @@ assert(markedPresentation.grandTotal > presentation.grandTotal, "PDF grand total
 assert(!("overhead" in presentation.totals), "presentation totals omit overhead");
 assert(!("profit" in presentation.totals), "presentation totals omit profit");
 assert(!("materialMarkup" in presentation.totals), "presentation totals omit material markup unless opted in");
+assert(presentation.includeTotalsCard === false, "totals card stays off the customer estimate by default");
+assert(presentation.totalsCard.length === 0, "default presentation has no totals card rows");
+assert(includeTotalsCard({}) === false, "existing estimates do not include the totals card");
 assert(resolveVisibleTotals({}).materialMarkup === false, "existing estimates hide the material markup line");
 assert(resolveVisibleTotals({ visibleTotals: { material: true } }).materialMarkup === false, "saved totals without the key stay hidden");
 assert(!("crew" in presentation), "presentation omits crew");
@@ -150,6 +153,21 @@ assert(withMarkupLine.totals.material === 60, "opt-in material line still includ
 const overheadPdf = buildEstimatePdf({ ...estimate, visibleTotals: { overhead: true } }, { companyName: "Current Flow Electric" });
 assert(!overheadPdf.strings.includes("Overhead"), "customer PDF matches Buildr and omits overhead");
 assert(!overheadPdf.strings.includes("Profit"), "customer PDF matches Buildr and omits profit");
+const cardPdf = buildEstimatePdf({
+  ...estimate,
+  includeTotalsCard: true,
+  visibleTotals: { material: true, labor: true, total: true },
+}, { companyName: "Current Flow Electric" });
+assert(cardPdf.strings.includes("Material Total"), "opt-in totals card prints Material Total on the customer PDF");
+assert(cardPdf.strings.includes("Labor Total"), "opt-in totals card prints Labor Total on the customer PDF");
+assert(cardPdf.strings.includes("ESTIMATE TOTAL"), "opt-in totals card still prints ESTIMATE TOTAL");
+assert(!cardPdf.strings.includes("Subtotal"), "opt-in totals card replaces the Buildr-only subtotal row");
+assert(estimatePresentation({ ...estimate, includeTotalsCard: true }).totalsCard.some((row) => row.key === "material"), "opt-in presentation carries totals card rows");
+assert(
+  estimateContentFingerprint({ ...estimate, includeTotalsCard: true })
+    !== estimateContentFingerprint(estimate),
+  "including the totals card changes the sync fingerprint",
+);
 
 const before = estimateContentFingerprint(estimate);
 const branded = { ...estimate };
@@ -186,6 +204,7 @@ assert(key !== estimatePdfPreviewKey({
 }, branding), "preview key follows the header");
 assert(key !== estimatePdfPreviewKey({ ...estimate, overhead: 25, profit: 20 }, branding), "preview key follows markup");
 assert(key !== estimatePdfPreviewKey({ ...estimate, materialMarkup: 25 }, branding), "preview key follows material markup");
+assert(key !== estimatePdfPreviewKey({ ...estimate, includeTotalsCard: true }, branding), "preview key follows totals card opt-in");
 assert(key !== estimatePdfPreviewKey(estimate, { ...branding, companyName: "Other Electric" }), "preview key follows branding");
 assert(key !== estimatePdfPreviewKey(estimate, { ...branding, logoStretchX: 220, logoStretchY: 70 }), "preview key follows independent logo stretch");
 

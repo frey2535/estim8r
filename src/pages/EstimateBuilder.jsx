@@ -17,7 +17,7 @@ import { defaultLaborRates } from "@/domain/labor/rates";
 import ProductivityFactorEditor from "@/components/labor/ProductivityFactorEditor";
 import NamedCrewPicker from "@/components/labor/NamedCrewPicker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DEFAULT_VISIBLE_TOTALS, resolveVisibleTotals, setAllLinesIncluded, TOTAL_OPTIONS } from "@/domain/estimate/presentation";
+import { DEFAULT_VISIBLE_TOTALS, includeTotalsCard as totalsCardIncluded, resolveVisibleTotals, setAllLinesIncluded, TOTAL_OPTIONS, visibleTotalRows } from "@/domain/estimate/presentation";
 import { calculateBidByScope, calculateWorkCategoryBreakdown } from "@/domain/estimate/trueElectricalTakeoff";
 import { applyLibraryItemToLine, applyManualLineLabor, clearLaborPick, hydrateManualLineLabor, laborPickStillMatches, shouldHydrateManualLabor } from "@/domain/estimate/manualLineLabor";
 import { categoriesForType, laborItemMatchesLine } from "@/domain/estimate/lineLaborCatalog";
@@ -91,6 +91,7 @@ export default function EstimateBuilder() {
   const [profit, setProfit] = useState(10);
   const [bondInsurance, setBondInsurance] = useState(0);
   const [itemized, setItemized] = useState(false);
+  const [includeTotalsCard, setIncludeTotalsCard] = useState(false);
   const [visibleTotals, setVisibleTotals] = useState(DEFAULT_VISIBLE_TOTALS);
   const [meta, setMeta] = useState({ fileName: "", fileSize: 0, scopeEdited: false });
   const [ready, setReady] = useState(false);
@@ -129,6 +130,7 @@ export default function EstimateBuilder() {
       setProfit(stored.profit ?? 10);
       setBondInsurance(stored.bondInsurance ?? 0);
       setItemized(Boolean(stored.itemized));
+      setIncludeTotalsCard(totalsCardIncluded(stored));
       setVisibleTotals(resolveVisibleTotals(stored));
       setFactors(stored.factors?.length ? stored.factors : defaultProductivityFactors());
       setNamedCrewId(stored.namedCrewId || "");
@@ -150,6 +152,7 @@ export default function EstimateBuilder() {
       setProfit(10);
       setBondInsurance(0);
       setItemized(false);
+      setIncludeTotalsCard(false);
       setVisibleTotals(DEFAULT_VISIBLE_TOTALS);
       setFactors(defaultProductivityFactors());
       setNamedCrewId("");
@@ -211,6 +214,7 @@ export default function EstimateBuilder() {
       bondInsurance: Number(bondInsurance) || 0,
       lines,
       itemized,
+      includeTotalsCard,
       visibleTotals,
       separateFromTakeoff: true,
       scopeEdited: meta.scopeEdited,
@@ -221,7 +225,7 @@ export default function EstimateBuilder() {
       supplierPriceBooks,
       pdfDesign,
     });
-  }, [ready, header, crew, lines, contingency, materialMarkup, overhead, profit, bondInsurance, itemized, visibleTotals, meta, factors, namedCrewId, trueTakeoff, completenessChecklist, assemblies, installationConditions, supplierPriceBooks, pdfDesign, storageFileName, storedEstimateId, storedBuildrProjectId, storedBuildrInvoiceId]);
+  }, [ready, header, crew, lines, contingency, materialMarkup, overhead, profit, bondInsurance, itemized, includeTotalsCard, visibleTotals, meta, factors, namedCrewId, trueTakeoff, completenessChecklist, assemblies, installationConditions, supplierPriceBooks, pdfDesign, storageFileName, storedEstimateId, storedBuildrProjectId, storedBuildrInvoiceId]);
 
   const draft = useMemo(() => ({
     version: 1,
@@ -240,6 +244,7 @@ export default function EstimateBuilder() {
     bondInsurance: Number(bondInsurance) || 0,
     lines,
     itemized,
+    includeTotalsCard,
     visibleTotals,
     separateFromTakeoff: true,
     scopeEdited: meta.scopeEdited,
@@ -249,7 +254,7 @@ export default function EstimateBuilder() {
     installationConditions,
     supplierPriceBooks,
     pdfDesign,
-  }), [header, crew, factors, namedCrewId, contingency, materialMarkup, overhead, profit, bondInsurance, lines, itemized, visibleTotals, meta, trueTakeoff, completenessChecklist, assemblies, installationConditions, supplierPriceBooks, pdfDesign, storageFileName, storedEstimateId, storedBuildrProjectId, storedBuildrInvoiceId]);
+  }), [header, crew, factors, namedCrewId, contingency, materialMarkup, overhead, profit, bondInsurance, lines, itemized, includeTotalsCard, visibleTotals, meta, trueTakeoff, completenessChecklist, assemblies, installationConditions, supplierPriceBooks, pdfDesign, storageFileName, storedEstimateId, storedBuildrProjectId, storedBuildrInvoiceId]);
 
   const supplyQuote = useMemo(() => buildEstimateSupplyQuote({
     lines,
@@ -587,6 +592,23 @@ export default function EstimateBuilder() {
             </Droppable>
           </DragDropContext>
         </div>
+        {includeTotalsCard ? (
+          <div className="border-t border-border p-4">
+            <h3 className="font-bold">Totals on this estimate</h3>
+            <div className="mt-3">
+              {visibleTotalRows(draft, totals).map((row) => (
+                row.key === "total" ? (
+                  <div key={row.key} className="mt-3 flex justify-between border-t border-border pt-4 text-xl font-black">
+                    <span>Total</span>
+                    <span className="text-blue-600 dark:text-orange-500">${row.value.toFixed(2)}</span>
+                  </div>
+                ) : (
+                  <Sum key={row.key} label={row.label} value={row.value} />
+                )
+              ))}
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <EstimateReadinessPanel checklist={completenessChecklist} onChange={setCompletenessChecklist} />
@@ -603,7 +625,16 @@ export default function EstimateBuilder() {
         </div>
         <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
           <h2 className="font-bold">Totals on this estimate</h2>
-          <p className="mt-1 text-xs text-muted-foreground">Choose which totals appear here and on the customer PDF. Overhead, profit, and material markup stay on Labor &amp; markup unless you turn them on.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Choose which totals appear on the estimate and customer PDF when the card is included. Overhead, profit, and material markup stay off the card unless you turn them on.</p>
+          <label className="mt-3 flex items-center gap-2 text-sm font-semibold">
+            <input
+              type="checkbox"
+              checked={includeTotalsCard}
+              onChange={(e) => setIncludeTotalsCard(e.target.checked)}
+            />
+            Include totals card on this estimate
+          </label>
+          <p className="mt-1 text-xs text-muted-foreground">Adds this totals block after Estimate Lines and on the customer PDF. Off for existing estimates until you check it.</p>
           <div className="mt-3 grid gap-2">
             {TOTAL_OPTIONS.map((option) => (
               <label key={option.key} className="flex items-center gap-2 text-sm">

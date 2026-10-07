@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 import { brandingLayout, normalizeBranding, resolveLogoBox } from "./branding.js";
 import { estimateGrandTotal } from "./projectDocuments.js";
-import { includedLines, resolveVisibleTotals, TOTAL_OPTIONS } from "./presentation.js";
+import { includeTotalsCard, includedLines, resolveVisibleTotals, TOTAL_OPTIONS, visibleTotalRows } from "./presentation.js";
 import { estimateLineLaborCost } from "./manualLineLabor.js";
 
 export const DEFAULT_DOCUMENT_TITLE = "Electrical";
@@ -135,6 +135,8 @@ export function estimatePresentation(estimate) {
         .filter((option) => visible[option.key])
         .map((option) => [option.key, moneyTotals[option.key]]),
     ),
+    includeTotalsCard: includeTotalsCard(estimate),
+    totalsCard: includeTotalsCard(estimate) ? visibleTotalRows(estimate, moneyTotals) : [],
     grandTotal: moneyTotals.total,
     subtotal: lines.reduce((sum, line) => sum + (Number(line.amount) || 0), 0),
   };
@@ -395,7 +397,8 @@ export function buildEstimatePdf(estimate, brandingInput) {
   const scopeH = scopeLines.length ? scopeLines.length * scopeLineH + Math.max(18, cardPad * 2 + 8) : 0;
   const rowH = { compact: 15, comfortable: 19, spacious: 24 }[design.density] || 19;
   const tableH = rowH + items.length * rowH;
-  const totalsH = 36;
+  const cardRows = presentation.includeTotalsCard ? (presentation.totalsCard || []) : [];
+  const totalsH = cardRows.length ? cardRows.length * 14 + 20 : 36;
   const termsH = termsLines.length ? termsLines.length * 10 + 14 : 0;
   const sigH = design.showSignatures === false ? 0 : SIG_BLOCK_H;
 
@@ -569,22 +572,42 @@ export function buildEstimatePdf(estimate, brandingInput) {
   y += gapTotals;
   const totalsX = pageW - margin - 190;
   ensureSpace(totalsH);
-  doc.setFont(font, "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(...docText);
-  write("Subtotal", totalsX, y);
-  write(money(presentation.subtotal), pageW - margin, y, { align: "right" });
-  y += 13;
-  doc.setDrawColor(...border);
-  doc.setLineWidth(1.1);
-  doc.line(totalsX, y, pageW - margin, y);
-  y += 14;
-  doc.setFont(font, "bold");
-  doc.setFontSize(11);
-  write("ESTIMATE TOTAL", totalsX, y);
-  doc.setTextColor(22, 163, 74);
-  write(money(presentation.grandTotal), pageW - margin, y, { align: "right" });
-  doc.setTextColor(...docText);
+  if (cardRows.length) {
+    cardRows.forEach((row) => {
+      const isTotal = row.key === "total";
+      if (isTotal) {
+        doc.setDrawColor(...border);
+        doc.setLineWidth(1.1);
+        doc.line(totalsX, y, pageW - margin, y);
+        y += 14;
+      }
+      doc.setFont(font, isTotal ? "bold" : "normal");
+      doc.setFontSize(isTotal ? 11 : 9);
+      doc.setTextColor(...docText);
+      write(isTotal ? "ESTIMATE TOTAL" : row.label, totalsX, y);
+      if (isTotal) doc.setTextColor(22, 163, 74);
+      write(money(row.value), pageW - margin, y, { align: "right" });
+      doc.setTextColor(...docText);
+      y += 13;
+    });
+  } else {
+    doc.setFont(font, "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(...docText);
+    write("Subtotal", totalsX, y);
+    write(money(presentation.subtotal), pageW - margin, y, { align: "right" });
+    y += 13;
+    doc.setDrawColor(...border);
+    doc.setLineWidth(1.1);
+    doc.line(totalsX, y, pageW - margin, y);
+    y += 14;
+    doc.setFont(font, "bold");
+    doc.setFontSize(11);
+    write("ESTIMATE TOTAL", totalsX, y);
+    doc.setTextColor(22, 163, 74);
+    write(money(presentation.grandTotal), pageW - margin, y, { align: "right" });
+    doc.setTextColor(...docText);
+  }
   y += gapTerms;
 
   if (termsLines.length && y + termsH + sigH <= bottomLimit) {

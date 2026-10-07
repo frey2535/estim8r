@@ -106,6 +106,7 @@ export function estimateContentFingerprint(estimate, takeoff) {
     header: estimate?.header || {},
     lines: estimate?.lines || [],
     itemized: Boolean(estimate?.itemized),
+    includeTotalsCard: Boolean(estimate?.includeTotalsCard),
     visibleTotals: estimate?.visibleTotals || null,
     overhead: estimate?.overhead,
     profit: estimate?.profit,

@@ -15,14 +15,22 @@ export default function DevicePicker({
   query,
   onQuery,
   compact = false,
+  availableSymbols = [],
 }) {
-  const poolAll = symbolsOnDrawingForTrade(trade, marks, { pageKinds });
-  const cats = [...new Set(poolAll.map((item) => item.category).filter(Boolean))];
+  const detected = symbolsOnDrawingForTrade(trade, marks, { pageKinds });
+  const merged = new Map();
+  for (const item of [...availableSymbols, ...detected]) {
+    if (!item?.id || (item.trade && item.trade !== trade)) continue;
+    merged.set(item.id, item);
+  }
+  const poolAll = [...merged.values()];
+  const cats = [...new Set(poolAll.map((item) => item.takeoffCategory || item.category).filter(Boolean))];
   const activeCategory = cats.includes(category) ? category : "";
-  const pool = symbolsOnDrawingForTrade(trade, marks, {
-    pageKinds,
-    category: activeCategory || undefined,
-  }).filter((item) => item.trade === trade);
+  const pool = poolAll.filter((item) => {
+    if (item.trade && item.trade !== trade) return false;
+    if (!activeCategory) return true;
+    return (item.takeoffCategory || item.category) === activeCategory;
+  });
   const visible = filterSymbols(pool, compact ? "" : query).filter((item) => item.trade === trade);
   const tradeLabel = trades.find((item) => item.id === trade)?.label || trade;
   return (
@@ -70,7 +78,7 @@ export default function DevicePicker({
           </option>
         ))}
       </select>
-      <p className="text-[11px] text-muted-foreground">{visible.length} {tradeLabel} type{visible.length === 1 ? "" : "s"} on this drawing</p>
+      <p className="text-[11px] text-muted-foreground">{visible.length} {tradeLabel} symbol type{visible.length === 1 ? "" : "s"} available from the project legend/catalog</p>
     </div>
   );
 }

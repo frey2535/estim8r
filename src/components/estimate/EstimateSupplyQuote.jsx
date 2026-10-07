@@ -4,6 +4,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import EstimateSupplyQuotePreview from "@/components/estimate/EstimateSupplyQuotePreview";
 import { buildSupplyQuotePdf, supplyQuoteExcelFileName, supplyQuoteToExcel } from "@/domain/takeoff/supplyQuote";
 import { downloadBlob } from "@/domain/estimate/projectDocuments";
+import { readCompanyBranding } from "@/domain/estimate/branding";
 
 export default function EstimateSupplyQuote({ quote, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -20,7 +21,7 @@ export default function EstimateSupplyQuote({ quote, defaultOpen = true }) {
   }
 
   function downloadPdf() {
-    const { doc, fileName } = buildSupplyQuotePdf(quote);
+    const { doc, fileName } = buildSupplyQuotePdf(quote, readCompanyBranding());
     downloadBlob(doc.output("blob"), fileName);
     setStatus(quote.rows.length
       ? `Downloaded ${fileName} for the supply house.`

@@ -1,5 +1,6 @@
 import { findLibraryItem, laborItemLabel } from "./manualLineLabor.js";
 import { buildSupplyQuotePdf, supplyQuoteFileBase } from "../takeoff/supplyQuote.js";
+import { readCompanyBranding } from "./branding.js";
 
 /** Library categories that are labor/civil work, not a supply-house buy list. */
 export const LABOR_ONLY_LIBRARY_CATEGORIES = new Set([
@@ -150,7 +151,7 @@ export function createSupplyQuotePdfPreview(quote) {
   if (!quote?.rows?.length) {
     return { status: "empty", fileName, blob: null, strings: [] };
   }
-  const built = buildSupplyQuotePdf(quote);
+  const built = buildSupplyQuotePdf(quote, readCompanyBranding());
   return {
     status: "ready",
     fileName: built.fileName,

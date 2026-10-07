@@ -47,7 +47,9 @@ export default function LaborItemPicker({
           <CommandList>
             <CommandEmpty>
               {canSearch
-                ? "Nothing in the labor library fits this Type and Category. MH/unit stays 0 — this is not a NECA rate."
+                ? itemType === "Subcontract"
+                  ? "No subcontract row in the labor manual for this category. Enter hours or an allowance on the line."
+                  : "Nothing in the labor library fits this Type and Category. MH/unit stays 0 — this is not a NECA rate."
                 : "Select Type and Category to see associated labor rows."}
             </CommandEmpty>
             <CommandGroup>

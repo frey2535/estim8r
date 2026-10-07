@@ -928,7 +928,9 @@ export function buildAiMarks({
     // fixtures whose only identity is their legend geometry.
     const visualHits = scanPageByLegendGeometry(page, dictionary, {
       planType,
-      strictSize: planType === "lighting",
+      threshold: 0.74,
+      strictSize: false,
+      occupyRadius: 0.24,
       occupied: seen.filter((item) => item.sheet === page.page),
     });
     for (const visual of visualHits) {
@@ -1137,8 +1139,8 @@ export function buildAiMarks({
       entries: (dictionary.entries || []).filter((entry) => /^\d{1,2}e?$/i.test(entry.code || "") && /2x4|troffer/i.test(entry.symbol?.label || "")),
     }, {
       planType,
-      threshold: 0.9,
-      strictSize: true,
+      threshold: 0.80,
+      strictSize: false,
       keepSeedBody: true,
       twinHatch: true,
       occupyRadius: 1.55,
@@ -1152,9 +1154,9 @@ export function buildAiMarks({
     const unlabeledHits = [
       ...scanPageByLegendGeometry(page, dictionary, {
         planType,
-        threshold: 0.9,
-        strictSize: true,
-        occupyRadius: 0.72,
+        threshold: 0.76,
+        strictSize: false,
+        occupyRadius: 0.28,
         occupied,
       }),
       ...twinHits,
@@ -1283,7 +1285,7 @@ export function buildAiMarks({
         continue;
       }
       const symbol = visual.entry?.symbol;
-      if (visual.score >= 0.9 && symbol && !visual.ambiguous) {
+      if (visual.score >= 0.84 && symbol && !visual.ambiguous) {
         const mark = attachDetectionRecord({
           id: newId(),
           source: "ai",

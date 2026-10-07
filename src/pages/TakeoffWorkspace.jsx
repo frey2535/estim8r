@@ -26,7 +26,7 @@ import {
 } from "@/domain/takeoff/junctionHardware";
 import { drawingSymbolsFromDocs, printedScaleCalibration, readDrawingDocuments } from "@/domain/takeoff/drawing-docs";
 import { paletteForTrade, pageKindsFromDocs, symbolsOnDrawingForTrade, tradeById, conduitOptionsForTrade, findConduitOption, TRADES, DEFAULT_CONDUIT_ID } from "@/domain/takeoff/trades";
-import { buildAiMarks } from "@/domain/takeoff/aiTakeoff";
+import { buildAiMarks, legendDictionaryFromPages } from "@/domain/takeoff/aiTakeoff";
 import { readAiPages } from "@/domain/takeoff/aiPages";
 import { hydratePagesRaster } from "@/domain/takeoff/rasterSymbols";
 import { pickInteractiveSymbolGeometry, matchGeometryToLegend, attachLegendGeometryPrototypes } from "@/domain/takeoff/legendGeometry";
@@ -247,13 +247,14 @@ export default function TakeoffWorkspace() {
   const isPdf = file?.type === "application/pdf" || file?.name?.toLowerCase().endsWith(".pdf");
   const drawingSymbols = useMemo(() => drawingSymbolsFromDocs(drawingDocs), [drawingDocs]);
   const legendDictionary = useMemo(() => {
-    const entries = drawingSymbols.map((symbol) => ({
-      code: symbol.abbr || symbol.type || "",
-      symbol,
-      shapeHint: symbol.shapeHint || "",
-    }));
-    return attachLegendGeometryPrototypes({ entries }, aiPages);
-  }, [drawingSymbols, aiPages]);
+    const base = legendDictionaryFromPages(
+      aiPages,
+      drawingSymbols,
+      paletteForTrade(trade, drawingSymbols).symbols,
+      trade,
+    );
+    return attachLegendGeometryPrototypes(base, aiPages);
+  }, [drawingSymbols, aiPages, trade]);
   const palette = useMemo(() => paletteForTrade(trade, drawingSymbols), [trade, drawingSymbols]);
   const pageKinds = useMemo(() => pageKindsFromDocs(drawingDocs), [drawingDocs]);
   const drawingTypes = useMemo(
@@ -1275,12 +1276,47 @@ export default function TakeoffWorkspace() {
       if (!hit) {
         const drawingObject = hitDrawingObject(drawingObjects, point, sheetMeta.page);
         if (drawingObject) {
-          const materialized = materializeDrawingObject(drawingObject, marks);
-          hit = materialized?.mark || null;
-          if (hit && !materialized.existing) {
+          const picked = interactiveGeometryAt(point);
+          const matchedSymbol = picked?.match?.entry?.symbol || null;
+          if (picked?.geometry && matchedSymbol) {
+            hit = {
+              id: drawingObject.sourceMarkId || crypto.randomUUID(),
+              sheet: sheetMeta.page || 1,
+              trade,
+              source: "drawing-object",
+              type: "count",
+              tool: "count",
+              x: picked.geometry.cx,
+              y: picked.geometry.cy,
+              symbolBodyLocation: { x: picked.geometry.cx, y: picked.geometry.cy },
+              outline: picked.geometry.outline,
+              outlineSource: picked.geometry.outline?.source || picked.geometry.source || "vector",
+              objectId: drawingObject.objectId,
+              sourceObjectId: drawingObject.objectId,
+              category: matchedSymbol.takeoffCategory || matchedSymbol.category || "From drawing",
+              symbol: matchedSymbol.id,
+              symbolLabel: matchedSymbol.label,
+              abbr: matchedSymbol.abbr || picked.match?.entry?.code,
+              typeCode: String(picked.match?.entry?.code || matchedSymbol.abbr || "").toUpperCase(),
+              reviewStatus: picked.match?.ambiguous ? "pending" : "accepted",
+              requiresClassification: false,
+              detectionAmbiguous: Boolean(picked.match?.ambiguous),
+              fillEnabled: true,
+              fillMode: "inside",
+              fillOpacity: 0.34,
+              layer: "device",
+            };
             const nextMarks = applyDeviceTypeColors([...marks, hit]);
             setMarks(nextMarks);
             persistTakeoff(nextMarks);
+          } else {
+            const materialized = materializeDrawingObject(drawingObject, marks);
+            hit = materialized?.mark || null;
+            if (hit && !materialized.existing) {
+              const nextMarks = applyDeviceTypeColors([...marks, hit]);
+              setMarks(nextMarks);
+              persistTakeoff(nextMarks);
+            }
           }
         }
       }
@@ -2069,18 +2105,17 @@ export default function TakeoffWorkspace() {
                     setHoveredDeviceId(hovered.id);
                   } else {
                     const object = hitDrawingObject(drawingObjects, point, sheetMeta.page);
-                    if (object) {
+                    const picked = interactiveGeometryAt(point);
+                    if (picked?.geometry) {
+                      const symbol = picked.match?.entry?.symbol;
+                      setHoveredGeometryInfo({ geometry: picked.geometry, match: picked.match });
+                      setHoveredDeviceId(`raw:${picked.geometry.cx.toFixed(3)}:${picked.geometry.cy.toFixed(3)}:${symbol?.id || "unknown"}`);
+                    } else if (object) {
+                      setHoveredGeometryInfo(null);
                       setHoveredDeviceId(`object:${object.objectId || object.id}`);
                     } else {
-                      const picked = interactiveGeometryAt(point);
-                      if (picked?.geometry) {
-                        const symbol = picked.match?.entry?.symbol;
-                        setHoveredGeometryInfo({ geometry: picked.geometry, match: picked.match });
-                        setHoveredDeviceId(`raw:${picked.geometry.cx.toFixed(3)}:${picked.geometry.cy.toFixed(3)}:${symbol?.id || "unknown"}`);
-                      } else {
-                        setHoveredGeometryInfo(null);
-                        setHoveredDeviceId(null);
-                      }
+                      setHoveredGeometryInfo(null);
+                      setHoveredDeviceId(null);
                     }
                   }
                   if (!["conduit", "polyline", "linear", "measure", "homerun"].includes(tool)) return;

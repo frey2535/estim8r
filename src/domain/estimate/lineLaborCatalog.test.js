@@ -3,10 +3,11 @@ import {
   categoriesForType,
   laborItemMatchesLine,
   laborItemsForLine,
-  lineTypeForLibraryItem,
+  lineTypesForLibraryItem,
   LINE_TYPES,
   TYPE_FOR_LIBRARY_CATEGORY,
   unmappedLibraryCategories,
+  unreachableCatalogRows,
 } from "./lineLaborCatalog.js";
 import { filterLaborLibrary } from "./manualLineLabor.js";
 
@@ -27,16 +28,17 @@ for (const category of mappedCategories) {
   assert(TYPE_FOR_LIBRARY_CATEGORY[category], `Type map covers ${category}`);
 }
 
-const reachable = new Set();
-for (const type of LINE_TYPES) {
-  for (const item of laborItemsForLine(active, { itemType: type })) reachable.add(item.id);
-}
-const missing = active.filter((row) => !reachable.has(row.id));
-assert(missing.length === 0, `every uploaded row is selectable by Type, missing ${missing.slice(0, 8).map((row) => `${row.id} ${row.category}`).join("; ")}`);
+const unreachable = unreachableCatalogRows(active);
+assert(
+  unreachable.length === 0,
+  `every uploaded row must appear for each of its Types and work categories, first misses: ${unreachable.slice(0, 8).map((row) => `${row.id} ${row.reason} ${row.itemType || ""} ${row.workCategory || row.category || ""}`).join("; ")}`,
+);
+assert(active.length === 1921, `expected the full uploaded manual, got ${active.length}`);
 
 const equipment = laborItemsForLine(active, { itemType: "Equipment" });
-const equipmentManual = active.filter((row) => lineTypeForLibraryItem(row) === "Equipment");
+const equipmentManual = active.filter((row) => lineTypesForLibraryItem(row).includes("Equipment"));
 assert(equipment.length === equipmentManual.length && equipment.length > 0, `Type Equipment lists all equipment labor, got ${equipment.length} vs ${equipmentManual.length}`);
+assert(equipment.filter((row) => row.category === "Distribution").length === 117, `Type Equipment includes all Distribution rows, got ${equipment.filter((row) => row.category === "Distribution").length}`);
 assert(equipment.some((row) => row.id === "EL-01842"), "Type Equipment includes 10 kW generator");
 assert(equipment.some((row) => row.category === "Equipment Connections"), "Type Equipment includes Equipment Connections");
 assert(equipment.some((row) => row.category === "Motors"), "Type Equipment includes Motors");
@@ -54,7 +56,7 @@ assert(equipmentCats.includes("Transfer switches"), "work categories include Tra
 assert(equipmentCats.includes("ATS"), "work categories include the manual ATS subcategory");
 
 const installs = laborItemsForLine(active, { itemType: "Equipment", category: "Equipment installation" });
-assert(installs.length > 0 && installs.every((row) => lineTypeForLibraryItem(row) === "Equipment"), "Equipment installation is equipment rows only");
+assert(installs.length > 0 && installs.every((row) => lineTypesForLibraryItem(row).includes("Equipment")), "Equipment installation is equipment rows only");
 assert(installs.some((row) => row.id === "EL-01842"), "Equipment installation includes set/connect generator");
 assert(installs.some((row) => row.category === "Equipment Connections"), "Equipment installation includes Equipment Connections");
 

@@ -116,17 +116,18 @@ export function isTransferSwitchItem(item) {
 }
 
 export function lineTypeForLibraryItem(item) {
-  if (isTransferSwitchItem(item)) return "Equipment";
   const category = libraryCategory(item);
   if (!category) return "";
   return TYPE_FOR_LIBRARY_CATEGORY[category] || "Labor";
 }
 
+/** Gear is installed equipment. Users open either Type, so both list the same rows. */
 export function lineTypesForLibraryItem(item) {
   const types = new Set();
-  const mapped = lineTypeForLibraryItem(item);
-  if (mapped) types.add(mapped);
-  if (isTransferSwitchItem(item)) types.add("Gear");
+  const primary = lineTypeForLibraryItem(item);
+  if (primary) types.add(primary);
+  if (primary === "Gear") types.add("Equipment");
+  if (primary === "Equipment") types.add("Gear");
   return [...types];
 }
 
@@ -217,4 +218,36 @@ export function unmappedLibraryCategories(items) {
     if (category && !TYPE_FOR_LIBRARY_CATEGORY[category]) missing.add(category);
   }
   return [...missing].sort();
+}
+
+export function unreachableCatalogRows(items) {
+  const missing = [];
+  for (const item of catalogItems(items)) {
+    const types = lineTypesForLibraryItem(item);
+    const categories = workCategoriesForItem(item);
+    if (!item.id) missing.push({ id: "", reason: "missing-id", category: libraryCategory(item) });
+    if (!types.length) missing.push({ id: item.id, reason: "no-type", category: libraryCategory(item) });
+    if (!categories.length) missing.push({ id: item.id, reason: "no-work-category", category: libraryCategory(item) });
+    for (const type of types) {
+      if (!laborItemMatchesLine(item, { itemType: type })) {
+        missing.push({ id: item.id, reason: "missing-from-type", itemType: type, category: libraryCategory(item) });
+      }
+      const listed = laborItemsForLine(items, { itemType: type });
+      if (!listed.some((row) => row.id === item.id)) {
+        missing.push({ id: item.id, reason: "missing-from-type-list", itemType: type, category: libraryCategory(item) });
+      }
+      for (const workCategory of categories) {
+        if (!laborItemMatchesLine(item, { itemType: type, category: workCategory })) {
+          missing.push({
+            id: item.id,
+            reason: "missing-from-work-category",
+            itemType: type,
+            workCategory,
+            category: libraryCategory(item),
+          });
+        }
+      }
+    }
+  }
+  return missing;
 }

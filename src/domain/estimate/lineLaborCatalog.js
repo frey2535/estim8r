@@ -107,19 +107,41 @@ function itemName(item) {
   return String(item?.item_name || item?.itemName || "");
 }
 
+export function isTransferSwitchItem(item) {
+  if (!item) return false;
+  if (librarySubcategory(item) === "ATS") return true;
+  if (materialIs(item, "ATS")) return true;
+  const blob = `${librarySubcategory(item)} ${itemName(item)} ${item?.material_type || item?.materialType || ""}`.toLowerCase();
+  return /transfer switch/.test(blob) || /(?<![a-z])ats(?![a-z])/.test(blob);
+}
+
 export function lineTypeForLibraryItem(item) {
   const category = libraryCategory(item);
   if (!category) return "";
   return TYPE_FOR_LIBRARY_CATEGORY[category] || "Labor";
 }
 
+/** Gear is installed equipment. Users open either Type, so both list the same rows. */
+export function lineTypesForLibraryItem(item) {
+  const types = new Set();
+  const primary = lineTypeForLibraryItem(item);
+  if (primary) types.add(primary);
+  if (primary === "Gear") types.add("Equipment");
+  if (primary === "Equipment") types.add("Gear");
+  return [...types];
+}
+
 function activityLabelsForItem(item) {
-  const type = lineTypeForLibraryItem(item);
+  const types = lineTypesForLibraryItem(item);
   const blob = `${librarySubcategory(item)} ${itemName(item)}`.toLowerCase();
   const labels = [];
-  if (type === "Equipment") {
+  if (types.includes("Equipment")) {
     if (/terminat/.test(blob)) labels.push("Equipment terminations");
     if (/install|set\/connect|set\/install|connect/.test(blob)) labels.push("Equipment installation");
+  }
+  if (isTransferSwitchItem(item)) {
+    labels.push("Transfer switches");
+    labels.push("Emergency Power");
   }
   return labels;
 }
@@ -156,7 +178,7 @@ export function laborItemMatchesLine(item, { itemType, category } = {}) {
   const type = String(itemType || "").trim();
   const cat = String(category || "").trim();
   if (!type) return false;
-  if (lineTypeForLibraryItem(item) !== type) {
+  if (!lineTypesForLibraryItem(item).includes(type)) {
     return Boolean(cat && matchesLegacyCategory(item, type, cat));
   }
   if (!cat) return true;
@@ -173,7 +195,7 @@ export function categoriesForType(type, items) {
   if (!wanted) return [];
   const labels = new Set();
   for (const item of catalogItems(items)) {
-    if (lineTypeForLibraryItem(item) !== wanted) continue;
+    if (!lineTypesForLibraryItem(item).includes(wanted)) continue;
     for (const label of workCategoriesForItem(item)) labels.add(label);
   }
   return [...labels].sort((a, b) => a.localeCompare(b));
@@ -196,4 +218,36 @@ export function unmappedLibraryCategories(items) {
     if (category && !TYPE_FOR_LIBRARY_CATEGORY[category]) missing.add(category);
   }
   return [...missing].sort();
+}
+
+export function unreachableCatalogRows(items) {
+  const missing = [];
+  for (const item of catalogItems(items)) {
+    const types = lineTypesForLibraryItem(item);
+    const categories = workCategoriesForItem(item);
+    if (!item.id) missing.push({ id: "", reason: "missing-id", category: libraryCategory(item) });
+    if (!types.length) missing.push({ id: item.id, reason: "no-type", category: libraryCategory(item) });
+    if (!categories.length) missing.push({ id: item.id, reason: "no-work-category", category: libraryCategory(item) });
+    for (const type of types) {
+      if (!laborItemMatchesLine(item, { itemType: type })) {
+        missing.push({ id: item.id, reason: "missing-from-type", itemType: type, category: libraryCategory(item) });
+      }
+      const listed = laborItemsForLine(items, { itemType: type });
+      if (!listed.some((row) => row.id === item.id)) {
+        missing.push({ id: item.id, reason: "missing-from-type-list", itemType: type, category: libraryCategory(item) });
+      }
+      for (const workCategory of categories) {
+        if (!laborItemMatchesLine(item, { itemType: type, category: workCategory })) {
+          missing.push({
+            id: item.id,
+            reason: "missing-from-work-category",
+            itemType: type,
+            workCategory,
+            category: libraryCategory(item),
+          });
+        }
+      }
+    }
+  }
+  return missing;
 }

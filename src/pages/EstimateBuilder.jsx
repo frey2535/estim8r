@@ -603,7 +603,7 @@ export default function EstimateBuilder() {
         </div>
         <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
           <h2 className="font-bold">Totals on this estimate</h2>
-          <p className="mt-1 text-xs text-muted-foreground">Choose which totals appear here and on the customer PDF. Overhead and profit stay on Labor &amp; markup unless you turn them on.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Choose which totals appear here and on the customer PDF. Overhead, profit, and material markup stay on Labor &amp; markup unless you turn them on.</p>
           <div className="mt-3 grid gap-2">
             {TOTAL_OPTIONS.map((option) => (
               <label key={option.key} className="flex items-center gap-2 text-sm">
@@ -618,6 +618,7 @@ export default function EstimateBuilder() {
           </div>
           <div className="mt-4">
             {visibleTotals.material ? <Sum label="Material Total" value={totals.material} /> : null}
+            {visibleTotals.materialMarkup ? <Sum label="Material markup" value={totals.materialMarkup || 0} /> : null}
             {visibleTotals.labor ? <Sum label="Labor Total" value={totals.labor} /> : null}
             {visibleTotals.overhead ? <Sum label="Overhead" value={oh} /> : null}
             {visibleTotals.profit ? <Sum label="Profit" value={prof} /> : null}

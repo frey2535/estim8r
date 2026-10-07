@@ -1,5 +1,6 @@
 export const DEFAULT_VISIBLE_TOTALS = {
   material: true,
+  materialMarkup: false,
   labor: true,
   contingency: false,
   overhead: false,
@@ -10,6 +11,7 @@ export const DEFAULT_VISIBLE_TOTALS = {
 
 export const TOTAL_OPTIONS = [
   { key: "material", label: "Material Total" },
+  { key: "materialMarkup", label: "Material markup" },
   { key: "labor", label: "Labor Total" },
   { key: "contingency", label: "Contingency" },
   { key: "overhead", label: "Overhead" },

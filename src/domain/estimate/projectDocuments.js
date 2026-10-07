@@ -301,7 +301,8 @@ export function estimateTotals(estimate) {
 
 export function estimateGrandTotal(estimate) {
   const totals = estimateTotals(estimate);
-  const material = totals.material * (1 + ((Number(estimate?.materialMarkup) || 0) / 100));
+  const materialMarkup = totals.material * ((Number(estimate?.materialMarkup) || 0) / 100);
+  const material = totals.material + materialMarkup;
   const direct = material + totals.labor;
   const contingency = direct * ((Number(estimate?.contingency) || 0) / 100);
   const overheadBase = direct + contingency;
@@ -313,6 +314,7 @@ export function estimateGrandTotal(estimate) {
   return {
     ...totals,
     material,
+    materialMarkup,
     direct,
     contingency,
     overhead,

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { ChevronDown, Download } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import EstimateSupplyQuotePreview from "@/components/estimate/EstimateSupplyQuotePreview";
 import { buildSupplyQuotePdf, supplyQuoteExcelFileName, supplyQuoteToExcel } from "@/domain/takeoff/supplyQuote";
 import { downloadBlob } from "@/domain/estimate/projectDocuments";
 
@@ -15,7 +16,7 @@ export default function EstimateSupplyQuote({ quote, defaultOpen = true }) {
     );
     setStatus(quote.rows.length
       ? `Downloaded ${supplyQuoteExcelFileName(quote)} for the supply house.`
-      : "No estimate lines to quote yet.");
+      : "No supply-house items to quote yet.");
   }
 
   function downloadPdf() {
@@ -23,7 +24,7 @@ export default function EstimateSupplyQuote({ quote, defaultOpen = true }) {
     downloadBlob(doc.output("blob"), fileName);
     setStatus(quote.rows.length
       ? `Downloaded ${fileName} for the supply house.`
-      : "No estimate lines to quote yet.");
+      : "No supply-house items to quote yet.");
   }
 
   return (
@@ -34,15 +35,16 @@ export default function EstimateSupplyQuote({ quote, defaultOpen = true }) {
           <div className="min-w-0">
             <h3 className="text-sm font-bold">Supply house quote</h3>
             <p className="text-[11px] text-muted-foreground">
-              Live from Estimate Lines. {quote.totals.items} item{quote.totals.items === 1 ? "" : "s"} · qty {quote.totals.quantity}
+              Equipment and materials only. {quote.totals.items} item{quote.totals.items === 1 ? "" : "s"} · qty {quote.totals.quantity}
             </p>
           </div>
         </CollapsibleTrigger>
         <div className="flex flex-wrap gap-1.5">
-          <button type="button" onClick={downloadExcel} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-semibold hover:bg-muted">
+          <EstimateSupplyQuotePreview quote={quote} />
+          <button type="button" data-testid="download-supply-quote-excel" onClick={downloadExcel} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-semibold hover:bg-muted">
             <Download className="h-3 w-3" /> Quote Excel
           </button>
-          <button type="button" onClick={downloadPdf} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-semibold hover:bg-muted">
+          <button type="button" data-testid="download-supply-quote-pdf" onClick={downloadPdf} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-semibold hover:bg-muted">
             <Download className="h-3 w-3" /> Quote PDF
           </button>
         </div>
@@ -50,10 +52,10 @@ export default function EstimateSupplyQuote({ quote, defaultOpen = true }) {
       <CollapsibleContent>
         <div className="border-t border-border px-3 pb-3 pt-2">
           <p className="mb-2 text-[11px] text-muted-foreground">
-            Device, model if you entered one, description, and quantity. Models are never invented.
+            Preview the filtered quote, then download. Labor-only work such as Site/Earthwork, hand trenching, and sawcutting stays on the estimate.
           </p>
           {quote.rows.length ? (
-            <div className="max-h-64 overflow-auto rounded-md border border-border">
+            <div className="max-h-64 overflow-auto rounded-md border border-border" data-testid="supply-quote-rows">
               <div className="space-y-2 p-2 sm:hidden">
                 {quote.rows.map((row) => (
                   <div key={row.id} className="rounded-md border border-border bg-background px-2 py-1.5 text-xs">
@@ -88,8 +90,8 @@ export default function EstimateSupplyQuote({ quote, defaultOpen = true }) {
               </table>
             </div>
           ) : (
-            <p className="rounded-md border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
-              Lines show up here as you enter Type, a labor pick, or a description. No separate re-entry.
+            <p className="rounded-md border border-dashed border-border px-3 py-4 text-xs text-muted-foreground" data-testid="supply-quote-empty">
+              Equipment and material lines show up here. Labor-only catalog rows stay on the estimate, not this quote.
             </p>
           )}
           {status ? <p className="mt-2 text-[11px] text-muted-foreground" role="status">{status}</p> : null}

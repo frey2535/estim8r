@@ -107,19 +107,40 @@ function itemName(item) {
   return String(item?.item_name || item?.itemName || "");
 }
 
+export function isTransferSwitchItem(item) {
+  if (!item) return false;
+  if (librarySubcategory(item) === "ATS") return true;
+  if (materialIs(item, "ATS")) return true;
+  const blob = `${librarySubcategory(item)} ${itemName(item)} ${item?.material_type || item?.materialType || ""}`.toLowerCase();
+  return /transfer switch/.test(blob) || /(?<![a-z])ats(?![a-z])/.test(blob);
+}
+
 export function lineTypeForLibraryItem(item) {
+  if (isTransferSwitchItem(item)) return "Equipment";
   const category = libraryCategory(item);
   if (!category) return "";
   return TYPE_FOR_LIBRARY_CATEGORY[category] || "Labor";
 }
 
+export function lineTypesForLibraryItem(item) {
+  const types = new Set();
+  const mapped = lineTypeForLibraryItem(item);
+  if (mapped) types.add(mapped);
+  if (isTransferSwitchItem(item)) types.add("Gear");
+  return [...types];
+}
+
 function activityLabelsForItem(item) {
-  const type = lineTypeForLibraryItem(item);
+  const types = lineTypesForLibraryItem(item);
   const blob = `${librarySubcategory(item)} ${itemName(item)}`.toLowerCase();
   const labels = [];
-  if (type === "Equipment") {
+  if (types.includes("Equipment")) {
     if (/terminat/.test(blob)) labels.push("Equipment terminations");
     if (/install|set\/connect|set\/install|connect/.test(blob)) labels.push("Equipment installation");
+  }
+  if (isTransferSwitchItem(item)) {
+    labels.push("Transfer switches");
+    labels.push("Emergency Power");
   }
   return labels;
 }
@@ -156,7 +177,7 @@ export function laborItemMatchesLine(item, { itemType, category } = {}) {
   const type = String(itemType || "").trim();
   const cat = String(category || "").trim();
   if (!type) return false;
-  if (lineTypeForLibraryItem(item) !== type) {
+  if (!lineTypesForLibraryItem(item).includes(type)) {
     return Boolean(cat && matchesLegacyCategory(item, type, cat));
   }
   if (!cat) return true;
@@ -173,7 +194,7 @@ export function categoriesForType(type, items) {
   if (!wanted) return [];
   const labels = new Set();
   for (const item of catalogItems(items)) {
-    if (lineTypeForLibraryItem(item) !== wanted) continue;
+    if (!lineTypesForLibraryItem(item).includes(wanted)) continue;
     for (const label of workCategoriesForItem(item)) labels.add(label);
   }
   return [...labels].sort((a, b) => a.localeCompare(b));

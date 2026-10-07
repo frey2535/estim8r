@@ -105,7 +105,7 @@ export default function EstimatePdfPreview({ estimate, live = false, embedded = 
         console.error("Estimate PDF preview failed", nextError);
         setError("Could not create the estimate PDF.");
       }
-    }, 180);
+    }, 40);
 
     return () => {
       cancelled = true;

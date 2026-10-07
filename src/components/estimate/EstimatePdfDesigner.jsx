@@ -115,7 +115,7 @@ export default function EstimatePdfDesigner({ estimate, design, onChange }) {
       <div><h2 className="text-lg font-black">PDF Designer</h2><p className="text-xs text-muted-foreground">Customer PDF uses the Buildr created-estimate layout. Heading stays Electrical. Logo stretch is independent on each axis.</p></div>
       <div className="flex gap-2"><EstimatePdfPreview estimate={previewEstimate} live embedded /><button type="button" onClick={() => onChange?.(DEFAULT_PDF_DESIGN)} className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-bold"><RotateCcw className="h-3.5 w-3.5"/> Reset layout</button></div>
     </div>
-    <div className="grid gap-5 p-4 xl:grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)]">
+    <div className="grid items-start gap-5 p-4 xl:grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)]">
       <div className="space-y-4">
         <Group title="Document">
           <Text label="Document title" value={value.documentTitle} set={(v)=>patch("documentTitle",v)} />
@@ -215,7 +215,7 @@ export default function EstimatePdfDesigner({ estimate, design, onChange }) {
           </Group>
         </div> : null}
       </div>
-      <div className="min-h-[42rem] rounded-xl border border-border bg-muted/30 p-2">
+      <div className="min-h-[42rem] rounded-xl border border-border bg-muted/30 p-2 xl:sticky xl:top-4 xl:h-[calc(100dvh-2rem)] xl:max-h-[calc(100dvh-2rem)]">
         <EstimatePdfPreview estimate={previewEstimate} live embedded />
       </div>
     </div>

@@ -122,7 +122,7 @@ The Estimates folder **Markup pages** button opens `/markup`. Edits write back t
 - **Verification** — imported rows are unverified and `production_allowed = false`
 - **Custom labor** — company-isolated hours the estimator enters
 - **Estimate selector** — side-by-side sources, MH × productivity factors × crew rate
-- **Rates & crews** — employee-class wage book and named crews
+- **Rates & crews** — employee-class wage book (shop default $95/hr for every class; last saved rates persist) and named crews
 
 Existing estimates keep their stored man-hours. Takeoff, drawings, auth, and Supabase integrations are unchanged.
 
@@ -131,6 +131,7 @@ Existing estimates keep their stored man-hours. Takeoff, drawings, auth, and Sup
 ```bash
 node src/domain/labor/auditedLibrary.test.js
 node src/domain/labor/architecture.test.js
+node src/domain/labor/rates.test.js
 node src/domain/estimate/fromDrawings.test.js
 node src/domain/estimate/fromTakeoff.test.js
 node src/domain/estimate/manualLineLabor.test.js

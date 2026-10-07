@@ -53,6 +53,11 @@ function deviceKind(item, kind) {
   return true;
 }
 
+function generatorInstall(item) {
+  return item?.category === "Emergency Power"
+    && (item?.subcategory === "Generators" || materialIs(item, "Generator"));
+}
+
 export const LINE_TYPES = [
   "Conduit",
   "Wire",
@@ -103,9 +108,12 @@ const CATEGORY_DEFS = [
   { type: "Gear", label: "Transformers", match: (item) => item?.category === "Distribution" && /transformer/i.test(`${item.subcategory} ${item.material_type}`) },
   { type: "Gear", label: "Switchgear", match: (item) => item?.category === "Distribution" && /switchgear|switchboard/i.test(`${item.subcategory} ${item.material_type}`) },
   { type: "Gear", label: "Breakers", match: (item) => item?.category === "Distribution" && /breaker/i.test(`${item.subcategory} ${item.material_type}`) },
+  { type: "Gear", label: "Generator installation", match: generatorInstall },
   { type: "Box", label: "Boxes", match: (item) => item?.category === "Boxes" },
   { type: "Equipment", label: "Equipment connections", match: (item) => item?.category === "Equipment Connections" },
   { type: "Equipment", label: "Motors", match: (item) => item?.category === "Motors" || item?.category === "Motor Control" },
+  { type: "Equipment", label: "Generator installation", match: generatorInstall },
+  { type: "Labor", label: "Generator installation", match: generatorInstall },
   { type: "Fire alarm", label: "Fire alarm", match: (item) => item?.category === "Life Safety" },
   { type: "Low voltage", label: "Communications", match: (item) => item?.category === "Communications" },
   { type: "Low voltage", label: "Security", match: (item) => item?.category === "Security" },

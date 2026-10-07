@@ -59,4 +59,16 @@ assert(filterLaborLibrary(AUDITED_LABOR_ITEMS, "emt").length === 0, "unscoped ty
 assert(filterLaborLibrary(AUDITED_LABOR_ITEMS, "1/2", { itemType: "Conduit", category: "EMT conduit" }).some((row) => row.id === "EL-00039"), "scoped typeahead still finds 1/2 EMT");
 assert(!laborItemMatchesLine(AUDITED_LABOR_ITEMS.find((row) => row.id === "EL-01372"), { itemType: "Conduit", category: "EMT conduit" }), "THHN does not match EMT conduit");
 
+assert(categoriesForType("Equipment").includes("Generator installation"), "Equipment has Generator installation");
+assert(categoriesForType("Gear").includes("Generator installation"), "Gear has Generator installation");
+assert(categoriesForType("Labor").includes("Generator installation"), "Labor has Generator installation");
+
+const generators = laborItemsForLine(AUDITED_LABOR_ITEMS, { itemType: "Equipment", category: "Generator installation" });
+assert(generators.length === 8 && generators.every((row) => row.category === "Emergency Power" && row.subcategory === "Generators"), `Generator installation is the 8 Emergency Power generator rows, got ${generators.length}`);
+assert(generators.some((row) => row.id === "EL-01842"), "10 kW set/connect generator is in Generator installation");
+assert(!generators.some((row) => /ups/i.test(`${row.item_name} ${row.subcategory}`)), "Generator installation excludes UPS");
+assert(!laborItemsForLine(AUDITED_LABOR_ITEMS, { itemType: "Equipment", category: "Equipment connections" }).some((row) => /generator/i.test(row.item_name)), "Equipment connections still excludes generators");
+assert(laborItemsForLine(AUDITED_LABOR_ITEMS, { itemType: "Labor", category: "Generator installation" }).some((row) => row.id === "EL-01845"), "Labor type lists generator installation");
+assert(filterLaborLibrary(AUDITED_LABOR_ITEMS, "100 kW", { itemType: "Gear", category: "Generator installation" }).some((row) => row.id === "EL-01845"), "typeahead finds 100 kW generator under Gear");
+
 if (!process.exitCode) console.log("line labor catalog checks passed");

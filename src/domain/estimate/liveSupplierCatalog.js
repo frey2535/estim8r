@@ -8,7 +8,7 @@ export const LIVE_CATALOG_ADAPTERS = [
   { id: "digikey", supplier: "Digi-Key", env: ["DIGIKEY_CLIENT_ID", "DIGIKEY_CLIENT_SECRET"], mode: "official-api" },
   { id: "nexar", supplier: "Nexar Supply", env: ["NEXAR_CLIENT_ID", "NEXAR_CLIENT_SECRET"], mode: "official-api" },
   { id: "element14", supplier: "Newark / element14", env: ["ELEMENT14_API_KEY"], mode: "official-api" },
-  { id: "lowes", supplier: "Lowe's", anyEnv: [["LOWES_ACCESS_TOKEN", "LOWES_CLIENT_ID"], ["LOWES_CLIENT_ID", "LOWES_CLIENT_SECRET", "LOWES_TOKEN_URL"]], mode: "official-api" },
+  { id: "lowes", supplier: "Lowe's", gateway: true, mode: "authorized-gateway" },
   { id: "homedepot", supplier: "Home Depot", gateway: true, mode: "authorized-gateway" },
   { id: "cityelectric", supplier: "City Electric Supply", gateway: true, mode: "authorized-gateway" },
   { id: "inlineelectric", supplier: "Inline Electric Supply", gateway: true, mode: "authorized-gateway" },

@@ -29,6 +29,7 @@ import { paletteForTrade, pageKindsFromDocs, symbolsOnDrawingForTrade, tradeById
 import { buildAiMarks } from "@/domain/takeoff/aiTakeoff";
 import { readAiPages } from "@/domain/takeoff/aiPages";
 import { hydratePagesRaster } from "@/domain/takeoff/rasterSymbols";
+import { pickInteractiveSymbolGeometry, matchGeometryToLegend, attachLegendGeometryPrototypes } from "@/domain/takeoff/legendGeometry";
 import { buildDrawingObjectLayer, hitDrawingObject, materializeDrawingObject } from "@/domain/takeoff/drawingObjectLayer";
 import SheetThumbnailPanel, { readThumbsOpen, writeThumbsOpen } from "@/components/takeoff/SheetThumbnailPanel";
 import DevicePicker from "@/components/takeoff/DevicePicker";
@@ -197,7 +198,7 @@ export default function TakeoffWorkspace() {
   const [scheduleEdits, setScheduleEdits] = useState({});
   const [aiBusy, setAiBusy] = useState(false);
   const [drawingObjects, setDrawingObjects] = useState([]);
-  const [tool, setTool] = useState("count");
+  const [tool, setTool] = useState("pan");
   const [category, setCategory] = useState("Receptacles");
   const [symbolId, setSymbolId] = useState("duplex");
   const [zoom, setZoom] = useState(1);
@@ -223,6 +224,7 @@ export default function TakeoffWorkspace() {
   const [drawingDocs, setDrawingDocs] = useState(null);
   const [hoverPoint, setHoverPoint] = useState(null);
   const [hoveredDeviceId, setHoveredDeviceId] = useState(null);
+  const [hoveredGeometryInfo, setHoveredGeometryInfo] = useState(null);
   const [wideLayout, setWideLayout] = useState(() => (
     typeof window !== "undefined" ? window.matchMedia("(min-width: 1024px)").matches : true
   ));
@@ -244,6 +246,14 @@ export default function TakeoffWorkspace() {
 
   const isPdf = file?.type === "application/pdf" || file?.name?.toLowerCase().endsWith(".pdf");
   const drawingSymbols = useMemo(() => drawingSymbolsFromDocs(drawingDocs), [drawingDocs]);
+  const legendDictionary = useMemo(() => {
+    const entries = drawingSymbols.map((symbol) => ({
+      code: symbol.abbr || symbol.type || "",
+      symbol,
+      shapeHint: symbol.shapeHint || "",
+    }));
+    return attachLegendGeometryPrototypes({ entries }, aiPages);
+  }, [drawingSymbols, aiPages]);
   const palette = useMemo(() => paletteForTrade(trade, drawingSymbols), [trade, drawingSymbols]);
   const pageKinds = useMemo(() => pageKindsFromDocs(drawingDocs), [drawingDocs]);
   const drawingTypes = useMemo(
@@ -917,7 +927,7 @@ export default function TakeoffWorkspace() {
     const step = event.ctrlKey ? 0.1 : 0.15;
 
     setZoom((currentZoom) => {
-      const nextZoom = Math.min(4, Math.max(0.25, Number((currentZoom + direction * step).toFixed(2))));
+      const nextZoom = Math.min(8, Math.max(0.25, Number((currentZoom + direction * step).toFixed(2))));
       if (nextZoom === currentZoom) return currentZoom;
 
       const ratio = nextZoom / currentZoom;
@@ -1237,6 +1247,18 @@ export default function TakeoffWorkspace() {
     }
   }
 
+  function interactiveGeometryAt(point) {
+    const page = aiPages.find((item) => item.page === sheetMeta.page);
+    if (!page || !point) return null;
+    const geometry = pickInteractiveSymbolGeometry(page, point, { radius: 1.35 });
+    if (!geometry) return null;
+    const match = matchGeometryToLegend(geometry, legendDictionary, {
+      planType: page.planType || "",
+      nearby: (page.paths || []).filter((path) => Math.hypot((path.cx || 0) - geometry.cx, (path.cy || 0) - geometry.cy) <= 0.8),
+    });
+    return { geometry, match };
+  }
+
   function onDrawingClick(event) {
     if (conduitContextMenu) setConduitContextMenu(null);
     if (!file || tool === "pan") return;
@@ -1260,6 +1282,39 @@ export default function TakeoffWorkspace() {
             setMarks(nextMarks);
             persistTakeoff(nextMarks);
           }
+        }
+      }
+      if (!hit) {
+        const picked = interactiveGeometryAt(point);
+        if (picked?.geometry) {
+          const matchedSymbol = picked.match?.entry?.symbol || null;
+          hit = {
+            id: crypto.randomUUID(),
+            sheet: sheetMeta.page || 1,
+            trade,
+            source: "manual-geometry-select",
+            type: "count",
+            tool: "count",
+            x: picked.geometry.cx,
+            y: picked.geometry.cy,
+            symbolBodyLocation: { x: picked.geometry.cx, y: picked.geometry.cy },
+            outline: picked.geometry.outline,
+            outlineSource: picked.geometry.outline?.source || picked.geometry.source || "vector",
+            category: matchedSymbol?.takeoffCategory || matchedSymbol?.category || "Unclassified",
+            symbol: matchedSymbol?.id || "unclassified-device",
+            symbolLabel: matchedSymbol?.label || "Unclassified device",
+            abbr: matchedSymbol?.abbr || picked.match?.entry?.code || "?",
+            typeCode: String(picked.match?.entry?.code || matchedSymbol?.abbr || "UNKNOWN").toUpperCase(),
+            reviewStatus: matchedSymbol ? "accepted" : "needs-classification",
+            requiresClassification: !matchedSymbol,
+            fillEnabled: true,
+            fillMode: "inside",
+            fillOpacity: 0.34,
+            layer: "device",
+          };
+          const nextMarks = applyDeviceTypeColors([...marks, hit]);
+          setMarks(nextMarks);
+          persistTakeoff(nextMarks);
         }
       }
       setSelectedId(hit?.id || null);
@@ -1302,21 +1357,42 @@ export default function TakeoffWorkspace() {
     }
 
     if (tool === "count" || tool === "drop") {
+      const picked = interactiveGeometryAt(point);
       const drawingObject = hitDrawingObject(drawingObjects, point, sheetMeta.page);
-      const body = drawingObject?.outline ? {
-        x: drawingObject.x,
-        y: drawingObject.y,
-        symbolBodyLocation: { x: drawingObject.x, y: drawingObject.y },
-        outline: drawingObject.outline,
-        outlineSource: drawingObject.outline?.source || "vector",
-        sourceObjectId: drawingObject.objectId,
+      const geometry = picked?.geometry || (drawingObject?.outline ? {
+        cx: drawingObject.x, cy: drawingObject.y, outline: drawingObject.outline,
+        source: drawingObject.outline?.source || "vector",
+      } : null);
+      if (!geometry) {
+        setStatus("No printed symbol geometry detected at that point. Zoom in and click directly inside the symbol.");
+        return;
+      }
+      const matched = picked?.match?.entry?.symbol;
+      const selectedSymbol = symbol || matched;
+      const body = {
+        x: geometry.cx,
+        y: geometry.cy,
+        symbolBodyLocation: { x: geometry.cx, y: geometry.cy },
+        outline: geometry.outline,
+        outlineSource: geometry.outline?.source || geometry.source || "vector",
         fillEnabled: true,
-      } : point;
+        fillMode: "inside",
+        fillOpacity: 0.34,
+      };
       addMark(
-        { type: tool === "drop" ? "drop" : "count", ...body, feet: tool === "drop" ? DEFAULT_DROP_FEET : undefined },
+        {
+          type: tool === "drop" ? "drop" : "count",
+          ...body,
+          symbol: selectedSymbol?.id,
+          symbolLabel: selectedSymbol?.label,
+          abbr: selectedSymbol?.abbr,
+          typeCode: selectedSymbol?.abbr || matched?.abbr,
+          category: selectedSymbol?.takeoffCategory || selectedSymbol?.category || category,
+          feet: tool === "drop" ? DEFAULT_DROP_FEET : undefined,
+        },
         tool === "drop"
-          ? `${symbol?.label || category} drop counted${calibration ? ` (${DEFAULT_DROP_FEET} LF typical)` : ""}.`
-          : `${symbol?.label || category} counted.`,
+          ? `${selectedSymbol?.label || category} drop counted and snapped to printed symbol geometry.`
+          : `${selectedSymbol?.label || category} counted and filled inside the printed symbol.`,
       );
       return;
     }
@@ -1946,7 +2022,7 @@ export default function TakeoffWorkspace() {
               <button type="button" onClick={redo} className="rounded-lg p-2 hover:bg-muted" title="Redo"><Redo2 className="h-4 w-4" /></button>
               <button type="button" onClick={() => setZoom((z) => Math.max(0.25, Number((z - 0.25).toFixed(2))))} className="rounded-lg p-2 hover:bg-muted" title="Zoom out"><ZoomOut className="h-4 w-4" /></button>
               <span className="min-w-12 text-center text-xs font-semibold">{Math.round(zoom * 100)}%</span>
-              <button type="button" onClick={() => setZoom((z) => Math.min(4, Number((z + 0.25).toFixed(2))))} className="rounded-lg p-2 hover:bg-muted" title="Zoom in"><ZoomIn className="h-4 w-4" /></button>
+              <button type="button" onClick={() => setZoom((z) => Math.min(8, Number((z + 0.25).toFixed(2))))} className="rounded-lg p-2 hover:bg-muted" title="Zoom in"><ZoomIn className="h-4 w-4" /></button>
               <button type="button" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} className="rounded-lg border border-border px-2 py-1 text-xs font-semibold hover:bg-muted">Fit sheet</button>
               {sheetMeta.pageCount > 1 && (
                 <div className="ml-2 flex items-center gap-1 rounded-lg border border-border bg-background px-1.5 py-0.5">
@@ -1993,7 +2069,19 @@ export default function TakeoffWorkspace() {
                     setHoveredDeviceId(hovered.id);
                   } else {
                     const object = hitDrawingObject(drawingObjects, point, sheetMeta.page);
-                    setHoveredDeviceId(object ? `object:${object.objectId || object.id}` : null);
+                    if (object) {
+                      setHoveredDeviceId(`object:${object.objectId || object.id}`);
+                    } else {
+                      const picked = interactiveGeometryAt(point);
+                      if (picked?.geometry) {
+                        const symbol = picked.match?.entry?.symbol;
+                        setHoveredGeometryInfo({ geometry: picked.geometry, match: picked.match });
+                        setHoveredDeviceId(`raw:${picked.geometry.cx.toFixed(3)}:${picked.geometry.cy.toFixed(3)}:${symbol?.id || "unknown"}`);
+                      } else {
+                        setHoveredGeometryInfo(null);
+                        setHoveredDeviceId(null);
+                      }
+                    }
                   }
                   if (!["conduit", "polyline", "linear", "measure", "homerun"].includes(tool)) return;
                   if (tool === "conduit") {
@@ -2002,7 +2090,7 @@ export default function TakeoffWorkspace() {
                   }
                   setHoverPoint(point);
                 }}
-                onPointerLeave={() => { setHoverPoint(null); setHoveredDeviceId(null); }}
+                onPointerLeave={() => { setHoverPoint(null); setHoveredDeviceId(null); setHoveredGeometryInfo(null); }}
                 className={cn("relative bg-white shadow-xl", tool === "pan" ? "cursor-grab" : tool === "select" ? "cursor-default" : "cursor-crosshair")}
               >
                 {isPdf ? (
@@ -2071,12 +2159,23 @@ export default function TakeoffWorkspace() {
                   lengthFor={(mark) => markLengthFeet(mark, calibration, aspect)}
                 />
                 {(() => {
+                  const rawSymbol = hoveredGeometryInfo?.match?.entry?.symbol || null;
+                  const rawGeometry = hoveredGeometryInfo?.geometry || null;
                   const hovered = visibleOverlayMarks.find((mark) => mark.id === hoveredDeviceId && isDeviceMark(mark))
                     || (String(hoveredDeviceId || "").startsWith("object:")
                       ? drawingObjects.find((item) => `object:${item.objectId || item.id}` === hoveredDeviceId)
-                      : null);
+                      : null)
+                    || (rawGeometry ? {
+                      x: rawGeometry.cx, y: rawGeometry.cy,
+                      symbol: rawSymbol?.id,
+                      symbolLabel: rawSymbol?.label || "Unclassified device",
+                      abbr: rawSymbol?.abbr || hoveredGeometryInfo?.match?.entry?.code || "?",
+                      typeCode: rawSymbol?.abbr || hoveredGeometryInfo?.match?.entry?.code || "UNKNOWN",
+                      category: rawSymbol?.takeoffCategory || rawSymbol?.category || "Unclassified",
+                      requiresClassification: !rawSymbol,
+                    } : null);
                   if (!hovered) return null;
-                  const legend = drawingSymbols.find((item) => (
+                  const legend = rawSymbol || drawingSymbols.find((item) => (
                     item.id === hovered.symbol
                     || String(item.abbr || "").toUpperCase() === String(hovered.typeCode || hovered.abbr || "").toUpperCase()
                   ));

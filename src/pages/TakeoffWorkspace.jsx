@@ -1858,6 +1858,7 @@ export default function TakeoffWorkspace() {
             <p className="text-[11px] leading-4 text-muted-foreground">Default is 3. AI will not put more homeruns in one conduit unless you raise this.</p>
             <p className="text-[11px] leading-4 text-muted-foreground"><strong className="text-foreground">AI assist</strong> counts the selected trade and draws colored marks on the sheets. <strong className="text-foreground">True Takeoff</strong> marks the drawings (runs AI if empty) then builds the bid-lock estimate.</p>
             <DevicePicker
+              availableSymbols={[...(palette.symbols || []), ...(palette.fromDrawing || [])]}
               trades={TRADES}
               trade={trade}
               onTrade={setTrade}

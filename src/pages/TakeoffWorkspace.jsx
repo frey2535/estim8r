@@ -98,6 +98,8 @@ import {
   MIN_VISIBLE_FILL,
   applyDeviceTypeColors,
   displayDeviceOutline,
+  interiorDeviceOutline,
+  deviceFillEnabled,
   hitTestDeviceFill,
   isCircuitMark,
   isDeviceMark,
@@ -220,6 +222,7 @@ export default function TakeoffWorkspace() {
   const [symbolQuery, setSymbolQuery] = useState("");
   const [drawingDocs, setDrawingDocs] = useState(null);
   const [hoverPoint, setHoverPoint] = useState(null);
+  const [hoveredDeviceId, setHoveredDeviceId] = useState(null);
   const [wideLayout, setWideLayout] = useState(() => (
     typeof window !== "undefined" ? window.matchMedia("(min-width: 1024px)").matches : true
   ));
@@ -963,7 +966,6 @@ export default function TakeoffWorkspace() {
     };
     if (isDeviceMark(mark)) {
       mark.typeCode = mark.typeCode || device?.abbr || mark.abbr;
-      setSearchManifest(planned.searchManifest || null);
       const colored = applyDeviceTypeColors([...marks.filter((item) => item.sheet === mark.sheet), mark]);
       const next = colored.find((item) => item.id === mark.id) || mark;
       mark.color = next.color;
@@ -1292,8 +1294,18 @@ export default function TakeoffWorkspace() {
     }
 
     if (tool === "count" || tool === "drop") {
+      const drawingObject = hitDrawingObject(drawingObjects, point, sheetMeta.page);
+      const body = drawingObject?.outline ? {
+        x: drawingObject.x,
+        y: drawingObject.y,
+        symbolBodyLocation: { x: drawingObject.x, y: drawingObject.y },
+        outline: drawingObject.outline,
+        outlineSource: drawingObject.outline?.source || "vector",
+        sourceObjectId: drawingObject.objectId,
+        fillEnabled: true,
+      } : point;
       addMark(
-        { type: tool === "drop" ? "drop" : "count", ...point, feet: tool === "drop" ? DEFAULT_DROP_FEET : undefined },
+        { type: tool === "drop" ? "drop" : "count", ...body, feet: tool === "drop" ? DEFAULT_DROP_FEET : undefined },
         tool === "drop"
           ? `${symbol?.label || category} drop counted${calibration ? ` (${DEFAULT_DROP_FEET} LF typical)` : ""}.`
           : `${symbol?.label || category} counted.`,
@@ -1962,17 +1974,18 @@ export default function TakeoffWorkspace() {
                 style={{ transform: `translate(${pan.x}px, ${pan.y}px)`, willChange: tool === "pan" ? "transform" : "auto" }}
                 onPointerMove={(event) => {
                   if (panningRef.current) return;
-                  if (!["conduit", "polyline", "linear", "measure", "homerun"].includes(tool)) return;
                   const point = drawingPoint(event);
                   if (!point) return;
-                  // Throttle hover updates while drafting conduit to keep pan/draw smooth.
+                  const hovered = selectMarkAtPoint(overlayMarks, point, { markerSize: penSize });
+                  setHoveredDeviceId(hovered && isDeviceMark(hovered) ? hovered.id : null);
+                  if (!["conduit", "polyline", "linear", "measure", "homerun"].includes(tool)) return;
                   if (tool === "conduit") {
                     const prev = hoverPoint;
                     if (prev && Math.hypot(prev.x - point.x, prev.y - point.y) < 0.35) return;
                   }
                   setHoverPoint(point);
                 }}
-                onPointerLeave={() => setHoverPoint(null)}
+                onPointerLeave={() => { setHoverPoint(null); setHoveredDeviceId(null); }}
                 className={cn("relative bg-white shadow-xl", tool === "pan" ? "cursor-grab" : tool === "select" ? "cursor-default" : "cursor-crosshair")}
               >
                 {isPdf ? (
@@ -2040,6 +2053,27 @@ export default function TakeoffWorkspace() {
                   lineSize={penThickness}
                   lengthFor={(mark) => markLengthFeet(mark, calibration, aspect)}
                 />
+                {(() => {
+                  const hovered = visibleOverlayMarks.find((mark) => mark.id === hoveredDeviceId && isDeviceMark(mark));
+                  if (!hovered) return null;
+                  const legend = drawingSymbols.find((item) => (
+                    item.id === hovered.symbol
+                    || String(item.abbr || "").toUpperCase() === String(hovered.typeCode || hovered.abbr || "").toUpperCase()
+                  ));
+                  const x = Math.min(82, Math.max(2, Number(hovered.x) || 0));
+                  const y = Math.min(86, Math.max(2, Number(hovered.y) || 0));
+                  return (
+                    <div
+                      className="pointer-events-none absolute z-50 max-w-72 rounded-lg border border-slate-300 bg-white/95 px-3 py-2 text-xs text-slate-900 shadow-xl"
+                      style={{ left: `${x}%`, top: `${y}%`, transform: "translate(10px, 10px)" }}
+                    >
+                      <div className="font-black">{hovered.typeCode || hovered.abbr || "Symbol"} · {legend?.label || hovered.symbolLabel || "Device"}</div>
+                      <div className="mt-1 text-[11px] text-slate-600">{legend?.category || hovered.category || ""}</div>
+                      {legend?.source ? <div className="mt-1 text-[10px] text-slate-500">Legend source: {legend.source}</div> : null}
+                      {legend?.page ? <div className="text-[10px] text-slate-500">Legend/schedule sheet {legend.page}</div> : null}
+                    </div>
+                  );
+                })()}
                 {file && !aiBusy && visibleOverlayMarks.length === 0 && (
                   <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center p-4">
                     <div className="max-w-sm rounded-xl border border-border bg-background/95 px-4 py-3 text-center shadow-lg">
@@ -2153,14 +2187,17 @@ function OverlayLabel({ label, fill }) {
 }
 
 function DeviceFill({ mark, selected, markerSize, focus = false }) {
-  const outline = displayDeviceOutline(mark, markerSize, { selected });
+  const measured = displayDeviceOutline(mark, markerSize, { selected });
+  if (!measured || !deviceFillEnabled(mark)) return null;
+  const outline = interiorDeviceOutline(measured, Number(mark.fillInset) || 0.86);
   if (!outline) return null;
   const color = readableFillColor(mark.color || "#1e3a8a");
-  const opacity = focus ? 0.34 : (mark.fillOpacity ?? DEVICE_FILL_OPACITY);
-  // A crisp hairline plus a light fill keeps the detected body visible while
-  // leaving its printed symbol and nearby plan notes readable.
-  const stroke = selected || focus ? "#ea580c" : color;
-  const strokeWidth = selected || focus ? DEVICE_FILL_STROKE_PX + 0.55 : DEVICE_FILL_STROKE_PX;
+  const opacity = focus ? 0.46 : (mark.fillOpacity ?? DEVICE_FILL_OPACITY);
+  // PlanSwift-style marking: paint only inside the detected symbol body.
+  // The original black PDF symbol remains visible on top visually because
+  // we do not redraw a colored perimeter over the printed symbol lines.
+  const stroke = selected || focus ? "#ea580c" : "none";
+  const strokeWidth = selected || focus ? DEVICE_FILL_STROKE_PX + 0.35 : 0;
   if (outline.kind === "composite" && outline.parts?.length) {
     return (
       <g>

@@ -939,24 +939,10 @@ export function buildAiMarks({
       if (!placementAllowed(placed, { sitePlan })) continue;
       const duplicate = seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.34);
       if (duplicate) continue;
-      if (planType === "lighting") {
-        const review = typedLightingBodyMark({
-          trade,
-          sheet: page.page,
-          geometry,
-          placed,
-          tokens: page.tokens,
-          symbols: matchSymbols,
-          color,
-          sources: ["legend-geometry"],
-          scores: { visual: visual.score, legend: visual.score, vector: visual.score },
-        });
-        if (review) {
-          counts.push(review);
-          seen.push({ ...review, tagX: placed.x, tagY: placed.y });
-        }
-        continue;
-      }
+      // A visual legend match already has an explicit project symbol identity.
+      // Keep that identity on lighting sheets instead of throwing it away and
+      // trying to re-type the device from nearby OCR/text. The geometry itself
+      // is the device body and must be the thing that gets marked.
       const mark = attachDetectionRecord({
         id: newId(),
         source: "ai",
@@ -1015,25 +1001,25 @@ export function buildAiMarks({
         : assigned.get(token) || placeOnSymbolGeometry(token, (page.paths || []).filter((item) => !usedGeometry.has(item)), {
           shapeHint: hint,
           rivals: hits.map((other) => other.token).filter((other) => other !== token),
-        }) || snapToEntryPrototype(token, page, entry, { used: usedGeometry }) || tagOnSymbolGeometry(token, { shapeHint: hint });
+        }) || snapToEntryPrototype(token, page, entry, { used: usedGeometry });
       if (geometry && looksLikeHexNoteGlyph(geometry)) {
         geometry = powerGlyph
           ? { ...powerGlyph, source: "vector", outline: powerGlyph.outline || { kind: powerGlyph.kind || "rect", source: "vector", w: powerGlyph.w, h: powerGlyph.h } }
-          : tagOnSymbolGeometry(token, { shapeHint: hint || "rect" });
+          : null;
       }
       if (geometry && powerDeviceTag) {
         const away = Math.hypot((geometry.cx || 0) - token.x, (geometry.cy || 0) - token.y);
         if (away > 0.62) {
           geometry = powerGlyph
             ? { ...powerGlyph, source: "vector", outline: powerGlyph.outline || { kind: powerGlyph.kind || "rect", source: "vector", w: powerGlyph.w, h: powerGlyph.h } }
-            : tagOnSymbolGeometry(token, { shapeHint: hint || "rect" });
+            : null;
         }
       }
       if (hint === "circle" && geometry) {
         const away = Math.hypot((geometry.cx || 0) - token.x, (geometry.cy || 0) - token.y);
         const code = normalizeTypeMark(token.text).toUpperCase();
         if (away > 0.48 && code === "OS") {
-          geometry = tagOnSymbolGeometry(token, { shapeHint: hint });
+          geometry = null;
         }
       }
       if (isCanDeviceText(token.text, token.nearbyText, symbol.label) && geometry?.kind !== "rect") {

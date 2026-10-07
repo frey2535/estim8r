@@ -36,11 +36,9 @@ export function matchCompanyProject(projects, { projectId, projectName, projectA
 }
 
 export function decideSaveDestination({
-  hasBuildrAccount,
   canUseBuildr,
   matchingProject,
   existingProjectId,
-  linkedCompanyId,
   accountError,
 } = {}) {
   if (existingProjectId && !accountError) {
@@ -56,14 +54,6 @@ export function decideSaveDestination({
     return {
       action: "local",
       warning: `Could not reach Buildr: ${accountError}`,
-    };
-  }
-  if (linkedCompanyId && !canUseBuildr) {
-    return {
-      action: "local",
-      warning: hasBuildrAccount
-        ? "Buildr is linked but this login cannot use that company yet."
-        : "Buildr is not available for this company, so the estimate stayed in Estim8r.",
     };
   }
   return { action: "local" };

@@ -4,7 +4,8 @@ import { pointHitsOutline, scaleOutline } from "./vectorSymbols.js";
 
 // Detection color should identify a symbol, not replace the printed symbol
 // with a solid block that hides the drawing underneath.
-export const DEVICE_FILL_OPACITY = 0.2;
+export const DEVICE_FILL_OPACITY = 0.34;
+export const DEVICE_INTERIOR_INSET = 0.86;
 export const MIN_VISIBLE_FILL = 0.28;
 export const MAX_POINT_FILL = 0.55;
 export const MAX_FIXTURE_FILL = 1.65;
@@ -346,4 +347,43 @@ export function shortenCircuitPath(points, pad = 0.55) {
     const pull = Math.min(pad, len * 0.35);
     return { x: point.x + (dx / len) * pull, y: point.y + (dy / len) * pull };
   });
+}
+
+
+export function interiorDeviceOutline(outline, factor = DEVICE_INTERIOR_INSET) {
+  if (!outline) return null;
+  const f = Math.max(0.45, Math.min(1, Number(factor) || DEVICE_INTERIOR_INSET));
+  if (outline.kind === "composite" && outline.parts?.length) {
+    return {
+      ...outline,
+      parts: outline.parts.map((part) => interiorDeviceOutline(part, f)).filter(Boolean),
+    };
+  }
+  if (outline.kind === "circle") {
+    return { ...outline, r: Math.max(0.02, (Number(outline.r) || Math.max(Number(outline.w) || 0, Number(outline.h) || 0) / 2) * f) };
+  }
+  if (outline.kind === "path" && outline.points?.length >= 3) {
+    const cx = Number.isFinite(outline.cx)
+      ? outline.cx
+      : outline.points.reduce((sum, point) => sum + (Number(point.x) || 0), 0) / outline.points.length;
+    const cy = Number.isFinite(outline.cy)
+      ? outline.cy
+      : outline.points.reduce((sum, point) => sum + (Number(point.y) || 0), 0) / outline.points.length;
+    return {
+      ...outline,
+      points: outline.points.map((point) => ({
+        x: cx + ((Number(point.x) || 0) - cx) * f,
+        y: cy + ((Number(point.y) || 0) - cy) * f,
+      })),
+    };
+  }
+  return {
+    ...outline,
+    w: Math.max(0.02, (Number(outline.w) || 0) * f),
+    h: Math.max(0.02, (Number(outline.h) || 0) * f),
+  };
+}
+
+export function deviceFillEnabled(mark) {
+  return mark?.fillEnabled !== false && mark?.fillMode !== "off";
 }

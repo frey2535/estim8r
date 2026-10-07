@@ -9,6 +9,8 @@ import {
   displayDeviceOutline,
   deviceOutline,
   hitTestDeviceFill,
+  interiorDeviceOutline,
+  deviceFillEnabled,
   marksForTrade,
   outlineExtent,
   planOverlayMarks,
@@ -172,5 +174,18 @@ const idleOutline = deviceOutline({
   outline: { kind: "circle", source: "vector", r: 0.6, w: 1.2, h: 1.2, points: [] },
 }, 0.55);
 assert(selectedOutline.r === idleOutline.r, "selection does not enlarge dots");
+
+const insideCircle = interiorDeviceOutline({ kind: "circle", r: 0.5, w: 1, h: 1 }, 0.8);
+assert(insideCircle.r === 0.4, "inside fill stays within the printed circle perimeter");
+const compositeFill = interiorDeviceOutline({
+  kind: "composite",
+  parts: [
+    { kind: "circle", cx: 10, cy: 10, r: 0.5, w: 1, h: 1 },
+    { kind: "rect", cx: 10, cy: 10, w: 0.8, h: 0.05 },
+  ],
+}, 0.86);
+assert(compositeFill.parts.length === 1 && compositeFill.parts[0].kind === "circle", "thin internal symbol strokes are not painted over");
+assert(deviceFillEnabled({ fillEnabled: false }) === false, "per-symbol fill can be disabled");
+assert(deviceFillEnabled({ fillMode: "inside" }) === true, "inside fill mode is enabled");
 
 if (!process.exitCode) console.log("device style checks passed");

@@ -35,6 +35,7 @@ import DevicePicker from "@/components/takeoff/DevicePicker";
 import TakeoffInspector from "@/components/takeoff/TakeoffInspector";
 import TakeoffSizeControl from "@/components/takeoff/TakeoffSizeControl";
 import AccuracyPopout from "@/components/takeoff/AccuracyPopout";
+import AiSearchManifestPanel from "@/components/takeoff/AiSearchManifestPanel";
 import {
   applyReviewDecision,
   isUncertainDetection,
@@ -224,6 +225,7 @@ export default function TakeoffWorkspace() {
   ));
   const [reviewOpen, setReviewOpen] = useState(false);
   const [aiPages, setAiPages] = useState([]);
+  const [searchManifest, setSearchManifest] = useState(null);
   const [confirmedCoverageIds, setConfirmedCoverageIds] = useState([]);
   const [confirmedEmptySheets, setConfirmedEmptySheets] = useState({});
   const [supplyQuote, setSupplyQuote] = useState(null);
@@ -961,6 +963,7 @@ export default function TakeoffWorkspace() {
     };
     if (isDeviceMark(mark)) {
       mark.typeCode = mark.typeCode || device?.abbr || mark.abbr;
+      setSearchManifest(planned.searchManifest || null);
       const colored = applyDeviceTypeColors([...marks.filter((item) => item.sheet === mark.sheet), mark]);
       const next = colored.find((item) => item.id === mark.id) || mark;
       mark.color = next.color;
@@ -1209,6 +1212,7 @@ export default function TakeoffWorkspace() {
       if (!silent) {
         setStatus(
           `${planned.summary || `AI marked ${devices} devices and ${conduits} conduit runs.`} `
+          + `${planned.searchManifest?.totalSymbols ? `Searched ${planned.searchManifest.totalSymbols} legend symbol targets across ${planned.searchManifest.sheetCount} applicable sheet${planned.searchManifest.sheetCount === 1 ? "" : "s"}. ` : ""}`
           + `${planned.reconciliationNote || ""} `
           + `Verify the colored marks on the sheet.`
           + (quote.rows.length ? ` Supply quote ready (${quote.totals.quantity} plan devices).` : ""),
@@ -2051,6 +2055,7 @@ export default function TakeoffWorkspace() {
               </div>
             </div>
           </div>
+          <AiSearchManifestPanel manifest={searchManifest} trade={trade} />
           <div className="shrink-0 border-t border-border bg-background px-3 py-1.5 text-xs text-muted-foreground">{status}</div>
           </div>
         </section>

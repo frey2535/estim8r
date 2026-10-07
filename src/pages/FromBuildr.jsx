@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { verifyBuildrFamilyAppSso } from "@/api/buildrBridge";
+import { verifyBuildrFamilyAppSso, writeBuildrSessionToken } from "@/api/buildrBridge";
 import { persistBuildrCompanyId } from "@/lib/buildrCompany";
 import {
   buildrFamilyAccessCopy,
@@ -89,6 +89,7 @@ export default function FromBuildr() {
       }
 
       writeBuildrFamilyAccess({ email, companyId: resolvedCompanyId });
+      if (verified.buildr_token) writeBuildrSessionToken(email, verified.buildr_token);
 
       if (isLoadingAuth) return;
 

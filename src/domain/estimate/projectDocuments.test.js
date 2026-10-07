@@ -12,6 +12,7 @@ import {
   estimateGrandTotal,
   findDocumentForEstim8r,
   findInvoiceForEstim8r,
+  matchCompanyProject,
   matchProjectByName,
   parseEstim8rEstimateId,
   projectFolderKey,
@@ -28,6 +29,18 @@ function assert(cond, message) {
 assert(projectFolderKey("  Main Hospital  ") === "main hospital", "project key is trimmed and lowercased");
 assert(matchProjectByName([{ name: "Main Hospital" }], "main hospital")?.name === "Main Hospital", "match ignores case");
 assert(matchProjectByName([{ name: "Other" }], "Main Hospital") === null, "unrelated project is not matched");
+assert(matchCompanyProject(
+  [{ id: "p1", name: "Main Hospital", address: "9 Oak" }, { id: "p2", name: "Shop", address: "1 Main" }],
+  { projectName: "main hospital" },
+)?.id === "p1", "company list matches by name");
+assert(matchCompanyProject(
+  [{ id: "p1", name: "Annex", address: "9 Oak" }, { id: "p2", name: "Shop", address: "1 Main" }],
+  { projectName: "Missing", projectAddress: "1 Main" },
+)?.id === "p2", "unique address matches inside the company");
+assert(matchCompanyProject(
+  [{ id: "p1", name: "A", address: "9 Oak" }, { id: "p2", name: "B", address: "9 Oak" }],
+  { projectName: "Missing", projectAddress: "9 Oak" },
+) === null, "shared address is not a match");
 
 assert(decideSaveDestination({
   hasBuildrAccount: true,
@@ -85,7 +98,7 @@ assert(decideSaveDestination({
   canUseBuildr: false,
   matchingProject: null,
   linkedCompanyId: "co_1",
-}).action === "error", "a linked company without a Buildr account is an error, not a silent local save");
+}).action === "local", "Buildr not purchased still saves in Estim8r");
 
 assert(decideSaveDestination({
   hasBuildrAccount: true,
@@ -93,14 +106,14 @@ assert(decideSaveDestination({
   matchingProject: null,
   linkedCompanyId: "co_1",
   accountError: "Buildr is unavailable.",
-}).action === "error", "a Buildr lookup failure is surfaced when a company is linked");
+}).action === "local", "unreachable Buildr does not block the Estim8r save");
 
 assert(decideSaveDestination({
   hasBuildrAccount: true,
   canUseBuildr: false,
   matchingProject: null,
   linkedCompanyId: "co_1",
-}).action === "error", "a linked company the login cannot use is an error");
+}).action === "local", "a linked company the login cannot use still saves locally");
 
 assert(canSaveProjectDocuments({ fileName: "plan.pdf", projectName: "Main Hospital" }) === true, "drawing plus project name can save");
 assert(canSaveProjectDocuments({ fileName: "", projectName: "Main Hospital" }) === true, "a named estimate can save without a drawing");

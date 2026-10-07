@@ -4,12 +4,30 @@ function trimUrl(value) {
   return String(value || "").trim().replace(/\/$/, "");
 }
 
+export function isLoopbackBuildrUrl(value) {
+  const trimmed = trimUrl(value);
+  if (!trimmed) return false;
+  try {
+    const host = new URL(trimmed).hostname.toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host === "::1";
+  } catch {
+    return false;
+  }
+}
+
+function usableBuildrUrl(value, isProd) {
+  const trimmed = trimUrl(value);
+  if (!trimmed) return "";
+  if (isProd && isLoopbackBuildrUrl(trimmed)) return "";
+  return trimmed;
+}
+
 export function resolveBuildrAppUrl(appUrl, { isProd = false } = {}) {
-  return trimUrl(appUrl || (isProd ? DEFAULT_BUILDR_PRODUCTION_URL : ""));
+  return usableBuildrUrl(appUrl, isProd) || (isProd ? DEFAULT_BUILDR_PRODUCTION_URL : "");
 }
 
 export function resolveBuildrApiUrl(apiUrl, appUrl, { isProd = false } = {}) {
-  return trimUrl(apiUrl || resolveBuildrAppUrl(appUrl, { isProd }));
+  return usableBuildrUrl(apiUrl, isProd) || resolveBuildrAppUrl(appUrl, { isProd });
 }
 
 export function buildrAppUrl() {
@@ -36,18 +54,11 @@ async function readJson(response) {
   }
 }
 
-export async function verifyBuildrFamilyAppSso(token, audience = "estim8r") {
-  const api = buildrApiUrl();
-  if (!api) {
-    return { valid: false, error: "buildr_not_configured" };
-  }
-  if (!token) {
-    return { valid: false, error: "token_required" };
-  }
+async function postFamilyAppSsoVerify(api, token, audience) {
   try {
     const response = await fetch(`${api}/functions/verifyFamilyAppSSOToken`, {
       method: "POST",
-      credentials: "include",
+      credentials: "omit",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token, audience }),
     });
@@ -59,6 +70,27 @@ export async function verifyBuildrFamilyAppSso(token, audience = "estim8r") {
   } catch (error) {
     return { valid: false, error: "buildr_unavailable", message: error?.message };
   }
+}
+
+export async function verifyBuildrFamilyAppSso(token, audience = "estim8r") {
+  const api = buildrApiUrl();
+  if (!api) {
+    return { valid: false, error: "buildr_not_configured" };
+  }
+  if (!token) {
+    return { valid: false, error: "token_required" };
+  }
+  const verified = await postFamilyAppSsoVerify(api, token, audience);
+  if (verified?.valid) return verified;
+  const production = DEFAULT_BUILDR_PRODUCTION_URL;
+  if (
+    import.meta.env.PROD &&
+    api !== production &&
+    (verified?.error === "buildr_unavailable" || isLoopbackBuildrUrl(api))
+  ) {
+    return postFamilyAppSsoVerify(production, token, audience);
+  }
+  return verified;
 }
 
 export async function fetchBuildrAccountStatus(email, companyId) {

@@ -41,6 +41,24 @@ export default function LiveSupplierCatalog({ lines = [], onApplyPrice }) {
     }
   }
 
+  async function checkConnections() {
+    setBusy(true);
+    setStatus("Checking supplier connections…");
+    try {
+      const result = await searchLiveSupplierCatalog({ query: "", quantity: 1 });
+      setPayload(result);
+      const ready = (result.diagnostics || []).filter((row) => row.configured).length;
+      setStatus(ready
+        ? `${ready} supplier connection${ready === 1 ? "" : "s"} configured. See status below.`
+        : "No live supplier connections are configured yet. See status below.");
+    } catch (error) {
+      setPayload(null);
+      setStatus(error.message || "Supplier connection check failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function priceMatchingLines() {
     if (!searchable.length) {
       setStatus("Add a model or description on an estimate line first.");
@@ -83,6 +101,7 @@ export default function LiveSupplierCatalog({ lines = [], onApplyPrice }) {
 
   const results = payload?.results || [];
   const configured = payload?.configured || [];
+  const diagnostics = payload?.diagnostics || [];
 
   return (
     <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -90,8 +109,9 @@ export default function LiveSupplierCatalog({ lines = [], onApplyPrice }) {
         <p className="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-orange-500">Live catalogs</p>
         <h2 className="mt-1 text-xl font-black">Search current supplier prices</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Queries official Mouser, Digi-Key, Nexar Supply, and Newark / element14 catalogs.
-          Results are live from those APIs. Estim8r does not invent or substitute a price when a catalog is offline or unconfigured.
+          Searches connected supplier pricing for Home Depot, Lowe's, City Electric Supply, Inline Electric Supply,
+          Wesco / Anixter, Graybar, Grainger, MSC Industrial, Mouser, Digi-Key, Nexar Supply, and Newark / element14.
+          Estim8r only displays prices returned by a configured live connection and never invents a price.
         </p>
       </div>
       <div className="mt-4 grid gap-2 md:grid-cols-[minmax(0,1fr)_12rem_auto_auto]">
@@ -119,6 +139,9 @@ export default function LiveSupplierCatalog({ lines = [], onApplyPrice }) {
         <button type="button" disabled={busy} onClick={priceMatchingLines} className="self-end rounded-md bg-blue-600 px-3 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50 dark:bg-orange-500 dark:hover:bg-orange-600">
           Price matching lines
         </button>
+        <button type="button" disabled={busy} onClick={checkConnections} className="self-end rounded-md border border-border px-3 py-2 text-sm font-bold hover:bg-muted disabled:opacity-50 md:col-start-4">
+          Check connections
+        </button>
       </div>
       {status ? <p className="mt-2 text-xs text-muted-foreground">{status}</p> : null}
       {configured.length ? (
@@ -127,6 +150,23 @@ export default function LiveSupplierCatalog({ lines = [], onApplyPrice }) {
       {(payload?.errors || []).length ? (
         <div className="mt-2 space-y-1 text-xs text-amber-700">
           {payload.errors.map((error) => <div key={error.message}>{error.message}</div>)}
+        </div>
+      ) : null}
+      {diagnostics.length ? (
+        <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+          {diagnostics.map((row) => (
+            <div key={row.id} className="rounded-lg border border-border px-3 py-2 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-bold">{row.supplier}</span>
+                <span className={row.configured ? "font-bold text-emerald-700" : "font-bold text-amber-700"}>
+                  {row.configured ? "Connected" : "Setup needed"}
+                </span>
+              </div>
+              <div className="mt-1 text-muted-foreground">
+                {row.configured ? (row.mode === "authorized-gateway" ? "Authorized account pricing gateway" : "Official supplier API") : row.reason}
+              </div>
+            </div>
+          ))}
         </div>
       ) : null}
       <div className="mt-4 space-y-2">

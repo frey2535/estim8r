@@ -4,10 +4,18 @@ export const LIVE_CATALOG_SOURCE_TYPE = "Supplier catalog";
 export const AUTO_APPLY_MIN_SCORE = 90;
 
 export const LIVE_CATALOG_ADAPTERS = [
-  { id: "mouser", supplier: "Mouser", env: ["MOUSER_API_KEY"] },
-  { id: "digikey", supplier: "Digi-Key", env: ["DIGIKEY_CLIENT_ID", "DIGIKEY_CLIENT_SECRET"] },
-  { id: "nexar", supplier: "Nexar Supply", env: ["NEXAR_CLIENT_ID", "NEXAR_CLIENT_SECRET"] },
-  { id: "element14", supplier: "Newark / element14", env: ["ELEMENT14_API_KEY"] },
+  { id: "mouser", supplier: "Mouser", env: ["MOUSER_API_KEY"], mode: "official-api" },
+  { id: "digikey", supplier: "Digi-Key", env: ["DIGIKEY_CLIENT_ID", "DIGIKEY_CLIENT_SECRET"], mode: "official-api" },
+  { id: "nexar", supplier: "Nexar Supply", env: ["NEXAR_CLIENT_ID", "NEXAR_CLIENT_SECRET"], mode: "official-api" },
+  { id: "element14", supplier: "Newark / element14", env: ["ELEMENT14_API_KEY"], mode: "official-api" },
+  { id: "lowes", supplier: "Lowe's", gateway: true, mode: "authorized-gateway" },
+  { id: "homedepot", supplier: "Home Depot", gateway: true, mode: "authorized-gateway" },
+  { id: "cityelectric", supplier: "City Electric Supply", gateway: true, mode: "authorized-gateway" },
+  { id: "inlineelectric", supplier: "Inline Electric Supply", gateway: true, mode: "authorized-gateway" },
+  { id: "wesco", supplier: "Wesco / Anixter", gateway: true, mode: "authorized-gateway" },
+  { id: "graybar", supplier: "Graybar", gateway: true, mode: "authorized-gateway" },
+  { id: "grainger", supplier: "Grainger", gateway: true, mode: "authorized-gateway" },
+  { id: "msc", supplier: "MSC Industrial", gateway: true, mode: "authorized-gateway" },
 ];
 
 function clean(value) {
@@ -34,8 +42,27 @@ export function catalogQueryForLine(line = {}) {
     .join(" ");
 }
 
+function adapterConfigured(adapter, env = {}) {
+  if (adapter.gateway) return Boolean(clean(env.SUPPLIER_GATEWAY_URL) && clean(env.SUPPLIER_GATEWAY_TOKEN));
+  if (adapter.anyEnv) return adapter.anyEnv.some((group) => group.every((name) => clean(env[name])));
+  return (adapter.env || []).every((name) => clean(env[name]));
+}
+
 export function configuredLiveCatalogAdapters(env = {}) {
-  return LIVE_CATALOG_ADAPTERS.filter((adapter) => adapter.env.every((name) => clean(env[name])));
+  return LIVE_CATALOG_ADAPTERS.filter((adapter) => adapterConfigured(adapter, env));
+}
+
+export function liveCatalogDiagnostics(env = {}) {
+  return LIVE_CATALOG_ADAPTERS.map((adapter) => {
+    const configured = adapterConfigured(adapter, env);
+    let reason = "";
+    if (!configured) {
+      if (adapter.gateway) reason = "Needs SUPPLIER_GATEWAY_URL and SUPPLIER_GATEWAY_TOKEN for authorized account pricing.";
+      else if (adapter.id === "lowes") reason = "Needs Lowe's partner API credentials/access token.";
+      else reason = `Missing ${(adapter.env || []).join(", ")}.`;
+    }
+    return { id: adapter.id, supplier: adapter.supplier, mode: adapter.mode, configured, reason };
+  });
 }
 
 export function pickUnitPrice(breaks = [], quantity = 1) {

@@ -66,4 +66,16 @@ const laterEdit = writeEstimate({
 assert(laterEdit.id === synced.id, "later standalone edits keep the same estimate id");
 assert(laterEdit.buildrSync?.invoiceId === "inv_1", "later edits keep the Buildr invoice id so Save can update");
 
+const markedSave = writeEstimate({
+  fileName: "standalone:markup job",
+  fileSize: 0,
+  header: { projectName: "Markup Job" },
+  lines: [{ id: "3", description: "Wire", quantity: 10, materialUnitCost: 2 }],
+  materialMarkup: 15,
+  overhead: 10,
+  profit: 10,
+});
+assert(markedSave.materialMarkup === 15, "writeEstimate stores material markup on the estimate JSON");
+assert(openEstimateSession({ fileName: "standalone:markup job", fileSize: 0 })?.materialMarkup === 15, "reopened estimate keeps material markup");
+
 if (!process.exitCode) console.log("estimate store checks passed");

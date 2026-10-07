@@ -59,6 +59,9 @@ assert(presentation.title === "Soccer Pavilion", "presentation keeps the project
 assert(presentation.totals.material === 48, `material ${presentation.totals.material}`);
 assert(Math.abs(presentation.totals.labor - 179.52) < 0.001, `labor ${presentation.totals.labor}`);
 assert(presentation.totals.total > presentation.totals.material + presentation.totals.labor, "total still includes markup");
+const markedPresentation = estimatePresentation({ ...estimate, materialMarkup: 25 });
+assert(markedPresentation.totals.material === 60, `PDF material includes material markup ${markedPresentation.totals.material}`);
+assert(markedPresentation.grandTotal > presentation.grandTotal, "PDF grand total follows material markup");
 assert(!("overhead" in presentation.totals), "presentation totals omit overhead");
 assert(!("profit" in presentation.totals), "presentation totals omit profit");
 assert(!("crew" in presentation), "presentation omits crew");
@@ -175,6 +178,7 @@ assert(key !== estimatePdfPreviewKey({
   header: { ...estimate.header, projectName: "Other Pavilion" },
 }, branding), "preview key follows the header");
 assert(key !== estimatePdfPreviewKey({ ...estimate, overhead: 25, profit: 20 }, branding), "preview key follows markup");
+assert(key !== estimatePdfPreviewKey({ ...estimate, materialMarkup: 25 }, branding), "preview key follows material markup");
 assert(key !== estimatePdfPreviewKey(estimate, { ...branding, companyName: "Other Electric" }), "preview key follows branding");
 assert(key !== estimatePdfPreviewKey(estimate, { ...branding, logoStretchX: 220, logoStretchY: 70 }), "preview key follows independent logo stretch");
 

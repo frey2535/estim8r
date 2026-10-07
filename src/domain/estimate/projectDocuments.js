@@ -109,6 +109,7 @@ export function estimateContentFingerprint(estimate, takeoff) {
     visibleTotals: estimate?.visibleTotals || null,
     overhead: estimate?.overhead,
     profit: estimate?.profit,
+    materialMarkup: estimate?.materialMarkup,
     crew: estimate?.crew || [],
     factors: estimate?.factors || [],
     marks: takeoff?.marks || [],
@@ -300,7 +301,8 @@ export function estimateTotals(estimate) {
 
 export function estimateGrandTotal(estimate) {
   const totals = estimateTotals(estimate);
-  const direct = totals.material + totals.labor;
+  const material = totals.material * (1 + ((Number(estimate?.materialMarkup) || 0) / 100));
+  const direct = material + totals.labor;
   const contingency = direct * ((Number(estimate?.contingency) || 0) / 100);
   const overheadBase = direct + contingency;
   const overhead = overheadBase * ((Number(estimate?.overhead) || 0) / 100);
@@ -310,6 +312,7 @@ export function estimateGrandTotal(estimate) {
   const bondInsurance = bondBase * ((Number(estimate?.bondInsurance) || 0) / 100);
   return {
     ...totals,
+    material,
     direct,
     contingency,
     overhead,

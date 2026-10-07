@@ -162,6 +162,21 @@ const itemizedMoney = estimateGrandTotal({
 assert(itemizedMoney.material === 100, `itemized material ${itemizedMoney.material}`);
 assert(itemizedMoney.labor === 100, `itemized labor ${itemizedMoney.labor}`);
 
+const markedMaterial = estimateGrandTotal({
+  materialMarkup: 25,
+  overhead: 0,
+  profit: 0,
+  lines: [{ quantity: 2, materialUnitCost: 50, laborMhPerUnit: 1, laborRate: 50 }],
+});
+assert(markedMaterial.material === 125, `material markup ${markedMaterial.material}`);
+assert(markedMaterial.labor === 100, `material markup leaves labor ${markedMaterial.labor}`);
+assert(Math.abs(markedMaterial.total - 225) < 0.001, `material markup grand ${markedMaterial.total}`);
+assert(
+  estimateContentFingerprint({ id: "est_abc", materialMarkup: 15, lines: [{ quantity: 1 }] })
+    !== estimateContentFingerprint({ id: "est_abc", materialMarkup: 0, lines: [{ quantity: 1 }] }),
+  "material markup changes the sync fingerprint",
+);
+
 const memory = globalThis.localStorage;
 if (!memory) {
   const store = new Map();

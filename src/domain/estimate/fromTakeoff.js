@@ -192,6 +192,7 @@ export function buildEstimateDraft({ fileName, fileSize, drawingDocs, rollup, pa
     crew,
     factors: defaultProductivityFactors(),
     namedCrewId: null,
+    materialMarkup: 0,
     overhead: 10,
     profit: 10,
     lines: [...takeoffLines, ...drawingLines],

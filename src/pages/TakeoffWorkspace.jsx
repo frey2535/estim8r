@@ -250,16 +250,24 @@ export default function TakeoffWorkspace() {
     () => symbolsOnDrawingForTrade(trade, marks, { pageKinds }),
     [trade, marks, pageKinds],
   );
+  const availableDeviceSymbols = useMemo(() => {
+    const merged = new Map();
+    for (const item of [...(palette.symbols || []), ...(palette.fromDrawing || []), ...drawingTypes]) {
+      if (!item?.id || (item.trade && item.trade !== trade)) continue;
+      merged.set(item.id, item);
+    }
+    return [...merged.values()];
+  }, [palette.symbols, palette.fromDrawing, drawingTypes, trade]);
   const categories = useMemo(
-    () => [...new Set(drawingTypes.map((item) => item.category).filter(Boolean))],
-    [drawingTypes],
+    () => [...new Set(availableDeviceSymbols.map((item) => item.takeoffCategory || item.category).filter(Boolean))],
+    [availableDeviceSymbols],
   );
   const symbols = useMemo(
-    () => symbolsOnDrawingForTrade(trade, marks, {
-      pageKinds,
-      category: categories.includes(category) ? category : undefined,
+    () => availableDeviceSymbols.filter((item) => {
+      if (!categories.includes(category)) return true;
+      return (item.takeoffCategory || item.category) === category;
     }),
-    [trade, marks, pageKinds, category, categories],
+    [availableDeviceSymbols, category, categories],
   );
   const conduitChoices = useMemo(() => conduitOptionsForTrade(trade), [trade]);
   const conduitChoice = findConduitOption(conduitId, trade);
@@ -1858,7 +1866,7 @@ export default function TakeoffWorkspace() {
             <p className="text-[11px] leading-4 text-muted-foreground">Default is 3. AI will not put more homeruns in one conduit unless you raise this.</p>
             <p className="text-[11px] leading-4 text-muted-foreground"><strong className="text-foreground">AI assist</strong> counts the selected trade and draws colored marks on the sheets. <strong className="text-foreground">True Takeoff</strong> marks the drawings (runs AI if empty) then builds the bid-lock estimate.</p>
             <DevicePicker
-              availableSymbols={[...(palette.symbols || []), ...(palette.fromDrawing || [])]}
+              availableSymbols={availableDeviceSymbols}
               trades={TRADES}
               trade={trade}
               onTrade={setTrade}
@@ -1908,6 +1916,7 @@ export default function TakeoffWorkspace() {
           <div className="shrink-0 border-b border-border px-2 py-2 lg:hidden">
             <DevicePicker
               compact
+              availableSymbols={availableDeviceSymbols}
               trades={TRADES}
               trade={trade}
               onTrade={setTrade}

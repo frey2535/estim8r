@@ -354,9 +354,27 @@ export function interiorDeviceOutline(outline, factor = DEVICE_INTERIOR_INSET) {
   if (!outline) return null;
   const f = Math.max(0.45, Math.min(1, Number(factor) || DEVICE_INTERIOR_INSET));
   if (outline.kind === "composite" && outline.parts?.length) {
+    const areas = outline.parts.map((part) => {
+      const w = Number(part.w) || (Number(part.r) || 0) * 2;
+      const h = Number(part.h) || (Number(part.r) || 0) * 2;
+      return Math.max(0, w * h);
+    });
+    const maxArea = Math.max(...areas, 0);
+    const bodyParts = outline.parts.filter((part, index) => {
+      if (!maxArea) return true;
+      const area = areas[index];
+      const w = Number(part.w) || (Number(part.r) || 0) * 2;
+      const h = Number(part.h) || (Number(part.r) || 0) * 2;
+      const aspect = Math.max(w, h) / Math.max(0.001, Math.min(w, h));
+      // Keep the enclosing body and other substantial regions, but do not
+      // paint thin internal slashes/hatches/cross-lines over the black symbol.
+      return area >= maxArea * 0.42 && aspect <= 4.2;
+    });
     return {
       ...outline,
-      parts: outline.parts.map((part) => interiorDeviceOutline(part, f)).filter(Boolean),
+      parts: (bodyParts.length ? bodyParts : [outline.parts[areas.indexOf(maxArea)]])
+        .map((part) => interiorDeviceOutline(part, f))
+        .filter(Boolean),
     };
   }
   if (outline.kind === "circle") {

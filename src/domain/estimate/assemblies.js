@@ -30,7 +30,7 @@ export const DEFAULT_ASSEMBLIES = [
     source: "system",
     active: true,
     components: [
-      { id: "generator-set", description: "Install standby generator set", itemType: "equipment", category: "Equipment Termination", quantity: 1, unit: "EA", laborMhPerUnit: 0, requiresReview: true, notes: "Select the applicable verified generator-set labor reference for the generator size/configuration." },
+      { id: "generator-set", description: "Install standby generator set", itemType: "Equipment", category: "Generator installation", quantity: 1, unit: "EA", laborMhPerUnit: 0, requiresReview: true, notes: "Select the applicable verified generator-set labor reference for the generator size/configuration." },
       { id: "automatic-transfer-switch", description: "Install automatic transfer switch", itemType: "equipment", category: "Equipment Termination", quantity: 1, unit: "EA", laborMhPerUnit: 0, requiresReview: true, notes: "Select the applicable verified ATS labor reference for ampacity, poles, enclosure, and service configuration." },
       { id: "generator-raceway", description: "Generator feeder raceway", itemType: "material", category: "Rough-in", quantity: 1, unit: "LF", laborMhPerUnit: 0, requiresReview: true, notes: "Replace 1 LF with measured installed length; choose raceway type/size and verified labor item." },
       { id: "generator-feeder-conductors", description: "Generator feeder conductors", itemType: "material", category: "Wire/Cable Pulling", quantity: 1, unit: "LF", laborMhPerUnit: 0, requiresReview: true, notes: "Replace 1 LF with total measured conductor footage, including all phase/neutral/EGC conductors as applicable." },

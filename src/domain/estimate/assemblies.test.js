@@ -34,6 +34,10 @@ describe("assemblies", () => {
       "Generator startup, testing, and commissioning",
     ]));
 
+    const setLine = generator.components.find((row) => row.id === "generator-set");
+    expect(setLine.itemType).toBe("Equipment");
+    expect(setLine.category).toBe("Generator installation");
+
     const lines = assemblyToEstimateLines(generator, 1, 95);
     expect(lines.length).toBe(generator.components.length);
     expect(lines.every((line) => line.laborReviewRequired)).toBe(true);

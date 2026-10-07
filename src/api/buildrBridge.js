@@ -220,6 +220,8 @@ export async function saveBuildrProjectDocuments({
   estimate,
   drawingFile,
   markupPages,
+  estimatePdf,
+  estimatePdfFileName,
   estim8rEstimateId,
   buildrProjectId,
   buildrInvoiceId,
@@ -255,6 +257,13 @@ export async function saveBuildrProjectDocuments({
       "markup",
       new Blob([JSON.stringify(markupPages, null, 2)], { type: "application/json" }),
       `${projectName || "estimate"}-markup-pages.json`,
+    );
+  }
+  if (estimatePdf) {
+    form.append(
+      "estimatePdf",
+      estimatePdf,
+      estimatePdfFileName || `${projectName || "estimate"}-customer-estimate.pdf`,
     );
   }
   if (drawingFile) {

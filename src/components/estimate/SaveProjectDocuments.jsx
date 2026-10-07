@@ -28,6 +28,8 @@ import {
   upsertProjectFolder,
 } from "@/domain/estimate/projectDocuments";
 import { titleBlockForMarkup } from "@/domain/estimate/fromDrawings";
+import { estimatePdfBlob } from "@/domain/estimate/estimatePdf";
+import { readCompanyBranding } from "@/domain/estimate/branding";
 
 function promptKey(projectName) {
   return `estim8r.projectDocs.prompted:${String(projectName || "").trim().toLowerCase()}`;
@@ -126,6 +128,7 @@ export default function SaveProjectDocuments({ estimate, onProjectName }) {
         titleBlock: titleBlockForMarkup(estimate?.header),
       })
       : null;
+    const customerPdf = estimatePdfBlob(current, readCompanyBranding());
     const result = await saveBuildrProjectDocuments({
       email: user?.email,
       companyId: readLinkedBuildrCompanyId(user),
@@ -135,6 +138,8 @@ export default function SaveProjectDocuments({ estimate, onProjectName }) {
       estimate: current,
       drawingFile,
       markupPages,
+      estimatePdf: customerPdf.blob,
+      estimatePdfFileName: customerPdf.fileName,
       estim8rEstimateId: current.id,
       buildrProjectId: current.buildrSync?.projectId || estimate?.buildrSync?.projectId || null,
       buildrInvoiceId: current.buildrSync?.invoiceId || estimate?.buildrSync?.invoiceId || null,

@@ -37,6 +37,21 @@ const dictionary = { entries: [{ code: "R", symbol: { id: "duplex", label: "Dupl
 const hits = scanPageByLegendGeometry({ paths: planParts }, dictionary, { threshold: 0.8 });
 assert(hits.length === 1, "unlabeled plan symbol found from legend geometry");
 
+
+const layoutA = clusterSymbolGeometry(part(60, 20, 0.5, 0.5, "circle"), [
+  part(60, 20, 0.5, 0.5, "circle"),
+  part(60.42, 20, 0.24, 0.10, "rect"),
+], { maxSpan: 1.2, joinGap: 0.2 });
+const layoutB = clusterSymbolGeometry(part(70, 20, 0.5, 0.5, "circle"), [
+  part(70, 20, 0.5, 0.5, "circle"),
+  part(70, 20.42, 0.24, 0.10, "rect"),
+], { maxSpan: 1.2, joinGap: 0.2 });
+const layoutCopy = clusterSymbolGeometry(part(80, 20, 0.5, 0.5, "circle"), [
+  part(80, 20, 0.5, 0.5, "circle"),
+  part(80.42, 20, 0.24, 0.10, "rect"),
+], { maxSpan: 1.2, joinGap: 0.2 });
+assert(geometrySimilarity(layoutA, layoutCopy) > geometrySimilarity(layoutA, layoutB), "complete part layout distinguishes lookalike symbols");
+
 const canProto = clusterSymbolGeometry(part(12, 12, 0.48, 0.48, "circle"), [part(12, 12, 0.48, 0.48, "circle")], { maxSpan: 2 });
 const gfiProto = clusterSymbolGeometry(part(14, 14, 0.5, 0.5, "circle"), [part(14, 14, 0.5, 0.5, "circle")], { maxSpan: 2 });
 const lookalikes = {

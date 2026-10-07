@@ -71,7 +71,14 @@ export async function searchLiveSupplierCatalog({ query, quantity = 1, limit = 8
 
   const { data, error } = await requireSupabase().functions.invoke(LIVE_CATALOG_FUNCTION, { body });
   if (error) {
-    throw new Error(error.message || "Live catalog search failed.");
+    const status = Number(error?.context?.status) || 0;
+    if (status === 404) throw new Error("Supplier pricing function is not deployed. Deploy search-supplier-catalog to the configured Supabase project.");
+    if (status === 401 || status === 403) throw new Error("Supplier pricing authorization failed. Sign in again and verify the Edge Function accepts this project session.");
+    if (status >= 500) throw new Error(`Supplier pricing service failed (${status}). Check Edge Function logs and supplier credentials.`);
+    throw new Error(error.message || "Live supplier pricing request failed.");
+  }
+  if (!data || typeof data !== "object") {
+    throw new Error("Supplier pricing function returned no usable response.");
   }
   return data;
 }

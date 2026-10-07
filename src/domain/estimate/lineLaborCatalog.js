@@ -115,6 +115,14 @@ export function isTransferSwitchItem(item) {
   return /transfer switch/.test(blob) || /(?<![a-z])ats(?![a-z])/.test(blob);
 }
 
+/** Existing excavation/concrete/civil rows. The workbook has no subcontract catalog. */
+export function isSubcontractibleItem(item) {
+  if (!item) return false;
+  if (libraryCategory(item) === "Site/Earthwork") return true;
+  const blob = `${libraryCategory(item)} ${librarySubcategory(item)} ${itemName(item)}`.toLowerCase();
+  return /excav|trench|concrete/.test(blob);
+}
+
 export function lineTypeForLibraryItem(item) {
   const category = libraryCategory(item);
   if (!category) return "";
@@ -128,6 +136,7 @@ export function lineTypesForLibraryItem(item) {
   if (primary) types.add(primary);
   if (primary === "Gear") types.add("Equipment");
   if (primary === "Equipment") types.add("Gear");
+  if (isSubcontractibleItem(item)) types.add("Subcontract");
   return [...types];
 }
 
@@ -142,6 +151,10 @@ function activityLabelsForItem(item) {
   if (isTransferSwitchItem(item)) {
     labels.push("Transfer switches");
     labels.push("Emergency Power");
+  }
+  if (isSubcontractibleItem(item)) {
+    if (/excav|trench/.test(blob) || librarySubcategory(item) === "Trenching") labels.push("Excavation");
+    if (/concrete/.test(blob)) labels.push("Concrete");
   }
   return labels;
 }

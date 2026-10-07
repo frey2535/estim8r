@@ -96,4 +96,35 @@ assert(!laborItemMatchesLine(active.find((row) => row.id === "EL-01372"), { item
 const none = laborItemsForLine(active, { itemType: "", category: "" });
 assert(none.length === 0, "no type does not dump the full library");
 
+assert(LINE_TYPES.includes("Subcontract"), "Subcontract is a line type");
+assert(
+  !active.some((row) => /subcontract/i.test(`${row.category} ${row.subcategory} ${row.item_name}`)),
+  "workbook has no subcontract catalog rows — do not invent them",
+);
+const subcontract = laborItemsForLine(active, { itemType: "Subcontract" });
+assert(subcontract.length > 0, "Type Subcontract is not an empty picker");
+assert(
+  subcontract.every((row) => lineTypesForLibraryItem(row).includes("Subcontract")),
+  "Subcontract lists only subcontractible rows",
+);
+assert(subcontract.some((row) => row.id === "EL-00007"), "Subcontract includes mini excavator trenching");
+assert(subcontract.some((row) => row.id === "EL-00031"), "Subcontract includes concrete encasement");
+assert(subcontract.some((row) => row.id === "EL-00034"), "Subcontract includes patch concrete");
+assert(subcontract.some((row) => row.id === "EL-00036"), "Subcontract includes excavate equipment pad");
+assert(subcontract.some((row) => row.id === "EL-01828"), "Subcontract includes excavate pole base");
+assert(subcontract.filter((row) => row.category === "Site/Earthwork").length === 38, `Subcontract includes all Site/Earthwork rows, got ${subcontract.filter((row) => row.category === "Site/Earthwork").length}`);
+const subcontractCats = categoriesForType("Subcontract", active);
+assert(subcontractCats.includes("Excavation"), "Subcontract work categories include Excavation");
+assert(subcontractCats.includes("Concrete"), "Subcontract work categories include Concrete");
+assert(subcontractCats.includes("Site/Earthwork"), "Subcontract work categories include Site/Earthwork");
+assert(subcontractCats.includes("Trenching"), "Subcontract work categories include Trenching");
+assert(subcontractCats.includes("Civil Support"), "Subcontract work categories include Civil Support");
+assert(!subcontractCats.some((label) => /rental/i.test(label)), "do not invent a Rentals category");
+const excavation = laborItemsForLine(active, { itemType: "Subcontract", category: "Excavation" });
+assert(excavation.length > 0 && excavation.every((row) => /excav|trench/i.test(`${row.subcategory} ${row.item_name}`)), "Excavation is existing trench/excavate rows");
+const concrete = laborItemsForLine(active, { itemType: "Subcontract", category: "Concrete" });
+assert(concrete.length > 0 && concrete.every((row) => /concrete/i.test(`${row.item_name}`)), "Concrete is existing concrete rows");
+assert(filterLaborLibrary(active, "excavat", { itemType: "Subcontract" }).some((row) => row.id === "EL-00036"), "Subcontract typeahead finds excavate equipment pad");
+assert(laborItemsForLine(active, { itemType: "Labor", category: "Site/Earthwork" }).length === 38, "Site/Earthwork stays reachable under Labor");
+
 if (!process.exitCode) console.log("line labor catalog checks passed");

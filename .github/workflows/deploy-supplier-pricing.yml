@@ -10,14 +10,28 @@ on:
 
 jobs:
   deploy:
-    if: ${{ secrets.SUPABASE_ACCESS_TOKEN != '' }}
     runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check deployment credentials
+        id: credentials
+        shell: bash
+        run: |
+          if [ -n "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "SUPABASE_ACCESS_TOKEN is not configured. Skipping Edge Function deployment."
+          fi
+
       - uses: supabase/setup-cli@v1
+        if: steps.credentials.outputs.ready == 'true'
         with:
           version: latest
+
       - name: Deploy search-supplier-catalog
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        if: steps.credentials.outputs.ready == 'true'
         run: supabase functions deploy search-supplier-catalog --project-ref gqdxvctvufalunaaopyj

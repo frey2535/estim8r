@@ -2,10 +2,18 @@
 // Keep in sync with src/domain/estimate/liveSupplierCatalog.js and liveSupplierCatalogSearch.js.
 
 const ADAPTERS = [
-  { id: "mouser", env: ["MOUSER_API_KEY"] },
-  { id: "digikey", env: ["DIGIKEY_CLIENT_ID", "DIGIKEY_CLIENT_SECRET"] },
-  { id: "nexar", env: ["NEXAR_CLIENT_ID", "NEXAR_CLIENT_SECRET"] },
-  { id: "element14", env: ["ELEMENT14_API_KEY"] },
+  { id: "mouser", supplier: "Mouser", env: ["MOUSER_API_KEY"], mode: "official-api" },
+  { id: "digikey", supplier: "Digi-Key", env: ["DIGIKEY_CLIENT_ID", "DIGIKEY_CLIENT_SECRET"], mode: "official-api" },
+  { id: "nexar", supplier: "Nexar Supply", env: ["NEXAR_CLIENT_ID", "NEXAR_CLIENT_SECRET"], mode: "official-api" },
+  { id: "element14", supplier: "Newark / element14", env: ["ELEMENT14_API_KEY"], mode: "official-api" },
+  { id: "lowes", supplier: "Lowe's", gateway: true, mode: "authorized-gateway" },
+  { id: "homedepot", supplier: "Home Depot", gateway: true, mode: "authorized-gateway" },
+  { id: "cityelectric", supplier: "City Electric Supply", gateway: true, mode: "authorized-gateway" },
+  { id: "inlineelectric", supplier: "Inline Electric Supply", gateway: true, mode: "authorized-gateway" },
+  { id: "wesco", supplier: "Wesco / Anixter", gateway: true, mode: "authorized-gateway" },
+  { id: "graybar", supplier: "Graybar", gateway: true, mode: "authorized-gateway" },
+  { id: "grainger", supplier: "Grainger", gateway: true, mode: "authorized-gateway" },
+  { id: "msc", supplier: "MSC Industrial", gateway: true, mode: "authorized-gateway" },
 ];
 
 const NEXAR_SEARCH = `
@@ -99,14 +107,35 @@ export function catalogEnvFromProcess(source) {
     "NEXAR_CLIENT_SECRET",
     "ELEMENT14_API_KEY",
     "ELEMENT14_STORE_ID",
+    "SUPPLIER_GATEWAY_URL",
+    "SUPPLIER_GATEWAY_TOKEN",
   ];
   const env = {};
   for (const name of names) env[name] = clean(envSource[name]);
   return env;
 }
 
+function adapterConfigured(adapter, env) {
+  if (adapter.gateway) return Boolean(clean(env.SUPPLIER_GATEWAY_URL) && clean(env.SUPPLIER_GATEWAY_TOKEN));
+  return (adapter.env || []).every((name) => clean(env[name]));
+}
+
 export function configuredIds(env) {
-  return ADAPTERS.filter((adapter) => adapter.env.every((name) => clean(env[name]))).map((row) => row.id);
+  return ADAPTERS.filter((adapter) => adapterConfigured(adapter, env)).map((row) => row.id);
+}
+
+export function liveCatalogDiagnostics(env) {
+  return ADAPTERS.map((adapter) => ({
+    id: adapter.id,
+    supplier: adapter.supplier,
+    mode: adapter.mode,
+    configured: adapterConfigured(adapter, env),
+    reason: adapterConfigured(adapter, env)
+      ? ""
+      : adapter.gateway
+        ? "Needs authorized supplier gateway configuration."
+        : `Missing ${(adapter.env || []).join(", ")}.`,
+  }));
 }
 
 function normalizeMouser(payload, quantity, fetchedAt) {
@@ -305,24 +334,60 @@ async function searchElement14(query, env, quantity, limit) {
   return normalizeElement14(await fetchJson(url), quantity, new Date().toISOString());
 }
 
+async function searchGateway(adapter, query, env, quantity, limit) {
+  const base = clean(env.SUPPLIER_GATEWAY_URL).replace(/\/+$/, "");
+  const payload = await fetchJson(`${base}/search`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${clean(env.SUPPLIER_GATEWAY_TOKEN)}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ supplier: adapter.id, supplierName: adapter.supplier, query, quantity, limit }),
+  });
+  const rows = Array.isArray(payload) ? payload : (payload.results || payload.offers || []);
+  return rows.map((row, index) => offer({
+    id: row.id || `${adapter.id}:${row.sku || row.mpn || index}`,
+    adapter: adapter.id,
+    supplier: row.supplier || adapter.supplier,
+    sku: row.sku || row.itemNumber || row.catalogNumber,
+    mpn: row.mpn || row.manufacturerPartNumber,
+    description: row.description || row.name,
+    unit: row.unit || row.uom || "EA",
+    unitCost: row.unitCost ?? row.price ?? row.unitPrice,
+    currency: row.currency || "USD",
+    quantityBreak: row.quantityBreak || row.minQty || 1,
+    availability: row.availability || row.stock || row.inventory,
+    url: row.url || row.productUrl,
+    fetchedAt: row.fetchedAt || new Date().toISOString(),
+  })).filter(Boolean);
+}
+
 const SEARCHERS = { mouser: searchMouser, digikey: searchDigikey, nexar: searchNexar, element14: searchElement14 };
 
 export async function searchLiveSupplierCatalogs(query, { env = {}, quantity = 1, limit = 8 } = {}) {
   const q = clean(query);
   const configured = configuredIds(env);
+  const diagnostics = liveCatalogDiagnostics(env);
   if (!q) {
-    return { query: q, configured, results: [], errors: [], message: "Enter a model, SKU, or description to search live catalogs." };
+    return { query: q, configured, diagnostics, results: [], errors: [], message: "Enter a model, SKU, or description to search live catalogs." };
   }
   if (!configured.length) {
     return {
       query: q,
       configured: [],
+      diagnostics,
       results: [],
       errors: [],
-      message: "No live catalog credentials are configured. Set supplier API secrets and deploy search-supplier-catalog. Estim8r will not invent prices.",
+      message: "No live supplier connections are configured. Add supplier credentials or the authorized supplier gateway. Estim8r will not invent prices.",
     };
   }
-  const settled = await Promise.allSettled(configured.map(async (id) => SEARCHERS[id](q, env, quantity, limit)));
+  const settled = await Promise.allSettled(configured.map(async (id) => {
+    const adapter = ADAPTERS.find((row) => row.id === id);
+    return adapter.gateway
+      ? searchGateway(adapter, q, env, quantity, limit)
+      : SEARCHERS[id](q, env, quantity, limit);
+  }));
   const results = [];
   const errors = [];
   for (const item of settled) {
@@ -333,6 +398,7 @@ export async function searchLiveSupplierCatalogs(query, { env = {}, quantity = 1
   return {
     query: q,
     configured,
+    diagnostics,
     results,
     errors,
     fetchedAt: new Date().toISOString(),

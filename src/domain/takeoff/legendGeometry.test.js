@@ -12,6 +12,7 @@ import {
   looksLikeUnlabeledReceptacleGlyph,
   resolveGeometryMatch,
   scanPageByLegendGeometry,
+  symbolBodyOutline,
 } from "./legendGeometry.js";
 
 function assert(v, m) {
@@ -128,6 +129,20 @@ assert(!looksLikeReceptacleGlyph(hex), "hex keys are not receptacle glyphs");
 assert(looksLikeReceptacleGlyph(box) && looksLikeUnlabeledReceptacleGlyph(box), "duplex box is a receptacle glyph");
 assert(looksLikeReceptacleGlyph(stroke) && looksLikeUnlabeledReceptacleGlyph(stroke), "box-with-strokes is a receptacle glyph");
 assert(findNearbyReceptacleGlyph({ x: 17.214, y: 69.416 }, [hex, box]) === box, "WP/SP fills prefer the box, not the hex");
+
+const bodyWithNumber = {
+  kind: "composite",
+  source: "vector",
+  w: 1.5,
+  h: 0.65,
+  parts: [
+    { kind: "circle", source: "vector", cx: 30, cy: 30, r: 0.24, w: 0.48, h: 0.48 },
+    { kind: "rect", source: "vector", cx: 31.0, cy: 30, w: 0.28, h: 0.42 },
+  ],
+};
+const cleanedBody = symbolBodyOutline({ outline: bodyWithNumber }, [{ text: "27", x: 31.0, y: 30 }]);
+assert(cleanedBody.parts.length === 1, "printed number geometry is removed from the paint outline");
+assert(Math.abs(cleanedBody.parts[0].cx - 30) < 0.01, "symbol body remains after nearby number is removed");
 const hatch = Array.from({ length: 12 }, (_, index) => part(12 + (index % 4) * 0.4, 16 + Math.floor(index / 4) * 0.4, 0.134, 0.187));
 assert(isHatchTickCluster(hatch[0], hatch), "stair/hatch tick lattices are not receptacles");
 

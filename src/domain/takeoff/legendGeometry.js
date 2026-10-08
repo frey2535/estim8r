@@ -22,6 +22,62 @@ function unionBounds(parts=[]) {
   if(!Number.isFinite(minX)) return null;
   return {minX,minY,maxX,maxY,w:maxX-minX,h:maxY-minY,cx:(minX+maxX)/2,cy:(minY+maxY)/2};
 }
+
+function shortPrintedLabel(text) {
+  const value = String(text || "").trim();
+  if (!value || value.length > 10) return false;
+  return /^[A-Z0-9][A-Z0-9.\-\/]*$/i.test(value);
+}
+
+function partNearPrintedLabel(part, tokens = []) {
+  const px = Number(part?.cx) || 0;
+  const py = Number(part?.cy) || 0;
+  const long = Math.max(Number(part?.w) || 0, Number(part?.h) || 0);
+  return (tokens || []).some((token) => {
+    if (!shortPrintedLabel(token?.text)) return false;
+    const dist = Math.hypot((Number(token.x) || 0) - px, (Number(token.y) || 0) - py);
+    // PDF text glyph paths usually sit almost exactly on the extracted text
+    // token. Keep a slightly larger radius for tiny number/type glyphs.
+    return dist <= Math.max(0.18, Math.min(0.52, long * 1.25));
+  });
+}
+
+export function symbolBodyOutline(geometry, tokens = []) {
+  const outline = geometry?.outline || geometry;
+  if (!outline) return null;
+  if (outline.kind !== "composite" || !outline.parts?.length) return outline;
+
+  const parts = outline.parts.filter((part) => !partNearPrintedLabel(part, tokens));
+  if (!parts.length) return outline;
+
+  // Find the substantial body and keep only geometry connected to it. This
+  // prevents an adjacent fixture number/circuit tag from becoming part of the
+  // colored symbol even when it was clustered with the symbol for detection.
+  const area = (part) => {
+    const w = Number(part?.w) || (Number(part?.r) || 0) * 2;
+    const h = Number(part?.h) || (Number(part?.r) || 0) * 2;
+    return Math.max(0.0001, w * h);
+  };
+  const core = [...parts].sort((a,b)=>area(b)-area(a))[0];
+  const coreLong = Math.max(Number(core?.w) || 0, Number(core?.h) || 0, (Number(core?.r) || 0) * 2, 0.12);
+  const kept = parts.filter((part) => {
+    if (part === core) return true;
+    const d = gap(core, part);
+    const center = Math.hypot((Number(part.cx)||0)-(Number(core.cx)||0),(Number(part.cy)||0)-(Number(core.cy)||0));
+    return d <= Math.max(0.16, coreLong * 0.42) && center <= Math.max(0.45, coreLong * 1.45);
+  });
+  const bodyParts = kept.length ? kept : [core];
+  const box = unionBounds(bodyParts);
+  return {
+    kind: "composite",
+    source: outline.source || geometry?.source || "vector",
+    cx: box?.cx,
+    cy: box?.cy,
+    w: box?.w,
+    h: box?.h,
+    parts: bodyParts,
+  };
+}
 function normalizedPart(part, box) {
   return {
     dx: box.w ? (part.cx-box.cx)/box.w : 0,

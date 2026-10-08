@@ -24,7 +24,7 @@ import { extractSheetNotes, notesToMarks } from "./sheetNotes.js";
 import { looksLikeCoverOrRendering, looksLikeElectricalPlan, looksLikeIndexPage, pagePlanType } from "./drawing-docs.js";
 import { associateGeometry, assignExclusiveGeometry, looksLikeRecessedCanBody, placeOnSymbolGeometry, shapeHintFromLabel, tagOnSymbolGeometry } from "./vectorSymbols.js";
 import { orthogonalizePolyline } from "./ortho.js";
-import { attachConfirmedGeometryPrototypes, attachFragmentPrototypes, attachLegendGeometryPrototypes, attachPowerGlyphPrototypes, attachProjectPrototypes, findNearbyReceptacleGlyph, isEmergencyHatch, isHatchTickCluster, looksLikeHexNoteGlyph, scanPageByLegendGeometry, scanUnlabeledPowerGlyphs, snapToEntryPrototype } from "./legendGeometry.js";
+import { attachConfirmedGeometryPrototypes, attachFragmentPrototypes, attachLegendGeometryPrototypes, attachPowerGlyphPrototypes, attachProjectPrototypes, findNearbyReceptacleGlyph, isEmergencyHatch, isHatchTickCluster, looksLikeHexNoteGlyph, scanPageByLegendGeometry, scanUnlabeledPowerGlyphs, snapToEntryPrototype, symbolBodyOutline } from "./legendGeometry.js";
 import { matchRasterToLegend, rasterCandidatesFromPage } from "./rasterSymbols.js";
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
 import { buildTradeSearchManifest } from "./searchManifest.js";
@@ -936,7 +936,11 @@ export function buildAiMarks({
     for (const visual of visualHits) {
       const geometry = visual.geometry;
       const symbol = visual.entry.symbol;
-      const placed = { x: geometry.cx, y: geometry.cy };
+      const paintOutline = symbolBodyOutline(geometry, page.tokens);
+      const placed = {
+        x: Number(paintOutline?.cx ?? geometry.cx),
+        y: Number(paintOutline?.cy ?? geometry.cy),
+      };
       if (isVisualOnlyEquipmentHit(visual, page, placed)) continue;
       if (!placementAllowed(placed, { sitePlan })) continue;
       const duplicate = seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.34);
@@ -960,8 +964,8 @@ export function buildAiMarks({
         typeCode: String(visual.entry.code || symbol.abbr || "").toUpperCase(),
         color,
         matchedFrom: "legend-geometry",
-        outline: geometry.outline,
-        outlineSource: geometry.outline?.source || geometry.source || "vector",
+        outline: paintOutline,
+        outlineSource: paintOutline?.source || geometry.outline?.source || geometry.source || "vector",
         detectSource: DETECT_SOURCE_ORIGINAL_PDF,
         confidence: visual.score >= 0.9 && !visual.ambiguous ? "high" : "medium",
         reviewStatus: visual.score >= 0.9 && !visual.ambiguous ? "accepted" : "pending",
@@ -1045,7 +1049,11 @@ export function buildAiMarks({
           if (long >= 0.4 && long <= 1.15) geometry = leftover;
         }
       }
-      const geometryPoint = geometry ? { x: geometry.cx, y: geometry.cy } : null;
+      const paintOutline = geometry ? symbolBodyOutline(geometry, page.tokens) : null;
+      const geometryPoint = geometry ? {
+        x: Number(paintOutline?.cx ?? geometry.cx),
+        y: Number(paintOutline?.cy ?? geometry.cy),
+      } : null;
       // Prefer extracted fixture geometry. When the type mark sits on the symbol
       // itself (slashed-circle cans, OS, GFI, quoted Revit types), the tag *is*
       // the device — place the fill there instead of inventing an offset or
@@ -1102,8 +1110,8 @@ export function buildAiMarks({
         typeCode,
         color,
         matchedFrom: fromLegend ? "legend" : "drawing",
-        outline: geometry?.outline || null,
-        outlineSource: geometrySource,
+        outline: paintOutline,
+        outlineSource: paintOutline?.source || geometrySource,
         detectSource: DETECT_SOURCE_ORIGINAL_PDF,
         confidence: geometrySource === "vector" ? "high" : "medium",
         reviewStatus: "pending",
@@ -1165,7 +1173,11 @@ export function buildAiMarks({
     for (const visual of unlabeledHits) {
       const geometry = visual.geometry;
       const symbol = visual.entry.symbol;
-      const placed = { x: geometry.cx, y: geometry.cy };
+      const paintOutline = symbolBodyOutline(geometry, page.tokens);
+      const placed = {
+        x: Number(paintOutline?.cx ?? geometry.cx),
+        y: Number(paintOutline?.cy ?? geometry.cy),
+      };
       if (isVisualOnlyEquipmentHit(visual, page, placed)) continue;
       const titleBand = planType !== "power" && (placed.x > 64 || placed.y < 12);
       if (!placementAllowed(placed, { sitePlan }) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens) || titleBand) continue;
@@ -1204,8 +1216,8 @@ export function buildAiMarks({
         typeCode: String(visual.entry.code || symbol.abbr || "").toUpperCase(),
         color,
         matchedFrom: "plan-repeat",
-        outline: geometry.outline,
-        outlineSource: geometry.outline?.source || geometry.source || "vector",
+        outline: paintOutline,
+        outlineSource: paintOutline?.source || geometry.outline?.source || geometry.source || "vector",
         detectSource: DETECT_SOURCE_ORIGINAL_PDF,
         confidence: visual.ambiguous ? "medium" : "high",
         reviewStatus: visual.ambiguous ? "pending" : "accepted",
@@ -1267,7 +1279,11 @@ export function buildAiMarks({
     });
     for (const visual of rasterHits) {
       const geometry = visual.geometry;
-      const placed = { x: geometry.cx, y: geometry.cy };
+      const paintOutline = symbolBodyOutline(geometry, page.tokens);
+      const placed = {
+        x: Number(paintOutline?.cx ?? geometry.cx),
+        y: Number(paintOutline?.cy ?? geometry.cy),
+      };
       if (isVisualOnlyEquipmentHit(visual, page, placed)) continue;
       const titleBand = planType !== "power" && (placed.x > 64 || placed.y < 12);
       if (!placementAllowed(placed, { sitePlan }) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens) || titleBand) continue;
@@ -1301,8 +1317,8 @@ export function buildAiMarks({
           typeCode: String(visual.entry.code || symbol.abbr || "").toUpperCase(),
           color,
           matchedFrom: "raster",
-          outline: geometry.outline,
-          outlineSource: "raster",
+          outline: paintOutline,
+          outlineSource: paintOutline?.source || "raster",
           detectSource: DETECT_SOURCE_ORIGINAL_PDF,
           confidence: "medium",
           reviewStatus: "pending",

@@ -53,6 +53,42 @@ function allowCandidate(candidate, options = {}) {
   return Boolean(options.allowSlash) && isDeviceFragment(candidate);
 }
 
+const SPATIAL_CELL = 2;
+
+export function buildSpatialIndex(candidates = [], cell = SPATIAL_CELL) {
+  const buckets = new Map();
+  for (const item of candidates || []) {
+    const gx = Math.floor((Number(item?.cx) || 0) / cell);
+    const gy = Math.floor((Number(item?.cy) || 0) / cell);
+    const key = `${gx}:${gy}`;
+    const bin = buckets.get(key);
+    if (bin) bin.push(item);
+    else buckets.set(key, [item]);
+  }
+  return { buckets, cell };
+}
+
+export function nearbyFromIndex(index, x, y, radius) {
+  if (!index?.buckets) return [];
+  const cell = index.cell || SPATIAL_CELL;
+  const reach = Math.ceil((Number(radius) || 0) / cell) + 1;
+  const gx = Math.floor((Number(x) || 0) / cell);
+  const gy = Math.floor((Number(y) || 0) / cell);
+  const out = [];
+  for (let dy = -reach; dy <= reach; dy += 1) {
+    for (let dx = -reach; dx <= reach; dx += 1) {
+      const bin = index.buckets.get(`${gx + dx}:${gy + dy}`);
+      if (bin) out.push(...bin);
+    }
+  }
+  return out;
+}
+
+function candidatePool(candidates, options, x, y, radius) {
+  if (options?.index) return nearbyFromIndex(options.index, x, y, radius);
+  return candidates || [];
+}
+
 export function clusterSymbolGeometry(seed, candidates=[], options={}) {
   if(!seed) return null;
   const maxParts=Math.max(1,Number(options.maxParts)||12);
@@ -64,7 +100,8 @@ export function clusterSymbolGeometry(seed, candidates=[], options={}) {
   while(changed && parts.length<maxParts){
     changed=false;
     const box=unionBounds(parts);
-    for(const c of candidates){
+    const pool=candidatePool(candidates,options,box.cx,box.cy,maxSpan+joinGap);
+    for(const c of pool){
       if(parts.includes(c)||!allowCandidate(c,options)) continue;
       if (options.keepSeedBody && looksLikeTroffer(seed)) continue;
       const nextBox=unionBounds([...parts,c]);
@@ -710,6 +747,16 @@ export function snapToEntryPrototype(token, page, entry, options = {}) {
   return best;
 }
 
+function pushHypothesis(hypotheses, cluster, entry, proto, planType, nearby, options) {
+  const geom = geometrySimilarity(cluster, proto);
+  const body = bodySimilarity(cluster, proto);
+  const sizeOk = sizeCompatible(cluster, proto);
+  const score = Math.max(geom, options.bodyOnly ? body : 0)
+    + planTypeScore(entry, planType)
+    + emergencyTwinAdjustment(cluster, entry, nearby);
+  hypotheses.push({ cluster, entry, raw: geom, score, sizeOk, nearby });
+}
+
 export function scanPageByLegendGeometry(page,dictionary,options={}){
   const threshold=Number(options.threshold)||0.76;
   const entries=(dictionary?.entries||[]).filter((e)=>{
@@ -724,10 +771,45 @@ export function scanPageByLegendGeometry(page,dictionary,options={}){
   const paths=(page?.paths||[]).filter((p)=>allowCandidate(p,options));
   const hypotheses=[];
   const seen=new Set();
+  const index=buildSpatialIndex(paths);
+  const started=Date.now();
+  const budget=Number(options.timeBudgetMs)>0?Number(options.timeBudgetMs):12000;
+  const maxSeeds=Number(options.maxSeeds)>0?Number(options.maxSeeds):1800;
+  const dense=paths.length>2500 || paths.length*entries.length>80000;
+  let seedsUsed=0;
 
   for(const seed of paths){
+    if(Date.now()-started>budget) break;
+    if(seedsUsed>=maxSeeds) break;
     if (options.allowSlash && !isDeviceFragment(seed) && isJunkGeometry(seed)) continue;
     if (options.twinHatch && !looksLikeTroffer(seed)) continue;
+    const seedLong=Math.max(Number(seed.w)||0,Number(seed.h)||0,0.02);
+    if(dense && (seedLong>3.2 || seedLong<0.06)) continue;
+    seedsUsed+=1;
+
+    if(dense){
+      const cluster=clusterSymbolGeometry(seed,paths,{
+        allowSlash:Boolean(options.allowSlash),
+        keepSeedBody:Boolean(options.keepSeedBody),
+        maxSpan:Math.max(0.42,Math.min(2.5,seedLong*1.42)),
+        joinGap:Math.max(0.06,Math.min(0.38,seedLong*0.72)),
+        maxParts:14,
+        index,
+      });
+      if(!cluster) continue;
+      const distKey=[cluster.cx.toFixed(2),cluster.cy.toFixed(2),cluster.w.toFixed(2),cluster.h.toFixed(2),cluster.parts?.length||1].join(":");
+      if(seen.has(distKey)) continue;
+      seen.add(distKey);
+      const nearby=nearbyFromIndex(index,cluster.cx,cluster.cy,Math.max(0.5,seedLong*1.2));
+      for(const entry of entries){
+        const protos=entry.prototypes?.length?entry.prototypes:[entry.prototype];
+        for(const proto of protos){
+          if(!proto) continue;
+          pushHypothesis(hypotheses,cluster,entry,proto,planType,nearby,options);
+        }
+      }
+      continue;
+    }
 
     for(const entry of entries){
       const protos=entry.prototypes?.length?entry.prototypes:[entry.prototype];
@@ -735,7 +817,6 @@ export function scanPageByLegendGeometry(page,dictionary,options={}){
         if(!proto) continue;
         const pLong=Math.max(Number(proto.w)||0,Number(proto.h)||0,0.18);
         const pShort=Math.max(0.08,Math.min(Number(proto.w)||0,Number(proto.h)||0,pLong));
-        const seedLong=Math.max(Number(seed.w)||0,Number(seed.h)||0,0.02);
         if(options.strictSize && (seedLong>pLong*1.75 || seedLong<pShort*0.15)) continue;
         const cluster=clusterSymbolGeometry(seed,paths,{
           allowSlash:Boolean(options.allowSlash),
@@ -743,19 +824,14 @@ export function scanPageByLegendGeometry(page,dictionary,options={}){
           maxSpan:Math.max(0.42,Math.min(2.5,pLong*1.42)),
           joinGap:Math.max(0.06,Math.min(0.38,pShort*0.72)),
           maxParts:Math.max(4,Math.min(14,(proto.parts?.length||1)+5)),
+          index,
         });
         if(!cluster) continue;
         const distKey=[entry.symbol?.id||entry.code,cluster.cx.toFixed(2),cluster.cy.toFixed(2),cluster.w.toFixed(2),cluster.h.toFixed(2),cluster.parts?.length||1].join(":");
         if(seen.has(distKey)) continue;
         seen.add(distKey);
-        const nearby=(page?.paths||[]).filter((path)=>Math.hypot((path.cx||0)-cluster.cx,(path.cy||0)-cluster.cy)<=Math.max(0.5,pLong*0.9));
-        const geom=geometrySimilarity(cluster,proto);
-        const body=bodySimilarity(cluster,proto);
-        const sizeOk=sizeCompatible(cluster,proto);
-        const score=Math.max(geom, options.bodyOnly ? body : 0)
-          + planTypeScore(entry,planType)
-          + emergencyTwinAdjustment(cluster,entry,nearby);
-        hypotheses.push({cluster,entry,raw:geom,score,sizeOk,nearby});
+        const nearby=nearbyFromIndex(index,cluster.cx,cluster.cy,Math.max(0.5,pLong*0.9));
+        pushHypothesis(hypotheses,cluster,entry,proto,planType,nearby,options);
       }
     }
   }

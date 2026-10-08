@@ -1,13 +1,28 @@
-import { classifyPageItems, inferPlanType, extractPdfPageItems } from "./drawing-docs";
+import { classifyPageItems, inferPlanType, extractPdfPageItems, looksLikeCoverOrRendering, looksLikeIndexPage } from "./drawing-docs";
 import { extractPageSymbolPaths } from "./pdfPaths";
 import { classifySheetDiscipline, findSheetId, parseSheetId } from "./sheetDiscipline";
 import { getPdfDocument } from "@/lib/pdf-document";
 import { extractRasterSymbolCandidates, hydrateRasterPaths } from "./rasterSymbols";
+import { isNonPlanSheetKind } from "./symbolDetection.js";
 
-export async function readAiPages(fileBytes) {
+function yieldToUi() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function shouldExtractRaster(recorded) {
+  if (!recorded) return false;
+  if (looksLikeCoverOrRendering(recorded) || looksLikeIndexPage(recorded)) return false;
+  if (isNonPlanSheetKind(recorded.kind) || recorded.kind === "spec") return false;
+  return true;
+}
+
+export async function readAiPages(fileBytes, options = {}) {
+  const includeRaster = options.includeRaster === true;
+  const onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
   const pdf = await getPdfDocument(fileBytes);
   const pages = [];
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+    onProgress?.(pageNumber, pdf.numPages);
     const page = await pdf.getPage(pageNumber);
     const viewport = page.getViewport({ scale: 1 });
     const items = await extractPdfPageItems(pdf, pageNumber);
@@ -34,20 +49,20 @@ export async function readAiPages(fileBytes) {
       pdfPage: page,
       rasterPaths: [],
     };
-    // Live PDF.js pages extract real raster blobs here. Node tests inject
-    // rasterPaths/rasterCandidates on the page record instead.
-    let rasterPaths = [];
-    try {
-      rasterPaths = await extractRasterSymbolCandidates(page);
-      recorded.rasterPaths = rasterPaths;
-      await hydrateRasterPaths(recorded);
-      rasterPaths = recorded.rasterPaths || rasterPaths;
-    } catch {
-      rasterPaths = [];
+    // Raster blobs stay on rasterPaths. Merging them into paths made the
+    // geometry-first scan O(paths × legend × prototypes) hang on real CAD PDFs.
+    if (includeRaster && shouldExtractRaster(recorded)) {
+      try {
+        const rasterPaths = await extractRasterSymbolCandidates(page);
+        recorded.rasterPaths = rasterPaths;
+        await hydrateRasterPaths(recorded);
+        recorded.rasterPaths = recorded.rasterPaths || rasterPaths;
+      } catch {
+        recorded.rasterPaths = [];
+      }
     }
-    recorded.paths = [...paths, ...rasterPaths];
-    recorded.rasterPaths = rasterPaths;
     pages.push(recorded);
+    await yieldToUi();
   }
   return pages;
 }

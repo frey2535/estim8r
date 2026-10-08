@@ -138,7 +138,7 @@ export default function SheetThumbnailPanel({
   return (
     <div className={cn(
       "flex shrink-0 border-border bg-card",
-      side ? "h-full w-[158px] flex-col border-r" : "w-full flex-col border-b",
+      side ? "h-full w-[158px] flex-col border-r" : "max-h-28 w-full flex-col border-b",
     )}>
       <div className="flex shrink-0 items-center justify-between gap-1 border-b border-border px-2 py-1.5">
         <div className="min-w-0">
@@ -161,7 +161,7 @@ export default function SheetThumbnailPanel({
         ref={listRef}
         className={cn(
           "min-h-0 flex-1 gap-2 p-2",
-          side ? "overflow-y-auto" : "flex overflow-x-auto",
+          side ? "overflow-y-auto" : "flex overflow-x-auto overflow-y-hidden",
         )}
       >
         {(thumbs.length ? thumbs : Array.from({ length: total }, (_, index) => ({ page: index + 1, src: "", label: `Sheet ${index + 1}` }))).map((item) => {

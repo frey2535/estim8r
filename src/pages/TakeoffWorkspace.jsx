@@ -1,9 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import {
   Cable, Cloud, FileUp, Hand, Image as ImageIcon, MousePointer2,
   Pencil, Redo2, Route, Ruler, Spline, Square, StickyNote,
-  Trash2, Undo2, Upload, X, ZoomIn, ZoomOut, Crosshair, Gauge, Lightbulb, Save
+  Trash2, Undo2, Upload, ZoomIn, ZoomOut, Crosshair, Gauge, Lightbulb
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlobalWorkerOptions } from "pdfjs-dist";
@@ -26,7 +25,8 @@ import {
 } from "@/domain/takeoff/junctionHardware";
 import { drawingSymbolsFromDocs, printedScaleCalibration, readDrawingDocuments } from "@/domain/takeoff/drawing-docs";
 import { paletteForTrade, pageKindsFromDocs, symbolsOnDrawingForTrade, tradeById, conduitOptionsForTrade, findConduitOption, TRADES, DEFAULT_CONDUIT_ID } from "@/domain/takeoff/trades";
-import { buildAiMarks, legendDictionaryFromPages } from "@/domain/takeoff/aiTakeoff";
+import { buildAiMarks, legendDictionaryFromPages, shouldScan } from "@/domain/takeoff/aiTakeoff";
+import TakeoffActionsMenu, { takeoffEstimatePath, takeoffMarkupPath } from "@/components/takeoff/TakeoffActionsMenu";
 import { readAiPages } from "@/domain/takeoff/aiPages";
 import { hydratePagesRaster } from "@/domain/takeoff/rasterSymbols";
 import { pickInteractiveSymbolGeometry, matchGeometryToLegend, attachLegendGeometryPrototypes } from "@/domain/takeoff/legendGeometry";
@@ -218,7 +218,11 @@ export default function TakeoffWorkspace() {
   const [selectedId, setSelectedId] = useState(null);
   const [isolationMode, setIsolationMode] = useState(false);
   const [measureLabel, setMeasureLabel] = useState("");
-  const [thumbsOpen, setThumbsOpen] = useState(readThumbsOpen);
+  const [thumbsOpen, setThumbsOpen] = useState(() => (
+    typeof window !== "undefined" && !window.matchMedia("(min-width: 1024px)").matches
+      ? false
+      : readThumbsOpen()
+  ));
   const [savedAt, setSavedAt] = useState("");
   const [symbolQuery, setSymbolQuery] = useState("");
   const [drawingDocs, setDrawingDocs] = useState(null);
@@ -606,19 +610,6 @@ export default function TakeoffWorkspace() {
     } catch {
       setStatus("Could not save takeoff in this browser.");
     }
-  }
-
-  function downloadTakeoff() {
-    if (!file) return;
-    const payload = sessionPayload();
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `estim8r-takeoff-${(file.name || "drawing").replace(/\.[^.]+$/, "")}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-    setStatus("Takeoff JSON downloaded.");
   }
 
   async function downloadMarkedDeviceDrawings() {
@@ -1163,41 +1154,41 @@ export default function TakeoffWorkspace() {
     let cancelled = false;
     const objectize = async () => {
       try {
-        const pages = await readAiPages(fileBytes);
+        const pages = await readAiPages(fileBytes, { includeRaster: false });
         if (cancelled) return;
-        await hydratePagesRaster(pages);
         setAiPages(pages);
-        const detected = buildAiMarks({
-          pages,
-          trade: "electrical",
-          symbols: paletteForTrade("electrical", drawingSymbolsFromDocs(drawingDocs)).symbols,
-          drawingSymbols: drawingSymbolsFromDocs(drawingDocs),
-          maxHomeruns,
-          conduit: findConduitOption(conduitId, "electrical"),
-          color: penColor,
-        });
-        const detectedDevices = (detected.marks || []).filter((mark) => isDeviceMark(mark));
-        const objects = buildDrawingObjectLayer({ pages, detectedMarks: detectedDevices, trade: "electrical" });
-        setDrawingObjects(objects);
+        setDrawingObjects(buildDrawingObjectLayer({ pages, detectedMarks: [], trade: "electrical" }));
       } catch (error) {
         if (!cancelled) console.error("Drawing object layer failed", error);
       }
     };
     void objectize();
     return () => { cancelled = true; };
-  }, [fileBytes, isPdf, drawingDocs, maxHomeruns, conduitId, penColor]);
+  }, [fileBytes, isPdf]);
 
   async function runAiTakeoff({ silent = false } = {}) {
     if (!isPdf || !fileBytes) {
-      if (!silent) setStatus("AI assist needs a PDF with a text layer. Image drawings stay manual for the selected trade.");
+      const message = "AI assist needs a PDF with a text layer. Image drawings stay manual for the selected trade.";
+      if (!silent) {
+        setDrawingError(message);
+        setStatus(message);
+      }
       return marks;
     }
     setAiBusy(true);
+    setDrawingError("");
     const tradeLabel = tradeById(trade).label;
-    if (!silent) setStatus(`AI assist is counting and marking ${tradeLabel} on the drawings…`);
+    if (!silent) setStatus(`AI assist is reading ${tradeLabel} sheets…`);
     try {
-      const pages = await readAiPages(fileBytes);
-      await hydratePagesRaster(pages);
+      const pages = await readAiPages(fileBytes, {
+        includeRaster: true,
+        onProgress: (current, total) => {
+          if (!silent) setStatus(`AI assist is reading sheet ${current} of ${total}…`);
+        },
+      });
+      await hydratePagesRaster((pages || []).filter((page) => shouldScan(page, trade)));
+      if (!silent) setStatus(`AI assist is marking ${tradeLabel} on the drawings…`);
+      await new Promise((resolve) => setTimeout(resolve, 0));
       setAiPages(pages);
       const planned = buildAiMarks({
         pages,
@@ -1209,6 +1200,7 @@ export default function TakeoffWorkspace() {
         color: penColor,
         projectPrototypes: projectPrototypesFromCorrections(marks),
       });
+      setSearchManifest(planned.searchManifest || null);
       const colored = applyDeviceTypeColors(
         (planned.marks || []).map((mark) => ({
           ...mark,
@@ -1226,6 +1218,11 @@ export default function TakeoffWorkspace() {
         ]);
         return nextMarks;
       });
+      setDrawingObjects(buildDrawingObjectLayer({
+        pages,
+        detectedMarks: nextMarks.filter(isDeviceMark),
+        trade,
+      }));
       focusMarkedSheet(nextMarks);
       const quote = persistSupplyQuote(nextMarks);
       const devices = nextMarks.filter(isDeviceMark).length;
@@ -1241,7 +1238,11 @@ export default function TakeoffWorkspace() {
       }
       return nextMarks;
     } catch (error) {
-      if (!silent) setStatus(error?.message || "AI takeoff could not read this drawing.");
+      const message = error?.message || "AI takeoff could not read this drawing.";
+      if (!silent) {
+        setDrawingError(message);
+        setStatus(message);
+      }
       return marks;
     } finally {
       setAiBusy(false);
@@ -1846,68 +1847,46 @@ export default function TakeoffWorkspace() {
   }
 
   return (
-    <div className="relative flex h-full min-h-0 flex-1 flex-col bg-background">
+    <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background">
       <div
         onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; }}
         onDrop={handleDrop}
-        className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-2"
+        className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b border-border bg-card px-3"
       >
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-blue-50 text-blue-600 dark:bg-orange-500/10 dark:text-orange-500"><ImageIcon className="h-5 w-5" /></div>
-          <div className="min-w-0">
-            <div className="truncate font-bold text-foreground">{file.name}</div>
-            <div className="text-xs text-muted-foreground">
-              {isPdf ? `PDF • ${sheetMeta.pageCount} sheet${sheetMeta.pageCount === 1 ? "" : "s"}` : "Drawing image"}
-              {calibration ? ` • ${calibration.scaleLabel ? `scale ${calibration.scaleLabel}` : `calibrated ${calibration.feet} ft`}` : " • scale not set"}
-              {zoom === 1 ? " • fitted to window" : ` • ${Math.round(zoom * 100)}%`}
-              {savedAt ? ` • saved ${new Date(savedAt).toLocaleTimeString()}` : " • not saved yet"}
-            </div>
+        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-600 dark:bg-orange-500/10 dark:text-orange-500"><ImageIcon className="h-4 w-4" /></div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-bold text-foreground">{file.name}</div>
+          <div className="truncate text-[11px] text-muted-foreground">
+            {isPdf ? `PDF • ${sheetMeta.pageCount} sheet${sheetMeta.pageCount === 1 ? "" : "s"}` : "Drawing image"}
+            {calibration ? ` • ${calibration.scaleLabel ? `scale ${calibration.scaleLabel}` : `calibrated ${calibration.feet} ft`}` : " • scale not set"}
+            {zoom === 1 ? " • fitted" : ` • ${Math.round(zoom * 100)}%`}
+            {aiBusy ? " • AI working…" : savedAt ? ` • saved ${new Date(savedAt).toLocaleTimeString()}` : " • not saved"}
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {[["manual", "Manual"], ["hybrid", "Hybrid"]].map(([value, label]) => (
-            <button key={value} type="button" onClick={() => setMode(value)} className={cn("rounded-lg border px-3 py-1.5 text-xs font-semibold", mode === value ? "border-blue-600 bg-blue-600 text-white dark:border-orange-500 dark:bg-orange-500" : "border-border bg-background")}>{label}</button>
-          ))}
-          <button
-            type="button"
-            disabled={aiBusy}
-            title="AI assist reads the PDF text/schedule layer for the selected trade, places colored count marks and homerun conduit on the sheets, and leaves them on the drawing so you can verify every count."
-            onClick={() => { setMode("ai"); void runAiTakeoff(); }}
-            className={cn("rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:cursor-wait disabled:opacity-60", mode === "ai" ? "border-blue-600 bg-blue-600 text-white dark:border-orange-500 dark:bg-orange-500" : "border-border bg-background")}
-          >
-            {aiBusy ? "AI working…" : "AI assist"}
-          </button>
-          <button type="button" onClick={() => saveTakeoff()} className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 dark:bg-orange-500">
-            <Save className="h-4 w-4" /> Save
-          </button>
-          <button
-            type="button"
-            title="True Takeoff marks the drawings (runs AI assist if nothing is counted yet), then builds the bid-lock electrical estimate from those verified marks."
-            onClick={() => { void buildAndSaveTrueElectricalEstimate(); }}
-            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-emerald-700"
-          >
-            True Takeoff
-          </button>
-          <button type="button" onClick={() => { void buildAndSaveTrueElectricalEstimate({ download: true }); }} className="rounded-lg border border-emerald-600 px-3 py-1.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300">Takeoff CSV</button>
-          <Link to={file ? `/estimates/new?file=${encodeURIComponent(file.name)}&size=${file.size}` : "/estimates/new"} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Estimate</Link>
-          <Link to={file ? `/markup?file=${encodeURIComponent(file.name)}&size=${file.size}` : "/markup"} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Markup pages</Link>
-          <button type="button" onClick={downloadQuoteExcel} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Quote Excel</button>
-          <button type="button" onClick={downloadQuotePdf} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Quote PDF</button>
-          <button type="button" onClick={downloadTakeoff} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Export JSON</button>
-          <button type="button" onClick={() => void downloadMarkedDeviceDrawings()} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Counted Drawings PDF</button>
-          <button type="button" onClick={() => void downloadConduitRouteDrawings()} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Conduit Routes PDF</button>
-          <button type="button" onClick={downloadConduitCircuitSchedule} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Conduit Schedule PDF</button>
-          <button type="button" onClick={downloadConduitCircuitCsv} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Conduit Schedule CSV</button>
-          <button type="button" onClick={downloadWireMakeupPdf} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Wire Makeup PDF</button>
-          <button type="button" onClick={downloadWireMakeupCsv} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Wire Makeup CSV</button>
-          <label htmlFor={DRAWING_INPUT_ID} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Replace</label>
-          <button type="button" onClick={closeDrawing} className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted"><X className="h-4 w-4" /> Close</button>
-        </div>
+        <TakeoffActionsMenu
+          aiBusy={aiBusy}
+          onAiAssist={() => { setMode("ai"); void runAiTakeoff(); }}
+          onSave={() => saveTakeoff()}
+          onTrueTakeoff={() => { void buildAndSaveTrueElectricalEstimate(); }}
+          onTakeoffCsv={() => { void buildAndSaveTrueElectricalEstimate({ download: true }); }}
+          onEstimatePath={takeoffEstimatePath(file)}
+          onMarkupPath={takeoffMarkupPath(file)}
+          onCountedDrawings={() => { void downloadMarkedDeviceDrawings(); }}
+          onConduitRoutes={() => { void downloadConduitRouteDrawings(); }}
+          onConduitSchedulePdf={downloadConduitCircuitSchedule}
+          onConduitScheduleCsv={downloadConduitCircuitCsv}
+          onWireMakeupPdf={downloadWireMakeupPdf}
+          onWireMakeupCsv={downloadWireMakeupCsv}
+          onQuoteExcel={downloadQuoteExcel}
+          onQuotePdf={downloadQuotePdf}
+          onReplaceId={DRAWING_INPUT_ID}
+          onClose={closeDrawing}
+        />
       </div>
-      {drawingError && <div className="border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{drawingError}</div>}
+      {drawingError && <div role="alert" className="shrink-0 border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{drawingError}</div>}
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)_300px]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] lg:grid-cols-[240px_minmax(0,1fr)_300px] lg:grid-rows-1">
         <aside className="hidden min-h-0 overflow-auto border-r border-border bg-card p-3 lg:block">
           {TOOL_GROUPS.map((group) => (
             <div key={group.key} className="mb-3">
@@ -2002,7 +1981,7 @@ export default function TakeoffWorkspace() {
           </div>
         </aside>
 
-        <section className="flex min-h-0 min-w-0 flex-col bg-card lg:flex-row">
+        <section className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-card lg:flex-row">
           <SheetThumbnailPanel
             layout={wideLayout ? "side" : "strip"}
             fileBytes={fileBytes}
@@ -2016,8 +1995,8 @@ export default function TakeoffWorkspace() {
             onToggle={toggleThumbs}
             onSelectPage={selectSheet}
           />
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="flex shrink-0 gap-1 overflow-auto border-b border-border p-1 lg:hidden">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-border p-1 lg:hidden">
             {TAKEOFF_TOOLS.map((item) => {
               const Icon = TOOL_ICONS[item.key] || Pencil;
               return <button key={item.key} type="button" onClick={() => { setTool(item.key); setDraftPoints([]); }} className={cn("inline-flex shrink-0 items-center gap-1 rounded-lg border px-2 py-1 text-xs font-semibold", tool === item.key ? "border-blue-600 bg-blue-50 text-blue-700" : "border-border")}>
@@ -2080,7 +2059,7 @@ export default function TakeoffWorkspace() {
             ref={viewportRef}
             onPointerDown={onPanPointerDown}
             onWheel={handleDrawingWheel}
-            className={cn("min-h-0 min-w-0 flex-1 overflow-hidden bg-neutral-400/40 dark:bg-neutral-950", tool === "pan" && "cursor-grab touch-none")}
+            className={cn("min-h-[40vh] min-w-0 flex-1 overflow-hidden bg-neutral-400/40 dark:bg-neutral-950 lg:min-h-0", tool === "pan" && "cursor-grab touch-none")}
           >
             <div className="flex h-full w-full items-center justify-center p-2">
               <div

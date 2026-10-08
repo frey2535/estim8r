@@ -131,5 +131,16 @@ assert(findNearbyReceptacleGlyph({ x: 17.214, y: 69.416 }, [hex, box]) === box, 
 const hatch = Array.from({ length: 12 }, (_, index) => part(12 + (index % 4) * 0.4, 16 + Math.floor(index / 4) * 0.4, 0.134, 0.187));
 assert(isHatchTickCluster(hatch[0], hatch), "stair/hatch tick lattices are not receptacles");
 
+const densePaths = [];
+for (let i = 0; i < 900; i += 1) {
+  densePaths.push(part(4 + (i % 30) * 3, 6 + Math.floor(i / 30) * 3, 0.2 + (i % 5) * 0.04, 0.16));
+}
+densePaths.push(...planParts);
+const denseStarted = Date.now();
+const denseHits = scanPageByLegendGeometry({ paths: densePaths }, dictionary, { threshold: 0.8, timeBudgetMs: 2500, maxSeeds: 900 });
+const denseMs = Date.now() - denseStarted;
+assert(denseMs < 2500, `dense geometry scan must finish, took ${denseMs}ms`);
+assert(Array.isArray(denseHits), "dense geometry scan returns hits or an empty list");
+
 if (!process.exitCode) console.log("legend geometry checks passed");
 

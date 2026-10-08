@@ -11,6 +11,7 @@ import {
   looksLikeReceptacleGlyph,
   looksLikeUnlabeledReceptacleGlyph,
   resolveGeometryMatch,
+  recoverMissedLegendSymbols,
   scanPageByLegendGeometry,
   symbolBodyOutline,
 } from "./legendGeometry.js";
@@ -37,6 +38,25 @@ assert(geometrySimilarity(proto, match) > 0.9, "translated identical symbol matc
 const dictionary = { entries: [{ code: "R", symbol: { id: "duplex", label: "Duplex receptacle", category: "Receptacles" }, prototype: proto }] };
 const hits = scanPageByLegendGeometry({ paths: planParts }, dictionary, { threshold: 0.8 });
 assert(hits.length === 1, "unlabeled plan symbol found from legend geometry");
+
+const recoveryPlan = {
+  page: 5,
+  planType: "lighting",
+  tokens: [],
+  paths: [
+    ...planParts,
+    part(55, 45, 0.5, 0.5, "circle"),
+    part(55.45, 45, 0.3, 0.12),
+    part(68, 55, 0.5, 0.5, "circle"),
+    part(68.45, 55, 0.3, 0.12),
+  ],
+};
+const recovered = recoverMissedLegendSymbols(recoveryPlan, dictionary, {
+  planType: "lighting",
+  occupied: [{ x: 40, y: 30 }],
+});
+assert(recovered.some((hit) => Math.hypot(hit.geometry.cx - 55.2, hit.geometry.cy - 45) < 0.6), "per-legend recovery finds a repeated symbol missed by occupied primary pass");
+assert(recovered.some((hit) => Math.hypot(hit.geometry.cx - 68.2, hit.geometry.cy - 55) < 0.6), "per-legend recovery finds multiple remaining copies");
 
 
 const layoutA = clusterSymbolGeometry(part(60, 20, 0.5, 0.5, "circle"), [

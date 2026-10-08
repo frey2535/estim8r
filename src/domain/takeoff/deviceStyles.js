@@ -293,15 +293,10 @@ export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
 export function displayDeviceOutline(mark, markerSize = 0.55, options = {}) {
   const outline = deviceOutline(mark, markerSize, options);
   if (!outline) {
-    // A classified, bid-counted AI device may have a reliable body location
-    // even when PDF extraction cannot recover its exact vector perimeter.
-    // Paint a compact locator at that body instead of silently showing no
-    // mark at all. UNKNOWN/review candidates remain excluded from the plan.
-    const x = Number(mark?.symbolBodyLocation?.x ?? mark?.x);
-    const y = Number(mark?.symbolBodyLocation?.y ?? mark?.y);
-    if (mark?.source !== "ai" || isReviewOnlyMark(mark) || !isDeviceMark(mark)
-      || !Number.isFinite(x) || !Number.isFinite(y)) return null;
-    return { kind: "circle", cx: x, cy: y, r: DEVICE_CHIP_R, source: "location-fallback" };
+    // Never paint an invented dot for an AI detection. If the actual printed
+    // symbol body cannot be recovered, keep the item for review instead of
+    // coloring a nearby type/circuit number.
+    return null;
   }
   const displayMax = isFixtureDevice(mark)
     ? MAX_DISPLAY_FIXTURE_FILL

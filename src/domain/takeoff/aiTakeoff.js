@@ -187,6 +187,7 @@ export function aliasesFromDrawingSymbols(drawingSymbols, catalogSymbols) {
     seen.add(id);
     aliases.push({
       code: id,
+      legend: item,
       symbol: {
         ...resolved,
         category: resolved.takeoffCategory || (resolved.category === "From drawing" ? item.takeoffCategory || item.category : resolved.category),
@@ -232,12 +233,13 @@ function usableDrawingSymbols(drawingSymbols, pages, trade) {
 export function legendDictionaryFromPages(pages, drawingSymbols, catalogSymbols, trade) {
   const usableDrawing = usableDrawingSymbols(drawingSymbols, pages, trade);
   const aliases = mergeAliases(
-    fixtureAliasesFromSchedules(pages, catalogSymbols, trade),
     aliasesFromDrawingSymbols(usableDrawing, catalogSymbols),
+    fixtureAliasesFromSchedules(pages, catalogSymbols, trade),
   );
   const entries = aliases.map((alias) => ({
     code: alias.code,
     symbol: alias.symbol,
+    legend: alias.legend || null,
     shapeHint: shapeHintFromLabel(`${alias.symbol?.label || ""} ${alias.symbol?.id || ""} ${alias.code || ""}`),
   }));
   for (const page of pages || []) {
@@ -974,12 +976,12 @@ export function buildAiMarks({
         layer: "device",
         anchor: anchorIds.has(symbol.id),
         geometryScore: visual.score,
-        legendEntryId: visual.entry?.symbol?.id || visual.entry?.id || null,
+        legendEntryId: visual.entry?.legend?.id || null,
         legendCode: String(visual.entry?.code || symbol?.abbr || "").toUpperCase(),
-        legendLabel: visual.entry?.symbol?.label || symbol?.label || "",
-        legendCategory: visual.entry?.symbol?.takeoffCategory || visual.entry?.symbol?.category || symbol?.takeoffCategory || symbol?.category || "",
-        legendSource: visual.entry?.symbol?.source || "",
-        legendSourcePage: visual.entry?.symbol?.page || null,
+        legendLabel: visual.entry?.legend?.label || visual.entry?.symbol?.label || symbol?.label || "",
+        legendCategory: visual.entry?.legend?.takeoffCategory || visual.entry?.legend?.category || visual.entry?.symbol?.takeoffCategory || visual.entry?.symbol?.category || symbol?.takeoffCategory || symbol?.category || "",
+        legendSource: visual.entry?.legend?.source || visual.entry?.symbol?.source || "",
+        legendSourcePage: visual.entry?.legend?.page || visual.entry?.symbol?.page || null,
       }, {
         geometry,
         symbolBodyLocation: placed,
@@ -1116,12 +1118,12 @@ export function buildAiMarks({
         typeCode,
         color,
         matchedFrom: fromLegend ? "legend" : "drawing",
-        legendEntryId: entry?.symbol?.id || null,
+        legendEntryId: entry?.legend?.id || null,
         legendCode: entry?.code || typeCode,
-        legendLabel: entry?.symbol?.label || symbol?.label || "",
-        legendCategory: entry?.symbol?.takeoffCategory || entry?.symbol?.category || symbol?.takeoffCategory || symbol?.category || "",
-        legendSource: entry?.symbol?.source || "",
-        legendSourcePage: entry?.symbol?.page || null,
+        legendLabel: entry?.legend?.label || entry?.symbol?.label || symbol?.label || "",
+        legendCategory: entry?.legend?.takeoffCategory || entry?.legend?.category || entry?.symbol?.takeoffCategory || entry?.symbol?.category || symbol?.takeoffCategory || symbol?.category || "",
+        legendSource: entry?.legend?.source || entry?.symbol?.source || "",
+        legendSourcePage: entry?.legend?.page || entry?.symbol?.page || null,
         outline: paintOutline,
         outlineSource: paintOutline?.source || geometrySource,
         detectSource: DETECT_SOURCE_ORIGINAL_PDF,

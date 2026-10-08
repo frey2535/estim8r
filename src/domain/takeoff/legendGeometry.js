@@ -915,6 +915,53 @@ export function scanPageByLegendGeometry(page,dictionary,options={}){
   return hits;
 }
 
+export function recoverMissedLegendSymbols(page, dictionary, options = {}) {
+  const planType = options.planType || pagePlanType(page);
+  const occupied = options.occupied || [];
+  const tokens = page?.tokens || [];
+  const entries = (dictionary?.entries || []).filter((entry) => {
+    if (!entry?.prototype) return false;
+    const family = entryFamily(entry);
+    return !planType || !family || family === planType;
+  });
+  const recovered = [];
+  for (const entry of entries) {
+    const hits = scanPageByLegendGeometry(page, { entries: [entry] }, {
+      planType,
+      threshold: 0.68,
+      strictSize: false,
+      occupyRadius: 0.24,
+      occupied: [...occupied, ...recovered.map((hit) => ({ x: hit.geometry.cx, y: hit.geometry.cy }))],
+      timeBudgetMs: 4500,
+      maxSeeds: 2200,
+      allowSlash: true,
+      keepSeedBody: true,
+    });
+    if (!hits.length) continue;
+    const repeated = hits.length >= 2;
+    const wanted = compact(entry.code);
+    for (const hit of hits) {
+      const nearbyCode = tokens.some((token) => (
+        wanted
+        && compact(token.text) === wanted
+        && Math.hypot((Number(token.x) || 0) - hit.geometry.cx, (Number(token.y) || 0) - hit.geometry.cy) <= 0.85
+      ));
+      const strong = hit.score >= 0.86;
+      const repeatedStrong = repeated && hit.score >= 0.78;
+      const labeledStrong = nearbyCode && hit.score >= 0.72;
+      if (!strong && !repeatedStrong && !labeledStrong) continue;
+      if (recovered.some((other) => Math.hypot(other.geometry.cx-hit.geometry.cx,other.geometry.cy-hit.geometry.cy) < 0.22)) continue;
+      recovered.push({
+        ...hit,
+        entry,
+        recoveryReason: strong ? "high-geometry" : labeledStrong ? "geometry+type-code" : "repeated-prototype",
+        ambiguous: false,
+      });
+    }
+  }
+  return recovered;
+}
+
 export function pickInteractiveSymbolGeometry(page, point, options = {}) {
   if (!page || !point) return null;
   const paths=(page.paths||[]).filter((path)=>allowCandidate(path,{allowSlash:true}));

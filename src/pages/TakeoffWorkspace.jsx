@@ -2081,21 +2081,15 @@ export default function TakeoffWorkspace() {
                   if (!point) return;
                   const hovered = selectMarkAtPoint(overlayMarks, point, { markerSize: penSize });
                   if (hovered && isDeviceMark(hovered)) {
+                    setHoveredGeometryInfo(null);
                     setHoveredDeviceId(hovered.id);
                   } else {
+                    // Pointer movement must stay cheap. Do not run the full legend
+                    // geometry matcher on every mouse event; that caused Chrome's
+                    // "Page unresponsive" dialog on large electrical PDFs.
                     const object = hitDrawingObject(drawingObjects, point, sheetMeta.page);
-                    const picked = interactiveGeometryAt(point);
-                    if (picked?.geometry) {
-                      const symbol = picked.match?.entry?.symbol;
-                      setHoveredGeometryInfo({ geometry: picked.geometry, match: picked.match });
-                      setHoveredDeviceId(`raw:${picked.geometry.cx.toFixed(3)}:${picked.geometry.cy.toFixed(3)}:${symbol?.id || "unknown"}`);
-                    } else if (object) {
-                      setHoveredGeometryInfo(null);
-                      setHoveredDeviceId(`object:${object.objectId || object.id}`);
-                    } else {
-                      setHoveredGeometryInfo(null);
-                      setHoveredDeviceId(null);
-                    }
+                    setHoveredGeometryInfo(null);
+                    setHoveredDeviceId(object ? `object:${object.objectId || object.id}` : null);
                   }
                   if (!["conduit", "polyline", "linear", "measure", "homerun"].includes(tool)) return;
                   if (tool === "conduit") {

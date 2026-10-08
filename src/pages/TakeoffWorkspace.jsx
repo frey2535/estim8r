@@ -2189,10 +2189,10 @@ export default function TakeoffWorkspace() {
                       requiresClassification: !rawSymbol,
                     } : null);
                   if (!hovered) return null;
-                  const legend = rawSymbol || drawingSymbols.find((item) => (
-                    item.id === hovered.symbol
-                    || String(item.abbr || "").toUpperCase() === String(hovered.typeCode || hovered.abbr || "").toUpperCase()
-                  ));
+                  const hoverLegend = legendHoverData(hovered, drawingSymbols, {
+                    planType: aiPages.find((item) => item.page === sheetMeta.page)?.planType || "",
+                  });
+                  const legend = hoverLegend.entry;
                   const x = Math.min(82, Math.max(2, Number(hovered.x) || 0));
                   const y = Math.min(86, Math.max(2, Number(hovered.y) || 0));
                   return (
@@ -2200,12 +2200,12 @@ export default function TakeoffWorkspace() {
                       className="pointer-events-none absolute z-50 max-w-72 rounded-lg border border-slate-300 bg-white/95 px-3 py-2 text-xs text-slate-900 shadow-xl"
                       style={{ left: `${x}%`, top: `${y}%`, transform: "translate(10px, 10px)" }}
                     >
-                      <div className="font-black">{hovered.typeCode || hovered.abbr || "Symbol"} · {legend?.label || hovered.symbolLabel || "Device"}</div>
-                      <div className="mt-1 text-[11px] text-slate-600">{legend?.label || hovered.symbolLabel || "No legend description available yet."}</div>
-                      <div className="mt-1 text-[10px] font-semibold text-slate-500">{legend?.category || hovered.category || ""}</div>
-                      {hovered.requiresClassification ? <div className="mt-1 text-[10px] font-bold text-amber-700">Unclassified geometry — choose the correct legend symbol and mark it manually.</div> : null}
-                      {legend?.source ? <div className="mt-1 text-[10px] text-slate-500">Legend source: {legend.source}</div> : null}
-                      {legend?.page ? <div className="text-[10px] text-slate-500">Legend/schedule sheet {legend.page}</div> : null}
+                      <div className="font-black">{hoverLegend.code || "Symbol"} · {hoverLegend.label}</div>
+                      <div className="mt-1 text-[11px] text-slate-600">{hoverLegend.label}</div>
+                      <div className="mt-1 text-[10px] font-semibold text-slate-500">{hoverLegend.category}</div>
+                      {!hoverLegend.verified || hovered.requiresClassification ? <div className="mt-1 text-[10px] font-bold text-amber-700">Legend identity not verified — review this symbol before bid use.</div> : null}
+                      {hoverLegend.source ? <div className="mt-1 text-[10px] text-slate-500">Legend source: {hoverLegend.source}</div> : null}
+                      {hoverLegend.page ? <div className="text-[10px] text-slate-500">Legend/schedule sheet {hoverLegend.page}</div> : null}
                     </div>
                   );
                 })()}

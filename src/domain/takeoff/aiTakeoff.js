@@ -24,7 +24,7 @@ import { extractSheetNotes, notesToMarks } from "./sheetNotes.js";
 import { looksLikeCoverOrRendering, looksLikeElectricalPlan, looksLikeIndexPage, pagePlanType } from "./drawing-docs.js";
 import { associateGeometry, assignExclusiveGeometry, looksLikeRecessedCanBody, placeOnSymbolGeometry, shapeHintFromLabel, tagOnSymbolGeometry } from "./vectorSymbols.js";
 import { orthogonalizePolyline } from "./ortho.js";
-import { attachConfirmedGeometryPrototypes, attachFragmentPrototypes, attachLegendGeometryPrototypes, attachPowerGlyphPrototypes, attachProjectPrototypes, findNearbyReceptacleGlyph, isEmergencyHatch, isHatchTickCluster, looksLikeHexNoteGlyph, scanPageByLegendGeometry, scanUnlabeledPowerGlyphs, snapToEntryPrototype, symbolBodyOutline } from "./legendGeometry.js";
+import { attachConfirmedGeometryPrototypes, attachFragmentPrototypes, attachLegendGeometryPrototypes, attachPowerGlyphPrototypes, attachProjectPrototypes, findNearbyReceptacleGlyph, isEmergencyHatch, isHatchTickCluster, looksLikeHexNoteGlyph, recoverMissedLegendSymbols, scanPageByLegendGeometry, scanUnlabeledPowerGlyphs, snapToEntryPrototype, symbolBodyOutline } from "./legendGeometry.js";
 import { matchRasterToLegend, rasterCandidatesFromPage } from "./rasterSymbols.js";
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
 import { buildTradeSearchManifest } from "./searchManifest.js";
@@ -187,6 +187,7 @@ export function aliasesFromDrawingSymbols(drawingSymbols, catalogSymbols) {
     seen.add(id);
     aliases.push({
       code: id,
+      legend: item,
       symbol: {
         ...resolved,
         category: resolved.takeoffCategory || (resolved.category === "From drawing" ? item.takeoffCategory || item.category : resolved.category),
@@ -232,12 +233,13 @@ function usableDrawingSymbols(drawingSymbols, pages, trade) {
 export function legendDictionaryFromPages(pages, drawingSymbols, catalogSymbols, trade) {
   const usableDrawing = usableDrawingSymbols(drawingSymbols, pages, trade);
   const aliases = mergeAliases(
-    fixtureAliasesFromSchedules(pages, catalogSymbols, trade),
     aliasesFromDrawingSymbols(usableDrawing, catalogSymbols),
+    fixtureAliasesFromSchedules(pages, catalogSymbols, trade),
   );
   const entries = aliases.map((alias) => ({
     code: alias.code,
     symbol: alias.symbol,
+    legend: alias.legend || null,
     shapeHint: shapeHintFromLabel(`${alias.symbol?.label || ""} ${alias.symbol?.id || ""} ${alias.code || ""}`),
   }));
   for (const page of pages || []) {
@@ -974,6 +976,12 @@ export function buildAiMarks({
         layer: "device",
         anchor: anchorIds.has(symbol.id),
         geometryScore: visual.score,
+        legendEntryId: visual.entry?.legend?.id || null,
+        legendCode: String(visual.entry?.code || symbol?.abbr || "").toUpperCase(),
+        legendLabel: visual.entry?.legend?.label || visual.entry?.symbol?.label || symbol?.label || "",
+        legendCategory: visual.entry?.legend?.takeoffCategory || visual.entry?.legend?.category || visual.entry?.symbol?.takeoffCategory || visual.entry?.symbol?.category || symbol?.takeoffCategory || symbol?.category || "",
+        legendSource: visual.entry?.legend?.source || visual.entry?.symbol?.source || "",
+        legendSourcePage: visual.entry?.legend?.page || visual.entry?.symbol?.page || null,
       }, {
         geometry,
         symbolBodyLocation: placed,
@@ -1110,6 +1118,12 @@ export function buildAiMarks({
         typeCode,
         color,
         matchedFrom: fromLegend ? "legend" : "drawing",
+        legendEntryId: entry?.legend?.id || null,
+        legendCode: entry?.code || typeCode,
+        legendLabel: entry?.legend?.label || entry?.symbol?.label || symbol?.label || "",
+        legendCategory: entry?.legend?.takeoffCategory || entry?.legend?.category || entry?.symbol?.takeoffCategory || entry?.symbol?.category || symbol?.takeoffCategory || symbol?.category || "",
+        legendSource: entry?.legend?.source || entry?.symbol?.source || "",
+        legendSourcePage: entry?.legend?.page || entry?.symbol?.page || null,
         outline: paintOutline,
         outlineSource: paintOutline?.source || geometrySource,
         detectSource: DETECT_SOURCE_ORIGINAL_PDF,
@@ -1274,6 +1288,69 @@ export function buildAiMarks({
       counts.push(review);
       seen.push({ ...review, tagX: placed.x, tagY: placed.y });
     }
+    // Final high-recall recovery pass: search each legend type independently
+    // after normal detection has established prototypes. This catches repeated
+    // symbols that were skipped by the global competition/deduplication pass.
+    const recoveryHits = recoverMissedLegendSymbols(page, dictionary, {
+      planType,
+      occupied: seen.filter((item) => item.sheet === page.page),
+    });
+    for (const visual of recoveryHits) {
+      const geometry = visual.geometry;
+      const symbol = visual.entry?.symbol;
+      if (!geometry || !symbol) continue;
+      const paintOutline = symbolBodyOutline(geometry, page.tokens);
+      const placed = {
+        x: Number(paintOutline?.cx ?? geometry.cx),
+        y: Number(paintOutline?.cy ?? geometry.cy),
+      };
+      if (!placementAllowed(placed, { sitePlan }) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens)) continue;
+      if (looksLikeHexNoteGlyph(geometry) || isHatchTickCluster(geometry, page.paths || [])) continue;
+      if (seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.28)) continue;
+      const mark = attachDetectionRecord({
+        id: newId(),
+        source: "ai",
+        trade,
+        type: "count",
+        sheet: page.page,
+        x: placed.x,
+        y: placed.y,
+        category: symbol.takeoffCategory || symbol.category,
+        symbol: symbol.id,
+        symbolLabel: symbol.label,
+        abbr: symbol.abbr || visual.entry.code,
+        typeCode: String(visual.entry.code || symbol.abbr || "").toUpperCase(),
+        color,
+        matchedFrom: "legend-recovery",
+        legendEntryId: visual.entry?.legend?.id || null,
+        legendCode: String(visual.entry?.code || symbol.abbr || "").toUpperCase(),
+        legendLabel: visual.entry?.legend?.label || visual.entry?.symbol?.label || symbol.label || "",
+        legendCategory: visual.entry?.legend?.takeoffCategory || visual.entry?.legend?.category || symbol.takeoffCategory || symbol.category || "",
+        legendSource: visual.entry?.legend?.source || visual.entry?.symbol?.source || "",
+        legendSourcePage: visual.entry?.legend?.page || visual.entry?.symbol?.page || null,
+        outline: paintOutline,
+        outlineSource: paintOutline?.source || geometry.outline?.source || geometry.source || "vector",
+        detectSource: DETECT_SOURCE_ORIGINAL_PDF,
+        confidence: visual.score >= 0.86 ? "high" : "medium",
+        reviewStatus: visual.score >= 0.86 ? "accepted" : "pending",
+        layer: "device",
+        anchor: anchorIds.has(symbol.id),
+        geometryScore: visual.score,
+        recoveryReason: visual.recoveryReason,
+      }, {
+        geometry,
+        symbolBodyLocation: placed,
+        detectionSources: ["legend-recovery", geometry.outline?.source || geometry.source || "vector"],
+        visualMatchScore: visual.score,
+        vectorMatchScore: geometry.source === "raster" ? 0 : visual.score,
+        legendMatchScore: visual.score,
+        requiresReview: visual.score < 0.86,
+        reviewReason: visual.score < 0.86 ? "recovered-mid-confidence" : "",
+      });
+      counts.push(mark);
+      seen.push({ ...mark, tagX: placed.x, tagY: placed.y });
+    }
+
     const rasterHits = matchRasterToLegend(rasterCandidatesFromPage(page), dictionary, {
       threshold: REVIEW_VISUAL_THRESHOLD,
     });

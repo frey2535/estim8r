@@ -423,6 +423,41 @@ function circleHintEntry(entry) {
 }
 
 function compact(v){return String(v||"").toLowerCase().replace(/[^a-z0-9]+/g,"");}
+function legendCodeEntries(dictionary) {
+  const map = new Map();
+  for (const entry of dictionary?.entries || []) {
+    const code = compact(normalizeTypeMark(entry?.code || entry?.symbol?.abbr || ""));
+    if (!code || map.has(code)) continue;
+    map.set(code, entry);
+  }
+  return map;
+}
+
+export function nearbyLegendEntry(point, tokens = [], dictionary, options = {}) {
+  if (!point) return null;
+  const radius = Number(options.radius) > 0 ? Number(options.radius) : 1.35;
+  const entries = legendCodeEntries(dictionary);
+  let best = null;
+  let bestDist = Infinity;
+  for (const token of tokens || []) {
+    const code = compact(normalizeTypeMark(token?.text));
+    const entry = entries.get(code);
+    if (!entry) continue;
+    const dist = Math.hypot(
+      (Number(token?.x) || 0) - (Number(point.x ?? point.cx) || 0),
+      (Number(token?.y) || 0) - (Number(point.y ?? point.cy) || 0),
+    );
+    if (dist <= radius && dist < bestDist) {
+      best = { entry, token, distance: dist };
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
+function emergencyVariantEntry(entry) {
+  return /^\d{1,2}e$/i.test(String(entry?.code || "").trim());
+}
 function meaningfulWords(label){
   return String(label||"").toLowerCase().split(/[^a-z0-9]+/).filter((w)=>w.length>=4&&!["type","with","wall","mount","mounted","device","fixture"].includes(w));
 }
@@ -1006,6 +1041,7 @@ export function recoverMissedLegendSymbols(page, dictionary, options = {}) {
   const planType = options.planType || pagePlanType(page);
   const occupied = options.occupied || [];
   const tokens = page?.tokens || [];
+  const paths = page?.paths || [];
   const entries = (dictionary?.entries || []).filter((entry) => {
     if (!entry?.prototype) return false;
     const family = entryFamily(entry);
@@ -1028,11 +1064,30 @@ export function recoverMissedLegendSymbols(page, dictionary, options = {}) {
     const repeated = hits.length >= 2;
     const wanted = compact(entry.code);
     for (const hit of hits) {
-      const nearbyCode = tokens.some((token) => (
-        wanted
-        && compact(token.text) === wanted
-        && Math.hypot((Number(token.x) || 0) - hit.geometry.cx, (Number(token.y) || 0) - hit.geometry.cy) <= 0.85
-      ));
+      const nearestPrinted = nearbyLegendEntry(
+        { x: hit.geometry.cx, y: hit.geometry.cy },
+        tokens,
+        dictionary,
+        { radius: 1.35 },
+      );
+      const nearestPrintedCode = compact(nearestPrinted?.entry?.code);
+      // Printed type text is authoritative when it is a known legend code.
+      // A visually similar 1E prototype must never override a nearby 1, 2E,
+      // 3E, OS, F, etc. label.
+      if (nearestPrintedCode && nearestPrintedCode !== wanted) continue;
+
+      const nearbyCode = Boolean(nearestPrintedCode === wanted);
+      const nearby = nearbyFromIndex(
+        buildSpatialIndex(paths.filter((path) => allowCandidate(path, { allowSlash: true }))),
+        hit.geometry.cx,
+        hit.geometry.cy,
+        1.1,
+      );
+      // Emergency fixture variants must have either their exact printed type
+      // beside the symbol or actual emergency/hatch geometry. Ordinary fixture
+      // geometry alone is not sufficient to classify an E variant.
+      if (emergencyVariantEntry(entry) && !nearbyCode && !isEmergencyHatch(hit.geometry, nearby)) continue;
+
       const strong = hit.score >= 0.86;
       const repeatedStrong = repeated && hit.score >= 0.78;
       const labeledStrong = nearbyCode && hit.score >= 0.72;

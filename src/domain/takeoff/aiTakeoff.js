@@ -397,6 +397,44 @@ export function shouldScan(page, trade) {
   return true;
 }
 
+function knownLegendCodes(dictionary) {
+  return new Set((dictionary?.entries || [])
+    .map((entry) => normalizeTakeoffText(normalizeTypeMark(entry?.code || entry?.symbol?.abbr || "")))
+    .filter(Boolean));
+}
+
+export function shouldScanWithDictionary(page, trade, dictionary) {
+  if (shouldScan(page, trade)) return true;
+  if (!page || trade !== "electrical") return false;
+  if (looksLikeCoverOrRendering(page) || looksLikeIndexPage(page)) return false;
+
+  const id = page.sheetId || findSheetId(page.tokens || []);
+  const fromId = tradeFromSheetId(id);
+  if (fromId && fromId !== "electrical") return false;
+
+  const codes = knownLegendCodes(dictionary);
+  if (!codes.size) return false;
+
+  const matchingTypeTokens = (page.tokens || []).filter((token) => (
+    codes.has(normalizeTakeoffText(normalizeTypeMark(token?.text)))
+    && isPlanInterior(token)
+    && !isSheetChrome(token)
+  ));
+
+  // A real plan may have a weak/missing title block or be exported in a way
+  // that defeats looksLikeElectricalPlan(). If the sheet contains known
+  // project legend codes in the plan interior, do not silently skip it.
+  if (matchingTypeTokens.length >= 1 && (page.paths || []).length >= 12) return true;
+
+  // Geometry-heavy pages classified as "drawing"/"other" are also eligible
+  // when the project already has an electrical legend. This avoids a complete
+  // zero-result run when title extraction fails.
+  const kind = String(page.kind || "").toLowerCase();
+  return (kind === "drawing" || kind === "other")
+    && (page.paths || []).length >= 180
+    && (page.tokens || []).length >= 8;
+}
+
 function isSectionContext(token, tokens) {
   const compact = normalizeTakeoffText(token.text);
   if (compact.length > 2) return false;
@@ -428,7 +466,7 @@ export function findConduitSections(pages, trade) {
   const sections = [];
   const seen = new Set();
   for (const page of pages || []) {
-    if (!shouldScan(page, trade)) continue;
+    if (!shouldScanWithDictionary(page, trade, dictionary)) continue;
     const tokens = page.tokens || [];
     for (const token of tokens) {
       const letter = String(token.text || "").trim().toUpperCase();
@@ -1491,7 +1529,7 @@ export function buildAiMarks({
   const pageKinds = Object.fromEntries((pages || []).filter((page) => page?.page).map((page) => [page.page, page.kind]));
   const persistedCount = persistedPlanDeviceCount(validatedCounts, pageKinds);
   const legendHits = validatedCounts.filter((mark) => mark.matchedFrom === "legend").length;
-  const skipped = (pages || []).filter((page) => !pageMatchesTrade(page, trade));
+  const skipped = (pages || []).filter((page) => !shouldScanWithDictionary(page, trade, dictionary));
   const skippedSheets = skipped.map((page) => ({
     page: page.page,
     kind: page.kind || "drawing",
@@ -1515,7 +1553,7 @@ export function buildAiMarks({
     trade,
     dictionary,
     marks: validatedCounts,
-    shouldScanPage: shouldScan,
+    shouldScanPage: (page, selectedTrade) => shouldScanWithDictionary(page, selectedTrade, dictionary),
   });
   return {
     marks: applyDeviceTypeColors([

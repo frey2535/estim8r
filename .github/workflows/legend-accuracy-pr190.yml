@@ -1,0 +1,36 @@
+name: Legend accuracy regression
+on:
+  push:
+    branches:
+      - feature/legend-tag-accuracy-20261009
+  pull_request:
+    paths:
+      - 'src/domain/takeoff/**'
+      - '.github/workflows/legend-accuracy-pr190.yml'
+jobs:
+  accuracy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test adjacent annotations
+        run: node src/domain/takeoff/adjacentAnnotations.test.js
+      - name: Test legend hover
+        run: node src/domain/takeoff/legendHover.test.js
+      - name: Test search manifest
+        run: node src/domain/takeoff/searchManifest.test.js
+      - name: Soccer Pavilion accuracy
+        run: node src/domain/takeoff/soccerPavilionAccuracy.test.js
+      - name: Pottsville accuracy
+        run: node src/domain/takeoff/pottsvilleAccuracy.test.js
+      - name: Expanded corpus accuracy
+        run: node src/domain/takeoff/expandedCorpusAccuracy.test.js
+      - name: Symbol detection regression
+        run: node src/domain/takeoff/symbolDetection.test.js
+      - name: Boundary highlight regression
+        run: node src/domain/takeoff/deviceFillVisibility.test.js

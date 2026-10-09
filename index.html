@@ -45,20 +45,65 @@
             + '</div>';
           document.body.appendChild(overlay);
           document.getElementById("estim8r-boot-update-btn").onclick = function () {
-            var url = new URL(window.location.href);
-            url.searchParams.set("t", String(Date.now()));
-            if (nextSha) url.searchParams.set("build", nextSha);
-            window.location.replace(url.toString());
+            clearStaleClient().finally(function () {
+              var url = new URL(window.location.href);
+              url.searchParams.set("t", String(Date.now()));
+              if (nextSha) url.searchParams.set("build", nextSha);
+              window.location.replace(url.toString());
+            });
           };
         }
+        function clearStaleClient() {
+          var jobs = [];
+          try {
+            if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+              jobs.push(navigator.serviceWorker.getRegistrations().then(function (regs) {
+                return Promise.all(regs.map(function (reg) { return reg.unregister().catch(function () { return false; }); }));
+              }));
+            }
+          } catch (e) { /* leftover workers */ }
+          try {
+            if ("caches" in window) {
+              jobs.push(caches.keys().then(function (keys) {
+                return Promise.all(keys.map(function (key) { return caches.delete(key).catch(function () { return false; }); }));
+              }));
+            }
+          } catch (e) { /* leftover Cache API */ }
+          return Promise.race([
+            Promise.all(jobs).catch(function () {}),
+            new Promise(function (resolve) { setTimeout(resolve, 1500); }),
+          ]);
+        }
+        function fetchWithTimeout(url, options, timeoutMs) {
+          var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+          var timer = setTimeout(function () { if (controller) controller.abort(); }, timeoutMs || 2000);
+          var opts = options || {};
+          if (controller) opts.signal = controller.signal;
+          return fetch(url, opts).finally(function () { clearTimeout(timer); });
+        }
+        function readRemoteSha() {
+          var bust = "t=" + Date.now() + "&n=" + Math.random().toString(36).slice(2);
+          var urls = ["/build-version.json?" + bust, window.location.origin + "/build-version.json?" + bust + "&abs=1"];
+          function once(url) {
+            var opts = { cache: "reload", headers: { "Cache-Control": "no-cache", Pragma: "no-cache" } };
+            return fetchWithTimeout(url, opts, 2000).catch(function () {
+              return fetchWithTimeout(url, { cache: "no-store" }, 2000);
+            }).then(function (response) { return response && response.ok ? response.json() : null; })
+              .then(function (next) { return next && next.sha ? String(next.sha) : ""; })
+              .catch(function () { return ""; });
+          }
+          return once(urls[0]).then(function (sha) {
+            if (sha) return sha;
+            return once(urls[1]).then(function (retrySha) {
+              if (retrySha) return retrySha;
+              return once(urls[0] + "&retry=1");
+            });
+          });
+        }
         if (!currentSha || currentSha === "local" || currentSha.indexOf("%ESTIM8R") === 0) return;
-        fetch("/build-version.json?t=" + Date.now(), { cache: "no-store" })
-          .then(function (response) { return response.ok ? response.json() : null; })
-          .then(function (next) {
-            if (!next || !next.sha || next.sha === currentSha) return;
-            showUpdatePopup(next.sha);
-          })
-          .catch(function () {});
+        clearStaleClient().then(function () { return readRemoteSha(); }).then(function (remoteSha) {
+          if (remoteSha && remoteSha !== currentSha) showUpdatePopup(remoteSha);
+        }).catch(function () {});
       })();
     </script>
     <script type="module" src="/src/main.jsx"></script>

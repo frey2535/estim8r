@@ -2076,7 +2076,7 @@ export default function TakeoffWorkspace() {
                 onPointerDown={onViewerPointerDown}
                 style={{ transform: `translate(${pan.x}px, ${pan.y}px)`, willChange: tool === "pan" ? "transform" : "auto" }}
                 onPointerMove={(event) => {
-                  if (panningRef.current) return;
+                  if (panningRef.current || aiBusy) return;
                   const point = drawingPoint(event);
                   if (!point) return;
                   const hovered = selectMarkAtPoint(overlayMarks, point, { markerSize: penSize });
@@ -2568,12 +2568,28 @@ function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber, viewp
         const fitted = fitSheetSize(base.width, base.height, viewportWidth, viewportHeight, zoom);
         if (!fitted.width || !fitted.height) return;
         setDisplaySize(fitted);
-        const outputScale = Math.min(2, window.devicePixelRatio || 1);
+
+        // Keep 8x visual zoom without allocating an 8x full-resolution canvas.
+        // Large electrical sheets can otherwise create 100M+ pixel canvases and
+        // crash the browser when zooming. Cap the backing store while keeping
+        // the CSS display size/pan geometry unchanged.
+        const deviceScale = Math.min(2, window.devicePixelRatio || 1);
+        const requestedPixels = fitted.width * fitted.height * deviceScale * deviceScale;
+        const MAX_CANVAS_PIXELS = 16_000_000;
+        const pixelBudgetScale = requestedPixels > MAX_CANVAS_PIXELS
+          ? Math.sqrt(MAX_CANVAS_PIXELS / Math.max(1, fitted.width * fitted.height))
+          : deviceScale;
+        const maxDimensionScale = Math.min(
+          1,
+          8192 / Math.max(1, fitted.width * pixelBudgetScale),
+          8192 / Math.max(1, fitted.height * pixelBudgetScale),
+        );
+        const outputScale = Math.max(0.35, pixelBudgetScale * maxDimensionScale);
         const viewport = page.getViewport({ scale: (fitted.width / base.width) * outputScale });
         const canvas = canvasRef.current;
         const context = canvas.getContext("2d", { alpha: false });
-        canvas.width = Math.floor(viewport.width);
-        canvas.height = Math.floor(viewport.height);
+        canvas.width = Math.max(1, Math.floor(viewport.width));
+        canvas.height = Math.max(1, Math.floor(viewport.height));
         canvas.style.width = `${fitted.width}px`;
         canvas.style.height = `${fitted.height}px`;
         context.setTransform(1, 0, 0, 1, 0, 0);
@@ -2590,9 +2606,12 @@ function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber, viewp
       }
     }
 
-    renderPdf();
+    const renderTimer = window.setTimeout(() => {
+      void renderPdf();
+    }, 90);
     return () => {
       cancelled = true;
+      window.clearTimeout(renderTimer);
       try { renderTask?.cancel(); } catch { /* ignore */ }
     };
   }, [fileBytes, pageNumber, zoom, viewportWidth, viewportHeight]);

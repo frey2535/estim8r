@@ -30,7 +30,7 @@ import TakeoffActionsMenu, { takeoffEstimatePath, takeoffMarkupPath } from "@/co
 import { readAiPages } from "@/domain/takeoff/aiPages";
 import { hydratePagesRaster } from "@/domain/takeoff/rasterSymbols";
 import { pickInteractiveSymbolGeometry, matchGeometryToLegend, attachLegendGeometryPrototypes } from "@/domain/takeoff/legendGeometry";
-import { legendHoverData } from "@/domain/takeoff/legendHover";
+import { legendHoverData, shouldShowSymbolHover } from "@/domain/takeoff/legendHover";
 import { buildDrawingObjectLayer, hitDrawingObject, materializeDrawingObject } from "@/domain/takeoff/drawingObjectLayer";
 import SheetThumbnailPanel, { readThumbsOpen, writeThumbsOpen } from "@/components/takeoff/SheetThumbnailPanel";
 import DevicePicker from "@/components/takeoff/DevicePicker";
@@ -2183,7 +2183,7 @@ export default function TakeoffWorkspace() {
                       category: rawSymbol?.takeoffCategory || rawSymbol?.category || "Unclassified",
                       requiresClassification: !rawSymbol,
                     } : null);
-                  if (!hovered) return null;
+                  if (!hovered || !shouldShowSymbolHover(hovered)) return null;
                   const hoverLegend = legendHoverData(hovered, drawingSymbols, {
                     planType: aiPages.find((item) => item.page === sheetMeta.page)?.planType || "",
                   });

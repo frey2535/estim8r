@@ -692,11 +692,16 @@ export function scanUnlabeledPowerGlyphs(page, options = {}) {
   return hits;
 }
 
-function entryFamily(entry) {
-  const blob = `${entry?.symbol?.takeoffCategory || ""} ${entry?.symbol?.category || ""} ${entry?.symbol?.label || ""} ${entry?.code || ""}`;
+export function entryFamily(entry) {
+  const code = String(entry?.code || "");
+  const blob = `${entry?.symbol?.takeoffCategory || ""} ${entry?.symbol?.category || ""} ${entry?.symbol?.label || ""} ${code}`;
+  // Ceiling / bay fans are lighting fixtures. The word "fan" used to dump them
+  // into the power family, so F2 painted and hovered on receptacles.
+  if (/ceiling\s*fan|bay\s*fan|fanimation|paddle\s*fan/i.test(blob)) return "lighting";
+  if (/^F\d/i.test(code) && !/recept|gfi|exhaust|vent/i.test(blob)) return "lighting";
   if (/lighting|downlight|troffer|can light|fixture/i.test(blob) && !/recept|gfi|switch/i.test(blob)) return "lighting";
   if (/recept|gfi|switch|outlet|duplex|weatherproof|special-purpose|\bwp\b|\bsp\b|\bspr\b/i.test(blob)) return "power";
-  if (/equipment|panel|fan|hvac/i.test(blob)) return "power";
+  if (/exhaust\s*fan|vent(?:ilation)?\s*fan|equipment|panel|hvac/i.test(blob)) return "power";
   return "";
 }
 

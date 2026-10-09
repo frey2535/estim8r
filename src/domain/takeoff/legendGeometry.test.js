@@ -3,6 +3,7 @@ import {
   attachConfirmedGeometryPrototypes,
   attachFragmentPrototypes,
   clusterSymbolGeometry,
+  entryFamily,
   findNearbyReceptacleGlyph,
   geometrySimilarity,
   isDeviceFragment,
@@ -86,6 +87,19 @@ const lighting = resolveGeometryMatch(cluster, lookalikes.entries, { planType: "
 const power = resolveGeometryMatch(cluster, lookalikes.entries, { planType: "power" });
 assert(lighting?.entry.code === "2" && lighting.ambiguous === false, `lighting sheet settles the can, got ${lighting?.entry.code} amb=${lighting?.ambiguous}`);
 assert(power?.entry.code === "GFI" && power.ambiguous === false, `power sheet settles the receptacle, got ${power?.entry.code} amb=${power?.ambiguous}`);
+
+const fanEntry = {
+  code: "F2",
+  symbol: { id: "f2-fan", label: "Type F2 8' BAY CEILING FAN", category: "Lighting", takeoffCategory: "Lighting" },
+  prototype: canProto,
+};
+assert(entryFamily(fanEntry) === "lighting", "ceiling fan F2 is a lighting family, not power");
+const fanOnPower = scanPageByLegendGeometry(
+  { paths: [part(50, 40, 0.49, 0.49, "circle")] },
+  { entries: [fanEntry, lookalikes.entries[1]] },
+  { planType: "power", threshold: 0.7 },
+);
+assert(!fanOnPower.some((hit) => String(hit.entry?.code || "").toUpperCase() === "F2"), "power sheets do not identify circles as ceiling-fan F2");
 
 const twins = {
   entries: [

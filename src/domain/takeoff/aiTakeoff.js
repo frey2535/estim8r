@@ -503,7 +503,7 @@ export function matchTradeSymbol(text, symbols, aliases = [], options = {}) {
   const alias = (aliases || []).find((item) => normalizeTakeoffText(item.code) === compact);
   if (alias?.symbol) {
     if (options.sitePlan && isIndoorLightingAlias(alias) && /^[0-9A-Z]{1,3}$/i.test(token)) return null;
-    if (options.planType === "power" && isIndoorLightingAlias(alias) && /^\d{1,2}[A-Z]?$/i.test(token)) return null;
+    if (options.planType === "power" && isIndoorLightingAlias(alias)) return null;
     return alias.symbol;
   }
   const hits = (symbols || []).filter((item) => (
@@ -842,6 +842,8 @@ function isSitePlanPage(page) {
 function isIndoorLightingAlias(alias) {
   const blob = `${alias?.symbol?.id || ""} ${alias?.symbol?.label || ""} ${alias?.code || ""} ${alias?.symbol?.category || ""} ${alias?.symbol?.takeoffCategory || ""}`.toLowerCase();
   if (/site|pole|area light|street|parking|flood/.test(blob) && !/lighting fixture/.test(blob)) return false;
+  if (/ceiling fan|bay fan|fanimation|paddle fan/.test(blob)) return true;
+  if (/^f\d/.test(String(alias?.code || "").toLowerCase()) && !/recept|gfi|exhaust|vent/.test(blob)) return true;
   if (/\blighting\b/.test(blob) && !/recept|gfi|switch|sensor/.test(blob)) return true;
   return /troffer|downlight|strip|can light|2x4|2x2|1x4|recessed|surface/.test(blob);
 }

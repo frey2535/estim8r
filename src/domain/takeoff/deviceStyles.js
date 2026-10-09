@@ -335,7 +335,7 @@ export function displayDeviceOutline(mark, markerSize = 0.55, options = {}) {
 
 export function hitTestDeviceFill(mark, point, markerSize = 0.55) {
   if (!mark || !point) return false;
-  const outline = deviceOutline(mark, markerSize);
+  const outline = displayDeviceOutline(mark, markerSize);
   if (!outline) return false;
   return pointHitsOutline(outline, { x: mark.x, y: mark.y }, point, 0.55);
 }

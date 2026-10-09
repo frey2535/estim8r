@@ -161,6 +161,59 @@ export function hasNearbyFixtureBody(token, paths = []) {
   });
 }
 
+function nearbyCompactBody(token, paths = []) {
+  const x = Number(token?.x) || 0;
+  const y = Number(token?.y) || 0;
+  let best = null;
+  let bestDist = 1.2;
+  for (const path of paths || []) {
+    const long = Math.max(Number(path?.w) || 0, Number(path?.h) || 0, (Number(path?.r) || 0) * 2);
+    const short = Math.min(Number(path?.w) || long, Number(path?.h) || long, (Number(path?.r) || 0) * 2 || long);
+    if (long < 0.16 || long > 1.65 || short < 0.12) continue;
+    if (long / (short || 1e-9) > 2.8) continue;
+    const dist = Math.hypot((Number(path.cx) || 0) - x, (Number(path.cy) || 0) - y);
+    if (dist < bestDist) {
+      best = path;
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
+function tokenInsideBody(token, path) {
+  if (!path) return false;
+  const dx = Math.abs((Number(token?.x) || 0) - (Number(path.cx) || 0));
+  const dy = Math.abs((Number(token?.y) || 0) - (Number(path.cy) || 0));
+  const hw = Math.max(Number(path.w) || 0, (Number(path.r) || 0) * 2) / 2;
+  const hh = Math.max(Number(path.h) || 0, (Number(path.r) || 0) * 2) / 2;
+  return dx <= Math.max(0.08, hw * 0.88) && dy <= Math.max(0.08, hh * 0.88);
+}
+
+function looksLikeNearbyKeynoteBody(path) {
+  if (!path) return false;
+  const w = Number(path.w) || 0;
+  const h = Number(path.h) || 0;
+  const long = Math.max(w, h);
+  const short = Math.min(w, h);
+  const area = w * h;
+  const aspect = long / (short || 1e-9);
+  return area >= 0.18 && area <= 0.42 && long >= 0.40 && long <= 0.78 && short >= 0.32 && short <= 0.62 && aspect <= 1.85;
+}
+
+export function isOutsideSymbolNumber(token, tokens = [], paths = []) {
+  const text = normalizeTypeMark(token?.text);
+  if (!text || isQuotedTypeMark(token?.text)) return false;
+  if (!/^\d{1,3}[A-Z]?$/i.test(text)) return false;
+  if (isPowerDeviceCode(text) || isLightingFixtureCode(text)) return false;
+  const body = nearbyCompactBody(token, paths);
+  if (!body) return false;
+  if (looksLikeNearbyKeynoteBody(body)) return true;
+  const long = Math.max(Number(body.w) || 0, Number(body.h) || 0, (Number(body.r) || 0) * 2);
+  if (tokenInsideBody(token, body)) return false;
+  if (long <= 0.42) return true;
+  return /^\d{1,2}$/.test(text) && long <= 0.78;
+}
+
 export function isCircuitCalloutToken(token, tokens = []) {
   const text = normalizeTypeMark(token?.text);
   if (!text) return false;
@@ -332,6 +385,7 @@ export function shouldAcceptPlanToken(token, tokens = [], options = {}) {
   if (isDigitCodeNoteToken(token, tokens) || isDigitCodeNoteToken(marked, tokens)) return false;
   if (isKeyNoteNumberToken(token, tokens) || isKeyNoteNumberToken(marked, tokens)) return false;
   if (isUnquotedCircuitBesideQuotedType(token, tokens)) return false;
+  if (isOutsideSymbolNumber(token, tokens, options.paths || [])) return false;
   if (/^EM$/i.test(marked.text) && (tokens || []).some((other) => {
     const dx = Math.abs((Number(other.x) || 0) - (Number(token?.x) || 0));
     const dy = Math.abs((Number(other.y) || 0) - (Number(token?.y) || 0));

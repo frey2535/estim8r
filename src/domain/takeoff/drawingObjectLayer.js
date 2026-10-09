@@ -1,4 +1,5 @@
 import { isDeviceMark } from "./deviceStyles.js";
+import { looksLikeHexNoteGlyph } from "./legendGeometry.js";
 import { isJunkGeometry, pointHitsOutline } from "./vectorSymbols.js";
 
 function fixed(value) { return Number(value || 0).toFixed(3); }
@@ -17,7 +18,7 @@ export function buildDrawingObjectLayer({ pages = [], detectedMarks = [], trade 
     const known = objects.filter((item) => (item.sheet || 1) === sheet);
     for (let index = 0; index < (page.paths || []).length; index += 1) {
       const path = page.paths[index];
-      if (isJunkGeometry(path)) continue;
+      if (isJunkGeometry(path) || looksLikeHexNoteGlyph(path)) continue;
       const long = Math.max(Number(path.w) || 0, Number(path.h) || 0);
       const short = Math.min(Number(path.w) || 0, Number(path.h) || 0);
       if (long > 2.3 || short < 0.1 || long / Math.max(short, 0.001) > 4.5) continue;
@@ -37,8 +38,11 @@ export function buildDrawingObjectLayer({ pages = [], detectedMarks = [], trade 
 
 export function hitDrawingObject(objects = [], point, sheet = 1) {
   return [...(objects || [])].reverse().find((item) =>
-    (item.sheet || 1) === sheet && item.selectable !== false &&
-    pointHitsOutline(item.outline, { x: item.x, y: item.y }, point, 0.5)
+    (item.sheet || 1) === sheet
+    && item.selectable !== false
+    && item.objectKind !== "unclassified-vector"
+    && item.requiresClassification !== true
+    && pointHitsOutline(item.outline, { x: item.x, y: item.y }, point, 0.5)
   ) || null;
 }
 

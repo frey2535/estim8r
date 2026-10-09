@@ -7,6 +7,7 @@ import {
   isDigitCodeNoteToken,
   isKeyNoteNumberToken,
   isLegendClusterToken,
+  isOutsideSymbolNumber,
   isReferenceCallout,
   isScheduleNoteContext,
   isTitleBlockLetter,
@@ -33,6 +34,10 @@ assert(!isReferenceCallout("GFI"), "GFI is a device");
 assert(!shouldAcceptPlanToken({ text: "R16.3", x: 20, y: 20 }), "reject R16.3 on the sheet");
 assert(!shouldAcceptPlanToken({ text: "3", x: 88, y: 12 }, [{ text: "R34", x: 86, y: 12 }]), "reject a digit hanging off R34.3");
 assert(shouldAcceptPlanToken({ text: "1E", x: 24, y: 40 }), "accept a real type 1E on the plan");
+const outsideHex = { cx: 40, cy: 22, w: 0.443, h: 0.622 };
+assert(isOutsideSymbolNumber({ text: "5", x: 40.62, y: 22 }, [], [outsideHex]), "offset 5 is a circuit/keynote, not a type");
+assert(!shouldAcceptPlanToken({ text: "5", x: 40.62, y: 22 }, [], { paths: [outsideHex] }), "outside circuit 5 is not accepted as a type");
+assert(!isOutsideSymbolNumber({ text: "1E", x: 24, y: 40 }, [], [{ cx: 24, cy: 40, w: 0.8, h: 1.2 }]), "type 1E inside the fixture stays a type");
 assert(shouldAcceptPlanToken({ text: "R", x: 40, y: 50 }, [
   { text: "R", x: 40, y: 50 },
   { text: "GFI", x: 52, y: 48 },

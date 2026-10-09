@@ -30,6 +30,7 @@ import TakeoffActionsMenu, { takeoffEstimatePath, takeoffMarkupPath } from "@/co
 import { readAiPages } from "@/domain/takeoff/aiPages";
 import { hydratePagesRaster } from "@/domain/takeoff/rasterSymbols";
 import { pickInteractiveSymbolGeometry, matchGeometryToLegend, attachLegendGeometryPrototypes } from "@/domain/takeoff/legendGeometry";
+import { legendHoverData } from "@/domain/takeoff/legendHover";
 import { buildDrawingObjectLayer, hitDrawingObject, materializeDrawingObject } from "@/domain/takeoff/drawingObjectLayer";
 import SheetThumbnailPanel, { readThumbsOpen, writeThumbsOpen } from "@/components/takeoff/SheetThumbnailPanel";
 import DevicePicker from "@/components/takeoff/DevicePicker";
@@ -2575,7 +2576,8 @@ function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber, viewp
         // the CSS display size/pan geometry unchanged.
         const deviceScale = Math.min(2, window.devicePixelRatio || 1);
         const requestedPixels = fitted.width * fitted.height * deviceScale * deviceScale;
-        const MAX_CANVAS_PIXELS = 16_000_000;
+        const coarse = Boolean(window.matchMedia?.("(pointer: coarse)")?.matches);
+        const MAX_CANVAS_PIXELS = coarse ? 6_000_000 : 16_000_000;
         const pixelBudgetScale = requestedPixels > MAX_CANVAS_PIXELS
           ? Math.sqrt(MAX_CANVAS_PIXELS / Math.max(1, fitted.width * fitted.height))
           : deviceScale;
@@ -2588,6 +2590,7 @@ function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber, viewp
         const viewport = page.getViewport({ scale: (fitted.width / base.width) * outputScale });
         const canvas = canvasRef.current;
         const context = canvas.getContext("2d", { alpha: false });
+        if (!context) throw new Error("Unable to allocate a drawing canvas.");
         canvas.width = Math.max(1, Math.floor(viewport.width));
         canvas.height = Math.max(1, Math.floor(viewport.height));
         canvas.style.width = `${fitted.width}px`;

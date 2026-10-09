@@ -26,56 +26,138 @@ function unionBounds(parts=[]) {
 function shortPrintedLabel(text) {
   const value = String(text || "").trim();
   if (!value || value.length > 10) return false;
-  return /^[A-Z0-9][A-Z0-9.\-\/]*$/i.test(value);
+  if (/^(?:LN|LP|PP|RP|H|L|EM)\d{1,2}$|^P\d{2}$/i.test(value)) return true;
+  // Bare circuit / keynote numbers sitting beside a symbol. Type words such as
+  // WP, GFI, SPR, or G are the device identity and must not steal the fill.
+  return /^\d{1,3}[A-Z]?$/.test(value);
+}
+
+function partLong(part) {
+  return Math.max(Number(part?.w) || 0, Number(part?.h) || 0, (Number(part?.r) || 0) * 2);
+}
+
+function isLabelSizedGlyph(part) {
+  const long = partLong(part);
+  return long > 0 && long <= 0.42;
 }
 
 function partNearPrintedLabel(part, tokens = []) {
+  if (!isLabelSizedGlyph(part)) return false;
   const px = Number(part?.cx) || 0;
   const py = Number(part?.cy) || 0;
-  const long = Math.max(Number(part?.w) || 0, Number(part?.h) || 0);
+  const long = partLong(part);
   return (tokens || []).some((token) => {
     if (!shortPrintedLabel(token?.text)) return false;
     const dist = Math.hypot((Number(token.x) || 0) - px, (Number(token.y) || 0) - py);
-    // PDF text glyph paths usually sit almost exactly on the extracted text
-    // token. Keep a slightly larger radius for tiny number/type glyphs.
-    return dist <= Math.max(0.18, Math.min(0.52, long * 1.25));
+    // Only the compact number/type glyph itself is a label. A full symbol body
+    // may contain a letter such as G or 11 and must still receive the fill.
+    return dist <= Math.max(0.16, Math.min(0.34, long * 1.15));
   });
 }
 
-export function symbolBodyOutline(geometry, tokens = []) {
+function outlineFromPath(path) {
+  if (!path) return null;
+  return path.outline ? {
+    ...path.outline,
+    cx: path.outline.cx ?? path.cx,
+    cy: path.outline.cy ?? path.cy,
+    w: path.outline.w ?? path.w,
+    h: path.outline.h ?? path.h,
+    r: path.outline.r ?? path.r,
+    source: path.outline.source || path.source || "vector",
+  } : {
+    kind: path.kind || "rect",
+    source: path.source || "vector",
+    cx: path.cx,
+    cy: path.cy,
+    w: path.w,
+    h: path.h,
+    r: path.r,
+    points: path.points || [],
+  };
+}
+
+function nearbySymbolBody(origin, paths = [], tokens = []) {
+  const x = Number(origin?.x ?? origin?.cx) || 0;
+  const y = Number(origin?.y ?? origin?.cy) || 0;
+  let best = null;
+  let bestScore = -Infinity;
+  for (const path of paths || []) {
+    if (!path || looksLikeHexNoteGlyph(path)) continue;
+    if (partNearPrintedLabel(path, tokens)) continue;
+    const cx = Number(path.cx) || 0;
+    const cy = Number(path.cy) || 0;
+    const dist = Math.hypot(cx - x, cy - y);
+    if (dist > 1.25 || dist < 0.02) continue;
+    const long = partLong(path);
+    const short = Math.min(Number(path.w) || long, Number(path.h) || long);
+    if (long < 0.16 || long > 1.65 || short < 0.12) continue;
+    if (long / (short || 1e-9) > 2.8) continue;
+    const compact = long >= 0.22 && long / (short || 1e-9) <= 1.75;
+    const score = (compact ? 1.5 : 0.75) - dist * 1.2 + Math.min(0.4, long);
+    if (score > bestScore) {
+      best = path;
+      bestScore = score;
+    }
+  }
+  return bestScore > 0.2 ? best : null;
+}
+
+export function symbolBodyOutline(geometry, tokens = [], options = {}) {
   const outline = geometry?.outline || geometry;
   if (!outline) return null;
-  if (outline.kind !== "composite" || !outline.parts?.length) return outline;
+  if (looksLikeHexNoteGlyph(geometry) || looksLikeHexNoteGlyph(outline)) return null;
 
-  const parts = outline.parts.filter((part) => !partNearPrintedLabel(part, tokens));
-  if (!parts.length) return outline;
-
-  // Find the substantial body and keep only geometry connected to it. This
-  // prevents an adjacent fixture number/circuit tag from becoming part of the
-  // colored symbol even when it was clustered with the symbol for detection.
-  const area = (part) => {
-    const w = Number(part?.w) || (Number(part?.r) || 0) * 2;
-    const h = Number(part?.h) || (Number(part?.r) || 0) * 2;
-    return Math.max(0.0001, w * h);
+  const paths = options.paths || [];
+  const origin = {
+    x: Number(outline.cx ?? geometry?.cx ?? geometry?.x) || 0,
+    y: Number(outline.cy ?? geometry?.cy ?? geometry?.y) || 0,
   };
-  const core = [...parts].sort((a,b)=>area(b)-area(a))[0];
-  const coreLong = Math.max(Number(core?.w) || 0, Number(core?.h) || 0, (Number(core?.r) || 0) * 2, 0.12);
-  const kept = parts.filter((part) => {
-    if (part === core) return true;
-    const d = gap(core, part);
-    const center = Math.hypot((Number(part.cx)||0)-(Number(core.cx)||0),(Number(part.cy)||0)-(Number(core.cy)||0));
-    return d <= Math.max(0.16, coreLong * 0.42) && center <= Math.max(0.45, coreLong * 1.45);
-  });
-  const bodyParts = kept.length ? kept : [core];
-  const box = unionBounds(bodyParts);
+  const snapAwayFromLabel = (point) => outlineFromPath(nearbySymbolBody(point, paths, tokens));
+
+  if (outline.kind === "composite" && outline.parts?.length) {
+    const parts = outline.parts.filter((part) => !partNearPrintedLabel(part, tokens) && !looksLikeHexNoteGlyph(part));
+    if (!parts.length) return snapAwayFromLabel(origin);
+    const area = (part) => {
+      const w = Number(part?.w) || (Number(part?.r) || 0) * 2;
+      const h = Number(part?.h) || (Number(part?.r) || 0) * 2;
+      return Math.max(0.0001, w * h);
+    };
+    const core = [...parts].sort((a, b) => area(b) - area(a))[0];
+    if (partNearPrintedLabel(core, tokens) || looksLikeHexNoteGlyph(core)) return snapAwayFromLabel(origin);
+    const coreLong = Math.max(partLong(core), 0.12);
+    const kept = parts.filter((part) => {
+      if (part === core) return true;
+      if (partNearPrintedLabel(part, tokens)) return false;
+      const d = gap(core, part);
+      const center = Math.hypot((Number(part.cx) || 0) - (Number(core.cx) || 0), (Number(part.cy) || 0) - (Number(core.cy) || 0));
+      return d <= Math.max(0.16, coreLong * 0.42) && center <= Math.max(0.45, coreLong * 1.45);
+    });
+    const bodyParts = kept.length ? kept : [core];
+    const box = unionBounds(bodyParts);
+    return {
+      kind: "composite",
+      source: outline.source || geometry?.source || "vector",
+      cx: box?.cx,
+      cy: box?.cy,
+      w: box?.w,
+      h: box?.h,
+      parts: bodyParts,
+    };
+  }
+
+  const asPart = {
+    cx: origin.x,
+    cy: origin.y,
+    w: Number(outline.w) || partLong(outline),
+    h: Number(outline.h) || partLong(outline),
+    r: outline.r,
+  };
+  if (partNearPrintedLabel(asPart, tokens)) return snapAwayFromLabel(origin);
   return {
-    kind: "composite",
-    source: outline.source || geometry?.source || "vector",
-    cx: box?.cx,
-    cy: box?.cy,
-    w: box?.w,
-    h: box?.h,
-    parts: bodyParts,
+    ...outline,
+    cx: outline.cx ?? origin.x,
+    cy: outline.cy ?? origin.y,
   };
 }
 function normalizedPart(part, box) {

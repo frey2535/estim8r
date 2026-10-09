@@ -163,6 +163,13 @@ const bodyWithNumber = {
 const cleanedBody = symbolBodyOutline({ outline: bodyWithNumber }, [{ text: "27", x: 31.0, y: 30 }]);
 assert(cleanedBody.parts.length === 1, "printed number geometry is removed from the paint outline");
 assert(Math.abs(cleanedBody.parts[0].cx - 30) < 0.01, "symbol body remains after nearby number is removed");
+
+const hexBody = { kind: "path", source: "vector", cx: 40, cy: 22, w: 0.52, h: 0.48, points: [{ x: 39.74, y: 22 }, { x: 40, y: 21.76 }, { x: 40.26, y: 22 }] };
+const numberOnly = { kind: "rect", source: "vector", cx: 40.62, cy: 22, w: 0.22, h: 0.28 };
+const snapped = symbolBodyOutline(numberOnly, [{ text: "5", x: 40.62, y: 22 }], { paths: [hexBody, numberOnly] });
+assert(snapped && Math.abs((snapped.cx || 0) - 40) < 0.08, "outside circuit number snaps fill to the nearby symbol body");
+assert(symbolBodyOutline(hexBody, [{ text: "G", x: 40, y: 22 }])?.kind === "path", "type letter inside the symbol does not steal the body fill");
+assert(symbolBodyOutline(hex, [{ text: "13", x: 26.18, y: 79.1 }]) == null, "keynote / 4-digit hex tags never receive fill");
 const hatch = Array.from({ length: 12 }, (_, index) => part(12 + (index % 4) * 0.4, 16 + Math.floor(index / 4) * 0.4, 0.134, 0.187));
 assert(isHatchTickCluster(hatch[0], hatch), "stair/hatch tick lattices are not receptacles");
 

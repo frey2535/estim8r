@@ -66,8 +66,8 @@ const manual = {
 assert(!planOverlayMarks([review, aiVector]).some((mark) => mark.id === "review"), "review candidates must not paint on normal plan");
 assert(deviceOutline(aiWithoutGeometry) === null, "AI without symbol-body geometry must not paint a fallback mark");
 assert(deviceOutline(aiTextOnly) === null, "text-only AI detection must not paint a fallback mark");
-assert(displayDeviceOutline(aiWithoutGeometry)?.kind === "circle", "accepted AI detection without geometry gets a compact visible locator");
-assert(displayDeviceOutline(aiTextOnly)?.kind === "circle", "accepted text-located AI detection gets a compact visible locator");
+assert(displayDeviceOutline(aiWithoutGeometry) === null, "accepted AI detection without geometry must not invent a locator on a number");
+assert(displayDeviceOutline(aiTextOnly) === null, "text-located AI detection must not paint the outside number");
 assert(displayDeviceOutline(review) === null, "review-only AI candidates remain hidden from the plan");
 
 const outline = deviceOutline(aiVector);

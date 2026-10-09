@@ -310,6 +310,7 @@ function typedLightingBodyMark({
   geometry,
   placed,
   tokens,
+  paths = [],
   symbols,
   color,
   sources = [],
@@ -342,7 +343,7 @@ function typedLightingBodyMark({
     typeCode,
     color,
     matchedFrom: "drawing",
-    outline: geometry?.outline || null,
+    outline: symbolBodyOutline(geometry, tokens, { paths }) || geometry?.outline || null,
     outlineSource: geometry?.outline?.source || geometry?.source || "vector",
     detectSource: DETECT_SOURCE_ORIGINAL_PDF,
     confidence: "medium",
@@ -938,7 +939,7 @@ export function buildAiMarks({
     for (const visual of visualHits) {
       const geometry = visual.geometry;
       const symbol = visual.entry.symbol;
-      const paintOutline = symbolBodyOutline(geometry, page.tokens);
+      const paintOutline = symbolBodyOutline(geometry, page.tokens, { paths: page.paths });
       const placed = {
         x: Number(paintOutline?.cx ?? geometry.cx),
         y: Number(paintOutline?.cy ?? geometry.cy),
@@ -1057,7 +1058,7 @@ export function buildAiMarks({
           if (long >= 0.4 && long <= 1.15) geometry = leftover;
         }
       }
-      const paintOutline = geometry ? symbolBodyOutline(geometry, page.tokens) : null;
+      const paintOutline = geometry ? symbolBodyOutline(geometry, page.tokens, { paths: page.paths }) : null;
       const geometryPoint = geometry ? {
         x: Number(paintOutline?.cx ?? geometry.cx),
         y: Number(paintOutline?.cy ?? geometry.cy),
@@ -1187,7 +1188,7 @@ export function buildAiMarks({
     for (const visual of unlabeledHits) {
       const geometry = visual.geometry;
       const symbol = visual.entry.symbol;
-      const paintOutline = symbolBodyOutline(geometry, page.tokens);
+      const paintOutline = symbolBodyOutline(geometry, page.tokens, { paths: page.paths });
       const placed = {
         x: Number(paintOutline?.cx ?? geometry.cx),
         y: Number(paintOutline?.cy ?? geometry.cy),
@@ -1299,7 +1300,7 @@ export function buildAiMarks({
       const geometry = visual.geometry;
       const symbol = visual.entry?.symbol;
       if (!geometry || !symbol) continue;
-      const paintOutline = symbolBodyOutline(geometry, page.tokens);
+      const paintOutline = symbolBodyOutline(geometry, page.tokens, { paths: page.paths });
       const placed = {
         x: Number(paintOutline?.cx ?? geometry.cx),
         y: Number(paintOutline?.cy ?? geometry.cy),
@@ -1356,7 +1357,7 @@ export function buildAiMarks({
     });
     for (const visual of rasterHits) {
       const geometry = visual.geometry;
-      const paintOutline = symbolBodyOutline(geometry, page.tokens);
+      const paintOutline = symbolBodyOutline(geometry, page.tokens, { paths: page.paths });
       const placed = {
         x: Number(paintOutline?.cx ?? geometry.cx),
         y: Number(paintOutline?.cy ?? geometry.cy),
@@ -1438,6 +1439,7 @@ export function buildAiMarks({
           geometry: path,
           placed,
           tokens: page.tokens,
+          paths: page.paths,
           symbols: matchSymbols,
           color,
           sources: ["vector"],

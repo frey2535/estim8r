@@ -1,4 +1,5 @@
 import { isReviewOnlyMark } from "./detectionRecord.js";
+import { symbolBodyOutline } from "./legendGeometry.js";
 import { isCanDeviceText } from "./symbolDetection.js";
 import { pointHitsOutline, scaleOutline } from "./vectorSymbols.js";
 
@@ -260,25 +261,45 @@ function genericDeviceOutline(mark, markerSize = 0.55) {
   return { kind: "circle", r: DEVICE_CHIP_R * scale };
 }
 
+function paintTokensForMark(mark) {
+  const tag = mark?.circuitTagLocation;
+  if (!tag || !Number.isFinite(Number(tag.x)) || !Number.isFinite(Number(tag.y))) return [];
+  const body = mark?.symbolBodyLocation;
+  if (body && Math.hypot(Number(body.x) - Number(tag.x), Number(body.y) - Number(tag.y)) <= 0.2) return [];
+  return [{ text: String(tag.text || "5"), x: Number(tag.x), y: Number(tag.y) }];
+}
+
+function outlineOnPrintedTag(outline, mark) {
+  const tokens = paintTokensForMark(mark);
+  if (!tokens.length) return false;
+  const center = outlineCenter(outline, { x: mark?.x, y: mark?.y });
+  return tokens.some((token) => (
+    Math.hypot(center.x - token.x, center.y - token.y) <= 0.22
+    && outlineExtent(outline) <= 0.42
+  ));
+}
+
 export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
+  const cleaned = mark?.outline
+    ? symbolBodyOutline({ ...mark.outline, outline: mark.outline, cx: mark.outline.cx ?? mark.x, cy: mark.outline.cy ?? mark.y }, paintTokensForMark(mark))
+    : null;
   const origin = {
-    x: Number(mark?.symbolBodyLocation?.x ?? mark?.x) || 0,
-    y: Number(mark?.symbolBodyLocation?.y ?? mark?.y) || 0,
+    x: Number(cleaned?.cx ?? mark?.symbolBodyLocation?.x ?? mark?.x) || 0,
+    y: Number(cleaned?.cy ?? mark?.symbolBodyLocation?.y ?? mark?.y) || 0,
   };
   const maxExtent = maxFillExtent(mark);
-  const source = String(mark?.outline?.source || mark?.outlineSource || "").toLowerCase();
+  const source = String(cleaned?.source || mark?.outline?.source || mark?.outlineSource || "").toLowerCase();
   const trustedAiSource = source === "vector" || source === "raster" || source === "mixed";
-  const usable = mark?.outline && isUsablePaintOutline(mark.outline, origin, maxExtent);
+  const usable = cleaned && isUsablePaintOutline(cleaned, origin, maxExtent) && !outlineOnPrintedTag(cleaned, mark);
 
   if (mark?.source === "ai") {
-    // AI is never allowed to invent a visual marker. It may paint only the
-    // measured symbol body returned by vector/raster analysis.
+    // AI may paint only the measured symbol body, never a circuit/type number.
     if (!trustedAiSource || !usable) return null;
-    return scaleOutline(mark.outline, 1, origin);
+    return scaleOutline(cleaned, 1, origin);
   }
 
   if (usable) {
-    const painted = scaleOutline(mark.outline, 1, origin);
+    const painted = scaleOutline(cleaned, 1, origin);
     const extent = outlineExtent(painted);
     if (isPointDevice(mark) && extent > 0 && extent < MIN_VISIBLE_FILL) {
       return scaleOutline(painted, MIN_VISIBLE_FILL / extent, origin);

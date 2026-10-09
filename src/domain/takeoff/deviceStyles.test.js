@@ -188,4 +188,31 @@ assert(compositeFill.parts.length === 1 && compositeFill.parts[0].kind === "circ
 assert(deviceFillEnabled({ fillEnabled: false }) === false, "per-symbol fill can be disabled");
 assert(deviceFillEnabled({ fillMode: "inside" }) === true, "inside fill mode is enabled");
 
+const numberFill = displayDeviceOutline({
+  source: "ai",
+  type: "count",
+  x: 50.6,
+  y: 20,
+  typeCode: "G",
+  circuitTagLocation: { x: 50.6, y: 20, text: "5" },
+  outlineSource: "vector",
+  outline: { kind: "rect", source: "vector", cx: 50.6, cy: 20, w: 0.22, h: 0.26 },
+});
+assert(numberFill == null, "AI fill must not sit on the circuit number outside the symbol");
+
+const bodyFill = displayDeviceOutline({
+  source: "ai",
+  type: "count",
+  x: 50,
+  y: 20,
+  typeCode: "G",
+  symbolBodyLocation: { x: 50, y: 20 },
+  labelLocation: { x: 50, y: 20 },
+  circuitTagLocation: { x: 50.6, y: 20, text: "5" },
+  outlineSource: "vector",
+  outline: { kind: "rect", source: "vector", cx: 50, cy: 20, w: 0.5, h: 0.46 },
+});
+assert(bodyFill, "symbol body still receives a tight interior fill");
+assert(Math.abs((Number(bodyFill.cx) || 50) - 50) < 0.08, "fill stays centered on the symbol, not the outside number");
+
 if (!process.exitCode) console.log("device style checks passed");

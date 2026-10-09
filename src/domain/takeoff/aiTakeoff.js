@@ -24,7 +24,7 @@ import { extractSheetNotes, notesToMarks } from "./sheetNotes.js";
 import { looksLikeCoverOrRendering, looksLikeElectricalPlan, looksLikeIndexPage, pagePlanType } from "./drawing-docs.js";
 import { associateGeometry, assignExclusiveGeometry, looksLikeRecessedCanBody, placeOnSymbolGeometry, shapeHintFromLabel, tagOnSymbolGeometry } from "./vectorSymbols.js";
 import { orthogonalizePolyline } from "./ortho.js";
-import { attachConfirmedGeometryPrototypes, attachFragmentPrototypes, attachLegendGeometryPrototypes, attachPowerGlyphPrototypes, attachProjectPrototypes, findNearbyReceptacleGlyph, isEmergencyHatch, isHatchTickCluster, looksLikeHexNoteGlyph, recoverMissedLegendSymbols, scanPageByLegendGeometry, scanUnlabeledPowerGlyphs, snapToEntryPrototype, symbolBodyOutline } from "./legendGeometry.js";
+import { attachConfirmedGeometryPrototypes, attachFragmentPrototypes, attachLegendGeometryPrototypes, attachPowerGlyphPrototypes, attachProjectPrototypes, findNearbyReceptacleGlyph, isEmergencyHatch, isHatchTickCluster, looksLikeHexNoteGlyph, nearbyLegendEntry, recoverMissedLegendSymbols, scanPageByLegendGeometry, scanUnlabeledPowerGlyphs, snapToEntryPrototype, symbolBodyOutline } from "./legendGeometry.js";
 import { matchRasterToLegend, rasterCandidatesFromPage } from "./rasterSymbols.js";
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
 import { buildTradeSearchManifest } from "./searchManifest.js";
@@ -940,12 +940,14 @@ export function buildAiMarks({
     });
     for (const visual of visualHits) {
       const geometry = visual.geometry;
-      const symbol = visual.entry.symbol;
       const paintOutline = symbolBodyOutline(geometry, page.tokens, { paths: page.paths });
       const placed = {
         x: Number(paintOutline?.cx ?? geometry.cx),
         y: Number(paintOutline?.cy ?? geometry.cy),
       };
+      const typed = nearbyLegendEntry(placed, page.tokens, dictionary, { radius: 1.35 });
+      const effectiveEntry = typed?.entry || visual.entry;
+      const symbol = effectiveEntry.symbol;
       if (isVisualOnlyEquipmentHit(visual, page, placed)) continue;
       if (!placementAllowed(placed, { sitePlan })) continue;
       const duplicate = seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.34);
@@ -966,7 +968,7 @@ export function buildAiMarks({
         symbol: symbol.id,
         symbolLabel: symbol.label,
         abbr: symbol.abbr,
-        typeCode: String(visual.entry.code || symbol.abbr || "").toUpperCase(),
+        typeCode: String(effectiveEntry.code || symbol.abbr || "").toUpperCase(),
         color,
         matchedFrom: "legend-geometry",
         outline: paintOutline,
@@ -979,12 +981,12 @@ export function buildAiMarks({
         layer: "device",
         anchor: anchorIds.has(symbol.id),
         geometryScore: visual.score,
-        legendEntryId: visual.entry?.legend?.id || null,
-        legendCode: String(visual.entry?.code || symbol?.abbr || "").toUpperCase(),
-        legendLabel: visual.entry?.legend?.label || visual.entry?.symbol?.label || symbol?.label || "",
-        legendCategory: visual.entry?.legend?.takeoffCategory || visual.entry?.legend?.category || visual.entry?.symbol?.takeoffCategory || visual.entry?.symbol?.category || symbol?.takeoffCategory || symbol?.category || "",
-        legendSource: visual.entry?.legend?.source || visual.entry?.symbol?.source || "",
-        legendSourcePage: visual.entry?.legend?.page || visual.entry?.symbol?.page || null,
+        legendEntryId: effectiveEntry?.legend?.id || null,
+        legendCode: String(effectiveEntry?.code || symbol?.abbr || "").toUpperCase(),
+        legendLabel: effectiveEntry?.legend?.label || effectiveEntry?.symbol?.label || symbol?.label || "",
+        legendCategory: effectiveEntry?.legend?.takeoffCategory || effectiveEntry?.legend?.category || effectiveEntry?.symbol?.takeoffCategory || effectiveEntry?.symbol?.category || symbol?.takeoffCategory || symbol?.category || "",
+        legendSource: effectiveEntry?.legend?.source || effectiveEntry?.symbol?.source || "",
+        legendSourcePage: effectiveEntry?.legend?.page || effectiveEntry?.symbol?.page || null,
       }, {
         geometry,
         symbolBodyLocation: placed,
@@ -1230,7 +1232,7 @@ export function buildAiMarks({
         symbol: symbol.id,
         symbolLabel: symbol.label,
         abbr: symbol.abbr,
-        typeCode: String(visual.entry.code || symbol.abbr || "").toUpperCase(),
+        typeCode: String(effectiveEntry.code || symbol.abbr || "").toUpperCase(),
         color,
         matchedFrom: "plan-repeat",
         outline: paintOutline,
@@ -1259,7 +1261,7 @@ export function buildAiMarks({
         if (seenIndex >= 0) seen[seenIndex] = { ...mark, tagX: placed.x, tagY: placed.y };
       } else {
         counts.push(mark);
-        seen.push({ sheet: page.page, x: placed.x, y: placed.y, typeCode: String(visual.entry.code || symbol.abbr || "").toUpperCase(), tagX: placed.x, tagY: placed.y });
+        seen.push({ sheet: page.page, x: placed.x, y: placed.y, typeCode: String(effectiveEntry.code || symbol.abbr || "").toUpperCase(), tagX: placed.x, tagY: placed.y });
       }
       for (const part of geometry.parts || []) usedGeometry.add(part);
     }

@@ -1,3 +1,5 @@
+import { resolveAdjacentAnnotations } from "./adjacentAnnotations.js";
+
 function clean(value) {
   return String(value || "").trim();
 }
@@ -120,8 +122,16 @@ export function legendHoverData(mark, drawingSymbols = [], options = {}) {
     };
   }
 
+  const annotations = resolveAdjacentAnnotations(mark.adjacentTokens || mark.nearbyTokens || []);
+  const description = clean(locked?.description || locked?.legendDescription || locked?.symbolDescription || locked?.label || mark.legendDescription);
+  const remarks = clean(locked?.remarks || locked?.legendRemarks || mark.legendRemarks);
   return {
     entry: locked,
+    description,
+    remarks,
+    equipmentId: clean(mark.equipmentId || annotations.equipmentId),
+    circuitNumbers: Array.isArray(mark.circuitNumbers) ? mark.circuitNumbers : annotations.circuitNumbers,
+    panel: clean(mark.panel || annotations.panel),
     code: identity.code,
     label: identity.label || clean(locked?.label) || `Type ${identity.code}`,
     category: identity.category || clean(locked?.takeoffCategory || locked?.category),

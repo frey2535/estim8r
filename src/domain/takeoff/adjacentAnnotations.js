@@ -7,10 +7,12 @@ const PANEL_CIRCUIT = /^([A-Z][A-Z0-9-]{0,12})\s*[-:]\s*(\d{1,3}(?:\s*[,/&]\s*\d
 export function classifyAdjacentAnnotation(value) {
   const text = clean(value);
   if (!text) return { kind: "none", text: "" };
+  // Equipment identifiers (EF-1, L5A, F1) take precedence over panel-circuit syntax.
+  // A panel-circuit match must not silently turn an equipment tag into a circuit.
+  if (EQUIPMENT.test(text)) return { kind: "equipment", text, equipmentId: text.toUpperCase().replace(/\\s+/g, "") };
   const panel = text.match(PANEL_CIRCUIT);
   if (panel) return { kind: "circuit", text, panel: panel[1], circuits: panel[2].match(/\d+/g) || [] };
   if (CIRCUIT.test(text)) return { kind: "circuit", text, circuits: text.match(/\d+/g) || [] };
-  if (EQUIPMENT.test(text)) return { kind: "equipment", text, equipmentId: text.toUpperCase().replace(/\s+/g, "") };
   return { kind: "unresolved", text };
 }
 export function resolveAdjacentAnnotations(tokens = []) {

@@ -52,6 +52,43 @@ if (!score.meetsDetection || !score.meetsMarkers) {
     bySource.set(source, (bySource.get(source) || 0) + 1);
   }
   console.log("false-positive/review candidate sources", JSON.stringify(Object.fromEntries([...bySource].sort((a, b) => b[1] - a[1]))));
+  const truth = fixture.groundTruth || [];
+  const closest = (mark) => {
+    const candidates = truth.filter((item) => item.sheet === mark.sheet);
+    if (!candidates.length) return null;
+    const ranked = candidates.map((item) => ({
+      item,
+      distance: Math.hypot(Number(mark.x) - Number(item.cx ?? item.x), Number(mark.y) - Number(item.cy ?? item.y)),
+    })).sort((a, b) => a.distance - b.distance);
+    return ranked[0];
+  };
+  const mismatches = score.extraMarks.map((mark) => {
+    const nearest = closest(mark);
+    return {
+      sheet: mark.sheet,
+      claimed: mark.typeCode || mark.abbr || mark.symbol || "unknown",
+      nearestActual: nearest?.item?.type || null,
+      distance: nearest ? Number(nearest.distance.toFixed(2)) : null,
+      source: mark.matchedFrom || mark.detectSource || "unknown",
+      confidence: mark.confidence || null,
+      visualScore: mark.visualMatchScore ?? mark.geometryScore ?? null,
+      x: mark.x,
+      y: mark.y,
+    };
+  });
+  const byClaimAndActual = new Map();
+  for (const row of mismatches) {
+    const key = row.claimed + " -> " + (row.distance !== null && row.distance <= 3.1 ? row.nearestActual : "no nearby truth") + " (" + row.source + ")";
+    byClaimAndActual.set(key, (byClaimAndActual.get(key) || 0) + 1);
+  }
+  console.log("false-positive nearest actual type/source", JSON.stringify(Object.fromEntries([...byClaimAndActual].sort((a, b) => b[1] - a[1]))));
+  console.log("false-positive examples", JSON.stringify(mismatches.slice(0, 18)));
+  const reviewReasons = new Map();
+  for (const mark of score.unresolvedCandidates) {
+    const reason = mark.reviewReason || mark.reason || mark.matchedFrom || "unspecified";
+    reviewReasons.set(reason, (reviewReasons.get(reason) || 0) + 1);
+  }
+  console.log("review-only reason totals", JSON.stringify(Object.fromEntries([...reviewReasons].sort((a, b) => b[1] - a[1]))));
   console.log("detection summary", JSON.stringify(score.summary || {}));
 }
 if (score.unmatchedTruth.length) {

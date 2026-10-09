@@ -33,6 +33,27 @@ assert(isNonPlanSheetKind("oneline") && isNonPlanSheetKind("detail"), "one-line 
 
 const score = scoreTakeoffAccuracy(fixture);
 console.log(formatAccuracyReport(score));
+if (!score.meetsDetection || !score.meetsMarkers) {
+  const summarize = (items, label) => {
+    const bySheetAndType = new Map();
+    for (const item of items) {
+      const key = String(item.sheet) + " / " + String(item.typeCode || item.type || item.abbr || item.symbol || "unknown");
+      bySheetAndType.set(key, (bySheetAndType.get(key) || 0) + 1);
+    }
+    console.log(label, JSON.stringify(Object.fromEntries([...bySheetAndType].sort((a, b) => b[1] - a[1]))));
+  };
+  summarize(score.unmatchedTruth, "missed by sheet/type");
+  summarize(score.extraMarks, "false positives by sheet/type");
+  summarize(score.unresolvedCandidates, "review-only candidates by sheet/type");
+  const bySource = new Map();
+  for (const item of [...score.extraMarks, ...score.unresolvedCandidates]) {
+    const source = [item.detectSource, item.outlineSource, item.matchedFrom, item.reviewReason || item.reason]
+      .filter(Boolean).join(" | ") || "unspecified";
+    bySource.set(source, (bySource.get(source) || 0) + 1);
+  }
+  console.log("false-positive/review candidate sources", JSON.stringify(Object.fromEntries([...bySource].sort((a, b) => b[1] - a[1]))));
+  console.log("detection summary", JSON.stringify(score.summary || {}));
+}
 if (score.unmatchedTruth.length) {
   console.log("missed", score.unmatchedTruth.slice(0, 12).map((item) => `${item.type}@${item.sheet}:${item.x},${item.y}`).join(" "));
 }

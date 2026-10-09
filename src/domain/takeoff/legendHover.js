@@ -127,8 +127,8 @@ export function legendHoverData(mark, drawingSymbols = [], options = {}) {
   const remarks = clean(locked?.remarks || locked?.legendRemarks || mark.legendRemarks);
   return {
     entry: locked,
-    description,
-    remarks,
+    description: locked ? description : "",
+    remarks: locked ? remarks : "",
     equipmentId: clean(mark.equipmentId || annotations.equipmentId),
     circuitNumbers: Array.isArray(mark.circuitNumbers) ? mark.circuitNumbers : annotations.circuitNumbers,
     panel: clean(mark.panel || annotations.panel),
@@ -137,7 +137,7 @@ export function legendHoverData(mark, drawingSymbols = [], options = {}) {
     category: identity.category || clean(locked?.takeoffCategory || locked?.category),
     source: identity.source || clean(locked?.source),
     page: identity.page || Number(locked?.page) || null,
-    verified: Boolean(mark.legendEntryId || locked),
+    verified: Boolean(locked),
   };
 }
 

@@ -79,6 +79,11 @@ assert(review.symbolBodyLocation.x === 15 && review.layer === "review", "review 
 assert(persistedPlanDeviceCount([body, textOnly, review], { 50: "drawing" }) === 2, "review-only marks do not inflate persisted bid counts");
 assert(bidDeviceMarks([body, textOnly, review]).length === 2, "bidDeviceMarks excludes UNKNOWN/REVIEW");
 
+const rejected = { ...body, id: "rejected-device", reviewStatus: "rejected" };
+assert(isReviewOnlyMark(rejected), "rejected detection is excluded from accepted bid devices");
+assert(bidDeviceMarks([body, rejected]).length === 1, "rejected device does not inflate the bid count");
+assert(persistedPlanDeviceCount([body, rejected], { 50: "drawing" }) === 1, "rejected device does not inflate persisted plan summary");
+
 const painted = applyDeviceTypeColors([review, body]);
 assert(painted.find((mark) => mark.typeCode === "UNKNOWN")?.layer === "review", "coloring does not promote review marks to bid devices");
 assert(deviceOutline(body).kind === "rect", "device fill uses the recorded symbol body");

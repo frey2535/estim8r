@@ -22,6 +22,8 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+      - name: Manual marker corrections regression
+        run: node src/domain/takeoff/reviewActions.test.js
       - name: Lint
         run: npm run lint
       - name: Typecheck diagnostics

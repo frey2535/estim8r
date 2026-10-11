@@ -236,6 +236,8 @@ export default function TakeoffWorkspace() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const [mobileDevicePickerOpen, setMobileDevicePickerOpen] = useState(false);
+  const [aiCompleted, setAiCompleted] = useState(false);
+  const [emptyNoticeDismissed, setEmptyNoticeDismissed] = useState(false);
   const [aiPages, setAiPages] = useState([]);
   const [searchManifest, setSearchManifest] = useState(null);
   const [confirmedCoverageIds, setConfirmedCoverageIds] = useState([]);
@@ -1179,6 +1181,8 @@ export default function TakeoffWorkspace() {
       return marks;
     }
     setAiBusy(true);
+    setAiCompleted(false);
+    setEmptyNoticeDismissed(false);
     setDrawingError("");
     const tradeLabel = tradeById(trade).label;
     if (!silent) setStatus(`AI assist is reading ${tradeLabel} sheets…`);
@@ -1204,6 +1208,7 @@ export default function TakeoffWorkspace() {
         projectPrototypes: projectPrototypesFromCorrections(marks),
       });
       setSearchManifest(planned.searchManifest || null);
+      setAiCompleted(true);
       const colored = applyDeviceTypeColors(
         (planned.marks || []).map((mark) => ({
           ...mark,
@@ -2232,15 +2237,17 @@ export default function TakeoffWorkspace() {
                     </div>
                   );
                 })()}
-                {file && !aiBusy && visibleOverlayMarks.length === 0 && (
-                  <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center p-4">
-                    <div className="max-w-sm rounded-xl border border-border bg-background/95 px-4 py-3 text-center shadow-lg">
-                      <p className="text-sm font-semibold text-foreground">No takeoff marks on this sheet</p>
-                      <p className="mt-1 text-xs leading-4 text-muted-foreground">
+                {file && aiCompleted && !aiBusy && !emptyNoticeDismissed && visibleOverlayMarks.length === 0 && (
+                  <div role="status" className="pointer-events-none absolute bottom-3 left-3 right-3 z-20 flex justify-center">
+                    <div className="pointer-events-auto flex w-full max-w-sm items-start gap-2 rounded-lg border border-amber-300 bg-background/95 px-3 py-2 text-left shadow-md">
+                      <p className="min-w-0 flex-1 text-xs leading-4 text-foreground">
                         {marks.length
-                          ? "This sheet has no counted devices or visible overlays. Open a plan sheet or run AI Assist again."
-                          : "Run AI Assist to count the selected trade and paint a type-colored fill on each symbol, or place a count yourself."}
+                          ? "No AI marks on this sheet. Try another plan sheet or review the AI results."
+                          : "AI Assist found no symbols. Check the selected trade and drawing legend."}
                       </p>
+                      <button type="button" aria-label="Dismiss empty AI results notice" title="Close notice"
+                        onClick={() => setEmptyNoticeDismissed(true)}
+                        className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-semibold hover:bg-muted">Close</button>
                     </div>
                   </div>
                 )}

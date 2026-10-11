@@ -36,3 +36,6 @@ Act as a principal software architect, electrical estimating domain engineer, fu
 A feature is **complete** only when all approved acceptance criteria have passing evidence, relevant regressions are checked, data integrity and permissions are verified, and no release-blocking defects remain. If verification is unavailable, mark it **unverified**. Never treat a successful build alone as proof of correctness.
 
 Keep a persistent implementation plan and test matrix in docs; continue from documented state in future sessions. Do not merge or deploy without explicit approval.
+
+## Mandatory retroactive audit and remediation
+This engineering standard applies to **every existing module and line of application code**, not just future changes. Before declaring the app commercially ready, inventory existing routes, UI controls, AI detection, drawings, circuit editing, estimating calculations, storage, access policies, exports, and integrations. Create `docs/ELITE_LEGACY_AUDIT.md` and `docs/ELITE_REMEDIATION_PLAN.md` documenting file-level evidence, failures, gaps, priorities, acceptance tests, and regression coverage. Establish baseline tests and correct noncompliant behavior in reviewable batches without unnecessary rewrites. Report untested areas honestly. These rules do not themselves execute repairs; no existing feature is considered verified without evidence.

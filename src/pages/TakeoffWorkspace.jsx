@@ -61,6 +61,7 @@ import {
   planSheetCoverage,
 } from "@/domain/takeoff/sheetCoverage";
 import { getPdfDocument } from "@/lib/pdf-document";
+import { pdfBackingScale } from "@/domain/takeoff/pdfBackingScale";
 import { readEstimate, syncStoredEstimate, writeEstimate } from "@/domain/estimate/estimateStore";
 import { downloadBlob, getDrawingFile, putDrawingFile } from "@/domain/estimate/projectDocuments";
 import {
@@ -2614,19 +2615,12 @@ function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber, viewp
         // Large electrical sheets can otherwise create 100M+ pixel canvases and
         // crash the browser when zooming. Cap the backing store while keeping
         // the CSS display size/pan geometry unchanged.
-        const deviceScale = Math.min(2, window.devicePixelRatio || 1);
-        const requestedPixels = fitted.width * fitted.height * deviceScale * deviceScale;
-        const coarse = Boolean(window.matchMedia?.("(pointer: coarse)")?.matches);
-        const MAX_CANVAS_PIXELS = coarse ? 6_000_000 : 16_000_000;
-        const pixelBudgetScale = requestedPixels > MAX_CANVAS_PIXELS
-          ? Math.sqrt(MAX_CANVAS_PIXELS / Math.max(1, fitted.width * fitted.height))
-          : deviceScale;
-        const maxDimensionScale = Math.min(
-          1,
-          8192 / Math.max(1, fitted.width * pixelBudgetScale),
-          8192 / Math.max(1, fitted.height * pixelBudgetScale),
+        const outputScale = pdfBackingScale(
+          fitted.width,
+          fitted.height,
+          window.devicePixelRatio || 1,
+          Boolean(window.matchMedia?.("(pointer: coarse)")?.matches),
         );
-        const outputScale = Math.max(0.35, pixelBudgetScale * maxDimensionScale);
         const viewport = page.getViewport({ scale: (fitted.width / base.width) * outputScale });
         const canvas = canvasRef.current;
         const context = canvas.getContext("2d", { alpha: false });

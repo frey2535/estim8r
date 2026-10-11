@@ -731,7 +731,7 @@ function attachCalloutToPath(conduits, callout) {
 export function findConduitRunCallouts(pages, trade) {
   const callouts = [];
   for (const page of pages || []) {
-    if (!shouldScan(page, trade)) continue;
+    if (!shouldScanWithDictionary(page, trade, dictionary)) continue;
     for (const phrase of phrasesFromTokens(page.tokens || [])) {
       const parsed = parseConduitCallout(phrase.text);
       if (!parsed) continue;

@@ -25,7 +25,7 @@ import {
 } from "@/domain/takeoff/junctionHardware";
 import { drawingSymbolsFromDocs, printedScaleCalibration, readDrawingDocuments } from "@/domain/takeoff/drawing-docs";
 import { paletteForTrade, pageKindsFromDocs, symbolsOnDrawingForTrade, tradeById, conduitOptionsForTrade, findConduitOption, TRADES, DEFAULT_CONDUIT_ID } from "@/domain/takeoff/trades";
-import { buildAiMarks, legendDictionaryFromPages, shouldScan } from "@/domain/takeoff/aiTakeoff";
+import { buildAiMarks, legendDictionaryFromPages, shouldScanWithDictionary } from "@/domain/takeoff/aiTakeoff";
 import TakeoffActionsMenu, { takeoffEstimatePath, takeoffMarkupPath } from "@/components/takeoff/TakeoffActionsMenu";
 import { readAiPages } from "@/domain/takeoff/aiPages";
 import { hydratePagesRaster } from "@/domain/takeoff/rasterSymbols";
@@ -1192,7 +1192,10 @@ export default function TakeoffWorkspace() {
           if (!silent) setStatus(`AI assist is reading sheet ${current} of ${total}…`);
         },
       });
-      await hydratePagesRaster((pages || []).filter((page) => shouldScan(page, trade)));
+      // Raster hydration must use the same legend-aware sheet eligibility as
+      // buildAiMarks; otherwise fallback electrical sheets are scanned without pixels.
+      const scanDictionary = legendDictionaryFromPages(pages, palette.fromDrawing, palette.symbols, trade);
+      await hydratePagesRaster((pages || []).filter((page) => shouldScanWithDictionary(page, trade, scanDictionary)));
       if (!silent) setStatus(`AI assist is marking ${tradeLabel} on the drawings…`);
       await new Promise((resolve) => setTimeout(resolve, 0));
       setAiPages(pages);

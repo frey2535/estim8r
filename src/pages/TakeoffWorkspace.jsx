@@ -2586,7 +2586,12 @@ function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber, viewp
           8192 / Math.max(1, fitted.width * pixelBudgetScale),
           8192 / Math.max(1, fitted.height * pixelBudgetScale),
         );
-        const outputScale = Math.max(0.35, pixelBudgetScale * maxDimensionScale);
+        // Never enforce a minimum backing-store scale: at high zoom it would
+        // override the pixel budget and allocate oversized canvases.
+        const outputScale = Math.min(deviceScale, pixelBudgetScale * maxDimensionScale);
+        if (!Number.isFinite(outputScale) || outputScale <= 0) {
+          throw new Error("Drawing dimensions exceed the supported render range.");
+        }
         const viewport = page.getViewport({ scale: (fitted.width / base.width) * outputScale });
         const canvas = canvasRef.current;
         const context = canvas.getContext("2d", { alpha: false });

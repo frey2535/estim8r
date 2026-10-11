@@ -65,7 +65,8 @@ const score = {
 score.falsePositives = score.extraMarks.length;
 score.counts = score.found + score.falsePositives;
 score.detectionPrecision = score.counts ? score.found / score.counts : 1;
-score.meetsDetection = score.worstTypeRecall >= ACCURACY_THRESHOLD && score.detectionPrecision >= ACCURACY_THRESHOLD;
+score.meetsDetection = score.truth > 0 && score.detectionRecall >= ACCURACY_THRESHOLD
+  && score.worstTypeRecall >= ACCURACY_THRESHOLD && score.detectionPrecision >= ACCURACY_THRESHOLD;
 console.log(formatAccuracyReport(score));
 if (score.unmatchedTruth.length) {
   console.log("missed", score.unmatchedTruth.slice(0, 16).map((item) => `${item.type}@${item.sheet}:${item.x},${item.y}`).join(" "));

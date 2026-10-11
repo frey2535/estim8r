@@ -59,7 +59,7 @@ export function legendEntryForMark(mark, drawingSymbols = [], options = {}) {
   if (mark.legendEntryId) {
     const exactId = list.find((item) => item.id === mark.legendEntryId);
     if (exactId) {
-      if (!painted?.code || code(exactId.abbr || exactId.type) === painted.code || exactId.id === mark.legendEntryId) {
+      if (!painted?.code || code(exactId.abbr || exactId.type) === painted.code) {
         return exactId;
       }
     }
@@ -76,7 +76,9 @@ export function legendEntryForMark(mark, drawingSymbols = [], options = {}) {
     if (exactCode.length > 1) {
       const sourceMatch = exactCode.find((item) => mark.legendSource && item.source === mark.legendSource);
       if (sourceMatch) return sourceMatch;
-      return exactCode[0];
+      // Duplicate legend codes are ambiguous without a matching source.
+      // Never guess which fixture description belongs to the mark.
+      return null;
     }
   }
 
@@ -127,7 +129,7 @@ export function legendHoverData(mark, drawingSymbols = [], options = {}) {
     category: identity.category || clean(locked?.takeoffCategory || locked?.category),
     source: identity.source || clean(locked?.source),
     page: identity.page || Number(locked?.page) || null,
-    verified: Boolean(mark.legendEntryId || locked),
+    verified: Boolean(locked),
   };
 }
 

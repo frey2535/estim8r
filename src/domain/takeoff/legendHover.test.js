@@ -68,4 +68,24 @@ assert.equal(shouldShowSymbolHover(unclassified), false);
 assert.equal(legendHoverData(unclassified, symbols).label, "Unclassified device");
 assert.notEqual(legendHoverData(unclassified, symbols).code, "F2");
 
+
+const conflictingId = {
+  typeCode: "1E",
+  legendCode: "1E",
+  legendEntryId: "legend:1:normal",
+  legendLabel: "Type 1E emergency LED troffer",
+};
+assert.equal(legendEntryForMark(conflictingId, symbols, { planType: "lighting" })?.id, "legend:1e:emergency", "conflicting stored ID must not override matching code");
+
+const ambiguousCodes = [
+  { id: "legend:a", abbr: "X1", label: "Fixture A", source: "legend" },
+  { id: "legend:b", abbr: "X1", label: "Fixture B", source: "legend" },
+];
+const ambiguousMark = { typeCode: "X1", legendCode: "X1" };
+assert.equal(legendEntryForMark(ambiguousMark, ambiguousCodes), null, "duplicate legend codes must not select arbitrary descriptions");
+assert.equal(legendHoverData(ambiguousMark, ambiguousCodes).verified, false, "ambiguous legend code cannot be verified");
+
+const missingId = { typeCode: "X2", legendCode: "X2", legendEntryId: "legend:missing" };
+assert.equal(legendHoverData(missingId, ambiguousCodes).verified, false, "missing legend entry ID is not verification");
+
 console.log("legend hover identity tests passed");

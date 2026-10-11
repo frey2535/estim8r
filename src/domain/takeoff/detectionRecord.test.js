@@ -82,6 +82,7 @@ assert(bidDeviceMarks([body, textOnly, review]).length === 2, "bidDeviceMarks ex
 const rejected = { ...body, id: "rejected-device", reviewStatus: "rejected" };
 assert(isReviewOnlyMark(rejected), "rejected detection is excluded from accepted bid devices");
 assert(bidDeviceMarks([body, rejected]).length === 1, "rejected device does not inflate the bid count");
+assert(persistedPlanDeviceCount([body, rejected], { 50: "drawing" }) === 1, "rejected device does not inflate persisted plan summary");
 
 const painted = applyDeviceTypeColors([review, body]);
 assert(painted.find((mark) => mark.typeCode === "UNKNOWN")?.layer === "review", "coloring does not promote review marks to bid devices");

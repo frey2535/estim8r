@@ -39,6 +39,9 @@ assert(typed[0].correction === "type" && typed[0].layer === "device", "type corr
 
 const moved = moveReviewMark(typed, typed[0], { x: 41.2, y: 50.4 });
 assert(Math.abs(moved[0].x - 41.2) < 0.01 && moved[0].symbolBodyLocation.x === 41.2, "move updates symbol body location");
+const bounded = moveReviewMark([{ ...typed[0], symbolBodyBounds: { x: 39.69, y: 49.63, w: 0.62, h: 0.74 } }], typed[0], { x: 41.2, y: 50.4 });
+assert(Math.abs(bounded[0].symbolBodyBounds.x - 40.89) < 0.001, "moving a device translates its body bounds in X");
+assert(Math.abs(bounded[0].symbolBodyBounds.y - 50.03) < 0.001, "moving a device translates its body bounds in Y");
 
 const resized = resizeReviewBounds(moved, moved[0], { w: 0.7, h: 0.8 });
 assert(resized[0].outline.w === 0.7 && resized[0].symbolBodyBounds.w === 0.7, "resize corrects symbol bounds");

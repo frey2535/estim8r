@@ -22,8 +22,8 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm install --no-audit --no-fund
-      - name: PDF zoom memory regression
-        run: node src/domain/takeoff/pdfBackingScale.test.js
+      - name: Accuracy gate regression
+        run: node src/domain/takeoff/accuracyGate.test.js
       - name: Lint
         run: npm run lint
       - name: Typecheck diagnostics

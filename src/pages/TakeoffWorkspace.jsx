@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Cable, Cloud, FileUp, Hand, Image as ImageIcon, MousePointer2,
   Pencil, Redo2, Route, Ruler, Spline, Square, StickyNote,
-  Trash2, Undo2, Upload, ZoomIn, ZoomOut, Crosshair, Gauge, Lightbulb
+  Trash2, Undo2, Upload, ZoomIn, ZoomOut, Crosshair, Gauge, Lightbulb, ChevronDown, ChevronUp
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlobalWorkerOptions } from "pdfjs-dist";
@@ -235,8 +235,11 @@ export default function TakeoffWorkspace() {
     typeof window !== "undefined" ? window.matchMedia("(min-width: 1024px)").matches : true
   ));
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
+  const [mobileDevicePickerOpen, setMobileDevicePickerOpen] = useState(false);
   const [aiPages, setAiPages] = useState([]);
   const [searchManifest, setSearchManifest] = useState(null);
+  const [emptyNoticeDismissed, setEmptyNoticeDismissed] = useState(false);
   const [confirmedCoverageIds, setConfirmedCoverageIds] = useState([]);
   const [confirmedEmptySheets, setConfirmedEmptySheets] = useState({});
   const [supplyQuote, setSupplyQuote] = useState(null);
@@ -1178,6 +1181,7 @@ export default function TakeoffWorkspace() {
       return marks;
     }
     setAiBusy(true);
+    setEmptyNoticeDismissed(false);
     setDrawingError("");
     const tradeLabel = tradeById(trade).label;
     if (!silent) setStatus(`AI assist is reading ${tradeLabel} sheets…`);
@@ -1998,34 +2002,60 @@ export default function TakeoffWorkspace() {
             onSelectPage={selectSheet}
           />
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-border p-1 lg:hidden">
-            {TAKEOFF_TOOLS.map((item) => {
-              const Icon = TOOL_ICONS[item.key] || Pencil;
-              return <button key={item.key} type="button" onClick={() => { setTool(item.key); setDraftPoints([]); }} className={cn("inline-flex shrink-0 items-center gap-1 rounded-lg border px-2 py-1 text-xs font-semibold", tool === item.key ? "border-blue-600 bg-blue-50 text-blue-700" : "border-border")}>
-                <Icon className="h-3.5 w-3.5" />{item.label}
-              </button>;
-            })}
+          <div className="shrink-0 border-b border-border bg-card lg:hidden">
+            <div className="flex items-center gap-2 px-2 py-1.5">
+              <button type="button" onClick={() => { setTool("pan"); setDraftPoints([]); setMobileToolsOpen(false); setMobileDevicePickerOpen(false); }}
+                aria-label="Pan drawing" className={cn("inline-flex min-h-10 items-center gap-1 rounded-lg border px-3 text-xs font-semibold", tool === "pan" ? "border-blue-600 bg-blue-50 text-blue-700" : "border-border")}>
+                <Hand className="h-4 w-4" />Pan
+              </button>
+              <span className="min-w-0 flex-1 truncate text-xs font-medium text-muted-foreground">Tool: {activeTool.label}</span>
+              <button type="button" aria-expanded={mobileToolsOpen} aria-controls="mobile-takeoff-tools"
+                onClick={() => { setMobileToolsOpen((value) => !value); setMobileDevicePickerOpen(false); }}
+                className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-border px-3 text-xs font-semibold">
+                Tools {mobileToolsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+              <button type="button" aria-expanded={mobileDevicePickerOpen} aria-controls="mobile-takeoff-devices"
+                onClick={() => { setMobileDevicePickerOpen((value) => !value); setMobileToolsOpen(false); }}
+                className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-border px-3 text-xs font-semibold">
+                Devices {mobileDevicePickerOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+            </div>
+            {mobileToolsOpen && (
+              <div id="mobile-takeoff-tools" className="max-h-[35dvh] overflow-y-auto border-t border-border p-2">
+                <div className="grid grid-cols-3 gap-1.5">
+                  {TAKEOFF_TOOLS.map((item) => {
+                    const Icon = TOOL_ICONS[item.key] || Pencil;
+                    return <button key={item.key} type="button" onClick={() => { setTool(item.key); setDraftPoints([]); setMobileToolsOpen(false); }}
+                      className={cn("flex min-h-11 items-center gap-1 rounded-lg border px-2 py-1 text-left text-xs font-semibold", tool === item.key ? "border-blue-600 bg-blue-50 text-blue-700" : "border-border")}>
+                      <Icon className="h-4 w-4 shrink-0" /><span className="truncate">{item.label}</span>
+                    </button>;
+                  })}
+                </div>
+              </div>
+            )}
+            {mobileDevicePickerOpen && (
+              <div id="mobile-takeoff-devices" className="max-h-[40dvh] overflow-y-auto border-t border-border p-2">
+                <DevicePicker
+                  compact
+                  availableSymbols={availableDeviceSymbols}
+                  trades={TRADES}
+                  trade={trade}
+                  onTrade={setTrade}
+                  marks={marks}
+                  pageKinds={pageKinds}
+                  category={category}
+                  onCategory={(value) => { setCategory(value); setSymbolQuery(""); }}
+                  symbolId={symbolId}
+                  onSymbol={setSymbolId}
+                  query={symbolQuery}
+                  onQuery={setSymbolQuery}
+                  onManualMark={() => { setTool("count"); setMobileDevicePickerOpen(false); setStatus("Choose a legend symbol, then tap the missed printed symbol."); }}
+                />
+              </div>
+            )}
           </div>
-          <div className="shrink-0 border-b border-border px-2 py-2 lg:hidden">
-            <DevicePicker
-              compact
-              availableSymbols={availableDeviceSymbols}
-              trades={TRADES}
-              trade={trade}
-              onTrade={setTrade}
-              marks={marks}
-              pageKinds={pageKinds}
-              category={category}
-              onCategory={(value) => { setCategory(value); setSymbolQuery(""); }}
-              symbolId={symbolId}
-              onSymbol={setSymbolId}
-              query={symbolQuery}
-              onQuery={setSymbolQuery}
-              onManualMark={() => { setTool("count"); setStatus(`Manual symbol marking: choose a legend symbol, then click the missed printed symbol. Estim8r will snap the fill to its extracted geometry.`); }}
-            />
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-2 py-1.5">
-            <div className="flex flex-wrap items-center gap-1">
+          <div className="flex shrink-0 flex-nowrap items-center gap-2 overflow-x-auto border-b border-border px-2 py-1.5 lg:flex-wrap lg:justify-between">
+            <div className="flex shrink-0 items-center gap-1 lg:flex-wrap">
               <div className="lg:hidden">
                 <TakeoffSizeControl
                   compact
@@ -2061,7 +2091,7 @@ export default function TakeoffWorkspace() {
             ref={viewportRef}
             onPointerDown={onPanPointerDown}
             onWheel={handleDrawingWheel}
-            className={cn("min-h-[40vh] min-w-0 flex-1 overflow-hidden bg-neutral-400/40 dark:bg-neutral-950 lg:min-h-0", tool === "pan" && "cursor-grab touch-none")}
+            className={cn("min-h-0 min-w-0 flex-1 overflow-hidden bg-neutral-400/40 dark:bg-neutral-950 lg:min-h-0", tool === "pan" && "cursor-grab touch-none")}
           >
             <div className="flex h-full w-full items-center justify-center p-2">
               <div
@@ -2205,15 +2235,25 @@ export default function TakeoffWorkspace() {
                     </div>
                   );
                 })()}
-                {file && !aiBusy && visibleOverlayMarks.length === 0 && (
-                  <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center p-4">
-                    <div className="max-w-sm rounded-xl border border-border bg-background/95 px-4 py-3 text-center shadow-lg">
-                      <p className="text-sm font-semibold text-foreground">No takeoff marks on this sheet</p>
-                      <p className="mt-1 text-xs leading-4 text-muted-foreground">
-                        {marks.length
-                          ? "This sheet has no counted devices or visible overlays. Open a plan sheet or run AI Assist again."
-                          : "Run AI Assist to count the selected trade and paint a type-colored fill on each symbol, or place a count yourself."}
-                      </p>
+                {file && searchManifest && !aiBusy && visibleOverlayMarks.length === 0 && !emptyNoticeDismissed && (
+                  <div className="absolute bottom-3 right-3 z-20 max-w-[18rem] rounded-lg border border-border bg-background/95 px-3 py-2 shadow-md">
+                    <div className="flex items-start gap-2">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-foreground">No takeoff marks on this sheet</p>
+                        <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
+                          {marks.length
+                            ? "This sheet has no visible takeoff marks. Open another plan sheet or rerun AI Assist."
+                            : "AI Assist finished without visible marks on this sheet."}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        aria-label="Close no takeoff marks notice"
+                        onClick={() => setEmptyNoticeDismissed(true)}
+                        className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      >
+                        ×
+                      </button>
                     </div>
                   </div>
                 )}

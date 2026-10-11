@@ -31,11 +31,19 @@ export function moveReviewMark(marks, current, point) {
   const y = clamp(point.y, 0, 100);
   return (marks || []).map((mark) => {
     if (mark.id !== current.id) return mark;
+    const previousX = Number(mark.symbolBodyLocation?.x ?? mark.x) || 0;
+    const previousY = Number(mark.symbolBodyLocation?.y ?? mark.y) || 0;
+    const bounds = mark.symbolBodyBounds;
     return {
       ...mark,
       x,
       y,
       symbolBodyLocation: { x, y },
+      symbolBodyBounds: bounds ? {
+        ...bounds,
+        x: (Number(bounds.x) || 0) + x - previousX,
+        y: (Number(bounds.y) || 0) + y - previousY,
+      } : bounds,
       correction: mark.correction || "move",
     };
   });

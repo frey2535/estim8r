@@ -100,6 +100,7 @@ export function scoreTakeoffAccuracy(fixture, options = {}) {
     byType[key].found += 1;
   }
   const falsePositives = counts.length - matches.length;
+  const falseNegatives = truth.length - matches.length;
   const placedOnGeometry = matches.filter((item) => item.onGeometry).length;
   const detectionRecall = truth.length ? matches.length / truth.length : 1;
   const detectionPrecision = counts.length ? matches.length / counts.length : 1;
@@ -115,14 +116,16 @@ export function scoreTakeoffAccuracy(fixture, options = {}) {
     truth: truth.length,
     found: matches.length,
     falsePositives,
+    falseNegatives,
     counts: counts.length,
     detectionRecall,
     detectionPrecision,
     worstTypeRecall,
     markerAccuracy,
     typeRecalls,
-    meetsDetection: worstTypeRecall >= ACCURACY_THRESHOLD && detectionPrecision >= ACCURACY_THRESHOLD,
-    meetsMarkers: markerAccuracy >= ACCURACY_THRESHOLD,
+    meetsDetection: truth.length > 0 && detectionRecall >= ACCURACY_THRESHOLD
+      && worstTypeRecall >= ACCURACY_THRESHOLD && detectionPrecision >= ACCURACY_THRESHOLD,
+    meetsMarkers: truth.length > 0 && matches.length > 0 && markerAccuracy >= ACCURACY_THRESHOLD,
     unmatchedTruth: truth.filter((_, index) => !used.has(index)),
     extraMarks: counts.filter((mark) => !matches.some((item) => item.mark === mark)),
     failedMarkers: matches.filter((item) => !item.onGeometry),
@@ -139,6 +142,8 @@ export function formatAccuracyReport(score) {
     `detection recall ${(score.detectionRecall * 100).toFixed(2)}% (${score.found}/${score.truth})`,
     `worst type ${(score.worstTypeRecall * 100).toFixed(2)}%`,
     `precision ${(score.detectionPrecision * 100).toFixed(2)}% (FP ${score.falsePositives})`,
+    `false negatives ${score.falseNegatives ?? Math.max(0, score.truth - score.found)}`,
+    `ground truth ${score.truth > 0 ? "present" : "MISSING — no accuracy claim permitted"}`,
     `marker accuracy ${(score.markerAccuracy * 100).toFixed(2)}%`,
     `unresolved review ${score.unresolvedCount || 0}`,
     types,

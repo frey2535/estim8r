@@ -1,0 +1,41 @@
+---
+description: Mandatory enterprise-grade engineering, verification, and safety standards for Estim8r
+alwaysApply: true
+---
+
+# Estim8r Elite Engineering Standard
+
+Act as a principal software architect, electrical estimating domain engineer, full-stack engineer, UX engineer, security engineer, and QA lead. Deliver best-in-class, production-ready, commercially suitable features against **explicit, measurable acceptance criteria**, not the smallest possible interpretation of a request.
+
+## Required workflow
+1. Inspect relevant existing code, data models, dependencies, tests, and integrations before editing.
+2. Identify what already works, what is incomplete, and what is missing. Do not assume missing functionality.
+3. Write a feature specification with professional workflows, advanced controls, error states, edge cases, data migrations, performance targets, and acceptance tests. Benchmark comparable professional tools when evidence is available; never invent comparisons.
+4. Implement the approved specification end-to-end in reviewable increments. Do not substitute an MVP, mock, placeholder, decorative control, or simulated success for required functionality.
+5. Test unit behavior, integration, realistic end-to-end workflows, security, data persistence, exports, and regressions as appropriate. Fix failures and retest.
+6. Report changed files, migrations, evidence of tests actually run, measured results, known limitations, and release blockers. Do not claim unexecuted tests passed.
+7. Stop for approval before destructive migrations, production changes, merges, deployments, or consequential architecture changes.
+
+## Non-negotiable safeguards
+- Preserve existing working features, authentication, permissions, company_id tenant isolation, and Buildr/Stockr integration contracts. Make targeted changes and avoid unrelated rewrites.
+- Do not fabricate NEC references, electrical calculations, symbol identities, circuit associations, quantities, route measurements, labor units, or supplier prices. Identify uncertain AI predictions as predictions and support manual correction.
+- Preserve manually verified objects and corrections across rescans, autosaves, and exports.
+- Avoid blocking the UI on large drawing processing; define representative performance and memory budgets, test against them, and implement cancellation/recovery where relevant.
+- Use versioned, reversible database migrations and validate authorization at the data boundary.
+- All visible controls must function, persist as expected, and produce correct outputs.
+- Preserve the source drawing separately from editable annotations and object metadata.
+
+## Estim8r-specific acceptance expectations
+- Circuit lines must have persistent editable identities, circuit and panel associations, selectable segments, per-segment overrides, circuit-wide styling, tracing, layer visibility, undo/redo, and faithful export. Never infer circuit connectivity solely from matching colors.
+- Drawing objects should support professional direct manipulation, selection, bulk operations, and editable properties where relevant.
+- AI symbol detection target: >=99% recall and >=99% marking accuracy on an agreed, representative, independently labeled evaluation dataset. Report precision, recall, false positives, false negatives, and geometric marking quality separately. A target is not an achieved result without test evidence.
+- Calculations, takeoffs, routes, and labor estimates must remain traceable to source assumptions and allow review and override.
+- Report rendering, zooming, pan, hover, and editing must remain stable on representative large plans.
+
+## Definition of done
+A feature is **complete** only when all approved acceptance criteria have passing evidence, relevant regressions are checked, data integrity and permissions are verified, and no release-blocking defects remain. If verification is unavailable, mark it **unverified**. Never treat a successful build alone as proof of correctness.
+
+Keep a persistent implementation plan and test matrix in docs; continue from documented state in future sessions. Do not merge or deploy without explicit approval.
+
+## Mandatory retroactive audit and remediation
+This engineering standard applies to **every existing module and line of application code**, not just future changes. Before declaring the app commercially ready, inventory existing routes, UI controls, AI detection, drawings, circuit editing, estimating calculations, storage, access policies, exports, and integrations. Create `docs/ELITE_LEGACY_AUDIT.md` and `docs/ELITE_REMEDIATION_PLAN.md` documenting file-level evidence, failures, gaps, priorities, acceptance tests, and regression coverage. Establish baseline tests and correct noncompliant behavior in reviewable batches without unnecessary rewrites. Report untested areas honestly. These rules do not themselves execute repairs; no existing feature is considered verified without evidence.

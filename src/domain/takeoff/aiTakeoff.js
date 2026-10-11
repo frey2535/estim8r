@@ -466,7 +466,7 @@ export function findConduitSections(pages, trade) {
   const sections = [];
   const seen = new Set();
   for (const page of pages || []) {
-    if (!shouldScanWithDictionary(page, trade, dictionary)) continue;
+    if (!shouldScan(page, trade)) continue;
     const tokens = page.tokens || [];
     for (const token of tokens) {
       const letter = String(token.text || "").trim().toUpperCase();
@@ -947,7 +947,7 @@ export function buildAiMarks({
   const seen = [];
   const usedGeometry = new Set();
   for (const page of pages || []) {
-    if (!shouldScan(page, trade)) continue;
+    if (!shouldScanWithDictionary(page, trade, dictionary)) continue;
     const sitePlan = isSitePlanPage(page);
     const planType = pagePlanType(page);
     const pageCandidates = collectMatchCandidates(page, { planType, paths: page.paths || [], sitePlan });

@@ -142,6 +142,8 @@ export function formatAccuracyReport(score) {
     `detection recall ${(score.detectionRecall * 100).toFixed(2)}% (${score.found}/${score.truth})`,
     `worst type ${(score.worstTypeRecall * 100).toFixed(2)}%`,
     `precision ${(score.detectionPrecision * 100).toFixed(2)}% (FP ${score.falsePositives})`,
+    `false negatives ${score.falseNegatives ?? Math.max(0, score.truth - score.found)}`,
+    `ground truth ${score.truth > 0 ? "present" : "MISSING — no accuracy claim permitted"}`,
     `marker accuracy ${(score.markerAccuracy * 100).toFixed(2)}%`,
     `unresolved review ${score.unresolvedCount || 0}`,
     types,

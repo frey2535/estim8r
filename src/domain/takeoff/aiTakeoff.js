@@ -466,7 +466,7 @@ export function findConduitSections(pages, trade) {
   const sections = [];
   const seen = new Set();
   for (const page of pages || []) {
-    if (!shouldScanWithDictionary(page, trade, dictionary)) continue;
+    if (!shouldScan(page, trade)) continue;
     const tokens = page.tokens || [];
     for (const token of tokens) {
       const letter = String(token.text || "").trim().toUpperCase();
@@ -731,7 +731,7 @@ function attachCalloutToPath(conduits, callout) {
 export function findConduitRunCallouts(pages, trade) {
   const callouts = [];
   for (const page of pages || []) {
-    if (!shouldScan(page, trade)) continue;
+    if (!shouldScanWithDictionary(page, trade, dictionary)) continue;
     for (const phrase of phrasesFromTokens(page.tokens || [])) {
       const parsed = parseConduitCallout(phrase.text);
       if (!parsed) continue;
@@ -947,7 +947,7 @@ export function buildAiMarks({
   const seen = [];
   const usedGeometry = new Set();
   for (const page of pages || []) {
-    if (!shouldScan(page, trade)) continue;
+    if (!shouldScanWithDictionary(page, trade, dictionary)) continue;
     const sitePlan = isSitePlanPage(page);
     const planType = pagePlanType(page);
     const pageCandidates = collectMatchCandidates(page, { planType, paths: page.paths || [], sitePlan });

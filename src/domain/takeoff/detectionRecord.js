@@ -29,7 +29,7 @@ export function boundsFromGeometry(geometry) {
 
 export function isReviewOnlyMark(mark) {
   if (!mark) return false;
-  if (mark.layer === "review") return true;
+  if (mark.layer === "review" || mark.reviewStatus === "rejected") return true;
   if (mark.symbol === "unknown" || String(mark.typeCode || "").toUpperCase() === "UNKNOWN") return true;
   return false;
 }

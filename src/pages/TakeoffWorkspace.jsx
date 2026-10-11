@@ -238,6 +238,7 @@ export default function TakeoffWorkspace() {
   const [mobileDevicePickerOpen, setMobileDevicePickerOpen] = useState(false);
   const [aiPages, setAiPages] = useState([]);
   const [searchManifest, setSearchManifest] = useState(null);
+  const [emptyNoticeDismissed, setEmptyNoticeDismissed] = useState(false);
   const [confirmedCoverageIds, setConfirmedCoverageIds] = useState([]);
   const [confirmedEmptySheets, setConfirmedEmptySheets] = useState({});
   const [supplyQuote, setSupplyQuote] = useState(null);
@@ -1179,6 +1180,7 @@ export default function TakeoffWorkspace() {
       return marks;
     }
     setAiBusy(true);
+    setEmptyNoticeDismissed(false);
     setDrawingError("");
     const tradeLabel = tradeById(trade).label;
     if (!silent) setStatus(`AI assist is reading ${tradeLabel} sheets…`);
@@ -2232,15 +2234,25 @@ export default function TakeoffWorkspace() {
                     </div>
                   );
                 })()}
-                {file && !aiBusy && visibleOverlayMarks.length === 0 && (
-                  <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center p-4">
-                    <div className="max-w-sm rounded-xl border border-border bg-background/95 px-4 py-3 text-center shadow-lg">
-                      <p className="text-sm font-semibold text-foreground">No takeoff marks on this sheet</p>
-                      <p className="mt-1 text-xs leading-4 text-muted-foreground">
-                        {marks.length
-                          ? "This sheet has no counted devices or visible overlays. Open a plan sheet or run AI Assist again."
-                          : "Run AI Assist to count the selected trade and paint a type-colored fill on each symbol, or place a count yourself."}
-                      </p>
+                {file && searchManifest && !aiBusy && visibleOverlayMarks.length === 0 && !emptyNoticeDismissed && (
+                  <div className="absolute bottom-3 right-3 z-20 max-w-[18rem] rounded-lg border border-border bg-background/95 px-3 py-2 shadow-md">
+                    <div className="flex items-start gap-2">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-foreground">No takeoff marks on this sheet</p>
+                        <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
+                          {marks.length
+                            ? "This sheet has no visible takeoff marks. Open another plan sheet or rerun AI Assist."
+                            : "AI Assist finished without visible marks on this sheet."}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        aria-label="Close no takeoff marks notice"
+                        onClick={() => setEmptyNoticeDismissed(true)}
+                        className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      >
+                        ×
+                      </button>
                     </div>
                   </div>
                 )}

@@ -1318,7 +1318,7 @@ export default function TakeoffWorkspace() {
           const matchedSymbol = picked?.match?.entry?.symbol || null;
           if (picked?.geometry && matchedSymbol) {
             hit = {
-              id: drawingObject.sourceMarkId || crypto.randomUUID(),
+              id: marks.some((item) => item.id === drawingObject.sourceMarkId) ? crypto.randomUUID() : (drawingObject.sourceMarkId || crypto.randomUUID()),
               sheet: sheetMeta.page || 1,
               trade,
               source: "drawing-object",

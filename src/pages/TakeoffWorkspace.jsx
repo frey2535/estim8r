@@ -1771,7 +1771,7 @@ export default function TakeoffWorkspace() {
           window.removeEventListener("pointermove", resize);
           window.removeEventListener("pointerup", finish);
           window.removeEventListener("pointercancel", finish);
-        if (upEvent.type === "pointercancel") suppressEditClickRef.current = false;
+          if (upEvent.type === "pointercancel") suppressEditClickRef.current = false;
         };
         window.addEventListener("pointermove", resize);
         window.addEventListener("pointerup", finish);

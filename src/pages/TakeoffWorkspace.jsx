@@ -208,6 +208,7 @@ export default function TakeoffWorkspace() {
   const panRef = useRef(pan);
   const panLayerRef = useRef(null);
   const panningRef = useRef(false);
+  const suppressEditClickRef = useRef(false);
   panRef.current = pan;
   const draftJunctionIdsRef = useRef([]);
   const [marks, setMarks] = useState([]);
@@ -471,7 +472,9 @@ export default function TakeoffWorkspace() {
     setAiPages([]);
 
     const saved = loadSession(nextFile);
-    setMarks(Array.isArray(saved?.marks) ? saved.marks : []);
+    const restoredMarks = Array.isArray(saved?.marks) ? saved.marks : [];
+    setMarks(restoredMarks);
+    historyRef.current = { past: [], future: [] };
     setConfirmedCoverageIds(Array.isArray(saved?.confirmedCoverageIds) ? saved.confirmedCoverageIds : []);
     setConfirmedEmptySheets(saved?.confirmedEmptySheets && typeof saved.confirmedEmptySheets === "object" ? saved.confirmedEmptySheets : {});
     setCalibrations(saved?.calibrations || (saved?.calibration ? { [saved?.sheet || 1]: saved.calibration } : {}));
@@ -487,6 +490,9 @@ export default function TakeoffWorkspace() {
     if (saved?.scheduleEdits) setScheduleEdits(saved.scheduleEdits);
     if (saved?.sheet) setSheetMeta((current) => ({ ...current, page: saved.sheet }));
     setSupplyQuote(saved?.supplyQuote || null);
+    if (restoredMarks.length) {
+      setStatus(`Restored ${restoredMarks.length} saved takeoff object${restoredMarks.length === 1 ? "" : "s"} for ${nextFile.name || "drawing"}.`);
+    }
 
     try {
       let file = nextFile;
@@ -508,7 +514,9 @@ export default function TakeoffWorkspace() {
       fileUrlRef.current = url;
       setFileUrl(url);
       setFileBytes(bytes);
-      setStatus(`${file.name} imported. Calibrate scale, then take off the sheet.`);
+      setStatus(restoredMarks.length
+        ? `${file.name} imported with ${restoredMarks.length} saved takeoff object${restoredMarks.length === 1 ? "" : "s"} restored.`
+        : `${file.name} imported. Calibrate scale, then take off the sheet.`);
     } catch (error) {
       console.error("Drawing import failed", error);
       clearPendingDrawing();
@@ -995,7 +1003,8 @@ export default function TakeoffWorkspace() {
   }
 
   function updateMark(id, patch) {
-    setMarks((current) => current.map((mark) => (mark.id === id ? { ...mark, ...patch } : mark)));
+    const next = marks.map((mark) => (mark.id === id ? { ...mark, ...patch } : mark));
+    commitMarks(next, "Selected takeoff object updated.");
   }
 
   function coverageAfterConfirm(region) {
@@ -1070,7 +1079,7 @@ export default function TakeoffWorkspace() {
     if (!isDeviceMark(current)) return;
     const instanceOnly = isUncertainDetection(current);
     const count = instanceOnly ? 1 : typeInstanceCount(marks, current);
-    setMarks((currentMarks) => applyReviewDecision(currentMarks, current, status));
+    commitMarks(applyReviewDecision(marks, current, status), "Device review decision updated.");
     setStatus(instanceOnly
       ? (status === "accepted" ? "Uncertain count accepted." : "Uncertain count rejected. The marker stays on the sheet.")
       : (status === "accepted"
@@ -1089,18 +1098,20 @@ export default function TakeoffWorkspace() {
 
   function changeReviewType(nextSymbol) {
     if (!selectedMark || !nextSymbol) return;
-    setMarks((current) => changeReviewDeviceType(current, selectedMark, nextSymbol));
-    setStatus(`Changed to ${nextSymbol.abbr || nextSymbol.label}. This correction can seed a project prototype.`);
+    commitMarks(
+      changeReviewDeviceType(marks, selectedMark, nextSymbol),
+      `Changed to ${nextSymbol.abbr || nextSymbol.label}. This correction can seed a project prototype.`,
+    );
   }
 
   function moveSelectedReview(point) {
     if (!selectedMark || !point) return;
-    setMarks((current) => moveReviewMark(current, selectedMark, point));
+    commitMarks(moveReviewMark(marks, selectedMark, point), "Device moved.");
   }
 
   function resizeSelectedReview(bounds) {
     if (!selectedMark) return;
-    setMarks((current) => resizeReviewBounds(current, selectedMark, bounds));
+    commitMarks(resizeReviewBounds(marks, selectedMark, bounds), "Device highlight resized.");
   }
 
   function addMissedDevice() {
@@ -1314,7 +1325,7 @@ export default function TakeoffWorkspace() {
           const matchedSymbol = picked?.match?.entry?.symbol || null;
           if (picked?.geometry && matchedSymbol) {
             hit = {
-              id: drawingObject.sourceMarkId || crypto.randomUUID(),
+              id: marks.some((item) => item.id === drawingObject.sourceMarkId) ? crypto.randomUUID() : (drawingObject.sourceMarkId || crypto.randomUUID()),
               sheet: sheetMeta.page || 1,
               trade,
               source: "drawing-object",
@@ -1341,14 +1352,14 @@ export default function TakeoffWorkspace() {
               layer: "device",
             };
             const nextMarks = applyDeviceTypeColors([...marks, hit]);
-            setMarks(nextMarks);
+            commitMarks(nextMarks, "Drawing object added to takeoff.");
             persistTakeoff(nextMarks);
           } else {
             const materialized = materializeDrawingObject(drawingObject, marks);
             hit = materialized?.mark || null;
             if (hit && !materialized.existing) {
               const nextMarks = applyDeviceTypeColors([...marks, hit]);
-              setMarks(nextMarks);
+              commitMarks(nextMarks, "Drawing object added to takeoff.");
               persistTakeoff(nextMarks);
             }
           }
@@ -1383,7 +1394,7 @@ export default function TakeoffWorkspace() {
             layer: "device",
           };
           const nextMarks = applyDeviceTypeColors([...marks, hit]);
-          setMarks(nextMarks);
+          commitMarks(nextMarks, "Drawing object added to takeoff.");
           persistTakeoff(nextMarks);
         }
       }
@@ -1630,6 +1641,10 @@ export default function TakeoffWorkspace() {
     if (!previous) return;
     historyRef.current.future.push(marks);
     setMarks(previous);
+    if (selectedId && !previous.some((mark) => mark.id === selectedId)) {
+      setSelectedId(null);
+      setIsolationMode(false);
+    }
     setStatus("Undid last takeoff change.");
   }
 
@@ -1638,6 +1653,10 @@ export default function TakeoffWorkspace() {
     if (!next) return;
     historyRef.current.past.push(marks);
     setMarks(next);
+    if (selectedId && !next.some((mark) => mark.id === selectedId)) {
+      setSelectedId(null);
+      setIsolationMode(false);
+    }
     setStatus("Redid last takeoff change.");
   }
 
@@ -1725,13 +1744,62 @@ export default function TakeoffWorkspace() {
   function onViewerPointerDown(event) {
     if (tool === "pan" || (tool !== "select" || !selectedId)) return;
     const point = drawingPoint(event);
+    if (!point) return;
     if (tool === "select" && selectedId) {
       const mark = marks.find((item) => item.id === selectedId);
       if (!mark) return;
       const canDrag = isDeviceMark(mark)
         ? hitTestDeviceFill(mark, point, penSize)
         : hitTestMark(sizedMark(mark), point, currentAspect(), markHitThreshold(mark, 3.2));
+      // The southeast resize handle is intentionally larger than its visual dot
+      // so it can be grabbed with a finger without moving the device instead.
+      const bodyBounds = mark.symbolBodyBounds;
+      const width = Number(bodyBounds?.w || mark.outline?.w || 0.7);
+      const height = Number(bodyBounds?.h || mark.outline?.h || 0.7);
+      const handleX = (Number(mark.x) || 0) + width / 2;
+      const handleY = (Number(mark.y) || 0) + height / 2;
+      const resizeHandle = isDeviceMark(mark)
+        && Math.abs(point.x - handleX) < 0.35
+        && Math.abs(point.y - handleY) < 0.35;
+      if (resizeHandle) {
+        event.preventDefault();
+        const beforeResize = marks;
+        let changed = false;
+        suppressEditClickRef.current = false;
+        const pointerId = event.pointerId;
+        const resize = (moveEvent) => {
+          if (moveEvent.pointerId !== pointerId) return;
+          const next = drawingPoint(moveEvent);
+          if (!next) return;
+          const w = Math.max(0.2, Math.min(2.4, 2 * (next.x - (Number(mark.x) || 0))));
+          const h = Math.max(0.2, Math.min(2.4, 2 * (next.y - (Number(mark.y) || 0))));
+          if (!changed && Math.abs(w - width) < 0.01 && Math.abs(h - height) < 0.01) return;
+          if (!changed) {
+            suppressEditClickRef.current = true;
+            historyRef.current.past.push(beforeResize);
+            historyRef.current.future = [];
+            if (historyRef.current.past.length > 80) historyRef.current.past.shift();
+            changed = true;
+          }
+          setMarks((current) => resizeReviewBounds(current, mark, { w, h }));
+        };
+        const finish = (upEvent) => {
+          if (upEvent.pointerId !== pointerId) return;
+          window.removeEventListener("pointermove", resize);
+          window.removeEventListener("pointerup", finish);
+          window.removeEventListener("pointercancel", finish);
+          if (upEvent.type === "pointercancel") suppressEditClickRef.current = false;
+          if (changed) saveTakeoff(true);
+        };
+        window.addEventListener("pointermove", resize);
+        window.addEventListener("pointerup", finish);
+        window.addEventListener("pointercancel", finish);
+        return;
+      }
       if (!canDrag) return;
+      event.preventDefault();
+      let changed = false;
+      suppressEditClickRef.current = false;
       const start = point;
       const origin = mark.points ? mark.points.map((item) => ({ ...item })) : { x: mark.x, y: mark.y };
       const isEditableConduit = mark.tool === "conduit" && Array.isArray(origin) && origin.length >= 2;
@@ -1746,11 +1814,21 @@ export default function TakeoffWorkspace() {
           endpointIndex = firstDistance <= lastDistance ? 0 : origin.length - 1;
         }
       }
+      const pointerId = event.pointerId;
       const move = (moveEvent) => {
+        if (moveEvent.pointerId !== pointerId) return;
         const now = drawingPoint(moveEvent);
         if (!now) return;
         const dx = now.x - start.x;
         const dy = now.y - start.y;
+        if (!changed && Math.hypot(dx, dy) < 0.05) return;
+        if (!changed) {
+          suppressEditClickRef.current = true;
+          historyRef.current.past.push(marks);
+          historyRef.current.future = [];
+          if (historyRef.current.past.length > 80) historyRef.current.past.shift();
+          changed = true;
+        }
         setMarks((current) => current.map((item) => {
           if (item.id !== selectedId) return item;
           if (item.points) {
@@ -1765,15 +1843,23 @@ export default function TakeoffWorkspace() {
             }
             return { ...item, points: origin.map((pt) => ({ x: pt.x + dx, y: pt.y + dy })), lengthEdited: false };
           }
+          if (isDeviceMark(item)) {
+            return moveReviewMark([item], item, { x: origin.x + dx, y: origin.y + dy })[0];
+          }
           return { ...item, x: origin.x + dx, y: origin.y + dy };
         }));
       };
-      const up = () => {
+      const up = (upEvent) => {
+        if (upEvent.pointerId !== pointerId) return;
         window.removeEventListener("pointermove", move);
         window.removeEventListener("pointerup", up);
+        window.removeEventListener("pointercancel", up);
+        if (upEvent.type === "pointercancel") suppressEditClickRef.current = false;
+        if (changed) saveTakeoff(true);
       };
       window.addEventListener("pointermove", move);
       window.addEventListener("pointerup", up);
+      window.addEventListener("pointercancel", up);
     }
   }
 
@@ -2105,7 +2191,39 @@ export default function TakeoffWorkspace() {
                   <button type="button" disabled={sheetMeta.page >= sheetMeta.pageCount} onClick={() => selectSheet(sheetMeta.page + 1)} className="rounded border border-border px-2 py-1 text-xs font-semibold disabled:opacity-40">Next</button>
                 </div>
               )}
-              {selectedId && <button type="button" onClick={deleteSelected} className="rounded-lg px-2 py-1 text-xs font-semibold text-destructive hover:bg-destructive/10">Delete</button>}
+              {selectedMark && isDeviceMark(selectedMark) && tool === "select" && (
+                <div className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg border border-border px-2 py-1" aria-label="Direct object editing controls">
+                  <span className="hidden text-[11px] font-semibold text-muted-foreground sm:inline">Edit selected</span>
+                  <label className="flex items-center gap-1 text-xs font-semibold">
+                    Color
+                    <input
+                      type="color"
+                      aria-label="Selected device highlight color"
+                      value={/^#[0-9a-f]{6}$/i.test(selectedMark.color || "") ? selectedMark.color : "#f97316"}
+                      onChange={(event) => updateMark(selectedMark.id, { color: event.target.value, correction: "color" })}
+                      className="h-9 w-10 cursor-pointer border-0 bg-transparent p-0"
+                    />
+                  </label>
+                  <button type="button" className="min-h-9 rounded px-3 py-2 text-xs font-semibold hover:bg-muted"
+                    onClick={() => {
+                      resizeSelectedReview({
+                        w: (selectedMark.symbolBodyBounds?.w || selectedMark.outline?.w || 0.7) * 0.8,
+                        h: (selectedMark.symbolBodyBounds?.h || selectedMark.outline?.h || 0.7) * 0.8,
+                      });
+                    }} aria-label="Shrink selected device highlight">− Size</button>
+                  <button type="button" className="rounded px-2 py-1 text-xs font-semibold hover:bg-muted"
+                    onClick={() => {
+                      resizeSelectedReview({
+                        w: (selectedMark.symbolBodyBounds?.w || selectedMark.outline?.w || 0.7) * 1.25,
+                        h: (selectedMark.symbolBodyBounds?.h || selectedMark.outline?.h || 0.7) * 1.25,
+                      });
+                    }} aria-label="Enlarge selected device highlight">+ Size</button>
+                  <button type="button" onClick={deleteSelected}
+                    className="min-h-9 rounded px-3 py-2 text-xs font-semibold text-destructive hover:bg-destructive/10"
+                    aria-label="Delete selected takeoff object">Delete</button>
+                </div>
+              )}
+              {selectedId && !(selectedMark && isDeviceMark(selectedMark) && tool === "select") && <button type="button" onClick={deleteSelected} className="rounded-lg px-2 py-1 text-xs font-semibold text-destructive hover:bg-destructive/10">Delete</button>}
               <button type="button" onClick={openAccuracyReview} className="rounded-lg border border-border px-2 py-1 text-xs font-semibold hover:bg-muted">
                 Review{accuracyTotals.pending ? ` ${accuracyTotals.pending}` : ""}
               </button>
@@ -2128,6 +2246,10 @@ export default function TakeoffWorkspace() {
                 }}
                 onClick={(event) => {
                   if (panningRef.current) return;
+                  if (suppressEditClickRef.current) {
+                    suppressEditClickRef.current = false;
+                    return;
+                  }
                   onDrawingClick(event);
                 }}
                 onDoubleClick={finishPath}
@@ -2158,7 +2280,7 @@ export default function TakeoffWorkspace() {
                   setHoverPoint(point);
                 }}
                 onPointerLeave={() => { setHoverPoint(null); setHoveredDeviceId(null); setHoveredGeometryInfo(null); }}
-                className={cn("relative bg-white shadow-xl", tool === "pan" ? "cursor-grab" : tool === "select" ? "cursor-default" : "cursor-crosshair")}
+                className={cn("relative bg-white shadow-xl", tool === "pan" ? "cursor-grab" : tool === "select" ? "cursor-move touch-none" : "cursor-crosshair")}
               >
                 {isPdf ? (
                   fileBytes ? (
@@ -2578,6 +2700,19 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
             ) : (
               <DeviceFill mark={mark} selected focus markerSize={size} />
             )}
+          </g>
+        );
+      })}
+      {tool === "select" && devices.filter((mark) => mark.id === selectedId).map((mark) => {
+        const w = Math.max(0.2, Number(mark.symbolBodyBounds?.w || mark.outline?.w || 0.7));
+        const h = Math.max(0.2, Number(mark.symbolBodyBounds?.h || mark.outline?.h || 0.7));
+        return (
+          <g key={`resize-${mark.id}`} aria-hidden="true">
+            <rect x={mark.x - w / 2} y={mark.y - h / 2} width={w} height={h}
+              fill="none" stroke="#ea580c" strokeWidth="0.2" strokeDasharray="0.35 0.25"
+              vectorEffect="non-scaling-stroke" />
+            <rect x={mark.x + w / 2 - 0.35} y={mark.y + h / 2 - 0.35} width="0.7" height="0.7"
+              fill="#ffffff" stroke="#ea580c" strokeWidth="0.2" vectorEffect="non-scaling-stroke" />
           </g>
         );
       })}

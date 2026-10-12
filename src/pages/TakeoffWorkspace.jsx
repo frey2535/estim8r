@@ -1345,14 +1345,14 @@ export default function TakeoffWorkspace() {
               layer: "device",
             };
             const nextMarks = applyDeviceTypeColors([...marks, hit]);
-            setMarks(nextMarks);
+            commitMarks(nextMarks, "Drawing object added to takeoff.");
             persistTakeoff(nextMarks);
           } else {
             const materialized = materializeDrawingObject(drawingObject, marks);
             hit = materialized?.mark || null;
             if (hit && !materialized.existing) {
               const nextMarks = applyDeviceTypeColors([...marks, hit]);
-              setMarks(nextMarks);
+              commitMarks(nextMarks, "Drawing object added to takeoff.");
               persistTakeoff(nextMarks);
             }
           }
@@ -1387,7 +1387,7 @@ export default function TakeoffWorkspace() {
             layer: "device",
           };
           const nextMarks = applyDeviceTypeColors([...marks, hit]);
-          setMarks(nextMarks);
+          commitMarks(nextMarks, "Drawing object added to takeoff.");
           persistTakeoff(nextMarks);
         }
       }

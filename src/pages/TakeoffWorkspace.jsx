@@ -1072,7 +1072,7 @@ export default function TakeoffWorkspace() {
     if (!isDeviceMark(current)) return;
     const instanceOnly = isUncertainDetection(current);
     const count = instanceOnly ? 1 : typeInstanceCount(marks, current);
-    setMarks((currentMarks) => applyReviewDecision(currentMarks, current, status));
+    commitMarks(applyReviewDecision(marks, current, status), "Device review decision updated.");
     setStatus(instanceOnly
       ? (status === "accepted" ? "Uncertain count accepted." : "Uncertain count rejected. The marker stays on the sheet.")
       : (status === "accepted"

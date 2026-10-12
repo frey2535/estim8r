@@ -1634,6 +1634,10 @@ export default function TakeoffWorkspace() {
     if (!previous) return;
     historyRef.current.future.push(marks);
     setMarks(previous);
+    if (selectedId && !previous.some((mark) => mark.id === selectedId)) {
+      setSelectedId(null);
+      setIsolationMode(false);
+    }
     setStatus("Undid last takeoff change.");
   }
 
@@ -1642,6 +1646,10 @@ export default function TakeoffWorkspace() {
     if (!next) return;
     historyRef.current.past.push(marks);
     setMarks(next);
+    if (selectedId && !next.some((mark) => mark.id === selectedId)) {
+      setSelectedId(null);
+      setIsolationMode(false);
+    }
     setStatus("Redid last takeoff change.");
   }
 

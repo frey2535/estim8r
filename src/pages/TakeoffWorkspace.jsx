@@ -472,7 +472,9 @@ export default function TakeoffWorkspace() {
     setAiPages([]);
 
     const saved = loadSession(nextFile);
-    setMarks(Array.isArray(saved?.marks) ? saved.marks : []);
+    const restoredMarks = Array.isArray(saved?.marks) ? saved.marks : [];
+    setMarks(restoredMarks);
+    historyRef.current = { past: [], future: [] };
     setConfirmedCoverageIds(Array.isArray(saved?.confirmedCoverageIds) ? saved.confirmedCoverageIds : []);
     setConfirmedEmptySheets(saved?.confirmedEmptySheets && typeof saved.confirmedEmptySheets === "object" ? saved.confirmedEmptySheets : {});
     setCalibrations(saved?.calibrations || (saved?.calibration ? { [saved?.sheet || 1]: saved.calibration } : {}));
@@ -488,6 +490,9 @@ export default function TakeoffWorkspace() {
     if (saved?.scheduleEdits) setScheduleEdits(saved.scheduleEdits);
     if (saved?.sheet) setSheetMeta((current) => ({ ...current, page: saved.sheet }));
     setSupplyQuote(saved?.supplyQuote || null);
+    if (restoredMarks.length) {
+      setStatus(`Restored ${restoredMarks.length} saved takeoff object${restoredMarks.length === 1 ? "" : "s"} for ${nextFile.name || "drawing"}.`);
+    }
 
     try {
       let file = nextFile;

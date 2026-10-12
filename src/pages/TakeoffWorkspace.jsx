@@ -514,7 +514,9 @@ export default function TakeoffWorkspace() {
       fileUrlRef.current = url;
       setFileUrl(url);
       setFileBytes(bytes);
-      setStatus(`${file.name} imported. Calibrate scale, then take off the sheet.`);
+      setStatus(restoredMarks.length
+        ? `${file.name} imported with ${restoredMarks.length} saved takeoff object${restoredMarks.length === 1 ? "" : "s"} restored.`
+        : `${file.name} imported. Calibrate scale, then take off the sheet.`);
     } catch (error) {
       console.error("Drawing import failed", error);
       clearPendingDrawing();

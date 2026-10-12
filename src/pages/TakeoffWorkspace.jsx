@@ -1765,15 +1765,20 @@ export default function TakeoffWorkspace() {
             }
             return { ...item, points: origin.map((pt) => ({ x: pt.x + dx, y: pt.y + dy })), lengthEdited: false };
           }
+          if (isDeviceMark(item)) {
+            return moveReviewMark([item], item, { x: origin.x + dx, y: origin.y + dy })[0];
+          }
           return { ...item, x: origin.x + dx, y: origin.y + dy };
         }));
       };
       const up = () => {
         window.removeEventListener("pointermove", move);
         window.removeEventListener("pointerup", up);
+        window.removeEventListener("pointercancel", up);
       };
       window.addEventListener("pointermove", move);
       window.addEventListener("pointerup", up);
+      window.addEventListener("pointercancel", up);
     }
   }
 
@@ -2158,7 +2163,7 @@ export default function TakeoffWorkspace() {
                   setHoverPoint(point);
                 }}
                 onPointerLeave={() => { setHoverPoint(null); setHoveredDeviceId(null); setHoveredGeometryInfo(null); }}
-                className={cn("relative bg-white shadow-xl", tool === "pan" ? "cursor-grab" : tool === "select" ? "cursor-default" : "cursor-crosshair")}
+                className={cn("relative bg-white shadow-xl", tool === "pan" ? "cursor-grab" : tool === "select" ? "cursor-move touch-none" : "cursor-crosshair")}
               >
                 {isPdf ? (
                   fileBytes ? (

@@ -2110,6 +2110,34 @@ export default function TakeoffWorkspace() {
                   <button type="button" disabled={sheetMeta.page >= sheetMeta.pageCount} onClick={() => selectSheet(sheetMeta.page + 1)} className="rounded border border-border px-2 py-1 text-xs font-semibold disabled:opacity-40">Next</button>
                 </div>
               )}
+              {selectedMark && isDeviceMark(selectedMark) && tool === "select" && (
+                <div className="flex shrink-0 items-center gap-2 rounded-lg border border-border px-2 py-1">
+                  <label className="flex items-center gap-1 text-xs font-semibold">
+                    Color
+                    <input
+                      type="color"
+                      aria-label="Selected device highlight color"
+                      value={/^#[0-9a-f]{6}$/i.test(selectedMark.color || "") ? selectedMark.color : "#f97316"}
+                      onChange={(event) => updateMark(selectedMark.id, { color: event.target.value, correction: "color" })}
+                      className="h-6 w-7 cursor-pointer border-0 bg-transparent p-0"
+                    />
+                  </label>
+                  <button type="button" className="rounded px-2 py-1 text-xs font-semibold hover:bg-muted"
+                    onClick={() => {
+                      resizeSelectedReview({
+                        w: (selectedMark.symbolBodyBounds?.w || selectedMark.outline?.w || 0.7) * 0.8,
+                        h: (selectedMark.symbolBodyBounds?.h || selectedMark.outline?.h || 0.7) * 0.8,
+                      });
+                    }} aria-label="Shrink selected device highlight">− Size</button>
+                  <button type="button" className="rounded px-2 py-1 text-xs font-semibold hover:bg-muted"
+                    onClick={() => {
+                      resizeSelectedReview({
+                        w: (selectedMark.symbolBodyBounds?.w || selectedMark.outline?.w || 0.7) * 1.25,
+                        h: (selectedMark.symbolBodyBounds?.h || selectedMark.outline?.h || 0.7) * 1.25,
+                      });
+                    }} aria-label="Enlarge selected device highlight">+ Size</button>
+                </div>
+              )}
               {selectedId && <button type="button" onClick={deleteSelected} className="rounded-lg px-2 py-1 text-xs font-semibold text-destructive hover:bg-destructive/10">Delete</button>}
               <button type="button" onClick={openAccuracyReview} className="rounded-lg border border-border px-2 py-1 text-xs font-semibold hover:bg-muted">
                 Review{accuracyTotals.pending ? ` ${accuracyTotals.pending}` : ""}

@@ -1754,6 +1754,7 @@ export default function TakeoffWorkspace() {
           if (!next) return;
           const w = Math.max(0.2, Math.min(2.4, 2 * (next.x - (Number(mark.x) || 0))));
           const h = Math.max(0.2, Math.min(2.4, 2 * (next.y - (Number(mark.y) || 0))));
+          if (!changed && Math.abs(w - width) < 0.01 && Math.abs(h - height) < 0.01) return;
           if (!changed) {
             historyRef.current.past.push(beforeResize);
             historyRef.current.future = [];
@@ -1797,6 +1798,7 @@ export default function TakeoffWorkspace() {
         if (!now) return;
         const dx = now.x - start.x;
         const dy = now.y - start.y;
+        if (!changed && Math.hypot(dx, dy) < 0.05) return;
         if (!changed) {
           historyRef.current.past.push(marks);
           historyRef.current.future = [];

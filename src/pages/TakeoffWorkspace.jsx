@@ -1091,8 +1091,10 @@ export default function TakeoffWorkspace() {
 
   function changeReviewType(nextSymbol) {
     if (!selectedMark || !nextSymbol) return;
-    setMarks((current) => changeReviewDeviceType(current, selectedMark, nextSymbol));
-    setStatus(`Changed to ${nextSymbol.abbr || nextSymbol.label}. This correction can seed a project prototype.`);
+    commitMarks(
+      changeReviewDeviceType(marks, selectedMark, nextSymbol),
+      `Changed to ${nextSymbol.abbr || nextSymbol.label}. This correction can seed a project prototype.`,
+    );
   }
 
   function moveSelectedReview(point) {

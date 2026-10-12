@@ -995,7 +995,8 @@ export default function TakeoffWorkspace() {
   }
 
   function updateMark(id, patch) {
-    setMarks((current) => current.map((mark) => (mark.id === id ? { ...mark, ...patch } : mark)));
+    const next = marks.map((mark) => (mark.id === id ? { ...mark, ...patch } : mark));
+    commitMarks(next, "Selected takeoff object updated.");
   }
 
   function coverageAfterConfirm(region) {
@@ -1095,12 +1096,12 @@ export default function TakeoffWorkspace() {
 
   function moveSelectedReview(point) {
     if (!selectedMark || !point) return;
-    setMarks((current) => moveReviewMark(current, selectedMark, point));
+    commitMarks(moveReviewMark(marks, selectedMark, point), "Device moved.");
   }
 
   function resizeSelectedReview(bounds) {
     if (!selectedMark) return;
-    setMarks((current) => resizeReviewBounds(current, selectedMark, bounds));
+    commitMarks(resizeReviewBounds(marks, selectedMark, bounds), "Device highlight resized.");
   }
 
   function addMissedDevice() {

@@ -2190,7 +2190,7 @@ export default function TakeoffWorkspace() {
                 </div>
               )}
               {selectedMark && isDeviceMark(selectedMark) && tool === "select" && (
-                <div className="flex shrink-0 items-center gap-2 rounded-lg border border-border px-2 py-1" aria-label="Direct object editing controls">
+                <div className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg border border-border px-2 py-1" aria-label="Direct object editing controls">
                   <span className="hidden text-[11px] font-semibold text-muted-foreground sm:inline">Edit selected</span>
                   <label className="flex items-center gap-1 text-xs font-semibold">
                     Color
@@ -2199,10 +2199,10 @@ export default function TakeoffWorkspace() {
                       aria-label="Selected device highlight color"
                       value={/^#[0-9a-f]{6}$/i.test(selectedMark.color || "") ? selectedMark.color : "#f97316"}
                       onChange={(event) => updateMark(selectedMark.id, { color: event.target.value, correction: "color" })}
-                      className="h-6 w-7 cursor-pointer border-0 bg-transparent p-0"
+                      className="h-9 w-10 cursor-pointer border-0 bg-transparent p-0"
                     />
                   </label>
-                  <button type="button" className="rounded px-2 py-1 text-xs font-semibold hover:bg-muted"
+                  <button type="button" className="min-h-9 rounded px-3 py-2 text-xs font-semibold hover:bg-muted"
                     onClick={() => {
                       resizeSelectedReview({
                         w: (selectedMark.symbolBodyBounds?.w || selectedMark.outline?.w || 0.7) * 0.8,
@@ -2217,7 +2217,7 @@ export default function TakeoffWorkspace() {
                       });
                     }} aria-label="Enlarge selected device highlight">+ Size</button>
                   <button type="button" onClick={deleteSelected}
-                    className="rounded px-2 py-1 text-xs font-semibold text-destructive hover:bg-destructive/10"
+                    className="min-h-9 rounded px-3 py-2 text-xs font-semibold text-destructive hover:bg-destructive/10"
                     aria-label="Delete selected takeoff object">Delete</button>
                 </div>
               )}

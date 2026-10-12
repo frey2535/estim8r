@@ -1210,6 +1210,18 @@ export default function TakeoffWorkspace() {
         projectPrototypes: projectPrototypesFromCorrections(marks),
       });
       setSearchManifest(planned.searchManifest || null);
+      // Distinguish a failed/empty scan from a genuine zero-symbol result.
+      // This is especially important on mobile where the PDF may render while
+      // text and vector extraction produce no usable symbol candidates.
+      const scannedPages = (pages || []).filter((page) => shouldScanWithDictionary(page, trade, scanDictionary));
+      const scanDiagnostics = {
+        totalPages: pages.length,
+        scannedPages: scannedPages.length,
+        textTokens: scannedPages.reduce((sum, page) => sum + (page.tokens?.length || 0), 0),
+        vectorPaths: scannedPages.reduce((sum, page) => sum + (page.paths?.length || 0), 0),
+        rasterCandidates: scannedPages.reduce((sum, page) => sum + (page.rasterPaths?.length || 0), 0),
+        legendEntries: scanDictionary?.entries?.length || 0,
+      };
       const colored = applyDeviceTypeColors(
         (planned.marks || []).map((mark) => ({
           ...mark,
@@ -1237,6 +1249,17 @@ export default function TakeoffWorkspace() {
       const devices = nextMarks.filter(isDeviceMark).length;
       const conduits = nextMarks.filter((mark) => mark.tool === "conduit" || mark.type === "homerun").length;
       if (!silent) {
+        if (planned.deviceCount === 0) {
+          const d = scanDiagnostics;
+          const reason = d.scannedPages === 0
+            ? "No eligible plan sheets were recognized."
+            : d.vectorPaths === 0 && d.rasterCandidates === 0
+              ? "No usable symbol geometry was extracted."
+              : d.legendEntries === 0
+                ? "No usable legend entries were recognized."
+                : "Symbol matching returned zero counted devices.";
+          setStatus(`AI found 0 devices. ${reason} Diagnostic: ${d.scannedPages}/${d.totalPages} sheets scanned; ${d.textTokens} text tokens; ${d.vectorPaths} vector paths; ${d.rasterCandidates} raster candidates; ${d.legendEntries} legend entries. Please share this diagnostic when reporting the failure.`);
+        } else {
         setStatus(
           `${planned.summary || `AI marked ${devices} devices and ${conduits} conduit runs.`} `
           + `${planned.searchManifest?.totalSymbols ? `Searched ${planned.searchManifest.totalSymbols} legend symbol targets across ${planned.searchManifest.sheetCount} applicable sheet${planned.searchManifest.sheetCount === 1 ? "" : "s"}. ` : ""}`
@@ -1244,6 +1267,7 @@ export default function TakeoffWorkspace() {
           + `Verify the colored marks on the sheet.`
           + (quote.rows.length ? ` Supply quote ready (${quote.totals.quantity} plan devices).` : ""),
         );
+        }
       }
       return nextMarks;
     } catch (error) {

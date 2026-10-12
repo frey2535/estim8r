@@ -1725,6 +1725,7 @@ export default function TakeoffWorkspace() {
   function onViewerPointerDown(event) {
     if (tool === "pan" || (tool !== "select" || !selectedId)) return;
     const point = drawingPoint(event);
+    if (!point) return;
     if (tool === "select" && selectedId) {
       const mark = marks.find((item) => item.id === selectedId);
       if (!mark) return;
@@ -1739,8 +1740,8 @@ export default function TakeoffWorkspace() {
       const handleX = (Number(mark.x) || 0) + width / 2;
       const handleY = (Number(mark.y) || 0) + height / 2;
       const resizeHandle = isDeviceMark(mark)
-        && Math.abs(point.x - handleX) < 0.85
-        && Math.abs(point.y - handleY) < 0.85;
+        && Math.abs(point.x - handleX) < 0.35
+        && Math.abs(point.y - handleY) < 0.35;
       if (resizeHandle) {
         event.preventDefault();
         const pointerId = event.pointerId;

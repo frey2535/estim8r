@@ -1745,6 +1745,10 @@ export default function TakeoffWorkspace() {
         && Math.abs(point.y - handleY) < 0.35;
       if (resizeHandle) {
         event.preventDefault();
+        const beforeResize = marks;
+        historyRef.current.past.push(beforeResize);
+        historyRef.current.future = [];
+        if (historyRef.current.past.length > 80) historyRef.current.past.shift();
         const pointerId = event.pointerId;
         const resize = (moveEvent) => {
           if (moveEvent.pointerId !== pointerId) return;
@@ -1766,6 +1770,10 @@ export default function TakeoffWorkspace() {
         return;
       }
       if (!canDrag) return;
+      event.preventDefault();
+      historyRef.current.past.push(marks);
+      historyRef.current.future = [];
+      if (historyRef.current.past.length > 80) historyRef.current.past.shift();
       const start = point;
       const origin = mark.points ? mark.points.map((item) => ({ ...item })) : { x: mark.x, y: mark.y };
       const isEditableConduit = mark.tool === "conduit" && Array.isArray(origin) && origin.length >= 2;
@@ -1780,7 +1788,9 @@ export default function TakeoffWorkspace() {
           endpointIndex = firstDistance <= lastDistance ? 0 : origin.length - 1;
         }
       }
+      const pointerId = event.pointerId;
       const move = (moveEvent) => {
+        if (moveEvent.pointerId !== pointerId) return;
         const now = drawingPoint(moveEvent);
         if (!now) return;
         const dx = now.x - start.x;
@@ -1805,7 +1815,8 @@ export default function TakeoffWorkspace() {
           return { ...item, x: origin.x + dx, y: origin.y + dy };
         }));
       };
-      const up = () => {
+      const up = (upEvent) => {
+        if (upEvent.pointerId !== pointerId) return;
         window.removeEventListener("pointermove", move);
         window.removeEventListener("pointerup", up);
         window.removeEventListener("pointercancel", up);

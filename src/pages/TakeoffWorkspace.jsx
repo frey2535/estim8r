@@ -1732,6 +1732,38 @@ export default function TakeoffWorkspace() {
         ? hitTestDeviceFill(mark, point, penSize)
         : hitTestMark(sizedMark(mark), point, currentAspect(), markHitThreshold(mark, 3.2));
       if (!canDrag) return;
+      // The southeast resize handle is intentionally larger than its visual dot
+      // so it can be grabbed with a finger without moving the device instead.
+      const bodyBounds = mark.symbolBodyBounds;
+      const width = Number(bodyBounds?.w || mark.outline?.w || 0.7);
+      const height = Number(bodyBounds?.h || mark.outline?.h || 0.7);
+      const handleX = (Number(mark.x) || 0) + width / 2;
+      const handleY = (Number(mark.y) || 0) + height / 2;
+      const resizeHandle = isDeviceMark(mark)
+        && Math.abs(point.x - handleX) < 0.85
+        && Math.abs(point.y - handleY) < 0.85;
+      if (resizeHandle) {
+        event.preventDefault();
+        const pointerId = event.pointerId;
+        const resize = (moveEvent) => {
+          if (moveEvent.pointerId !== pointerId) return;
+          const next = drawingPoint(moveEvent);
+          if (!next) return;
+          const w = Math.max(0.2, Math.min(2.4, 2 * (next.x - (Number(mark.x) || 0))));
+          const h = Math.max(0.2, Math.min(2.4, 2 * (next.y - (Number(mark.y) || 0))));
+          setMarks((current) => resizeReviewBounds(current, mark, { w, h }));
+        };
+        const finish = (upEvent) => {
+          if (upEvent.pointerId !== pointerId) return;
+          window.removeEventListener("pointermove", resize);
+          window.removeEventListener("pointerup", finish);
+          window.removeEventListener("pointercancel", finish);
+        };
+        window.addEventListener("pointermove", resize);
+        window.addEventListener("pointerup", finish);
+        window.addEventListener("pointercancel", finish);
+        return;
+      }
       const start = point;
       const origin = mark.points ? mark.points.map((item) => ({ ...item })) : { x: mark.x, y: mark.y };
       const isEditableConduit = mark.tool === "conduit" && Array.isArray(origin) && origin.length >= 2;
@@ -2611,6 +2643,19 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
             ) : (
               <DeviceFill mark={mark} selected focus markerSize={size} />
             )}
+          </g>
+        );
+      })}
+      {tool === "select" && devices.filter((mark) => mark.id === selectedId).map((mark) => {
+        const w = Math.max(0.2, Number(mark.symbolBodyBounds?.w || mark.outline?.w || 0.7));
+        const h = Math.max(0.2, Number(mark.symbolBodyBounds?.h || mark.outline?.h || 0.7));
+        return (
+          <g key={`resize-${mark.id}`} aria-hidden="true">
+            <rect x={mark.x - w / 2} y={mark.y - h / 2} width={w} height={h}
+              fill="none" stroke="#ea580c" strokeWidth="0.2" strokeDasharray="0.35 0.25"
+              vectorEffect="non-scaling-stroke" />
+            <rect x={mark.x + w / 2 - 0.35} y={mark.y + h / 2 - 0.35} width="0.7" height="0.7"
+              fill="#ffffff" stroke="#ea580c" strokeWidth="0.2" vectorEffect="non-scaling-stroke" />
           </g>
         );
       })}

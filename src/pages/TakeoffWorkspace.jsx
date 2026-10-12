@@ -1746,9 +1746,7 @@ export default function TakeoffWorkspace() {
       if (resizeHandle) {
         event.preventDefault();
         const beforeResize = marks;
-        historyRef.current.past.push(beforeResize);
-        historyRef.current.future = [];
-        if (historyRef.current.past.length > 80) historyRef.current.past.shift();
+        let changed = false;
         const pointerId = event.pointerId;
         const resize = (moveEvent) => {
           if (moveEvent.pointerId !== pointerId) return;
@@ -1756,6 +1754,12 @@ export default function TakeoffWorkspace() {
           if (!next) return;
           const w = Math.max(0.2, Math.min(2.4, 2 * (next.x - (Number(mark.x) || 0))));
           const h = Math.max(0.2, Math.min(2.4, 2 * (next.y - (Number(mark.y) || 0))));
+          if (!changed) {
+            historyRef.current.past.push(beforeResize);
+            historyRef.current.future = [];
+            if (historyRef.current.past.length > 80) historyRef.current.past.shift();
+            changed = true;
+          }
           setMarks((current) => resizeReviewBounds(current, mark, { w, h }));
         };
         const finish = (upEvent) => {
@@ -1771,9 +1775,7 @@ export default function TakeoffWorkspace() {
       }
       if (!canDrag) return;
       event.preventDefault();
-      historyRef.current.past.push(marks);
-      historyRef.current.future = [];
-      if (historyRef.current.past.length > 80) historyRef.current.past.shift();
+      let changed = false;
       const start = point;
       const origin = mark.points ? mark.points.map((item) => ({ ...item })) : { x: mark.x, y: mark.y };
       const isEditableConduit = mark.tool === "conduit" && Array.isArray(origin) && origin.length >= 2;
@@ -1795,6 +1797,12 @@ export default function TakeoffWorkspace() {
         if (!now) return;
         const dx = now.x - start.x;
         const dy = now.y - start.y;
+        if (!changed) {
+          historyRef.current.past.push(marks);
+          historyRef.current.future = [];
+          if (historyRef.current.past.length > 80) historyRef.current.past.shift();
+          changed = true;
+        }
         setMarks((current) => current.map((item) => {
           if (item.id !== selectedId) return item;
           if (item.points) {

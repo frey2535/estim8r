@@ -2191,7 +2191,8 @@ export default function TakeoffWorkspace() {
               )}
               {selectedMark && isDeviceMark(selectedMark) && tool === "select" && (
                 <div className="flex shrink-0 items-center gap-2 rounded-lg border border-border px-2 py-1" aria-label="Direct object editing controls">
-                  <span className="hidden text-[11px] font-semibold text-muted-foreground sm:inline">Edit selected</span>\n                  <label className="flex items-center gap-1 text-xs font-semibold">
+                  <span className="hidden text-[11px] font-semibold text-muted-foreground sm:inline">Edit selected</span>
+                  <label className="flex items-center gap-1 text-xs font-semibold">
                     Color
                     <input
                       type="color"
@@ -2220,7 +2221,7 @@ export default function TakeoffWorkspace() {
                     aria-label="Delete selected takeoff object">Delete</button>
                 </div>
               )}
-              {selectedId && <button type="button" onClick={deleteSelected} className="rounded-lg px-2 py-1 text-xs font-semibold text-destructive hover:bg-destructive/10">Delete</button>}
+              {selectedId && !(selectedMark && isDeviceMark(selectedMark) && tool === "select") && <button type="button" onClick={deleteSelected} className="rounded-lg px-2 py-1 text-xs font-semibold text-destructive hover:bg-destructive/10">Delete</button>}
               <button type="button" onClick={openAccuracyReview} className="rounded-lg border border-border px-2 py-1 text-xs font-semibold hover:bg-muted">
                 Review{accuracyTotals.pending ? ` ${accuracyTotals.pending}` : ""}
               </button>

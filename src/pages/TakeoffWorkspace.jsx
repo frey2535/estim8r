@@ -208,6 +208,7 @@ export default function TakeoffWorkspace() {
   const panRef = useRef(pan);
   const panLayerRef = useRef(null);
   const panningRef = useRef(false);
+  const suppressEditClickRef = useRef(false);
   panRef.current = pan;
   const draftJunctionIdsRef = useRef([]);
   const [marks, setMarks] = useState([]);
@@ -1756,6 +1757,7 @@ export default function TakeoffWorkspace() {
           const h = Math.max(0.2, Math.min(2.4, 2 * (next.y - (Number(mark.y) || 0))));
           if (!changed && Math.abs(w - width) < 0.01 && Math.abs(h - height) < 0.01) return;
           if (!changed) {
+            suppressEditClickRef.current = true;
             historyRef.current.past.push(beforeResize);
             historyRef.current.future = [];
             if (historyRef.current.past.length > 80) historyRef.current.past.shift();
@@ -1800,6 +1802,7 @@ export default function TakeoffWorkspace() {
         const dy = now.y - start.y;
         if (!changed && Math.hypot(dx, dy) < 0.05) return;
         if (!changed) {
+          suppressEditClickRef.current = true;
           historyRef.current.past.push(marks);
           historyRef.current.future = [];
           if (historyRef.current.past.length > 80) historyRef.current.past.shift();
@@ -2216,6 +2219,10 @@ export default function TakeoffWorkspace() {
                 }}
                 onClick={(event) => {
                   if (panningRef.current) return;
+                  if (suppressEditClickRef.current) {
+                    suppressEditClickRef.current = false;
+                    return;
+                  }
                   onDrawingClick(event);
                 }}
                 onDoubleClick={finishPath}

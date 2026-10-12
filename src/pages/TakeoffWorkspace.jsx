@@ -1748,6 +1748,7 @@ export default function TakeoffWorkspace() {
         event.preventDefault();
         const beforeResize = marks;
         let changed = false;
+        suppressEditClickRef.current = false;
         const pointerId = event.pointerId;
         const resize = (moveEvent) => {
           if (moveEvent.pointerId !== pointerId) return;
@@ -1770,6 +1771,7 @@ export default function TakeoffWorkspace() {
           window.removeEventListener("pointermove", resize);
           window.removeEventListener("pointerup", finish);
           window.removeEventListener("pointercancel", finish);
+        if (upEvent.type === "pointercancel") suppressEditClickRef.current = false;
         };
         window.addEventListener("pointermove", resize);
         window.addEventListener("pointerup", finish);
@@ -1779,6 +1781,7 @@ export default function TakeoffWorkspace() {
       if (!canDrag) return;
       event.preventDefault();
       let changed = false;
+      suppressEditClickRef.current = false;
       const start = point;
       const origin = mark.points ? mark.points.map((item) => ({ ...item })) : { x: mark.x, y: mark.y };
       const isEditableConduit = mark.tool === "conduit" && Array.isArray(origin) && origin.length >= 2;
@@ -1833,6 +1836,7 @@ export default function TakeoffWorkspace() {
         window.removeEventListener("pointermove", move);
         window.removeEventListener("pointerup", up);
         window.removeEventListener("pointercancel", up);
+        if (upEvent.type === "pointercancel") suppressEditClickRef.current = false;
       };
       window.addEventListener("pointermove", move);
       window.addEventListener("pointerup", up);

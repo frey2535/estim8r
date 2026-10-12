@@ -412,6 +412,16 @@ export function shouldScanWithDictionary(page, trade, dictionary) {
   const fromId = tradeFromSheetId(id);
   if (fromId && fromId !== "electrical") return false;
 
+  // CAD exports can have an electrical sheet number but no extractable title.
+  // Keep geometry-bearing electrical plan sheets eligible even when the
+  // text classifier fails; otherwise the entire takeoff silently returns zero.
+  // Exclude cover/index and clearly non-plan schedules or specifications.
+  const kind = String(page.kind || "").toLowerCase();
+  if (fromId === "electrical"
+    && !isNonPlanSheetKind(kind)
+    && kind !== "spec"
+    && (page.paths || []).length >= 12) return true;
+
   const codes = knownLegendCodes(dictionary);
   if (!codes.size) return false;
 
@@ -429,7 +439,6 @@ export function shouldScanWithDictionary(page, trade, dictionary) {
   // Geometry-heavy pages classified as "drawing"/"other" are also eligible
   // when the project already has an electrical legend. This avoids a complete
   // zero-result run when title extraction fails.
-  const kind = String(page.kind || "").toLowerCase();
   return (kind === "drawing" || kind === "other")
     && (page.paths || []).length >= 180
     && (page.tokens || []).length >= 8;

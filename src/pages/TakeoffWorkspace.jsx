@@ -1789,6 +1789,7 @@ export default function TakeoffWorkspace() {
           window.removeEventListener("pointerup", finish);
           window.removeEventListener("pointercancel", finish);
           if (upEvent.type === "pointercancel") suppressEditClickRef.current = false;
+          if (changed) saveTakeoff(true);
         };
         window.addEventListener("pointermove", resize);
         window.addEventListener("pointerup", finish);
@@ -1854,6 +1855,7 @@ export default function TakeoffWorkspace() {
         window.removeEventListener("pointerup", up);
         window.removeEventListener("pointercancel", up);
         if (upEvent.type === "pointercancel") suppressEditClickRef.current = false;
+        if (changed) saveTakeoff(true);
       };
       window.addEventListener("pointermove", move);
       window.addEventListener("pointerup", up);

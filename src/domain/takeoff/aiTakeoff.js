@@ -1238,12 +1238,15 @@ export function buildAiMarks({
     ];
     for (const visual of unlabeledHits) {
       const geometry = visual.geometry;
-      const symbol = visual.entry.symbol;
       const paintOutline = symbolBodyOutline(geometry, page.tokens, { paths: page.paths });
       const placed = {
         x: Number(paintOutline?.cx ?? geometry.cx),
         y: Number(paintOutline?.cy ?? geometry.cy),
       };
+      const typed = nearbyLegendEntry(placed, page.tokens, dictionary, { radius: 1.35 });
+      const effectiveEntry = typed?.entry || visual.entry;
+      const symbol = effectiveEntry?.symbol;
+      if (!symbol) continue;
       if (isVisualOnlyEquipmentHit(visual, page, placed)) continue;
       const titleBand = planType !== "power" && (placed.x > 64 || placed.y < 12);
       if (!placementAllowed(placed, { sitePlan }) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens) || titleBand) continue;

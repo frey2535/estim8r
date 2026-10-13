@@ -471,11 +471,11 @@ function addSection(sections, seen, page, x, y, label) {
   });
 }
 
-export function findConduitSections(pages, trade) {
+export function findConduitSections(pages, trade, dictionary = null) {
   const sections = [];
   const seen = new Set();
   for (const page of pages || []) {
-    if (!shouldScan(page, trade)) continue;
+    if (!shouldScanWithDictionary(page, trade, dictionary)) continue;
     const tokens = page.tokens || [];
     for (const token of tokens) {
       const letter = String(token.text || "").trim().toUpperCase();
@@ -737,10 +737,10 @@ function attachCalloutToPath(conduits, callout) {
   return false;
 }
 
-export function findConduitRunCallouts(pages, trade) {
+export function findConduitRunCallouts(pages, trade, dictionary = null) {
   const callouts = [];
   for (const page of pages || []) {
-    if (!shouldScan(page, trade)) continue;
+    if (!shouldScanWithDictionary(page, trade, dictionary)) continue;
     for (const phrase of phrasesFromTokens(page.tokens || [])) {
       const parsed = parseConduitCallout(phrase.text);
       if (!parsed) continue;
@@ -1505,7 +1505,7 @@ export function buildAiMarks({
   const validatedCounts = validateTaggedEquipmentMarks(counts, pages);
   const anchors = validatedCounts.filter((mark) => mark.anchor && !isReviewOnlyMark(mark));
   const devices = validatedCounts.filter((mark) => !mark.anchor && !isReviewOnlyMark(mark));
-  const sections = findConduitSections(pages, trade);
+  const sections = findConduitSections(pages, trade, dictionary);
   const groups = groupHomeruns(devices, anchors, maxHomeruns, { sections });
   const conduits = groups.map((group, index) => {
     const points = conduitRoutePoints(group.devices, group.anchor);
@@ -1532,7 +1532,7 @@ export function buildAiMarks({
     mark.runLabel = conduitRunLabel(mark);
     return mark;
   }).filter(Boolean);
-  const callouts = findConduitRunCallouts(pages, trade);
+  const callouts = findConduitRunCallouts(pages, trade, dictionary);
   conduits.push(...applyConduitCallouts(conduits, callouts, anchors, conduits.length, trade, color));
   const cap = Math.max(1, Number(maxHomeruns) || DEFAULT_MAX_HOMERUNS);
   const pageKinds = Object.fromEntries((pages || []).filter((page) => page?.page).map((page) => [page.page, page.kind]));

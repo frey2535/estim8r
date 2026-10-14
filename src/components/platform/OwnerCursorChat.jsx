@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Activity, Bot, Camera, Loader2, Minimize2, Play, RefreshCw, Send, X } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
+import { supabase } from "@/api/supabaseClient";
 import { CURSOR_CHAT_STORAGE, canUseOwnerCursorChat, screenLabel } from "@/lib/ownerCursorChat";
 import { collectOwnerChatEvidence, installOwnerChatEvidence } from "@/lib/ownerChatEvidence";
 import { inspectOwnerEvidence } from "@/lib/ownerChatInspector";
@@ -45,6 +46,7 @@ export default function OwnerCursorChat() {
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState(readHistory);
   const [inspecting, setInspecting] = useState(false);
+  const [replying, setReplying] = useState(false);
   const [snapshot, setSnapshot] = useState(null);
   const [capture, setCapture] = useState(null);
   const [capturing, setCapturing] = useState(false);
@@ -105,21 +107,28 @@ export default function OwnerCursorChat() {
     dispatchOwnerAiTakeoff();
     setMessages((current) => [...current, message("assistant", "Requested AI Assist on the active Takeoff workspace. Check its on-screen result; detection success is not yet verified.")]);
   }
-  function send(event) {
+  async function send(event) {
     event.preventDefault();
     const text = draft.trim();
-    if (!text) return;
+    if (!text || replying) return;
     setDraft("");
-    const evidence = collectOwnerChatEvidence(location.pathname);
-    const result = inspectOwnerEvidence(evidence, text);
-    setSnapshot({ evidence, result });
-    const lower = text.toLowerCase();
-    const reply = /run (?:ai|takeoff)|start (?:ai|takeoff)/.test(lower)
-      ? "To start detection on this drawing, select Run AI Assist. I cannot confirm its accuracy until the results are checked."
-      : /(?:error|crash|broken|fail|issue|wrong|missing|not working|incorrect|bug)/.test(lower) && result.findings.length
-        ? `I found ${result.findings.length} captured issue(s) on this screen. ${result.findings.slice(0, 2).map((item) => item.what).join(" ")} These observations alone do not establish the root cause or prove a fix.`
-        : "I cannot answer that question reliably with the current local diagnostics. A conversational AI model is not connected yet, so I will not invent an answer or dump unrelated screen details. You can use Inspect screen for a diagnostic report.";
-    setMessages((current) => [...current, message("user", text), message("assistant", reply)]);
+    const history = messages.slice(-8).map(({ role, text: content }) => ({ role, text: content }));
+    setMessages((current) => [...current, message("user", text)]);
+    setReplying(true);
+    try {
+      if (!supabase) throw new Error("Sign-in service is not configured.");
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session?.access_token) throw new Error("Sign in again to use AI chat.");
+      const { data, error } = await supabase.functions.invoke("owner-agent-chat", {
+        headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
+        body: { message: text, history, context: collectOwnerChatEvidence(location.pathname) },
+      });
+      if (error) throw new Error("The AI service is unavailable or has not been deployed.");
+      if (!data?.answer) throw new Error(data?.error || "The AI service did not return an answer.");
+      setMessages((current) => [...current, message("assistant", data.answer)]);
+    } catch (error) {
+      setMessages((current) => [...current, message("assistant", `I couldn't connect to the AI service: ${error.message} No fix has been made.`)]);
+    } finally { setReplying(false); }
   }
 
   if (!allowed) return null;
@@ -139,7 +148,7 @@ export default function OwnerCursorChat() {
           <Button type="button" size="icon" variant="ghost" onClick={() => setOpen(false)} aria-label="Close assistant"><X className="h-4 w-4" /></Button>
         </header>
         <div className="border-b border-border px-3 py-2 text-xs text-muted-foreground" data-testid="owner-cursor-chat-status">
-          <Activity className="mr-1 inline h-3.5 w-3.5" /> Local diagnostics only · Conversational AI not connected.
+          <Activity className="mr-1 inline h-3.5 w-3.5" /> AI chat requires the authenticated owner-agent-chat service.
           {snapshot && <span className="block">Last inspected: {new Date(snapshot.evidence.capturedAt).toLocaleTimeString()} · {snapshot.result.findings.length} findings</span>}
         </div>
         <div className="flex gap-2 border-b border-border px-3 py-2">
@@ -160,7 +169,7 @@ export default function OwnerCursorChat() {
         <form onSubmit={send} className="border-t border-border p-2">
           <Textarea data-testid="owner-cursor-chat-input" value={draft} onChange={(event) => setDraft(event.target.value)}
             placeholder="Ask a question about Estim8r…" className="min-h-[64px] resize-none" />
-          <div className="mt-2 flex justify-end"><Button type="submit" size="sm" disabled={!draft.trim()}><Send className="mr-1 h-3.5 w-3.5" /> Send</Button></div>
+          <div className="mt-2 flex justify-end"><Button type="submit" size="sm" disabled={!draft.trim() || replying}><Send className="mr-1 h-3.5 w-3.5" /> {replying ? "Thinking…" : "Send"}</Button></div>
         </form>
       </aside>}
     </>

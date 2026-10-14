@@ -28,6 +28,8 @@ function inspectionText(evidence, inspection) {
     evidence.takeoff?.present ? `Drawing: ${evidence.takeoff.name || "unnamed"}, sheet ${evidence.takeoff.page || 1}` : "",
     evidence.estimate?.present ? `Estimate: ${evidence.estimate.projectName || "active"}, ${evidence.estimate.lineCount} lines` : "",
     `Recent errors/validation issues: ${inspection.findings.length}`,
+    `Open dialogs: ${evidence.workspace?.dialogs || 0}`,
+    evidence.workspace?.controls?.length ? `Visible controls: ${evidence.workspace.controls.map((item) => item.label).join(", ").slice(0, 450)}` : "",
     ...inspection.findings.slice(0, 5).map((item) => `• ${item.what} [${item.file}]`),
   ].filter(Boolean);
   if (!inspection.findings.length) lines.push("No captured errors or invalid fields on this tab. This does not verify that the feature works.");

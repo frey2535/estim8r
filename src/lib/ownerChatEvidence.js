@@ -172,6 +172,21 @@ function isChromeNode(el) {
   return false;
 }
 
+function snapshotWorkspaceControls() {
+  if (typeof document === "undefined") return { controls: [], dialogs: 0 };
+  const controls = [...document.querySelectorAll("main button, main [role=button], main select, main input")]
+    .filter((el) => !el.closest("[data-testid=owner-cursor-chat]"))
+    .slice(0, 120)
+    .map((el) => ({
+      type: el.tagName.toLowerCase(),
+      label: redactOwnerDiagnostic(el.getAttribute("aria-label") || el.getAttribute("title") || (el.tagName === "BUTTON" ? el.textContent : "") || "").trim().slice(0, 90),
+      disabled: Boolean(el.disabled),
+    }))
+    .filter((el) => el.label)
+    .slice(0, 24);
+  return { controls, dialogs: document.querySelectorAll("[role=dialog]").length };
+}
+
 function snapshotVisible() {
   if (typeof document === "undefined") return { alerts: [], invalid: [] };
   const alerts = [...document.querySelectorAll("[role='alert']")]
@@ -202,5 +217,6 @@ export function collectOwnerChatEvidence(pathname = "/") {
     estimate: snapshotEstimate(),
     takeoff: snapshotTakeoff(),
     visible: snapshotVisible(),
+    workspace: snapshotWorkspaceControls(),
   };
 }

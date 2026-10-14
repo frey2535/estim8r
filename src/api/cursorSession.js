@@ -43,6 +43,13 @@ async function fetchOwnerJson(path, init) {
         lastError.status = response.status;
         continue;
       }
+      // A missing route on the Estim8r-prefixed API must not prevent trying
+      // the shared Buildr owner route. Keep auth errors as auth errors.
+      if (response.status === 404 || response.status === 405) {
+        lastError = new Error(`Owner agent route unavailable (${response.status}).`);
+        lastError.status = response.status;
+        continue;
+      }
       return response;
     } catch (error) {
       lastError = error;
@@ -66,9 +73,8 @@ export async function probeCursorSession(email) {
     });
     if (response.status === 401 || response.status === 403) {
       return {
-        state: "ready",
-        session: { attached: true, agent: "buildr-in-app" },
-        message: "Same Buildr in-app agent. Sign in once through Buildr if a turn cannot ship.",
+        state: "detached",
+        message: "Buildr agent authentication is required. Sign in through Buildr and try again.",
       };
     }
     if (!response.ok) {

@@ -2303,7 +2303,7 @@ export default function TakeoffWorkspace() {
           />
           <div className="flex shrink-0 flex-nowrap items-center gap-2 overflow-x-auto border-b border-border px-2 py-1.5 lg:flex-wrap lg:justify-between">
             <div className="flex shrink-0 items-center gap-1 lg:flex-wrap">
-              <div className="lg:hidden">
+              <div className="hidden lg:block">
                 <TakeoffSizeControl
                   compact
                   markerSize={penSize}
@@ -2664,6 +2664,14 @@ export default function TakeoffWorkspace() {
               </button>
             );
           })}
+        </div>
+        <div className="mt-4 rounded-xl border border-border bg-muted/40 p-3">
+          <TakeoffSizeControl
+            markerSize={penSize}
+            lineSize={penThickness}
+            onMarkerSize={setPenSize}
+            onLineSize={setPenThickness}
+          />
         </div>
         {typeSwatches.length ? (
           <div className="mt-4">

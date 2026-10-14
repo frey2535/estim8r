@@ -25,7 +25,7 @@ export function TakeoffMobileCommandBar({
 }) {
   return (
     <div className="shrink-0 border-b border-border bg-card px-2 py-2 lg:hidden" data-testid="takeoff-mobile-commands">
-      <div className="grid grid-cols-[minmax(0,1.15fr)_auto_auto_minmax(0,1fr)] items-center gap-1.5">
+      <div className="grid grid-cols-2 gap-1.5">
         <button
           type="button"
           disabled={aiBusy}
@@ -33,28 +33,35 @@ export function TakeoffMobileCommandBar({
           className={cn(commandBtn, "bg-blue-600 text-white dark:bg-orange-500 disabled:opacity-60")}
         >
           <ScanSearch className="h-5 w-5 shrink-0" />
-          <span className="truncate">{aiBusy ? "AI working" : "AI assist"}</span>
+          <span>{aiBusy ? "AI working" : "AI assist"}</span>
         </button>
+        <Link
+          to={estimatePath}
+          className={cn(commandBtn, "border border-blue-600 bg-blue-50 text-blue-800 dark:border-orange-500 dark:bg-orange-500/10 dark:text-orange-200")}
+        >
+          <Calculator className="h-5 w-5 shrink-0" />
+          Estimate
+        </Link>
         <button
           type="button"
           aria-pressed={pagesOpen}
           onClick={onTogglePages}
           className={cn(
             commandBtn,
-            "min-w-[72px] border border-border bg-background",
+            "border border-border bg-background",
             pagesOpen && "border-blue-600 bg-blue-50 text-blue-800 dark:border-orange-500 dark:bg-orange-500/10 dark:text-orange-200",
           )}
         >
           Pages
         </button>
-        <div className="flex items-center rounded-xl border border-border bg-background">
+        <div className="flex items-center justify-between rounded-xl border border-border bg-background">
           <button type="button" onClick={onZoomOut} className="flex h-11 w-11 items-center justify-center" aria-label="Zoom out" title="Zoom out">
             <ZoomOut className="h-5 w-5" />
           </button>
           <button
             type="button"
             onClick={onFit}
-            className="min-w-14 px-1 text-center text-[15px] font-black tabular-nums"
+            className="min-w-16 px-1 text-center text-[15px] font-black tabular-nums"
             title="Fit sheet"
             aria-label={`Zoom ${Math.round(zoom * 100)} percent. Tap to fit sheet.`}
           >
@@ -64,13 +71,6 @@ export function TakeoffMobileCommandBar({
             <ZoomIn className="h-5 w-5" />
           </button>
         </div>
-        <Link
-          to={estimatePath}
-          className={cn(commandBtn, "border border-blue-600 bg-blue-50 text-blue-800 dark:border-orange-500 dark:bg-orange-500/10 dark:text-orange-200")}
-        >
-          <Calculator className="h-5 w-5 shrink-0" />
-          <span className="truncate">Estimate</span>
-        </Link>
       </div>
     </div>
   );

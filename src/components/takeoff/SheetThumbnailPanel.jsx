@@ -115,14 +115,14 @@ export default function SheetThumbnailPanel({
     return (
       <div className={cn(
         "flex shrink-0 border-border bg-card",
-        side ? "h-full w-9 flex-col border-r" : "h-9 w-full flex-row border-b",
+        side ? "h-full w-9 flex-col border-r" : "h-10 w-full flex-row border-b",
       )}>
         <button
           type="button"
           onClick={onToggle}
           className={cn(
             "flex items-center justify-center gap-1 text-xs font-bold text-muted-foreground hover:bg-muted hover:text-foreground",
-            side ? "h-full w-9 flex-col py-3" : "h-9 w-full flex-row px-3",
+            side ? "h-full w-9 flex-col py-3" : "h-10 w-full flex-row px-3",
           )}
           aria-expanded={false}
           aria-label="Show sheet thumbnails"
@@ -138,7 +138,7 @@ export default function SheetThumbnailPanel({
   return (
     <div className={cn(
       "flex shrink-0 border-border bg-card",
-      side ? "h-full w-[158px] flex-col border-r" : "max-h-28 w-full flex-col border-b",
+        side ? "h-full w-[158px] flex-col border-r" : "max-h-28 w-full shrink-0 flex-col border-b",
     )}>
       <div className="flex shrink-0 items-center justify-between gap-1 border-b border-border px-2 py-1.5">
         <div className="min-w-0">

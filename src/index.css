@@ -85,6 +85,7 @@
     height: 100%;
     min-height: 100dvh;
     min-height: 100svh;
+    touch-action: manipulation;
   }
   body {
     @apply bg-background text-foreground;
@@ -97,6 +98,12 @@
     user-select: none;
     -webkit-user-select: none;
     touch-action: manipulation;
+  }
+  .takeoff-sheet-viewport,
+  .takeoff-sheet-viewport * {
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
   }
   .h-safe-area-inset-bottom { height: env(safe-area-inset-bottom, 0px); }
   @media (max-width: 640px) {

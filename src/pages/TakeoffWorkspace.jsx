@@ -121,6 +121,14 @@ import {
 import { conduitCircuitScheduleCsv } from "@/domain/takeoff/markupPages";
 import { conduitWireMakeupCsv } from "@/domain/takeoff/conduitWireMakeup";
 import { reconcilePlanToSchedule } from "@/domain/takeoff/countReconciliation";
+import {
+  TAKEOFF_MAX_ZOOM,
+  TAKEOFF_MIN_ZOOM,
+  pinchMidpoint,
+  pointerDistance,
+  sheetPinchViewport,
+  sheetZoomAboutPoint,
+} from "@/lib/sheetViewport";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -205,10 +213,13 @@ export default function TakeoffWorkspace() {
   const [symbolId, setSymbolId] = useState("duplex");
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const zoomRef = useRef(zoom);
   const panRef = useRef(pan);
   const panLayerRef = useRef(null);
   const panningRef = useRef(false);
+  const pinchActiveRef = useRef(false);
   const suppressEditClickRef = useRef(false);
+  zoomRef.current = zoom;
   panRef.current = pan;
   const draftJunctionIdsRef = useRef([]);
   const [marks, setMarks] = useState([]);
@@ -789,6 +800,156 @@ export default function TakeoffWorkspace() {
     return () => observer.disconnect();
   }, [file]);
 
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el || !file) return undefined;
+
+    const pointers = new Map();
+    let pinch = null;
+    let raf = 0;
+
+    function clientPoints(list) {
+      return [...list].map((item) => ({ x: item.clientX ?? item.x, y: item.clientY ?? item.y }));
+    }
+
+    function flushViewport() {
+      raf = 0;
+      setZoom(zoomRef.current);
+      setPan(panRef.current);
+    }
+
+    function applyPinch(points) {
+      if (points.length < 2) return;
+      const viewportRect = el.getBoundingClientRect();
+      const currentMid = pinchMidpoint(points[0], points[1]);
+      const currentDistance = pointerDistance(points[0], points[1]);
+      if (!pinch) {
+        pinch = {
+          startZoom: zoomRef.current,
+          startDistance: currentDistance || 1,
+          startPan: { ...panRef.current },
+          startMid: currentMid,
+        };
+        pinchActiveRef.current = true;
+        panningRef.current = false;
+        return;
+      }
+      const next = sheetPinchViewport({
+        startZoom: pinch.startZoom,
+        startDistance: pinch.startDistance,
+        startPan: pinch.startPan,
+        startMid: pinch.startMid,
+        currentDistance,
+        currentMid,
+        viewportRect,
+      });
+      zoomRef.current = next.zoom;
+      panRef.current = next.pan;
+      if (panLayerRef.current) {
+        panLayerRef.current.style.transform = `translate(${next.pan.x}px, ${next.pan.y}px)`;
+      }
+      if (!raf) raf = window.requestAnimationFrame(flushViewport);
+    }
+
+    function endPinch() {
+      pinch = null;
+      pinchActiveRef.current = false;
+      if (raf) {
+        window.cancelAnimationFrame(raf);
+        raf = 0;
+      }
+      setZoom(zoomRef.current);
+      setPan(panRef.current);
+    }
+
+    function onTouchStart(event) {
+      if (event.touches.length >= 2) {
+        event.preventDefault();
+        pinch = null;
+        applyPinch(clientPoints(event.touches));
+      }
+    }
+
+    function onTouchMove(event) {
+      if (event.touches.length >= 2) {
+        event.preventDefault();
+        applyPinch(clientPoints(event.touches));
+      }
+    }
+
+    function onTouchEnd(event) {
+      if (event.touches.length >= 2) {
+        event.preventDefault();
+        pinch = null;
+        applyPinch(clientPoints(event.touches));
+        return;
+      }
+      if (pinch) endPinch();
+    }
+
+    function onPointerDown(event) {
+      if (event.pointerType === "mouse") return;
+      pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (pointers.size >= 2) {
+        event.preventDefault();
+        pinch = null;
+        applyPinch([...pointers.values()]);
+      }
+    }
+
+    function onPointerMove(event) {
+      if (!pointers.has(event.pointerId)) return;
+      pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (pointers.size >= 2) {
+        event.preventDefault();
+        applyPinch([...pointers.values()]);
+      }
+    }
+
+    function onPointerUp(event) {
+      pointers.delete(event.pointerId);
+      if (pointers.size < 2 && pinch) endPinch();
+    }
+
+    function preventNativeGesture(event) {
+      event.preventDefault();
+    }
+
+    el.addEventListener("touchstart", onTouchStart, { passive: false });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd, { passive: false });
+    el.addEventListener("touchcancel", onTouchEnd, { passive: false });
+    el.addEventListener("pointerdown", onPointerDown, { passive: false });
+    el.addEventListener("pointermove", onPointerMove, { passive: false });
+    el.addEventListener("pointerup", onPointerUp);
+    el.addEventListener("pointercancel", onPointerUp);
+    el.addEventListener("gesturestart", preventNativeGesture, { passive: false });
+    el.addEventListener("gesturechange", preventNativeGesture, { passive: false });
+    el.addEventListener("gestureend", preventNativeGesture, { passive: false });
+    document.addEventListener("gesturestart", preventNativeGesture, { passive: false });
+    document.addEventListener("gesturechange", preventNativeGesture, { passive: false });
+    document.addEventListener("gestureend", preventNativeGesture, { passive: false });
+
+    return () => {
+      if (raf) window.cancelAnimationFrame(raf);
+      pinchActiveRef.current = false;
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("touchcancel", onTouchEnd);
+      el.removeEventListener("pointerdown", onPointerDown);
+      el.removeEventListener("pointermove", onPointerMove);
+      el.removeEventListener("pointerup", onPointerUp);
+      el.removeEventListener("pointercancel", onPointerUp);
+      el.removeEventListener("gesturestart", preventNativeGesture);
+      el.removeEventListener("gesturechange", preventNativeGesture);
+      el.removeEventListener("gestureend", preventNativeGesture);
+      document.removeEventListener("gesturestart", preventNativeGesture);
+      document.removeEventListener("gesturechange", preventNativeGesture);
+      document.removeEventListener("gestureend", preventNativeGesture);
+    };
+  }, [file]);
+
 
   function focusMarkedSheet(nextMarks) {
     const first = (nextMarks || []).find((mark) => isDeviceMark(mark) || isCircuitMark(mark));
@@ -917,6 +1078,16 @@ export default function TakeoffWorkspace() {
     };
   }
 
+  function commitSheetViewport(nextZoom, nextPan) {
+    zoomRef.current = nextZoom;
+    panRef.current = nextPan;
+    if (panLayerRef.current) {
+      panLayerRef.current.style.transform = `translate(${nextPan.x}px, ${nextPan.y}px)`;
+    }
+    setZoom(nextZoom);
+    setPan(nextPan);
+  }
+
   function handleDrawingWheel(event) {
     if (!file) return;
     event.preventDefault();
@@ -930,25 +1101,21 @@ export default function TakeoffWorkspace() {
     // position by compensating pan as the centered drawing grows/shrinks.
     const direction = event.deltaY < 0 ? 1 : -1;
     const step = event.ctrlKey ? 0.1 : 0.15;
+    const currentZoom = zoomRef.current;
+    const nextZoom = Math.min(
+      TAKEOFF_MAX_ZOOM,
+      Math.max(TAKEOFF_MIN_ZOOM, Number((currentZoom + direction * step).toFixed(2))),
+    );
+    if (nextZoom === currentZoom) return;
 
-    setZoom((currentZoom) => {
-      const nextZoom = Math.min(8, Math.max(0.25, Number((currentZoom + direction * step).toFixed(2))));
-      if (nextZoom === currentZoom) return currentZoom;
-
-      const ratio = nextZoom / currentZoom;
-      const cursorX = event.clientX - (viewport.left + viewport.width / 2);
-      const cursorY = event.clientY - (viewport.top + viewport.height / 2);
-      const currentPan = panRef.current;
-
-      const nextPan = {
-        x: currentPan.x + (cursorX - currentPan.x) * (1 - ratio),
-        y: currentPan.y + (cursorY - currentPan.y) * (1 - ratio),
-      };
-      panRef.current = nextPan;
-      setPan(nextPan);
-
-      return nextZoom;
+    const next = sheetZoomAboutPoint({
+      zoom: currentZoom,
+      nextZoom,
+      pan: panRef.current,
+      focusClient: { x: event.clientX, y: event.clientY },
+      viewportRect: viewport,
     });
+    commitSheetViewport(next.zoom, next.pan);
   }
 
   function currentAspect() {
@@ -1705,7 +1872,7 @@ export default function TakeoffWorkspace() {
   });
 
   function onPanPointerDown(event) {
-    if (tool !== "pan" || event.button > 0) return;
+    if (tool !== "pan" || event.button > 0 || pinchActiveRef.current) return;
     event.preventDefault();
     event.stopPropagation();
     const pointerId = event.pointerId;
@@ -1715,9 +1882,8 @@ export default function TakeoffWorkspace() {
     const startY = panRef.current.y;
     const target = event.currentTarget;
     panningRef.current = true;
-    target.setPointerCapture?.(pointerId);
     const move = (moveEvent) => {
-      if (moveEvent.pointerId !== pointerId) return;
+      if (pinchActiveRef.current || moveEvent.pointerId !== pointerId) return;
       const next = {
         x: startX + (moveEvent.clientX - originX),
         y: startY + (moveEvent.clientY - originY),
@@ -1732,6 +1898,7 @@ export default function TakeoffWorkspace() {
       if (upEvent.pointerId !== pointerId) return;
       panningRef.current = false;
       setPan(panRef.current);
+      try { target.releasePointerCapture?.(pointerId); } catch { /* already released */ }
       target.removeEventListener("pointermove", move);
       target.removeEventListener("pointerup", up);
       target.removeEventListener("pointercancel", up);
@@ -1739,6 +1906,11 @@ export default function TakeoffWorkspace() {
     target.addEventListener("pointermove", move, { passive: true });
     target.addEventListener("pointerup", up);
     target.addEventListener("pointercancel", up);
+    // Do not capture touch pointers: Safari/iOS then never delivers the second
+    // finger, so pinch/spread would be stolen by a one-finger pan.
+    if (event.pointerType !== "touch") {
+      try { target.setPointerCapture?.(pointerId); } catch { /* already released */ }
+    }
   }
 
   function onViewerPointerDown(event) {
@@ -2100,7 +2272,7 @@ export default function TakeoffWorkspace() {
           </div>
         </aside>
 
-        <section className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-card lg:flex-row">
+        <section className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(12rem,1fr)] overflow-hidden bg-card lg:flex lg:grid-rows-none lg:flex-row">
           <SheetThumbnailPanel
             layout={wideLayout ? "side" : "strip"}
             fileBytes={fileBytes}
@@ -2114,7 +2286,7 @@ export default function TakeoffWorkspace() {
             onToggle={toggleThumbs}
             onSelectPage={selectSheet}
           />
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="grid min-h-0 min-w-0 grid-rows-[auto_auto_minmax(12rem,1fr)] overflow-hidden lg:flex lg:flex-1 lg:grid-rows-none lg:flex-col">
           <div className="shrink-0 border-b border-border bg-card lg:hidden">
             <div className="flex items-center gap-2 px-2 py-1.5">
               <button type="button" onClick={() => { setTool("pan"); setDraftPoints([]); setMobileToolsOpen(false); setMobileDevicePickerOpen(false); }}
@@ -2178,12 +2350,12 @@ export default function TakeoffWorkspace() {
                   onLineSize={setPenThickness}
                 />
               </div>
-              <button type="button" onClick={undo} className="rounded-lg p-2 hover:bg-muted" title="Undo"><Undo2 className="h-4 w-4" /></button>
-              <button type="button" onClick={redo} className="rounded-lg p-2 hover:bg-muted" title="Redo"><Redo2 className="h-4 w-4" /></button>
-              <button type="button" onClick={() => setZoom((z) => Math.max(0.25, Number((z - 0.25).toFixed(2))))} className="rounded-lg p-2 hover:bg-muted" title="Zoom out"><ZoomOut className="h-4 w-4" /></button>
+              <button type="button" onClick={undo} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg p-2 hover:bg-muted" title="Undo"><Undo2 className="h-4 w-4" /></button>
+              <button type="button" onClick={redo} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg p-2 hover:bg-muted" title="Redo"><Redo2 className="h-4 w-4" /></button>
+              <button type="button" onClick={() => setZoom((z) => Math.max(TAKEOFF_MIN_ZOOM, Number((z - 0.25).toFixed(2))))} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg p-2 hover:bg-muted" title="Zoom out"><ZoomOut className="h-4 w-4" /></button>
               <span className="min-w-12 text-center text-xs font-semibold">{Math.round(zoom * 100)}%</span>
-              <button type="button" onClick={() => setZoom((z) => Math.min(8, Number((z + 0.25).toFixed(2))))} className="rounded-lg p-2 hover:bg-muted" title="Zoom in"><ZoomIn className="h-4 w-4" /></button>
-              <button type="button" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} className="rounded-lg border border-border px-2 py-1 text-xs font-semibold hover:bg-muted">Fit sheet</button>
+              <button type="button" onClick={() => setZoom((z) => Math.min(TAKEOFF_MAX_ZOOM, Number((z + 0.25).toFixed(2))))} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg p-2 hover:bg-muted" title="Zoom in"><ZoomIn className="h-4 w-4" /></button>
+              <button type="button" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} className="inline-flex min-h-10 items-center rounded-lg border border-border px-2 py-1 text-xs font-semibold hover:bg-muted">Fit sheet</button>
               {sheetMeta.pageCount > 1 && (
                 <div className="ml-2 flex items-center gap-1 rounded-lg border border-border bg-background px-1.5 py-0.5">
                   <button type="button" disabled={sheetMeta.page <= 1} onClick={() => selectSheet(sheetMeta.page - 1)} className="rounded border border-border px-2 py-1 text-xs font-semibold disabled:opacity-40">Previous</button>
@@ -2236,7 +2408,12 @@ export default function TakeoffWorkspace() {
             ref={viewportRef}
             onPointerDown={onPanPointerDown}
             onWheel={handleDrawingWheel}
-            className={cn("min-h-0 min-w-0 flex-1 overflow-hidden bg-neutral-400/40 dark:bg-neutral-950 lg:min-h-0", tool === "pan" && "cursor-grab touch-none")}
+            data-testid="takeoff-sheet-viewport"
+            className={cn(
+              "takeoff-sheet-viewport min-h-[12rem] min-w-0 overflow-hidden bg-neutral-400/40 dark:bg-neutral-950 lg:min-h-0 lg:flex-1",
+              tool === "pan" && "cursor-grab",
+            )}
+            style={{ touchAction: "none" }}
           >
             <div className="flex h-full w-full items-center justify-center p-2">
               <div
@@ -2255,7 +2432,6 @@ export default function TakeoffWorkspace() {
                 onDoubleClick={finishPath}
                 onContextMenu={onViewerContextMenu}
                 onPointerDown={onViewerPointerDown}
-                style={{ transform: `translate(${pan.x}px, ${pan.y}px)`, willChange: tool === "pan" ? "transform" : "auto" }}
                 onPointerMove={(event) => {
                   if (panningRef.current || aiBusy) return;
                   const point = drawingPoint(event);
@@ -2280,7 +2456,8 @@ export default function TakeoffWorkspace() {
                   setHoverPoint(point);
                 }}
                 onPointerLeave={() => { setHoverPoint(null); setHoveredDeviceId(null); setHoveredGeometryInfo(null); }}
-                className={cn("relative bg-white shadow-xl", tool === "pan" ? "cursor-grab" : tool === "select" ? "cursor-move touch-none" : "cursor-crosshair")}
+                className={cn("relative bg-white shadow-xl", tool === "pan" ? "cursor-grab" : tool === "select" ? "cursor-move" : "cursor-crosshair")}
+                style={{ transform: `translate(${pan.x}px, ${pan.y}px)`, willChange: tool === "pan" ? "transform" : "auto", touchAction: "none" }}
               >
                 {isPdf ? (
                   fileBytes ? (

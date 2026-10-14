@@ -436,15 +436,13 @@ export function shouldScanWithDictionary(page, trade, dictionary) {
   // project legend codes in the plan interior, do not silently skip it.
   if (matchingTypeTokens.length >= 1 && (page.paths || []).length >= 12) return true;
 
-  // Geometry-heavy pages classified as "drawing"/"other" are also eligible
-  // when the project already has an electrical legend. This avoids a complete
-  // zero-result run when title extraction fails.
-  return (kind === "drawing" || kind === "other")
-    && (page.paths || []).length >= 180
-    && (page.tokens || []).length >= 8;
+  // Do not treat every dense CAD sheet as electrical. That rasterized and
+  // scanned architectural / mechanical / plumbing pages on live bid sets and
+  // crashed the tab. Legend codes or an electrical sheet id are required.
+  return false;
 }
 
-/** If sheet gating drops every page, still scan geometry-bearing sheets so AI Assist is not empty. */
+/** If sheet gating drops every page, still scan electrical-looking sheets so AI Assist is not empty. */
 export function pagesToScan(pages, trade, dictionary) {
   const list = pages || [];
   const eligible = list.filter((page) => shouldScanWithDictionary(page, trade, dictionary));
@@ -452,9 +450,16 @@ export function pagesToScan(pages, trade, dictionary) {
   return list.filter((page) => {
     if (!page) return false;
     if (looksLikeCoverOrRendering(page) || looksLikeIndexPage(page)) return false;
-    return (page.paths || []).length >= 12
-      || (page.rasterPaths || []).length >= 8
-      || (page.tokens || []).length >= 20;
+    if (isNonPlanSheetKind(page.kind) || page.kind === "spec") return false;
+    const id = page.sheetId || findSheetId(page.tokens || []);
+    const fromId = tradeFromSheetId(id);
+    if (fromId && fromId !== "electrical") return false;
+    return fromId === "electrical"
+      || looksLikeElectricalPlan(page)
+      || ((page.paths || []).length >= 12 && knownLegendCodes(dictionary).size > 0 && (page.tokens || []).some((token) => (
+        knownLegendCodes(dictionary).has(normalizeTakeoffText(normalizeTypeMark(token?.text)))
+        && isPlanInterior(token)
+      )));
   });
 }
 
@@ -959,7 +964,15 @@ export function buildAiMarks({
   conduit,
   color = "#2563eb",
   projectPrototypes = [],
+  timeBudgetMs = 22000,
 }) {
+  const deadline = Date.now() + Math.max(4000, Number(timeBudgetMs) || 22000);
+  const remainingMs = () => deadline - Date.now();
+  const timedScan = (page, dictionary, options) => {
+    const budget = Math.max(0, Math.min(2800, remainingMs()));
+    if (budget < 80) return [];
+    return scanPageByLegendGeometry(page, dictionary, { ...options, timeBudgetMs: budget });
+  };
   const anchorIds = new Set(ANCHOR_SYMBOL_IDS[trade] || []);
   let dictionary = attachLegendGeometryPrototypes(legendDictionaryFromPages(pages, drawingSymbols, symbols, trade), pages);
   if (projectPrototypes.length) dictionary = attachProjectPrototypes(dictionary, projectPrototypes);
@@ -995,7 +1008,7 @@ export function buildAiMarks({
     // Visual legend pass: detect repeated graphical symbols even when the plan has
     // no adjacent type text. This is required for power receptacles and many light
     // fixtures whose only identity is their legend geometry.
-    const visualHits = scanPageByLegendGeometry(page, dictionary, {
+    const visualHits = timedScan(page, dictionary, {
       planType,
       threshold: 0.74,
       strictSize: false,
@@ -1229,7 +1242,7 @@ export function buildAiMarks({
       item.sheet === page.page
       && (planType !== "lighting" || !isReviewOnlyMark(item))
     ));
-    const twinHits = planType === "power" ? [] : scanPageByLegendGeometry(page, {
+    const twinHits = planType === "power" ? [] : timedScan(page, {
       ...dictionary,
       entries: (dictionary.entries || []).filter((entry) => /^\d{1,2}e?$/i.test(entry.code || "") && /2x4|troffer/i.test(entry.symbol?.label || "")),
     }, {
@@ -1247,7 +1260,7 @@ export function buildAiMarks({
       return isEmergencyHatch(hit.geometry, nearby);
     });
     const unlabeledHits = [
-      ...scanPageByLegendGeometry(page, dictionary, {
+      ...timedScan(page, dictionary, {
         planType,
         threshold: 0.76,
         strictSize: false,
@@ -1342,7 +1355,7 @@ export function buildAiMarks({
     }
     // Keep mid-confidence visual hits as UNKNOWN/REVIEW instead of deleting them.
     // Chrome, hex notes, hatch ticks, and title-block stamps stay dropped.
-    const reviewHits = scanPageByLegendGeometry(page, dictionary, {
+    const reviewHits = timedScan(page, dictionary, {
       planType,
       threshold: REVIEW_VISUAL_THRESHOLD,
       occupyRadius: 0.34,
@@ -1371,10 +1384,13 @@ export function buildAiMarks({
     // Final high-recall recovery pass: search each legend type independently
     // after normal detection has established prototypes. This catches repeated
     // symbols that were skipped by the global competition/deduplication pass.
-    const recoveryHits = recoverMissedLegendSymbols(page, dictionary, {
-      planType,
-      occupied: seen.filter((item) => item.sheet === page.page),
-    });
+    const recoveryHits = remainingMs() > 200
+      ? recoverMissedLegendSymbols(page, dictionary, {
+        planType,
+        occupied: seen.filter((item) => item.sheet === page.page),
+        deadline,
+      })
+      : [];
     for (const visual of recoveryHits) {
       const geometry = visual.geometry;
       const symbol = visual.entry?.symbol;

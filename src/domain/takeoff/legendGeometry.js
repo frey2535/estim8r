@@ -1050,6 +1050,9 @@ export function recoverMissedLegendSymbols(page, dictionary, options = {}) {
   const occupied = options.occupied || [];
   const tokens = page?.tokens || [];
   const paths = page?.paths || [];
+  const deadline = Number(options.deadline) > 0
+    ? Number(options.deadline)
+    : Date.now() + Math.max(200, Number(options.timeBudgetMs) > 0 ? Number(options.timeBudgetMs) : 8000);
   const entries = (dictionary?.entries || []).filter((entry) => {
     if (!entry?.prototype) return false;
     const family = entryFamily(entry);
@@ -1057,13 +1060,15 @@ export function recoverMissedLegendSymbols(page, dictionary, options = {}) {
   });
   const recovered = [];
   for (const entry of entries) {
+    const remaining = deadline - Date.now();
+    if (remaining < 80) break;
     const hits = scanPageByLegendGeometry(page, { entries: [entry] }, {
       planType,
       threshold: 0.68,
       strictSize: false,
       occupyRadius: 0.24,
       occupied: [...occupied, ...recovered.map((hit) => ({ x: hit.geometry.cx, y: hit.geometry.cy }))],
-      timeBudgetMs: 4500,
+      timeBudgetMs: Math.min(4500, remaining),
       maxSeeds: 2200,
       allowSlash: true,
       keepSeedBody: true,

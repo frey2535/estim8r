@@ -28,8 +28,8 @@ import { paletteForTrade, pageKindsFromDocs, symbolsOnDrawingForTrade, tradeById
 import { buildAiMarks, legendDictionaryFromPages, pagesToScan } from "@/domain/takeoff/aiTakeoff";
 import TakeoffActionsMenu, { takeoffEstimatePath, takeoffMarkupPath } from "@/components/takeoff/TakeoffActionsMenu";
 import { TakeoffMobileCommandBar, TakeoffMobileDock, TakeoffMobileSheet } from "@/components/takeoff/TakeoffMobileChrome";
-import { readAiPages } from "@/domain/takeoff/aiPages";
-import { hydratePagesRaster } from "@/domain/takeoff/rasterSymbols";
+import { persistableAiPages, readAiPages } from "@/domain/takeoff/aiPages";
+import { hydratePagesRaster, pagesNeedingRaster } from "@/domain/takeoff/rasterSymbols";
 import { pickInteractiveSymbolGeometry, matchGeometryToLegend, attachLegendGeometryPrototypes } from "@/domain/takeoff/legendGeometry";
 import { legendHoverData, shouldShowSymbolHover } from "@/domain/takeoff/legendHover";
 import { buildDrawingObjectLayer, hitDrawingObject, materializeDrawingObject } from "@/domain/takeoff/drawingObjectLayer";
@@ -1339,8 +1339,9 @@ export default function TakeoffWorkspace() {
       try {
         const pages = await readAiPages(fileBytes, { includeRaster: false });
         if (cancelled) return;
-        setAiPages(pages);
-        setDrawingObjects(buildDrawingObjectLayer({ pages, detectedMarks: [], trade: "electrical" }));
+        const persistable = persistableAiPages(pages);
+        setAiPages(persistable);
+        setDrawingObjects(buildDrawingObjectLayer({ pages: persistable, detectedMarks: [], trade: "electrical" }));
       } catch (error) {
         if (!cancelled) console.error("Drawing object layer failed", error);
       }
@@ -1365,18 +1366,20 @@ export default function TakeoffWorkspace() {
     if (!silent) setStatus(`AI assist is reading ${tradeLabel} sheets…`);
     try {
       const pages = await readAiPages(fileBytes, {
-        includeRaster: true,
+        includeRaster: false,
         onProgress: (current, total) => {
           if (!silent) setStatus(`AI assist is reading sheet ${current} of ${total}…`);
         },
       });
-      // Raster hydration must use the same legend-aware sheet eligibility as
-      // buildAiMarks; otherwise fallback electrical sheets are scanned without pixels.
+      // Raster only the sparse electrical scan pages. Full-set raster at CAD
+      // scale OOM'd / jetsam'd the tab while AI takeoff was running.
       const scanDictionary = legendDictionaryFromPages(pages, palette.fromDrawing, palette.symbols, trade);
-      await hydratePagesRaster(pagesToScan(pages, trade, scanDictionary));
+      const scanPages = pagesToScan(pages, trade, scanDictionary);
+      await hydratePagesRaster(pagesNeedingRaster(scanPages));
       if (!silent) setStatus(`AI assist is marking ${tradeLabel} on the drawings…`);
       await new Promise((resolve) => setTimeout(resolve, 0));
-      setAiPages(pages);
+      const persistable = persistableAiPages(pages);
+      setAiPages(persistable);
       const planned = buildAiMarks({
         pages,
         trade,
@@ -1418,7 +1421,7 @@ export default function TakeoffWorkspace() {
         return nextMarks;
       });
       setDrawingObjects(buildDrawingObjectLayer({
-        pages,
+        pages: persistable,
         detectedMarks: nextMarks.filter(isDeviceMark),
         trade,
       }));

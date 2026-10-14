@@ -1,19 +1,14 @@
-import { classifyPageItems, inferPlanType, extractPdfPageItems, looksLikeCoverOrRendering, looksLikeIndexPage } from "./drawing-docs";
+import { classifyPageItems, inferPlanType, extractPdfPageItems } from "./drawing-docs";
 import { extractPageSymbolPaths } from "./pdfPaths";
 import { classifySheetDiscipline, findSheetId, parseSheetId } from "./sheetDiscipline";
 import { getPdfDocument } from "@/lib/pdf-document";
+import { persistableAiPages, shouldExtractRaster } from "./aiPageBudget.js";
 import { extractRasterSymbolCandidates, hydrateRasterPaths } from "./rasterSymbols";
-import { isNonPlanSheetKind } from "./symbolDetection.js";
+
+export { persistableAiPages, shouldExtractRaster };
 
 function yieldToUi() {
   return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-function shouldExtractRaster(recorded) {
-  if (!recorded) return false;
-  if (looksLikeCoverOrRendering(recorded) || looksLikeIndexPage(recorded)) return false;
-  if (isNonPlanSheetKind(recorded.kind) || recorded.kind === "spec") return false;
-  return true;
 }
 
 export async function readAiPages(fileBytes, options = {}) {

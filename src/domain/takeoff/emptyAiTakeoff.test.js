@@ -45,6 +45,15 @@ assert(powerLighting.length < 8, `power plan E110 must not count lighting types 
 assert(!devices.some((mark) => /^\d{1,2}$/.test(String(mark.typeCode || "")) && mark.circuitTagLocation?.text === mark.typeCode), "circuit-tag-only numbers are not painted as types");
 
 const gatedOut = pagesToScan([{ kind: "other", paths: new Array(20).fill({}), tokens: [] }], "electrical", { entries: [] });
-assert(gatedOut.length === 1, "pagesToScan keeps geometry-bearing sheets when gating finds none");
+assert(gatedOut.length === 0, "pagesToScan does not fall back to non-electrical geometry sheets");
+
+const electricalFallback = pagesToScan([{
+  kind: "drawing",
+  sheetId: "E110",
+  discipline: "electrical",
+  paths: new Array(20).fill({}),
+  tokens: [{ text: "E110", x: 88, y: 92 }],
+}], "electrical", { entries: [] });
+assert(electricalFallback.length === 1, "pagesToScan still keeps electrical-looking sheets when gating is empty");
 
 if (!process.exitCode) console.log(`empty AI takeoff guard: ${planned.deviceCount} devices, ${painted.length} in-symbol fills`);

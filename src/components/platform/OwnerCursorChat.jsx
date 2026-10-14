@@ -9,7 +9,7 @@ import {
   screenLabel,
 } from "@/lib/ownerCursorChat";
 import { collectOwnerChatEvidence, installOwnerChatEvidence } from "@/lib/ownerChatEvidence";
-import { formatOwnerReply, inspectOwnerEvidence } from "@/lib/ownerChatInspector";
+import { inspectOwnerEvidence } from "@/lib/ownerChatInspector";
 import { dispatchOwnerAiTakeoff, postCursorSessionTurn, probeCursorSession, wantsAiTakeoff } from "@/api/cursorSession";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -121,18 +121,15 @@ export default function OwnerCursorChat() {
         });
       }
     } catch (err) {
-      setError(err?.message || "Buildr in-app agent could not apply that turn. Stay in Estim8r.");
-      if (wantsAiTakeoff(text)) {
-        reply = "AI Assist is running on this sheet now. I will apply the scan fallback as soon as the Buildr runtime is reachable.";
-      }
+      const failure = err?.status === 404
+        ? "Owner Agent endpoint is missing on the configured Buildr API. No agent action was submitted."
+        : (err?.message || "Buildr in-app agent could not apply that turn.");
+      setError(failure);
+      reply = failure;
     }
 
     if (!reply) {
-      reply = formatOwnerReply(text, evidence, inspection, {
-        apply: wantsAiTakeoff(text)
-          ? { summary: "AI Assist is running on this sheet now. Applying the Estim8r scan fallback." }
-          : null,
-      });
+      reply = "The Owner Agent returned no response. No code change or deployment has been confirmed.";
     }
     setMessages((current) => current.map((message) => (
       message.id === pendingId ? { ...message, text: reply, status: "done", findings: inspection.findings } : message

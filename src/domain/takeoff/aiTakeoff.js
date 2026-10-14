@@ -969,8 +969,11 @@ export function buildAiMarks({
   const counts = [];
   const seen = [];
   const usedGeometry = new Set();
-  for (const page of pages || []) {
-    if (!shouldScanWithDictionary(page, trade, dictionary)) continue;
+  // Use exactly the same eligible pages as raster hydration. Previously the
+  // raster fallback could extract candidates from a sheet that this loop then
+  // silently skipped, producing a completed takeoff with zero device counts.
+  const scanPages = pagesToScan(pages, trade, dictionary);
+  for (const page of scanPages) {
     const sitePlan = isSitePlanPage(page);
     const planType = pagePlanType(page);
     const pageCandidates = collectMatchCandidates(page, { planType, paths: page.paths || [], sitePlan });
@@ -1569,7 +1572,8 @@ export function buildAiMarks({
   ]);
   const persistedCount = persistedPlanDeviceCount(validatedCounts, pageKinds);
   const legendHits = validatedCounts.filter((mark) => mark.matchedFrom === "legend").length;
-  const skipped = (pages || []).filter((page) => !shouldScanWithDictionary(page, trade, dictionary));
+  const scannedPageNumbers = new Set(scanPages.map((page) => page.page));
+  const skipped = (pages || []).filter((page) => !scannedPageNumbers.has(page.page));
   const skippedSheets = skipped.map((page) => ({
     page: page.page,
     kind: page.kind || "drawing",
@@ -1592,7 +1596,7 @@ export function buildAiMarks({
     trade,
     dictionary,
     marks: validatedCounts,
-    shouldScanPage: (page, selectedTrade) => shouldScanWithDictionary(page, selectedTrade, dictionary),
+    shouldScanPage: (page) => scannedPageNumbers.has(page.page),
   });
   return {
     marks: coloredMarks,

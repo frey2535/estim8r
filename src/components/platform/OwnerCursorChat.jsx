@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { Activity, Bot, Loader2, MessageSquare, Minimize2, Play, RefreshCw, Send, X } from "lucide-react";
+import { Activity, Bot, Loader2, Minimize2, Play, RefreshCw, Send, X } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { CURSOR_CHAT_STORAGE, canUseOwnerCursorChat, screenLabel } from "@/lib/ownerCursorChat";
 import { collectOwnerChatEvidence, installOwnerChatEvidence } from "@/lib/ownerChatEvidence";

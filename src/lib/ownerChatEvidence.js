@@ -27,6 +27,20 @@ function push(list, item) {
   if (list.length > MAX_EVENTS) list.splice(0, list.length - MAX_EVENTS);
 }
 
+export function redactOwnerDiagnostic(value) {
+  return String(value || "")
+    .replace(/(authorization\\s*[:=]\\s*bearer\\s+)\\S+/gi, "$1[REDACTED]")
+    .replace(/(\\b(?:token|secret|api[_-]?key|password|access[_-]?token|refresh[_-]?token)\\b\\s*[:=]\\s*["\x27]?)\\S+/gi, "$1[REDACTED]")
+    .replace(/([?&](?:token|key|access_token|refresh_token|code|secret)=)[^&#\\s]+/gi, "$1[REDACTED]");
+}
+
+function safeRequestUrl(raw) {
+  try {
+    const parsed = new URL(String(raw || ""), typeof window === "undefined" ? "https://localhost" : window.location.origin);
+    return `${parsed.origin}${parsed.pathname}`.slice(0, 300);
+  } catch { return String(raw || "").split("?")[0].split("#")[0].slice(0, 300); }
+}
+
 function asText(value) {
   if (value instanceof Error) return value.stack || value.message;
   if (typeof value === "string") return value;
@@ -55,7 +69,7 @@ export function installOwnerChatEvidence() {
     console[level] = (...args) => {
       push(bag.console, {
         level,
-        text: args.map(asText).join(" ").slice(0, 800),
+        text: redactOwnerDiagnostic(args.map(asText).join(" ")).slice(0, 800),
         at: Date.now(),
       });
       original.apply(console, args);
@@ -67,7 +81,7 @@ export function installOwnerChatEvidence() {
   window.addEventListener("error", (event) => {
     push(bag.console, {
       level: "error",
-      text: String(event.message || event.error?.message || "window error").slice(0, 800),
+      text: redactOwnerDiagnostic(event.message || event.error?.message || "window error").slice(0, 800),
       source: event.filename || "",
       at: Date.now(),
     });
@@ -75,7 +89,7 @@ export function installOwnerChatEvidence() {
   window.addEventListener("unhandledrejection", (event) => {
     push(bag.console, {
       level: "error",
-      text: asText(event.reason).slice(0, 800),
+      text: redactOwnerDiagnostic(asText(event.reason)).slice(0, 800),
       at: Date.now(),
     });
   });
@@ -87,7 +101,7 @@ export function installOwnerChatEvidence() {
       const response = await originalFetch(input, init);
       if (!response.ok && !url.includes("/api/cursor-session")) {
         push(bag.requests, {
-          url: url.slice(0, 300),
+          url: safeRequestUrl(url),
           status: response.status,
           ok: false,
           at: Date.now(),
@@ -97,9 +111,9 @@ export function installOwnerChatEvidence() {
     } catch (error) {
       if (!url.includes("/api/cursor-session")) {
         push(bag.requests, {
-          url: url.slice(0, 300),
+          url: safeRequestUrl(url),
           failed: true,
-          message: error?.message || "network error",
+          message: redactOwnerDiagnostic(error?.message || "network error"),
           at: Date.now(),
         });
       }
@@ -158,6 +172,21 @@ function isChromeNode(el) {
   return false;
 }
 
+function snapshotWorkspaceControls() {
+  if (typeof document === "undefined") return { controls: [], dialogs: 0 };
+  const controls = [...document.querySelectorAll("main button, main [role=button], main select, main input")]
+    .filter((el) => !el.closest("[data-testid=owner-cursor-chat]"))
+    .slice(0, 120)
+    .map((el) => ({
+      type: el.tagName.toLowerCase(),
+      label: redactOwnerDiagnostic(el.getAttribute("aria-label") || el.getAttribute("title") || (el.tagName === "BUTTON" ? el.textContent : "") || "").trim().slice(0, 90),
+      disabled: Boolean(el.disabled),
+    }))
+    .filter((el) => el.label)
+    .slice(0, 24);
+  return { controls, dialogs: document.querySelectorAll("[role=dialog]").length };
+}
+
 function snapshotVisible() {
   if (typeof document === "undefined") return { alerts: [], invalid: [] };
   const alerts = [...document.querySelectorAll("[role='alert']")]
@@ -188,5 +217,6 @@ export function collectOwnerChatEvidence(pathname = "/") {
     estimate: snapshotEstimate(),
     takeoff: snapshotTakeoff(),
     visible: snapshotVisible(),
+    workspace: snapshotWorkspaceControls(),
   };
 }

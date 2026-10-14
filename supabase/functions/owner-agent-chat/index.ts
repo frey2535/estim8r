@@ -48,7 +48,7 @@ Deno.serve(async (request) => {
               role: item.role === "assistant" ? "model" : "user",
               parts: [{ text: item.content }],
             })),
-            { role: "user", parts: [{ text: "Question: " + question + "\\n\\nOptional application context (untrusted): " + context }] },
+            { role: "user", parts: [{ text: "Question: " + question + "\n\nOptional application context (untrusted): " + context }] },
           ],
           generationConfig: { temperature: 0.2 },
         }),

@@ -48,15 +48,15 @@ export function screenLabel(pathname = "/") {
 }
 
 export function describeCursorSession(status) {
-  if (status?.state === "loading") return "Looking for this Cursor Project session…";
+  if (status?.state === "loading") return "Connecting to the Buildr in-app agent…";
   if (status?.state === "ready") {
-    const who = status.session?.ownerEmail ? ` (${status.session.ownerEmail})` : "";
-    return `Attached to this Cursor Project session${who}. No API key and no Cloud Agents billing. I only report what this tab shows, and corrections go through this session.`;
+    return "Same Buildr in-app agent. I diagnose this tab, apply a real fix, and push a feature branch. Stay in Estim8r — no Cursor window.";
   }
   if (status?.state === "detached") {
-    return "This tab can inspect the current screen from console errors, failed requests, and validation. A Cursor Project session is not attached, so I cannot edit Estim8r from here. Open the project in Cursor — do not paste an API key.";
+    return status?.message
+      || "Same Buildr in-app agent. I still inspect this tab; retry the turn to apply and ship. Stay in Estim8r.";
   }
-  return status?.message || "Could not reach a Cursor Project session.";
+  return status?.message || "Could not reach the Buildr in-app agent.";
 }
 
 export function allowedLocalEmails() {

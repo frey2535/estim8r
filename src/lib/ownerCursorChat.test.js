@@ -18,10 +18,10 @@ function assert(cond, message) {
   }
 }
 
-assert(canUseOwnerCursorChat(PLATFORM_OWNER_EMAIL), "owner can open Cursor chat");
-assert(canUseOwnerCursorChat(BACKUP_ADMIN_EMAIL), "backup admin can open Cursor chat");
-assert(!canUseOwnerCursorChat(FIRST_CUSTOMER_ADMIN_EMAIL), "Day One admin cannot open Cursor chat");
-assert(!canUseOwnerCursorChat("local@localhost"), "local estimator cannot open Cursor chat");
+assert(canUseOwnerCursorChat(PLATFORM_OWNER_EMAIL), "owner can open in-app agent");
+assert(canUseOwnerCursorChat(BACKUP_ADMIN_EMAIL), "backup admin can open in-app agent");
+assert(!canUseOwnerCursorChat(FIRST_CUSTOMER_ADMIN_EMAIL), "Day One admin cannot open in-app agent");
+assert(!canUseOwnerCursorChat("local@localhost"), "local estimator cannot open in-app agent");
 
 const storage = new Map();
 const mem = {
@@ -39,8 +39,9 @@ const ready = describeCursorSession({
   state: "ready",
   session: { ownerEmail: "marcus.a.frey@gmail.com" },
 });
-assert(/No API key/.test(ready) && /Cloud Agents billing/.test(ready), "ready copy has no billing");
+assert(/Same Buildr in-app agent/.test(ready), "ready copy is the Buildr agent");
+assert(!/open the project in Cursor/i.test(ready), "ready copy does not send Marcus to Cursor");
 assert(!/paste/i.test(ready), "ready copy does not ask for a paste");
-assert(/not attached/.test(describeCursorSession({ state: "detached" })), "detached copy is honest");
+assert(/Stay in Estim8r/.test(describeCursorSession({ state: "detached" })), "detached copy keeps Marcus in Estim8r");
 
 if (!process.exitCode) console.log("owner cursor chat checks passed");

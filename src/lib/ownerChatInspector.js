@@ -187,9 +187,9 @@ export function formatOwnerReply(message, evidence = {}, inspection, { sessionAt
       lines.push(formatFindings(inspection.findings));
     }
     if (queued && sessionAttached) {
-      lines.push("That correction is queued on this Cursor Project session. No API key and no Cloud Agents billing.");
-    } else if (!sessionAttached) {
-      lines.push("I can talk through the change, but this tab is not attached to a Cursor Project session so I cannot edit Estim8r from here.");
+      lines.push("Same Buildr in-app agent applied that correction and will push a feature branch. Stay in Estim8r.");
+    } else {
+      lines.push("Tell me what is wrong and I will apply a real fix from this chat. Stay in Estim8r — no Cursor window.");
     }
   } else {
     lines.push(answerForAsk(asked, evidence, inspection));

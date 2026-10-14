@@ -444,6 +444,20 @@ export function shouldScanWithDictionary(page, trade, dictionary) {
     && (page.tokens || []).length >= 8;
 }
 
+/** If sheet gating drops every page, still scan geometry-bearing sheets so AI Assist is not empty. */
+export function pagesToScan(pages, trade, dictionary) {
+  const list = pages || [];
+  const eligible = list.filter((page) => shouldScanWithDictionary(page, trade, dictionary));
+  if (eligible.length) return eligible;
+  return list.filter((page) => {
+    if (!page) return false;
+    if (looksLikeCoverOrRendering(page) || looksLikeIndexPage(page)) return false;
+    return (page.paths || []).length >= 12
+      || (page.rasterPaths || []).length >= 8
+      || (page.tokens || []).length >= 20;
+  });
+}
+
 function isSectionContext(token, tokens) {
   const compact = normalizeTakeoffText(token.text);
   if (compact.length > 2) return false;

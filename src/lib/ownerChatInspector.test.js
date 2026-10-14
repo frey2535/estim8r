@@ -43,8 +43,8 @@ const askB = formatOwnerReply("How do I add an estimate?", { pathname: "/", visi
   intent: "ask",
 });
 assert(askA !== askB, "two different questions get two different replies");
-assert(/You asked: “What is this page\?”/.test(askA), "reply quotes first question");
-assert(/You asked: “How do I add an estimate\?”/.test(askB), "reply quotes second question");
+assert(!/You asked:/.test(askA) && !/You asked:/.test(askB), "does not echo the question");
+assert(!/You're on /.test(askA), "does not dump the route");
 assert(/Estimates folder/.test(askA), "describes the page");
 assert(/New Estimate/.test(askB), "explains how to add an estimate");
 assert(!/Delete/.test(askA) || /not a validation error/.test(askA), "does not report Delete as an error");
@@ -73,6 +73,14 @@ assert(failed.wantsFix, "fix intent");
 assert(failed.findings.some((f) => f.what.includes("500")), "records the 500");
 assert(failed.findings.some((f) => f.what.includes("Could not save")), "records on-screen alert");
 assert(wantsCorrection("please fix this") && !wantsCorrection("what is on this screen"), "fix detector");
+assert(wantsCorrection("AI is not identifying, counting, or marking symbols"), "empty takeoff is a fix");
+const takeoffReply = formatOwnerReply(
+  "AI is not identifying, counting, or marking symbols",
+  { pathname: "/takeoff" },
+  inspectOwnerEvidence({ pathname: "/takeoff" }, "AI is not identifying, counting, or marking symbols"),
+);
+assert(/AI Assist is running/.test(takeoffReply), "leads with the takeoff fix");
+assert(!/You asked:|You're on |Related confirmed signals:|Tell me what is wrong|open the project in Cursor|Stay in Estim8r/i.test(takeoffReply), "coordinator voice, not a template dump");
 assert(classifyOwnerMessage("What is this page?") === "ask", "ask intent");
 
 const noGuess = inspectOwnerEvidence({ pathname: "/markup" }, "is the conduit math wrong?");

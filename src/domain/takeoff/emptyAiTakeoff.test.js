@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildAiMarks } from "./aiTakeoff.js";
+import { buildAiMarks, pagesToScan } from "./aiTakeoff.js";
 import { displayDeviceOutline, isDeviceMark, planOverlayMarks } from "./deviceStyles.js";
 import { paletteForTrade } from "./trades.js";
 
@@ -43,5 +43,8 @@ assert(painted.length >= 8, `overlay must paint in-symbol fills, got ${painted.l
 assert(painted.length >= Math.floor(devices.length * 0.72), `most counted devices must keep a visible fill (${painted.length}/${devices.length})`);
 assert(powerLighting.length < 8, `power plan E110 must not count lighting types as devices, got ${powerLighting.length}`);
 assert(!devices.some((mark) => /^\d{1,2}$/.test(String(mark.typeCode || "")) && mark.circuitTagLocation?.text === mark.typeCode), "circuit-tag-only numbers are not painted as types");
+
+const gatedOut = pagesToScan([{ kind: "other", paths: new Array(20).fill({}), tokens: [] }], "electrical", { entries: [] });
+assert(gatedOut.length === 1, "pagesToScan keeps geometry-bearing sheets when gating finds none");
 
 if (!process.exitCode) console.log(`empty AI takeoff guard: ${planned.deviceCount} devices, ${painted.length} in-symbol fills`);

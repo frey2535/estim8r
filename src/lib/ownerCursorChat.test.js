@@ -39,9 +39,9 @@ const ready = describeCursorSession({
   state: "ready",
   session: { ownerEmail: "marcus.a.frey@gmail.com" },
 });
-assert(/Same Buildr in-app agent/.test(ready), "ready copy is the Buildr agent");
-assert(!/open the project in Cursor/i.test(ready), "ready copy does not send Marcus to Cursor");
+assert(/Connected/.test(ready), "ready copy is connected");
+assert(!/open the project in Cursor|Stay in Estim8r — no Cursor window/i.test(ready), "ready copy does not send Marcus to Cursor");
 assert(!/paste/i.test(ready), "ready copy does not ask for a paste");
-assert(/Stay in Estim8r/.test(describeCursorSession({ state: "detached" })), "detached copy keeps Marcus in Estim8r");
+assert(!/open Cursor|Cursor Project|Stay in Estim8r — no Cursor window/i.test(describeCursorSession({ state: "detached" })), "detached copy does not send Marcus to Cursor");
 
 if (!process.exitCode) console.log("owner cursor chat checks passed");

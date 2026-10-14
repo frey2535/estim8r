@@ -10,7 +10,7 @@ import {
 } from "@/lib/ownerCursorChat";
 import { collectOwnerChatEvidence, installOwnerChatEvidence } from "@/lib/ownerChatEvidence";
 import { formatOwnerReply, inspectOwnerEvidence } from "@/lib/ownerChatInspector";
-import { postCursorSessionTurn, probeCursorSession } from "@/api/cursorSession";
+import { dispatchOwnerAiTakeoff, postCursorSessionTurn, probeCursorSession, wantsAiTakeoff } from "@/api/cursorSession";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -96,6 +96,10 @@ export default function OwnerCursorChat() {
     setBusy(true);
     setError("");
 
+    if (wantsAiTakeoff(text) || (inspection.wantsFix && /takeoff|symbol|device/i.test(text))) {
+      dispatchOwnerAiTakeoff();
+    }
+
     let reply = "";
     try {
       const posted = await postCursorSessionTurn({
@@ -103,9 +107,12 @@ export default function OwnerCursorChat() {
         pathname: location.pathname,
         evidence,
         email: user?.email,
-        wantFix: inspection.wantsFix,
+        wantFix: inspection.wantsFix || wantsAiTakeoff(text),
       });
       reply = posted.reply || posted.apply?.summary || "";
+      if ((posted.actions || []).some((action) => action.type === "run_ai_takeoff")) {
+        dispatchOwnerAiTakeoff();
+      }
       if (posted.apply?.shipped || posted.runtime?.platform?.ok) {
         setConnection({
           state: "ready",
@@ -114,14 +121,17 @@ export default function OwnerCursorChat() {
         });
       }
     } catch (err) {
-      setError(err?.message || "Buildr in-app agent could not apply that turn.");
+      setError(err?.message || "Buildr in-app agent could not apply that turn. Stay in Estim8r.");
+      if (wantsAiTakeoff(text)) {
+        reply = "AI Assist is running on this sheet now. I will apply the scan fallback as soon as the Buildr runtime is reachable.";
+      }
     }
 
     if (!reply) {
       reply = formatOwnerReply(text, evidence, inspection, {
-        sessionAttached: true,
-        queued: false,
-        apply: null,
+        apply: wantsAiTakeoff(text)
+          ? { summary: "AI Assist is running on this sheet now. Applying the Estim8r scan fallback." }
+          : null,
       });
     }
     setMessages((current) => current.map((message) => (
@@ -192,7 +202,7 @@ export default function OwnerCursorChat() {
 
             {messages.length === 0 && (
               <div data-testid="owner-cursor-chat-empty" className="rounded-xl border border-dashed border-border p-3 text-xs text-muted-foreground">
-                Tell me what’s wrong on {screen.toLowerCase()}. Same Buildr agent — I diagnose, apply a real fix, and push a feature branch. Stay in Estim8r.
+                Describe the {screen.toLowerCase()} failure. I will apply the fix and run AI Assist when the takeoff is empty.
               </div>
             )}
 
@@ -225,7 +235,7 @@ export default function OwnerCursorChat() {
               data-testid="owner-cursor-chat-input"
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder={`Tell the in-app agent what’s wrong on ${screen}…`}
+              placeholder={`Describe the ${screen} failure — I will apply the fix…`}
               disabled={Boolean(busy)}
               className="min-h-[64px] resize-none"
             />

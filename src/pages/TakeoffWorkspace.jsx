@@ -25,7 +25,7 @@ import {
 } from "@/domain/takeoff/junctionHardware";
 import { drawingSymbolsFromDocs, printedScaleCalibration, readDrawingDocuments } from "@/domain/takeoff/drawing-docs";
 import { paletteForTrade, pageKindsFromDocs, symbolsOnDrawingForTrade, tradeById, conduitOptionsForTrade, findConduitOption, TRADES, DEFAULT_CONDUIT_ID } from "@/domain/takeoff/trades";
-import { buildAiMarks, legendDictionaryFromPages, shouldScanWithDictionary } from "@/domain/takeoff/aiTakeoff";
+import { buildAiMarks, legendDictionaryFromPages, pagesToScan } from "@/domain/takeoff/aiTakeoff";
 import TakeoffActionsMenu, { takeoffEstimatePath, takeoffMarkupPath } from "@/components/takeoff/TakeoffActionsMenu";
 import { TakeoffMobileCommandBar, TakeoffMobileDock, TakeoffMobileSheet } from "@/components/takeoff/TakeoffMobileChrome";
 import { readAiPages } from "@/domain/takeoff/aiPages";
@@ -1373,7 +1373,7 @@ export default function TakeoffWorkspace() {
       // Raster hydration must use the same legend-aware sheet eligibility as
       // buildAiMarks; otherwise fallback electrical sheets are scanned without pixels.
       const scanDictionary = legendDictionaryFromPages(pages, palette.fromDrawing, palette.symbols, trade);
-      await hydratePagesRaster((pages || []).filter((page) => shouldScanWithDictionary(page, trade, scanDictionary)));
+      await hydratePagesRaster(pagesToScan(pages, trade, scanDictionary));
       if (!silent) setStatus(`AI assist is marking ${tradeLabel} on the drawings…`);
       await new Promise((resolve) => setTimeout(resolve, 0));
       setAiPages(pages);
@@ -1391,7 +1391,7 @@ export default function TakeoffWorkspace() {
       // Distinguish a failed/empty scan from a genuine zero-symbol result.
       // This is especially important on mobile where the PDF may render while
       // text and vector extraction produce no usable symbol candidates.
-      const scannedPages = (pages || []).filter((page) => shouldScanWithDictionary(page, trade, scanDictionary));
+      const scannedPages = pagesToScan(pages || [], trade, scanDictionary);
       const scanDiagnostics = {
         totalPages: pages.length,
         scannedPages: scannedPages.length,
@@ -1459,6 +1459,17 @@ export default function TakeoffWorkspace() {
       setAiBusy(false);
     }
   }
+
+  const runAiTakeoffRef = useRef(runAiTakeoff);
+  runAiTakeoffRef.current = runAiTakeoff;
+  useEffect(() => {
+    const onRun = () => {
+      setMode("ai");
+      void runAiTakeoffRef.current();
+    };
+    window.addEventListener("estim8r-owner-run-ai-takeoff", onRun);
+    return () => window.removeEventListener("estim8r-owner-run-ai-takeoff", onRun);
+  }, []);
 
   function interactiveGeometryAt(point) {
     const page = aiPages.find((item) => item.page === sheetMeta.page);

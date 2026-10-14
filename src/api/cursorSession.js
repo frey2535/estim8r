@@ -8,13 +8,56 @@ export function ownerAgentApiUrl() {
   return buildrApiUrl() || (import.meta.env.PROD ? "" : "http://127.0.0.1:3001");
 }
 
+export function ownerAgentBases(api = ownerAgentApiUrl()) {
+  const root = String(api || "").replace(/\/$/, "");
+  if (!root) return [];
+  return [`${root}/estim8r/owner`, `${root}/owner`];
+}
+
+export function wantsAiTakeoff(text) {
+  return /\b(empty takeoff|no (?:devices|marks|symbols)|not (?:identifying|counting|marking)|ai assist|ai is not|pottsville|takeoff is empty|run ai|mark (?:the )?(?:symbols|devices)|count (?:the )?symbols)\b/i.test(
+    String(text || ""),
+  );
+}
+
+export function dispatchOwnerAiTakeoff() {
+  if (typeof window === "undefined") return false;
+  window.dispatchEvent(new CustomEvent("estim8r-owner-run-ai-takeoff"));
+  return true;
+}
+
+async function fetchOwnerJson(path, init) {
+  const bases = ownerAgentBases();
+  if (!bases.length) {
+    const error = new Error("Buildr API URL is not configured.");
+    error.status = 0;
+    throw error;
+  }
+  let lastError = null;
+  for (const base of bases) {
+    try {
+      const response = await fetch(`${base}${path}`, init);
+      const type = response.headers.get("content-type") || "";
+      if (type.includes("text/html")) {
+        lastError = new Error("Buildr in-app agent is not reachable from this tab.");
+        lastError.status = response.status;
+        continue;
+      }
+      return response;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error("Buildr in-app agent is not reachable from this tab.");
+}
+
 export async function probeCursorSession(email) {
   const api = ownerAgentApiUrl();
   if (!api) {
-    return { state: "detached", message: "Buildr API URL is not configured." };
+    return { state: "detached", message: "Buildr API URL is not configured. Stay in Estim8r." };
   }
   try {
-    const response = await fetch(`${api}/owner/runtime`, {
+    const response = await fetchOwnerJson("/runtime", {
       credentials: "include",
       headers: {
         Accept: "application/json",
@@ -29,7 +72,7 @@ export async function probeCursorSession(email) {
       };
     }
     if (!response.ok) {
-      return { state: "detached", message: "Buildr in-app agent is not reachable from this tab." };
+      return { state: "detached", message: "Buildr in-app agent is not reachable from this tab. Stay in Estim8r." };
     }
     const body = await response.json();
     return {
@@ -45,17 +88,16 @@ export async function probeCursorSession(email) {
   } catch {
     return {
       state: "detached",
-      message: "Buildr in-app agent is not reachable from this tab. Stay in Estim8r and retry — do not open Cursor.",
+      message: "Buildr in-app agent is not reachable from this tab. Stay in Estim8r.",
     };
   }
 }
 
 export async function postCursorSessionTurn(payload) {
-  const api = ownerAgentApiUrl();
-  if (!api) {
-    throw new Error("Buildr API URL is not configured.");
+  if (wantsAiTakeoff(payload.text)) {
+    dispatchOwnerAiTakeoff();
   }
-  const response = await fetch(`${api}/owner/runtime/turns`, {
+  const response = await fetchOwnerJson("/runtime/turns", {
     method: "POST",
     credentials: "include",
     headers: {
@@ -76,5 +118,9 @@ export async function postCursorSessionTurn(payload) {
     error.status = response.status;
     throw error;
   }
-  return response.json();
+  const body = await response.json();
+  if ((body.actions || []).some((action) => action.type === "run_ai_takeoff") || wantsAiTakeoff(payload.text)) {
+    dispatchOwnerAiTakeoff();
+  }
+  return body;
 }

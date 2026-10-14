@@ -49,14 +49,11 @@ export function screenLabel(pathname = "/") {
 
 export function describeCursorSession(status) {
   if (status?.state === "loading") return "Connecting to the Buildr in-app agent…";
-  if (status?.state === "ready") {
-    return "Same Buildr in-app agent. I diagnose this tab, apply a real fix, and push a feature branch. Stay in Estim8r — no Cursor window.";
-  }
+  if (status?.state === "ready") return "Connected. I will apply the fix from this chat.";
   if (status?.state === "detached") {
-    return status?.message
-      || "Same Buildr in-app agent. I still inspect this tab; retry the turn to apply and ship. Stay in Estim8r.";
+    return status?.message || "Runtime unreachable. I can still run AI Assist on this tab.";
   }
-  return status?.message || "Could not reach the Buildr in-app agent.";
+  return status?.message || "Runtime unreachable.";
 }
 
 export function allowedLocalEmails() {

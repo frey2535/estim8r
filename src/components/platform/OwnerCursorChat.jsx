@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { Activity, Bot, Loader2, Minimize2, Play, RefreshCw, Send, X } from "lucide-react";
+import { Activity, Bot, Camera, Loader2, Minimize2, Play, RefreshCw, Send, X } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { CURSOR_CHAT_STORAGE, canUseOwnerCursorChat, screenLabel } from "@/lib/ownerCursorChat";
 import { collectOwnerChatEvidence, installOwnerChatEvidence } from "@/lib/ownerChatEvidence";
@@ -46,6 +46,8 @@ export default function OwnerCursorChat() {
   const [messages, setMessages] = useState(readHistory);
   const [inspecting, setInspecting] = useState(false);
   const [snapshot, setSnapshot] = useState(null);
+  const [capture, setCapture] = useState(null);
+  const [capturing, setCapturing] = useState(false);
   const listRef = useRef(null);
   const screen = screenLabel(location.pathname);
 
@@ -71,6 +73,29 @@ export default function OwnerCursorChat() {
       setSnapshot({ evidence, result });
       setMessages((current) => [...current, message("assistant", inspectionText(evidence, result))]);
     } finally { setInspecting(false); }
+  }
+  async function captureWorkspace() {
+    setCapturing(true);
+    try {
+      const root = document.querySelector("main");
+      if (!root) throw new Error("No main workspace is available for visual capture.");
+      const { default: html2canvas } = await import("html2canvas");
+      const canvas = await html2canvas(root, {
+        backgroundColor: null,
+        logging: false,
+        useCORS: false,
+        scale: Math.min(1, 1200 / Math.max(root.clientWidth, 1)),
+        onclone: (clonedDocument) => {
+          clonedDocument.querySelectorAll("input, textarea, select, [contenteditable], [data-private], [data-sensitive]").forEach((el) => {
+            el.style.setProperty("visibility", "hidden", "important");
+          });
+        },
+      });
+      setCapture(canvas.toDataURL("image/png"));
+      setMessages((current) => [...current, message("assistant", "Local workspace preview captured. Review it below. The image has not been uploaded or sent to an AI service. Inputs and editable fields are hidden; other customer information may still be visible.")]);
+    } catch (error) {
+      setMessages((current) => [...current, message("assistant", `Workspace capture failed: ${error?.message || "unknown error"}. No image was sent.`)]);
+    } finally { setCapturing(false); }
   }
   function runTakeoff() {
     if (!location.pathname.startsWith("/takeoff")) {
@@ -119,8 +144,12 @@ export default function OwnerCursorChat() {
           <Button type="button" size="sm" variant="outline" onClick={inspect} disabled={inspecting}>
             {inspecting ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1 h-3.5 w-3.5" />} Inspect screen
           </Button>
+          <Button type="button" size="sm" variant="outline" onClick={captureWorkspace} disabled={capturing}>
+            {capturing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Camera className="mr-1 h-3.5 w-3.5" />} Preview screen
+          </Button>
           {location.pathname.startsWith("/takeoff") && <Button type="button" size="sm" variant="outline" onClick={runTakeoff}><Play className="mr-1 h-3.5 w-3.5" /> Run AI Assist</Button>}
         </div>
+        {capture && <div className="border-b border-border p-2"><div className="mb-1 flex justify-between text-xs"><span>Local preview — not shared</span><Button size="sm" variant="ghost" type="button" onClick={() => setCapture(null)}>Discard</Button></div><img src={capture} alt="Preview of current Estim8r workspace" className="max-h-44 w-full object-contain" /></div>}
         <div ref={listRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3" aria-live="polite">
           {!messages.length && <p className="text-xs text-muted-foreground">Inspect this tab's errors, active drawing and estimate. No screenshot or external transmission occurs.</p>}
           {messages.map((item) => <div key={item.id} className={cn("whitespace-pre-wrap rounded-xl px-3 py-2 text-xs",

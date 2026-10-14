@@ -55,11 +55,27 @@ Deno.serve(async (request) => {
       },
     );
     if (!response.ok) {
-      console.error("Gemini AI request failed", { status: response.status });
-      if (response.status === 429) return json(429, { error: "Free AI quota reached. Try again later." });
-      if (response.status === 400 || response.status === 404) return json(502, { error: "AI model request failed. Check ESTIM8R_AGENT_MODEL and Edge Function logs." });
-      if (response.status === 401 || response.status === 403) return json(502, { error: "AI provider authorization failed. Check GEMINI_API_KEY and its project access." });
-      return json(502, { error: "AI provider request failed (status " + response.status + ")." });
+      // Only expose Google's status and standardized error category, never request contents or secrets.
+      const providerError = await response.json().catch(() => null);
+      const providerStatus = typeof providerError?.error?.status === "string"
+        ? providerError.error.status.slice(0, 80) : "UNKNOWN";
+      console.error("Gemini AI request failed", {
+        status: response.status, providerStatus, model,
+      });
+      if (response.status === 429) return json(429, { error: "Gemini free-tier quota reached. Try again later.", providerStatus });
+      if (response.status === 404) return json(502, {
+        error: "Gemini model not found or unavailable: " + model + ". Check this API key's available models at https://generativelanguage.googleapis.com/v1beta/models (requires authentication).",
+        providerStatus,
+      });
+      if (response.status === 400) return json(502, {
+        error: "Gemini rejected the request (400). Check model and providerStatus in Edge Function logs.",
+        providerStatus,
+      });
+      if (response.status === 401 || response.status === 403) return json(502, {
+        error: "Gemini API authorization failed. Check GEMINI_API_KEY and API access.",
+        providerStatus,
+      });
+      return json(502, { error: "Gemini request failed (status " + response.status + ").", providerStatus });
     }
     const result = await response.json();
     const answer = result?.candidates?.[0]?.content?.parts

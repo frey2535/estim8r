@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildAiMarks } from "./aiTakeoff.js";
-import { isDeviceMark, planOverlayMarks } from "./deviceStyles.js";
+import { displayDeviceOutline, isDeviceMark, planOverlayMarks } from "./deviceStyles.js";
 import { paletteForTrade } from "./trades.js";
 
 function assert(cond, message) {
@@ -33,8 +33,15 @@ try {
 }
 
 const devices = planOverlayMarks(planned.marks || []).filter(isDeviceMark);
+const painted = devices.filter((mark) => displayDeviceOutline(mark));
+const powerLighting = devices.filter((mark) => (
+  mark.sheet === 50 && /^(?:[1-4]E?|L\d+[A-Z]?|F\d+[A-Z]?|X\d+[A-Z]?)$/i.test(String(mark.typeCode || ""))
+));
 assert(planned.deviceCount >= 8, `AI must mark real devices, got deviceCount ${planned.deviceCount}`);
 assert(devices.length >= 8, `overlay must show marked devices, got ${devices.length}`);
+assert(painted.length >= 8, `overlay must paint in-symbol fills, got ${painted.length}`);
+assert(painted.length >= Math.floor(devices.length * 0.72), `most counted devices must keep a visible fill (${painted.length}/${devices.length})`);
+assert(powerLighting.length < 8, `power plan E110 must not count lighting types as devices, got ${powerLighting.length}`);
 assert(!devices.some((mark) => /^\d{1,2}$/.test(String(mark.typeCode || "")) && mark.circuitTagLocation?.text === mark.typeCode), "circuit-tag-only numbers are not painted as types");
 
-if (!process.exitCode) console.log(`empty AI takeoff guard: ${planned.deviceCount} devices`);
+if (!process.exitCode) console.log(`empty AI takeoff guard: ${planned.deviceCount} devices, ${painted.length} in-symbol fills`);

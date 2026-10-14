@@ -436,6 +436,8 @@ function legendCodeEntries(dictionary) {
 export function nearbyLegendEntry(point, tokens = [], dictionary, options = {}) {
   if (!point) return null;
   const radius = Number(options.radius) > 0 ? Number(options.radius) : 1.35;
+  const planType = String(options.planType || "");
+  const anchorFamily = String(options.anchorFamily || "");
   const entries = legendCodeEntries(dictionary);
   let best = null;
   let bestDist = Infinity;
@@ -443,6 +445,11 @@ export function nearbyLegendEntry(point, tokens = [], dictionary, options = {}) 
     const code = compact(normalizeTypeMark(token?.text));
     const entry = entries.get(code);
     if (!entry) continue;
+    const family = entryFamily(entry);
+    if (planType && family && family !== planType) continue;
+    if (anchorFamily && family && family !== anchorFamily) continue;
+    // Circuit / keynote digits next to a power glyph are not lighting type codes.
+    if ((planType === "power" || anchorFamily === "power") && family === "lighting" && /^\d{1,2}[a-z]?$/.test(code)) continue;
     const dist = Math.hypot(
       (Number(token?.x) || 0) - (Number(point.x ?? point.cx) || 0),
       (Number(token?.y) || 0) - (Number(point.y ?? point.cy) || 0),
@@ -733,6 +740,7 @@ export function entryFamily(entry) {
   // Ceiling / bay fans are lighting fixtures. The word "fan" used to dump them
   // into the power family, so F2 painted and hovered on receptacles.
   if (/ceiling\s*fan|bay\s*fan|fanimation|paddle\s*fan/i.test(blob)) return "lighting";
+  if (/^OS$/i.test(code) || /occupanc|vacanc/i.test(blob)) return "lighting";
   if (/^F\d/i.test(code) && !/recept|gfi|exhaust|vent/i.test(blob)) return "lighting";
   if (/lighting|downlight|troffer|can light|fixture/i.test(blob) && !/recept|gfi|switch/i.test(blob)) return "lighting";
   if (/recept|gfi|switch|outlet|duplex|weatherproof|special-purpose|\bwp\b|\bsp\b|\bspr\b/i.test(blob)) return "power";
@@ -1068,7 +1076,7 @@ export function recoverMissedLegendSymbols(page, dictionary, options = {}) {
         { x: hit.geometry.cx, y: hit.geometry.cy },
         tokens,
         dictionary,
-        { radius: 1.35 },
+        { radius: 1.35, planType, anchorFamily: entryFamily(entry) },
       );
       const nearestPrintedCode = compact(nearestPrinted?.entry?.code);
       // Printed type text is authoritative when it is a known legend code.

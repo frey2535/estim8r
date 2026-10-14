@@ -16,6 +16,9 @@ export const DEVICE_FILL_STROKE_PX = 1.25;
 export const MAX_DISPLAY_POINT_FILL = 0.42;
 export const MAX_DISPLAY_FIXTURE_FILL = 0.9;
 export const MAX_DISPLAY_GENERIC_FILL = 0.62;
+export const MIN_TRUSTED_AI_BODY = 0.06;
+export const MAX_TRUSTED_AI_BODY = 2.45;
+export const MAX_TRUSTED_FIXTURE_BODY = 3.8;
 export const CIRCUIT_COLOR = "#64748b";
 export const SELECTED_OUTLINE_SCALE = 1;
 
@@ -237,6 +240,44 @@ export function isUsablePaintOutline(outline, origin, maxExtent = MAX_GENERIC_FI
   return true;
 }
 
+export function trustedAiBodyMax(mark) {
+  if (isFixtureDevice(mark)) return MAX_TRUSTED_FIXTURE_BODY;
+  if (isPointDevice(mark)) return MAX_TRUSTED_AI_BODY;
+  return 2.8;
+}
+
+export function isTrustedAiBodyOutline(outline, origin, mark) {
+  if (!outline) return false;
+  if (outline.kind === "path" && (outline.points || []).length < 3) return false;
+  if (outline.kind === "composite" && !(outline.parts || []).length) return false;
+  const extent = outlineExtent(outline);
+  if (extent < MIN_TRUSTED_AI_BODY || extent > trustedAiBodyMax(mark)) return false;
+  const center = outlineCenter(outline, origin);
+  if (!isOnSheet(center.x, center.y)) return false;
+  if (origin && Number.isFinite(origin.x) && Number.isFinite(origin.y)) {
+    if (Math.hypot(center.x - origin.x, center.y - origin.y) > 0.95) return false;
+  }
+  return true;
+}
+
+function coreDeviceOutline(outline, origin, mark) {
+  if (!outline || outline.kind !== "composite" || !(outline.parts || []).length) return null;
+  const ranked = [...outline.parts]
+    .map((part) => ({ part, extent: outlineExtent(part) }))
+    .filter((item) => item.extent >= 0.12 && item.extent <= trustedAiBodyMax(mark))
+    .sort((a, b) => b.extent - a.extent);
+  const best = ranked[0]?.part;
+  if (!best) return null;
+  const cx = Number(best.cx ?? outline.cx ?? origin?.x);
+  const cy = Number(best.cy ?? outline.cy ?? origin?.y);
+  return {
+    ...best,
+    cx,
+    cy,
+    source: best.source || outline.source || "vector",
+  };
+}
+
 function genericDeviceOutline(mark, markerSize = 0.55) {
   const scale = Math.min(1.15, Math.max(0.7, Number(markerSize) || 0.55) / 0.55);
   const blob = deviceFillBlob(mark);
@@ -293,9 +334,20 @@ export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
   const usable = cleaned && isUsablePaintOutline(cleaned, origin, maxExtent) && !outlineOnPrintedTag(cleaned, mark);
 
   if (mark?.source === "ai") {
-    // AI may paint only the measured symbol body, never a circuit/type number.
-    if (!trustedAiSource || !usable) return null;
-    return scaleOutline(cleaned, 1, origin);
+    // Paint the measured symbol body. Slightly oversize or tiny CAD glyphs are
+    // still the device — displayDeviceOutline scales them into the visible cap.
+    // Room-sized junk, text-only boxes, and circuit-number glyphs stay unpainted.
+    if (!trustedAiSource) return null;
+    const core = isTrustedAiBodyOutline(cleaned, origin, mark)
+      ? cleaned
+      : coreDeviceOutline(cleaned, origin, mark);
+    if (core && !outlineOnPrintedTag(core, mark) && isTrustedAiBodyOutline(core, origin, mark)) {
+      return scaleOutline(core, 1, origin);
+    }
+    if ((!cleaned || outlineExtent(cleaned) < MIN_TRUSTED_AI_BODY) && mark.symbolBodyLocation && !outlineOnPrintedTag(cleaned, mark)) {
+      return genericDeviceOutline(mark, markerSize);
+    }
+    return null;
   }
 
   if (usable) {

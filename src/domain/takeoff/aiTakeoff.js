@@ -24,7 +24,7 @@ import { extractSheetNotes, notesToMarks } from "./sheetNotes.js";
 import { looksLikeCoverOrRendering, looksLikeElectricalPlan, looksLikeIndexPage, pagePlanType } from "./drawing-docs.js";
 import { associateGeometry, assignExclusiveGeometry, looksLikeRecessedCanBody, placeOnSymbolGeometry, shapeHintFromLabel, tagOnSymbolGeometry } from "./vectorSymbols.js";
 import { orthogonalizePolyline } from "./ortho.js";
-import { attachConfirmedGeometryPrototypes, attachFragmentPrototypes, attachLegendGeometryPrototypes, attachPowerGlyphPrototypes, attachProjectPrototypes, findNearbyReceptacleGlyph, isEmergencyHatch, isHatchTickCluster, looksLikeHexNoteGlyph, nearbyLegendEntry, recoverMissedLegendSymbols, scanPageByLegendGeometry, scanUnlabeledPowerGlyphs, snapToEntryPrototype, symbolBodyOutline } from "./legendGeometry.js";
+import { attachConfirmedGeometryPrototypes, attachFragmentPrototypes, attachLegendGeometryPrototypes, attachPowerGlyphPrototypes, attachProjectPrototypes, entryFamily, findNearbyReceptacleGlyph, isEmergencyHatch, isHatchTickCluster, looksLikeHexNoteGlyph, nearbyLegendEntry, recoverMissedLegendSymbols, scanPageByLegendGeometry, scanUnlabeledPowerGlyphs, snapToEntryPrototype, symbolBodyOutline } from "./legendGeometry.js";
 import { matchRasterToLegend, rasterCandidatesFromPage } from "./rasterSymbols.js";
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
 import { buildTradeSearchManifest } from "./searchManifest.js";
@@ -992,7 +992,11 @@ export function buildAiMarks({
         x: Number(paintOutline?.cx ?? geometry.cx),
         y: Number(paintOutline?.cy ?? geometry.cy),
       };
-      const typed = nearbyLegendEntry(placed, page.tokens, dictionary, { radius: 1.35 });
+      const typed = nearbyLegendEntry(placed, page.tokens, dictionary, {
+        radius: 1.35,
+        planType,
+        anchorFamily: entryFamily(visual.entry),
+      });
       const effectiveEntry = typed?.entry || visual.entry;
       const symbol = effectiveEntry.symbol;
       if (isVisualOnlyEquipmentHit(visual, page, placed)) continue;
@@ -1243,7 +1247,11 @@ export function buildAiMarks({
         x: Number(paintOutline?.cx ?? geometry.cx),
         y: Number(paintOutline?.cy ?? geometry.cy),
       };
-      const typed = nearbyLegendEntry(placed, page.tokens, dictionary, { radius: 1.35 });
+      const typed = nearbyLegendEntry(placed, page.tokens, dictionary, {
+        radius: 1.35,
+        planType,
+        anchorFamily: entryFamily(visual.entry),
+      });
       const effectiveEntry = typed?.entry || visual.entry;
       const symbol = effectiveEntry?.symbol;
       if (!symbol) continue;
@@ -1539,6 +1547,12 @@ export function buildAiMarks({
   conduits.push(...applyConduitCallouts(conduits, callouts, anchors, conduits.length, trade, color));
   const cap = Math.max(1, Number(maxHomeruns) || DEFAULT_MAX_HOMERUNS);
   const pageKinds = Object.fromEntries((pages || []).filter((page) => page?.page).map((page) => [page.page, page.kind]));
+  const noteMarks = notesToMarks(extractSheetNotes(pages, trade), trade);
+  const coloredMarks = applyDeviceTypeColors([
+    ...validatedCounts.map(({ anchor, ...mark }) => mark),
+    ...conduits,
+    ...noteMarks,
+  ]);
   const persistedCount = persistedPlanDeviceCount(validatedCounts, pageKinds);
   const legendHits = validatedCounts.filter((mark) => mark.matchedFrom === "legend").length;
   const skipped = (pages || []).filter((page) => !shouldScanWithDictionary(page, trade, dictionary));
@@ -1553,7 +1567,6 @@ export function buildAiMarks({
   const skipNote = skipped.length
     ? ` Skipped ${skipped.length} non-${trade} sheet(s)${skippedTrades.length ? ` (${skippedTrades.join(", ")})` : ""}.`
     : "";
-  const noteMarks = notesToMarks(extractSheetNotes(pages, trade), trade);
   const reconciliation = reconcilePlanToSchedule({
     marks: validatedCounts,
     pages,
@@ -1568,11 +1581,7 @@ export function buildAiMarks({
     shouldScanPage: (page, selectedTrade) => shouldScanWithDictionary(page, selectedTrade, dictionary),
   });
   return {
-    marks: applyDeviceTypeColors([
-      ...validatedCounts.map(({ anchor, ...mark }) => mark),
-      ...conduits,
-      ...noteMarks,
-    ]),
+    marks: coloredMarks,
     summary: persistedCount
       ? `AI ${trade} takeoff: ${persistedCount} devices from the drawing${legendHits ? ` (${legendHits} matched from the legend)` : ""}, ${conduits.length} conduit runs on ${trade} sheets showing run count and path, max ${cap} homeruns per conduit.${skipNote}`
       : `No ${trade} symbols were found on ${trade} sheets.${skipNote || " Counts stay empty until that trade is labeled on the sheets."}`,

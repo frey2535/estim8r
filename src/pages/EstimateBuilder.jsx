@@ -481,13 +481,13 @@ export default function EstimateBuilder() {
           />
         </div>
         <div className="min-w-0 flex-1">
-        <p className="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-orange-500">Estimate Builder</p>
+        <p className="text-sm font-bold uppercase tracking-widest text-blue-600 dark:text-orange-500">Estimate Builder</p>
         <h1 className="text-3xl font-black">{pdfDesign.documentTitle || "Electrical"}</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base text-foreground/80">
           Add items, quantities, labor, and markup here. Drawings and takeoff are optional and do not have to be started to save.
           {isDrawingFileName(meta.fileName) ? ` Drawing: ${meta.fileName}.` : ""}
         </p>
-        <Link to="/takeoff" className="mt-2 inline-block text-sm font-semibold text-blue-600 dark:text-orange-500">Back to takeoff</Link>
+        <Link to="/takeoff" className="mt-2 inline-flex min-h-[44px] items-center text-base font-bold text-blue-700 dark:text-orange-400">Back to takeoff</Link>
         <div className="mt-3">
           {ready && <SaveProjectDocuments estimate={draft} onProjectName={(name) => setHeaderField("projectName", name)} />}
         </div>
@@ -496,12 +496,12 @@ export default function EstimateBuilder() {
 
       <Tabs defaultValue="estimate" className="w-full min-w-0">
         <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto bg-muted/70 p-1">
-          <TabsTrigger value="estimate" className="px-4 py-2">Estimate</TabsTrigger>
-          <TabsTrigger value="labor-markup" className="px-4 py-2">Labor &amp; markup</TabsTrigger>
-          <TabsTrigger value="assemblies" className="px-4 py-2">Assemblies</TabsTrigger>
-          <TabsTrigger value="supplier-prices" className="px-4 py-2">Supplier Prices</TabsTrigger>
-          <TabsTrigger value="pdf-designer" className="px-4 py-2">PDF Designer</TabsTrigger>
-          {draft.trueTakeoff?.analysis ? <TabsTrigger value="audit" className="px-4 py-2">Takeoff Audit</TabsTrigger> : null}
+          <TabsTrigger value="estimate" className="min-h-[44px] px-4 text-base">Estimate</TabsTrigger>
+          <TabsTrigger value="labor-markup" className="min-h-[44px] px-4 text-base">Labor</TabsTrigger>
+          <TabsTrigger value="assemblies" className="min-h-[44px] px-4 text-base">Assemblies</TabsTrigger>
+          <TabsTrigger value="supplier-prices" className="min-h-[44px] px-4 text-base">Prices</TabsTrigger>
+          <TabsTrigger value="pdf-designer" className="min-h-[44px] px-4 text-base">PDF</TabsTrigger>
+          {draft.trueTakeoff?.analysis ? <TabsTrigger value="audit" className="min-h-[44px] px-4 text-base">Audit</TabsTrigger> : null}
         </TabsList>
 
         <TabsContent value="estimate" className="mt-4 space-y-5">
@@ -509,9 +509,9 @@ export default function EstimateBuilder() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="font-bold">Existing estimate labor</h2>
-            <p className="text-xs text-muted-foreground">Keep every estimate line and quantity, but re-apply the current labor library to matched lines. Manual labor overrides are preserved.</p>
+            <p className="text-base text-foreground/80">Keep every estimate line and quantity, but re-apply the current labor library to matched lines. Manual labor overrides are preserved.</p>
           </div>
-          <button type="button" onClick={refreshEstimateLabor} disabled={!library.length} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Apply updated labor</button>
+          <button type="button" onClick={refreshEstimateLabor} disabled={!library.length} className="min-h-[44px] rounded-lg bg-blue-600 px-4 py-2 text-base font-bold text-white disabled:opacity-50">Apply updated labor</button>
         </div>
         {laborRefreshReport ? <p className="mt-2 text-xs font-semibold">{laborRefreshReport.updated} lines updated · {laborRefreshReport.preservedOverrides} manual overrides preserved · {laborRefreshReport.unmatched} unmatched lines left unchanged.</p> : null}
       </section>
@@ -540,24 +540,24 @@ export default function EstimateBuilder() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
           <div className="min-w-0">
             <h2 className="text-lg font-bold">Estimate Lines</h2>
-            <p className="text-xs text-muted-foreground">Choose Type and Category first. Labor item, MH/unit, and Hours follow the picked row. Conduit qty is stick count (× 10') unless the unit is LF. The supply-house sheet updates as you type.</p>
+            <p className="text-base text-foreground/80">Choose Type and Category first. Labor item, MH/unit, and Hours follow the picked row. Conduit qty is stick count (× 10') unless the unit is LF. The supply-house sheet updates as you type.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold">
+            <label className="flex min-h-[44px] items-center gap-2 rounded-lg border border-border px-3 text-base font-semibold">
               <input type="checkbox" checked={itemized} onChange={(e) => setItemized(e.target.checked)} />
               Itemized estimate
             </label>
             {itemized ? (
               <>
-                <button type="button" onClick={() => setLines((current) => setAllLinesIncluded(current, true))} className="rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-muted">
+                <button type="button" onClick={() => setLines((current) => setAllLinesIncluded(current, true))} className="min-h-[44px] rounded-lg border border-border px-3 text-base font-semibold hover:bg-muted">
                   Check all
                 </button>
-                <button type="button" onClick={() => setLines((current) => setAllLinesIncluded(current, false))} className="rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-muted">
+                <button type="button" onClick={() => setLines((current) => setAllLinesIncluded(current, false))} className="min-h-[44px] rounded-lg border border-border px-3 text-base font-semibold hover:bg-muted">
                   Uncheck all
                 </button>
               </>
             ) : null}
-            <button type="button" data-testid="add-estimate-line" onClick={() => setLines((current) => [...current, blankLine(wage.rate)])} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white dark:bg-orange-500">
+            <button type="button" data-testid="add-estimate-line" onClick={() => setLines((current) => [...current, blankLine(wage.rate)])} className="flex min-h-[44px] items-center gap-2 rounded-lg bg-blue-600 px-4 text-base font-bold text-white dark:bg-orange-500">
               <Plus className="h-4 w-4" />Add line
             </button>
           </div>
@@ -726,7 +726,47 @@ export default function EstimateBuilder() {
           <NamedCrewPicker crews={namedCrews} selectedId={namedCrewId} onLoad={loadCrew} onSave={saveCrew} />
         </div>
         <div className="mt-4">
-          <table className="w-full table-auto text-sm">
+          <div className="space-y-3 lg:hidden">
+            {crew.map((row) => (
+              <div key={row.id} className="rounded-xl border border-border bg-background p-3">
+                <label className="flex min-h-[44px] items-center gap-3 text-base font-bold">
+                  <input type="checkbox" className="h-5 w-5" checked={row.selected} onChange={() => toggleClass(row.id)} aria-label={`Select ${row.label}`} />
+                  {row.label}{row.id === "journeyman" ? " (default)" : ""}
+                </label>
+                <div className="mt-2 grid grid-cols-2 gap-3">
+                  <label className="min-w-0">
+                    <span className="mb-1 block text-sm font-bold">Hourly wage $/MH</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={row.wage}
+                      aria-label={`${row.label} wage`}
+                      onChange={(e) => applyCrew(crew.map((item) => item.id === row.id ? { ...item, wage: e.target.value } : item))}
+                      className="w-full min-h-[44px] rounded-md border border-input bg-background px-3 text-base"
+                    />
+                  </label>
+                  <label className="min-w-0">
+                    <span className="mb-1 block text-sm font-bold">Headcount</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={row.headcount}
+                      aria-label={`${row.label} headcount`}
+                      onChange={(e) => applyCrew(crew.map((item) => {
+                        if (item.id !== row.id) return item;
+                        const headcount = e.target.value;
+                        return { ...item, headcount, selected: Number(headcount) > 0 };
+                      }))}
+                      className="w-full min-h-[44px] rounded-md border border-input bg-background px-3 text-base"
+                    />
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+          <table className="hidden w-full table-auto text-sm lg:table">
             <thead className="text-left text-xs uppercase text-muted-foreground">
               <tr>
                 <th className="p-2">Use</th>
@@ -1035,11 +1075,11 @@ export default function EstimateBuilder() {
 function Field({ label, value, set, type = "text", children, className = "", required = false, hint = "" }) {
   return (
     <label className={`min-w-0 ${className}`}>
-      <span className="mb-1 block text-xs font-bold text-muted-foreground">
+      <span className="mb-1 block text-sm font-bold text-foreground">
         {label}
         {required ? <span className="ml-1 font-semibold text-blue-600 dark:text-orange-500">{hint || "Required"}</span> : null}
       </span>
-      {children || <input type={type} value={value} onChange={(e) => set(e.target.value)} required={required} className="w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2.5" />}
+      {children || <input type={type} value={value} onChange={(e) => set(e.target.value)} required={required} className="w-full min-h-[44px] min-w-0 rounded-lg border border-input bg-background px-3 py-2.5 text-base" />}
     </label>
   );
 }

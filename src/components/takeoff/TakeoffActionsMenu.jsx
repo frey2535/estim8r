@@ -28,17 +28,19 @@ export default function TakeoffActionsMenu({
   onQuotePdf,
   onReplaceId,
   onClose,
+  label = "More",
+  className = "",
 }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-semibold hover:bg-muted"
-          aria-label="Takeoff actions"
+          className={`inline-flex min-h-[44px] w-full shrink-0 items-center justify-center gap-1 rounded-xl border border-border bg-background px-3 text-base font-bold hover:bg-muted ${className}`}
+          aria-label="More takeoff actions"
         >
-          {aiBusy ? "AI working…" : "Actions"}
-          <ChevronDown className="h-4 w-4" />
+          {aiBusy ? "AI…" : label}
+          <ChevronDown className="h-5 w-5" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">

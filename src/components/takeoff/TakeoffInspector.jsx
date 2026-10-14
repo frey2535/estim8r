@@ -15,9 +15,9 @@ import {
 import TradeSymbolSelect from "@/components/takeoff/TradeSymbolSelect";
 import ReconciliationPanel from "@/components/takeoff/ReconciliationPanel";
 
-function Field({ label, children }) {
+function Field({ label, children, compact = true }) {
   return (
-    <label className="block text-[11px]">
+    <label className={compact ? "block text-[11px]" : "block text-base"}>
       <span className="mb-0.5 block font-bold text-muted-foreground">{label}</span>
       {children}
     </label>
@@ -25,6 +25,7 @@ function Field({ label, children }) {
 }
 
 const inputClass = "w-full rounded-md border border-input bg-background px-1.5 py-1 text-xs";
+const sheetInputClass = "w-full min-h-[44px] rounded-lg border border-input bg-background px-3 py-2 text-base";
 
 export default function TakeoffInspector({
   rollup,
@@ -55,25 +56,28 @@ export default function TakeoffInspector({
   coverageNote,
   isolationMode = false,
   onIsolationMode,
+  embedded = false,
 }) {
   const selectedIsLine = isLineMark(selected);
   const selectedIsMarker = isMarkerMark(selected);
   const selectedIsConduit = selected?.tool === "conduit" || selected?.type === "route" || selected?.category === "Raceway";
   const selectedIsNote = selected?.type === "note";
+  const fieldInput = embedded ? sheetInputClass : inputClass;
+  const Wrapper = embedded ? "div" : "aside";
   return (
-    <aside className="hidden min-h-0 overflow-auto border-l border-border bg-card p-3 lg:block">
+    <Wrapper className={embedded ? "space-y-3 text-base" : "hidden min-h-0 overflow-auto border-l border-border bg-card p-3 lg:block"}>
       {selected && (
         <div className="mb-3 space-y-2 rounded-lg border border-border p-2">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Selected item</div>
+          <div className={embedded ? "text-sm font-bold uppercase tracking-wider text-muted-foreground" : "text-[10px] font-bold uppercase tracking-wider text-muted-foreground"}>Selected item</div>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => onIsolationMode?.(!isolationMode)} className={isolationMode ? "rounded-md bg-orange-600 px-2 py-1 text-[11px] font-bold text-white" : "rounded-md border border-border px-2 py-1 text-[11px] font-bold hover:bg-muted"}>
+            <button type="button" onClick={() => onIsolationMode?.(!isolationMode)} className={isolationMode ? "min-h-11 rounded-md bg-orange-600 px-3 py-2 text-sm font-bold text-white" : "min-h-11 rounded-md border border-border px-3 py-2 text-sm font-bold hover:bg-muted"}>
               {isolationMode ? "Exit isolation" : "Isolate selected"}
             </button>
-            <span className="text-[10px] text-muted-foreground">{isolationMode ? "Only this item is shown for focused editing." : "Selected item is brought forward and editable below."}</span>
+            <span className={embedded ? "text-sm text-muted-foreground" : "text-[10px] text-muted-foreground"}>{isolationMode ? "Only this item is shown for focused editing." : "Selected item is brought forward and editable below."}</span>
           </div>
           {selectedIsConduit || selectedIsNote ? (
             <Field label="Name">
-              <input className={inputClass} value={selected.symbolLabel || ""} onChange={(e) => onUpdateMark(selected.id, { symbolLabel: e.target.value })} />
+              <input className={fieldInput} value={selected.symbolLabel || ""} onChange={(e) => onUpdateMark(selected.id, { symbolLabel: e.target.value })} />
             </Field>
           ) : (
             <Field label="Device / symbol">
@@ -82,22 +86,22 @@ export default function TakeoffInspector({
                 marks={marks}
                 pageKinds={pageKinds}
                 value={selected.symbol || selected.symbolLabel}
-                className={inputClass}
+                className={fieldInput}
                 onChange={(item) => onUpdateMark(selected.id, symbolPatchFromCatalog(item))}
               />
             </Field>
           )}
           <Field label="Category">
-            <input className={inputClass} value={selected.category || ""} readOnly />
+            <input className={fieldInput} value={selected.category || ""} readOnly />
           </Field>
           <Field label="Marker text">
-            <input className={inputClass} value={selected.abbr || ""} onChange={(e) => onUpdateMark(selected.id, { abbr: e.target.value })} />
+            <input className={fieldInput} value={selected.abbr || ""} onChange={(e) => onUpdateMark(selected.id, { abbr: e.target.value })} />
           </Field>
           {selectedIsMarker ? (
             <>
               <Field label="Circuit">
                 <input
-                  className={inputClass}
+                  className={fieldInput}
                   value={selected.circuit || selected.circuitNumber || ""}
                   placeholder="Example: LN1-12"
                   onChange={(e) => onUpdateMark(selected.id, { circuit: e.target.value, circuitNumber: e.target.value })}
@@ -109,7 +113,7 @@ export default function TakeoffInspector({
                     type="number"
                     min="0"
                     step="1"
-                    className={inputClass}
+                    className={fieldInput}
                     value={selected.breakerAmps || selected.circuitAmps || ""}
                     placeholder="20"
                     onChange={(e) => onUpdateMark(selected.id, { breakerAmps: Number(e.target.value) || "" })}
@@ -117,7 +121,7 @@ export default function TakeoffInspector({
                 </Field>
                 <Field label="Poles">
                   <select
-                    className={inputClass}
+                    className={fieldInput}
                     value={selected.circuitPoles || selected.poles || 1}
                     onChange={(e) => onUpdateMark(selected.id, { circuitPoles: Number(e.target.value) || 1 })}
                   >
@@ -130,7 +134,7 @@ export default function TakeoffInspector({
               <div className="grid grid-cols-2 gap-2">
                 <Field label="Wire size">
                   <input
-                    className={inputClass}
+                    className={fieldInput}
                     value={selected.circuitWireSize || selected.wireSize || ""}
                     placeholder="#12"
                     onChange={(e) => onUpdateMark(selected.id, { circuitWireSize: e.target.value })}
@@ -138,7 +142,7 @@ export default function TakeoffInspector({
                 </Field>
                 <Field label="Ground size">
                   <input
-                    className={inputClass}
+                    className={fieldInput}
                     value={selected.circuitGroundSize || selected.groundSize || ""}
                     placeholder="#12"
                     onChange={(e) => onUpdateMark(selected.id, { circuitGroundSize: e.target.value })}
@@ -155,7 +159,7 @@ export default function TakeoffInspector({
               </label>
               <Field label="Assigned conduit">
                 <select
-                  className={inputClass}
+                  className={fieldInput}
                   value={selected.circuitRunId || ""}
                   onChange={(e) => onUpdateMark(selected.id, { circuitRunId: e.target.value || null })}
                 >
@@ -214,7 +218,7 @@ export default function TakeoffInspector({
                   type="number"
                   min="0.5"
                   step="0.1"
-                  className={inputClass}
+                  className={fieldInput}
                   aria-label="This line size"
                   value={resolvedLineSize(selected, globalLineSize)}
                   onChange={(e) => onUpdateMark(selected.id, lineSizePatch(e.target.value))}
@@ -227,7 +231,7 @@ export default function TakeoffInspector({
                   type="number"
                   min="0.5"
                   step="0.1"
-                  className={inputClass}
+                  className={fieldInput}
                   aria-label="This marker size"
                   value={resolvedMarkerSize(selected, globalMarkerSize)}
                   onChange={(e) => onUpdateMark(selected.id, markerSizePatch(e.target.value))}
@@ -252,7 +256,7 @@ export default function TakeoffInspector({
           {(selected.tool === "conduit" || selected.type === "route") && (
             <Field label="Conduit type / size">
               <select
-                className={inputClass}
+                className={fieldInput}
                 value={conduitOptions.find((item) => item.label === selected.symbolLabel)?.id || ""}
                 onChange={(e) => {
                   const option = conduitOptions.find((item) => item.id === e.target.value);
@@ -274,7 +278,7 @@ export default function TakeoffInspector({
           )}
           {selected.type === "note" && (
             <Field label="Note">
-              <input className={inputClass} value={selected.text || ""} onChange={(e) => onUpdateMark(selected.id, { text: e.target.value })} />
+              <input className={fieldInput} value={selected.text || ""} onChange={(e) => onUpdateMark(selected.id, { text: e.target.value })} />
             </Field>
           )}
         </div>
@@ -298,7 +302,7 @@ export default function TakeoffInspector({
           <ReconciliationPanel reconciliation={reconciliation} compact />
         </div>
       ) : null}
-      <div className="mb-2 flex items-center gap-2"><Layers3 className="h-4 w-4 text-blue-600 dark:text-orange-500" /><h3 className="font-bold">Quantity schedule</h3></div>
+      <div className="mb-2 flex items-center gap-2"><Layers3 className="h-5 w-5 text-blue-600 dark:text-orange-500" /><h3 className={embedded ? "text-lg font-black" : "font-bold"}>Quantity schedule</h3></div>
       {!rollup.calibrated && (
         <p className="mb-2 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] leading-4 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">Calibrate scale before trusting LF / SF. Counts still work.</p>
       )}
@@ -324,7 +328,7 @@ export default function TakeoffInspector({
                 marks={marks}
                 pageKinds={pageKinds}
                 value={symbol}
-                className={inputClass}
+                className={fieldInput}
                 aria-label="Item name"
                 onChange={(item) => {
                   const next = { symbol: item.label, category: item.takeoffCategory || item.category };
@@ -332,11 +336,11 @@ export default function TakeoffInspector({
                   onRenameRow?.(row, next);
                 }}
               />
-              <input className={inputClass} aria-label="Item category" value={category} readOnly />
+              <input className={fieldInput} aria-label="Item category" value={category} readOnly />
               <div className="grid grid-cols-3 gap-1">
-                <input className={inputClass} aria-label="Count" type="number" value={count} onChange={(e) => onEditRow(row, { count: e.target.value })} />
-                <input className={inputClass} aria-label="Length" type="number" value={lf} onChange={(e) => onEditRow(row, { lf: e.target.value })} />
-                <input className={inputClass} aria-label="Area" type="number" value={sf} onChange={(e) => onEditRow(row, { sf: e.target.value })} />
+                <input className={fieldInput} aria-label="Count" type="number" value={count} onChange={(e) => onEditRow(row, { count: e.target.value })} />
+                <input className={fieldInput} aria-label="Length" type="number" value={lf} onChange={(e) => onEditRow(row, { lf: e.target.value })} />
+                <input className={fieldInput} aria-label="Area" type="number" value={sf} onChange={(e) => onEditRow(row, { sf: e.target.value })} />
               </div>
             </div>
           );
@@ -344,14 +348,14 @@ export default function TakeoffInspector({
       </div>
 
       <div className="mt-3 border-t border-border pt-3">
-        <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Conduit runs</div>
+        <div className={embedded ? "mb-1 text-sm font-bold uppercase tracking-wider text-muted-foreground" : "mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground"}>Conduit runs</div>
         {runs.length === 0 && <p className="text-[11px] text-muted-foreground">Trace conduit to store each run.</p>}
         <div className="space-y-2">
           {runs.map((run) => (
             <div key={run.id} className="space-y-1 rounded-lg border border-border px-2 py-1.5">
               <button type="button" onClick={() => onSelectRun(run.id)} className="text-left text-[11px] font-semibold">Run {run.runNumber} · sheet {run.sheet}</button>
               <select
-                className={inputClass}
+                className={fieldInput}
                 value={conduitOptions.find((item) => item.label === run.type)?.id || ""}
                 onChange={(e) => {
                   const option = conduitOptions.find((item) => item.id === e.target.value);
@@ -364,8 +368,8 @@ export default function TakeoffInspector({
               </select>
               <div className="grid grid-cols-3 gap-1">
                 <input type="color" aria-label="Run color" className="h-8 w-full" value={run.color || "#2563eb"} onChange={(e) => onUpdateMark(run.id, { color: e.target.value })} />
-                <input type="number" aria-label="This line size" min="0.5" step="0.1" className={inputClass} value={run.thickness} onChange={(e) => onUpdateMark(run.id, lineSizePatch(e.target.value))} />
-                <input type="number" aria-label="Run length" step="0.1" className={inputClass} value={run.lf || ""} onChange={(e) => onUpdateMark(run.id, { storedFeet: Number(e.target.value), lengthEdited: true })} />
+                <input type="number" aria-label="This line size" min="0.5" step="0.1" className={fieldInput} value={run.thickness} onChange={(e) => onUpdateMark(run.id, lineSizePatch(e.target.value))} />
+                <input type="number" aria-label="Run length" step="0.1" className={fieldInput} value={run.lf || ""} onChange={(e) => onUpdateMark(run.id, { storedFeet: Number(e.target.value), lengthEdited: true })} />
               </div>
             </div>
           ))}
@@ -410,10 +414,10 @@ export default function TakeoffInspector({
         </div>
       )}
 
-      <button type="button" onClick={onCopy} className="mt-3 w-full rounded-lg border border-border px-2 py-2 text-xs font-semibold hover:bg-muted">Copy schedule CSV</button>
-      <button type="button" onClick={onDownloadQuoteExcel} className="mt-2 w-full rounded-lg border border-border px-2 py-2 text-xs font-semibold hover:bg-muted">Download quote (Excel)</button>
-      <button type="button" onClick={onDownloadQuotePdf} className="mt-2 w-full rounded-lg border border-border px-2 py-2 text-xs font-semibold hover:bg-muted">Download quote (PDF)</button>
-      <p className="mt-2 text-[10px] text-muted-foreground">Totals {totals.count} devices · {rollup.calibrated ? formatFeet(totals.lf) : "LF needs scale"} · {rollup.calibrated ? formatArea(totals.sf) : "SF needs scale"}</p>
-    </aside>
+      <button type="button" onClick={onCopy} className="mt-3 w-full min-h-[44px] rounded-lg border border-border px-3 py-2 text-base font-semibold hover:bg-muted">Copy schedule CSV</button>
+      <button type="button" onClick={onDownloadQuoteExcel} className="mt-2 w-full min-h-[44px] rounded-lg border border-border px-3 py-2 text-base font-semibold hover:bg-muted">Download quote (Excel)</button>
+      <button type="button" onClick={onDownloadQuotePdf} className="mt-2 w-full min-h-[44px] rounded-lg border border-border px-3 py-2 text-base font-semibold hover:bg-muted">Download quote (PDF)</button>
+      <p className={embedded ? "mt-2 text-base font-semibold text-foreground" : "mt-2 text-[10px] text-muted-foreground"}>Totals {totals.count} devices · {rollup.calibrated ? formatFeet(totals.lf) : "LF needs scale"} · {rollup.calibrated ? formatArea(totals.sf) : "SF needs scale"}</p>
+    </Wrapper>
   );
 }

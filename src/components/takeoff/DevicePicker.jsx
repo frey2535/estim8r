@@ -32,46 +32,46 @@ export default function DevicePicker({
     if (!activeCategory) return true;
     return (item.takeoffCategory || item.category) === activeCategory;
   });
-  const visible = filterSymbols(pool, compact ? "" : query).filter((item) => item.trade === trade);
+  const visible = filterSymbols(pool, query).filter((item) => item.trade === trade);
   const tradeLabel = trades.find((item) => item.id === trade)?.label || trade;
+  const labelClass = compact ? "block text-base font-bold text-foreground" : "block text-xs font-bold text-muted-foreground";
+  const controlClass = compact
+    ? "mt-1 w-full min-h-[44px] rounded-lg border border-input bg-background px-3 py-2 text-base font-semibold text-foreground"
+    : "mt-1 w-full rounded-lg border border-input bg-background px-2 py-2 text-sm font-semibold text-foreground";
   return (
-    <div className="space-y-2">
-      <label className="block text-xs font-bold text-muted-foreground">
+    <div className="space-y-3">
+      <label className={labelClass}>
         Trade
         <select
           aria-label="Trade"
           value={trade}
           onChange={(event) => onTrade(event.target.value)}
-          className="mt-1 w-full rounded-lg border border-input bg-background px-2 py-2 text-sm font-semibold text-foreground"
+          className={controlClass}
         >
           {trades.map((item) => (
             <option key={item.id} value={item.id}>{item.label}</option>
           ))}
         </select>
       </label>
-      {!compact && (
-        <>
-          <label className="mb-1 block text-xs font-bold text-muted-foreground">Search devices</label>
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => onQuery(event.target.value)}
-            placeholder="Search devices on this drawing…"
-            className="w-full rounded-lg border border-input bg-background px-2 py-2 text-sm"
-          />
-        </>
+      <label className={labelClass}>Search devices</label>
+      <input
+        type="search"
+        value={query}
+        onChange={(event) => onQuery(event.target.value)}
+        placeholder="Search devices on this drawing…"
+        className={controlClass}
+      />
+      {cats.length > 0 && (
+        <label className={labelClass}>Category</label>
       )}
       {cats.length > 0 && (
-        <label className="mb-1 block text-xs font-bold text-muted-foreground">Category</label>
-      )}
-      {cats.length > 0 && (
-        <select aria-label="Category" value={activeCategory} onChange={(event) => onCategory(event.target.value)} className="w-full rounded-lg border border-input bg-background px-2 py-2 text-sm">
+        <select aria-label="Category" value={activeCategory} onChange={(event) => onCategory(event.target.value)} className={controlClass}>
           <option value="">All on drawing</option>
           {cats.map((item) => <option key={item} value={item}>{item}</option>)}
         </select>
       )}
-      <label className="mb-1 block text-xs font-bold text-muted-foreground">Device / symbol</label>
-      <select aria-label="Device / symbol" data-trade={trade} value={visible.some((item) => item.id === symbolId) ? symbolId : (visible[0]?.id || "")} onChange={(event) => onSymbol(event.target.value)} className="w-full rounded-lg border border-input bg-background px-2 py-2 text-sm">
+      <label className={labelClass}>Device / symbol</label>
+      <select aria-label="Device / symbol" data-trade={trade} value={visible.some((item) => item.id === symbolId) ? symbolId : (visible[0]?.id || "")} onChange={(event) => onSymbol(event.target.value)} className={controlClass}>
         {visible.length === 0 ? <option value="">No devices on this drawing</option> : null}
         {visible.map((item) => (
           <option key={item.id} value={item.id} data-trade={item.trade}>
@@ -79,13 +79,15 @@ export default function DevicePicker({
           </option>
         ))}
       </select>
-      <p className="text-[11px] text-muted-foreground">{visible.length} {tradeLabel} symbol type{visible.length === 1 ? "" : "s"} available from the project legend/catalog</p>
+      <p className={compact ? "text-base text-foreground" : "text-[11px] text-muted-foreground"}>{visible.length} {tradeLabel} symbol type{visible.length === 1 ? "" : "s"} available from the project legend/catalog</p>
       {onManualMark ? (
         <button
           type="button"
           onClick={onManualMark}
           disabled={!symbolId && !visible[0]?.id}
-          className="w-full rounded-lg border border-blue-600 bg-blue-50 px-2 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-40 dark:border-orange-500 dark:bg-orange-500/10 dark:text-orange-300"
+          className={compact
+            ? "w-full min-h-[44px] rounded-lg border border-blue-600 bg-blue-50 px-3 py-2 text-base font-bold text-blue-800 hover:bg-blue-100 disabled:opacity-40 dark:border-orange-500 dark:bg-orange-500/10 dark:text-orange-300"
+            : "w-full rounded-lg border border-blue-600 bg-blue-50 px-2 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-40 dark:border-orange-500 dark:bg-orange-500/10 dark:text-orange-300"}
         >
           Mark missed symbol manually
         </button>

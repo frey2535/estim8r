@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Cable, Cloud, FileUp, Hand, Image as ImageIcon, MousePointer2,
   Pencil, Redo2, Route, Ruler, Spline, Square, StickyNote,
-  Trash2, Undo2, Upload, ZoomIn, ZoomOut, Crosshair, Gauge, Lightbulb, ChevronDown, ChevronUp
+  Trash2, Undo2, Upload, ZoomIn, ZoomOut, Crosshair, Gauge, Lightbulb
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlobalWorkerOptions } from "pdfjs-dist";
@@ -27,6 +27,7 @@ import { drawingSymbolsFromDocs, printedScaleCalibration, readDrawingDocuments }
 import { paletteForTrade, pageKindsFromDocs, symbolsOnDrawingForTrade, tradeById, conduitOptionsForTrade, findConduitOption, TRADES, DEFAULT_CONDUIT_ID } from "@/domain/takeoff/trades";
 import { buildAiMarks, legendDictionaryFromPages, shouldScanWithDictionary } from "@/domain/takeoff/aiTakeoff";
 import TakeoffActionsMenu, { takeoffEstimatePath, takeoffMarkupPath } from "@/components/takeoff/TakeoffActionsMenu";
+import { TakeoffMobileCommandBar, TakeoffMobileDock, TakeoffMobileSheet } from "@/components/takeoff/TakeoffMobileChrome";
 import { readAiPages } from "@/domain/takeoff/aiPages";
 import { hydratePagesRaster } from "@/domain/takeoff/rasterSymbols";
 import { pickInteractiveSymbolGeometry, matchGeometryToLegend, attachLegendGeometryPrototypes } from "@/domain/takeoff/legendGeometry";
@@ -92,7 +93,7 @@ import {
   resolvedLineSize,
   resolvedMarkerSize,
 } from "@/domain/takeoff/sizes";
-import { OVERLAY_FONT_SIZE, layoutOverlayCallouts } from "@/domain/takeoff/overlayLayout";
+import { MOBILE_OVERLAY_FONT_SIZE, OVERLAY_FONT_SIZE, layoutOverlayCallouts } from "@/domain/takeoff/overlayLayout";
 import {
   CIRCUIT_COLOR,
   DEVICE_CHIP_R,
@@ -247,8 +248,7 @@ export default function TakeoffWorkspace() {
     typeof window !== "undefined" ? window.matchMedia("(min-width: 1024px)").matches : true
   ));
   const [reviewOpen, setReviewOpen] = useState(false);
-  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
-  const [mobileDevicePickerOpen, setMobileDevicePickerOpen] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState("");
   const [aiPages, setAiPages] = useState([]);
   const [searchManifest, setSearchManifest] = useState(null);
   const [emptyNoticeDismissed, setEmptyNoticeDismissed] = useState(false);
@@ -2106,10 +2106,10 @@ export default function TakeoffWorkspace() {
   if (!file) {
     return (
       <div className="mx-auto max-w-5xl space-y-4 p-4">
-        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-orange-500">Estim8r Takeoff</p>
-          <h1 className="mt-1 text-2xl font-black text-foreground">Electrical takeoff workspace</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Calibrated counts, conduit LF, circuit traces, areas, and a quantity schedule on the live drawing. Upload a PDF or image to start.</p>
+        <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <p className="text-sm font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-orange-500">Estim8r Takeoff</p>
+          <h1 className="mt-1 text-3xl font-black text-foreground">Electrical takeoff workspace</h1>
+          <p className="mt-2 text-base text-foreground/80">Calibrated counts, conduit LF, circuit traces, areas, and a quantity schedule on the live drawing. Upload a PDF or image to start.</p>
         </section>
         <section className="relative rounded-2xl border border-border bg-card p-4 shadow-sm">
           <div
@@ -2119,19 +2119,19 @@ export default function TakeoffWorkspace() {
           >
             <label
               htmlFor={DRAWING_INPUT_ID}
-              className="flex min-h-52 w-full cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-blue-300 bg-blue-50/50 p-8 text-center dark:border-orange-500/30 dark:bg-orange-500/5"
+              className="flex min-h-56 w-full cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-blue-300 bg-blue-50/50 p-8 text-center dark:border-orange-500/30 dark:bg-orange-500/5"
             >
-              <FileUp className="mb-3 h-10 w-10 text-blue-600 dark:text-orange-500" />
-              <span className="text-lg font-bold text-foreground">Upload electrical drawings</span>
-              <span className="mt-1 text-sm text-muted-foreground">PDF, PNG, JPG, JPEG, or WEBP — full sheet fits the window</span>
-              <span className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-bold text-white dark:bg-orange-500">
-                <Upload className="h-4 w-4" /> Choose drawing
+              <FileUp className="mb-3 h-12 w-12 text-blue-600 dark:text-orange-500" />
+              <span className="text-xl font-black text-foreground">Upload electrical drawings</span>
+              <span className="mt-2 text-base text-foreground/80">PDF, PNG, JPG, JPEG, or WEBP — full sheet fits the window</span>
+              <span className="mt-5 inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-base font-bold text-white dark:bg-orange-500">
+                <Upload className="h-5 w-5" /> Choose drawing
               </span>
             </label>
           </div>
-          <div className="mt-2 text-xs text-muted-foreground">{status}</div>
-          {loadingDrawing && <div className="mt-2 text-sm font-semibold text-foreground">Reading drawing…</div>}
-          {drawingError && <div role="alert" className="mt-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{drawingError}</div>}
+          <div className="mt-3 text-base text-foreground">{status}</div>
+          {loadingDrawing && <div className="mt-2 text-base font-semibold text-foreground">Reading drawing…</div>}
+          {drawingError && <div role="alert" className="mt-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-base text-destructive">{drawingError}</div>}
         </section>
       </div>
     );
@@ -2143,37 +2143,40 @@ export default function TakeoffWorkspace() {
         onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; }}
         onDrop={handleDrop}
-        className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b border-border bg-card px-3"
+        className="flex min-h-14 shrink-0 items-center gap-2 overflow-hidden border-b border-border bg-card px-3 py-1.5"
       >
-        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-600 dark:bg-orange-500/10 dark:text-orange-500"><ImageIcon className="h-4 w-4" /></div>
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-600 dark:bg-orange-500/10 dark:text-orange-500"><ImageIcon className="h-5 w-5" /></div>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-bold text-foreground">{file.name}</div>
-          <div className="truncate text-[11px] text-muted-foreground">
+          <div className="truncate text-base font-black text-foreground">{file.name}</div>
+          <div className="truncate text-sm font-semibold text-foreground/80">
             {isPdf ? `PDF • ${sheetMeta.pageCount} sheet${sheetMeta.pageCount === 1 ? "" : "s"}` : "Drawing image"}
             {calibration ? ` • ${calibration.scaleLabel ? `scale ${calibration.scaleLabel}` : `calibrated ${calibration.feet} ft`}` : " • scale not set"}
             {zoom === 1 ? " • fitted" : ` • ${Math.round(zoom * 100)}%`}
             {aiBusy ? " • AI working…" : savedAt ? ` • saved ${new Date(savedAt).toLocaleTimeString()}` : " • not saved"}
           </div>
         </div>
-        <TakeoffActionsMenu
-          aiBusy={aiBusy}
-          onAiAssist={() => { setMode("ai"); void runAiTakeoff(); }}
-          onSave={() => saveTakeoff()}
-          onTrueTakeoff={() => { void buildAndSaveTrueElectricalEstimate(); }}
-          onTakeoffCsv={() => { void buildAndSaveTrueElectricalEstimate({ download: true }); }}
-          onEstimatePath={takeoffEstimatePath(file)}
-          onMarkupPath={takeoffMarkupPath(file)}
-          onCountedDrawings={() => { void downloadMarkedDeviceDrawings(); }}
-          onConduitRoutes={() => { void downloadConduitRouteDrawings(); }}
-          onConduitSchedulePdf={downloadConduitCircuitSchedule}
-          onConduitScheduleCsv={downloadConduitCircuitCsv}
-          onWireMakeupPdf={downloadWireMakeupPdf}
-          onWireMakeupCsv={downloadWireMakeupCsv}
-          onQuoteExcel={downloadQuoteExcel}
-          onQuotePdf={downloadQuotePdf}
-          onReplaceId={DRAWING_INPUT_ID}
-          onClose={closeDrawing}
-        />
+        <div className="hidden lg:block">
+          <TakeoffActionsMenu
+            aiBusy={aiBusy}
+            label="Actions"
+            onAiAssist={() => { setMode("ai"); void runAiTakeoff(); }}
+            onSave={() => saveTakeoff()}
+            onTrueTakeoff={() => { void buildAndSaveTrueElectricalEstimate(); }}
+            onTakeoffCsv={() => { void buildAndSaveTrueElectricalEstimate({ download: true }); }}
+            onEstimatePath={takeoffEstimatePath(file)}
+            onMarkupPath={takeoffMarkupPath(file)}
+            onCountedDrawings={() => { void downloadMarkedDeviceDrawings(); }}
+            onConduitRoutes={() => { void downloadConduitRouteDrawings(); }}
+            onConduitSchedulePdf={downloadConduitCircuitSchedule}
+            onConduitScheduleCsv={downloadConduitCircuitCsv}
+            onWireMakeupPdf={downloadWireMakeupPdf}
+            onWireMakeupCsv={downloadWireMakeupCsv}
+            onQuoteExcel={downloadQuoteExcel}
+            onQuotePdf={downloadQuotePdf}
+            onReplaceId={DRAWING_INPUT_ID}
+            onClose={closeDrawing}
+          />
+        </div>
       </div>
       {drawingError && <div role="alert" className="shrink-0 border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{drawingError}</div>}
 
@@ -2220,8 +2223,8 @@ export default function TakeoffWorkspace() {
               {typeSwatches.length ? (
                 <div className="flex flex-wrap gap-1">
                   {typeSwatches.map((item) => (
-                    <span key={item.key} className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-1.5 py-0.5 text-[10px] font-semibold text-foreground">
-                      <span className="h-3 w-3 rounded-sm border border-black/20" style={{ backgroundColor: item.color }} aria-hidden />
+                    <span key={item.key} className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-1.5 py-0.5 text-xs font-bold text-foreground">
+                      <span className="h-3.5 w-3.5 rounded-sm border border-black/20" style={{ backgroundColor: item.color }} aria-hidden />
                       {item.key.toUpperCase()}
                     </span>
                   ))}
@@ -2272,7 +2275,7 @@ export default function TakeoffWorkspace() {
           </div>
         </aside>
 
-        <section className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(12rem,1fr)] overflow-hidden bg-card lg:flex lg:grid-rows-none lg:flex-row">
+        <section className="grid min-h-0 min-w-0 grid-rows-[minmax(20rem,1fr)] overflow-hidden bg-card lg:flex lg:grid-rows-none lg:flex-row">
           <SheetThumbnailPanel
             layout={wideLayout ? "side" : "strip"}
             fileBytes={fileBytes}
@@ -2286,59 +2289,18 @@ export default function TakeoffWorkspace() {
             onToggle={toggleThumbs}
             onSelectPage={selectSheet}
           />
-          <div className="grid min-h-0 min-w-0 grid-rows-[auto_auto_minmax(12rem,1fr)] overflow-hidden lg:flex lg:flex-1 lg:grid-rows-none lg:flex-col">
-          <div className="shrink-0 border-b border-border bg-card lg:hidden">
-            <div className="flex items-center gap-2 px-2 py-1.5">
-              <button type="button" onClick={() => { setTool("pan"); setDraftPoints([]); setMobileToolsOpen(false); setMobileDevicePickerOpen(false); }}
-                aria-label="Pan drawing" className={cn("inline-flex min-h-10 items-center gap-1 rounded-lg border px-3 text-xs font-semibold", tool === "pan" ? "border-blue-600 bg-blue-50 text-blue-700" : "border-border")}>
-                <Hand className="h-4 w-4" />Pan
-              </button>
-              <span className="min-w-0 flex-1 truncate text-xs font-medium text-muted-foreground">Tool: {activeTool.label}</span>
-              <button type="button" aria-expanded={mobileToolsOpen} aria-controls="mobile-takeoff-tools"
-                onClick={() => { setMobileToolsOpen((value) => !value); setMobileDevicePickerOpen(false); }}
-                className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-border px-3 text-xs font-semibold">
-                Tools {mobileToolsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </button>
-              <button type="button" aria-expanded={mobileDevicePickerOpen} aria-controls="mobile-takeoff-devices"
-                onClick={() => { setMobileDevicePickerOpen((value) => !value); setMobileToolsOpen(false); }}
-                className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-border px-3 text-xs font-semibold">
-                Devices {mobileDevicePickerOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </button>
-            </div>
-            {mobileToolsOpen && (
-              <div id="mobile-takeoff-tools" className="max-h-[35dvh] overflow-y-auto border-t border-border p-2">
-                <div className="grid grid-cols-3 gap-1.5">
-                  {TAKEOFF_TOOLS.map((item) => {
-                    const Icon = TOOL_ICONS[item.key] || Pencil;
-                    return <button key={item.key} type="button" onClick={() => { setTool(item.key); setDraftPoints([]); setMobileToolsOpen(false); }}
-                      className={cn("flex min-h-11 items-center gap-1 rounded-lg border px-2 py-1 text-left text-xs font-semibold", tool === item.key ? "border-blue-600 bg-blue-50 text-blue-700" : "border-border")}>
-                      <Icon className="h-4 w-4 shrink-0" /><span className="truncate">{item.label}</span>
-                    </button>;
-                  })}
-                </div>
-              </div>
-            )}
-            {mobileDevicePickerOpen && (
-              <div id="mobile-takeoff-devices" className="max-h-[40dvh] overflow-y-auto border-t border-border p-2">
-                <DevicePicker
-                  compact
-                  availableSymbols={availableDeviceSymbols}
-                  trades={TRADES}
-                  trade={trade}
-                  onTrade={setTrade}
-                  marks={marks}
-                  pageKinds={pageKinds}
-                  category={category}
-                  onCategory={(value) => { setCategory(value); setSymbolQuery(""); }}
-                  symbolId={symbolId}
-                  onSymbol={setSymbolId}
-                  query={symbolQuery}
-                  onQuery={setSymbolQuery}
-                  onManualMark={() => { setTool("count"); setMobileDevicePickerOpen(false); setStatus("Choose a legend symbol, then tap the missed printed symbol."); }}
-                />
-              </div>
-            )}
-          </div>
+          <div className="grid min-h-0 min-w-0 grid-rows-[auto_auto_minmax(20rem,1fr)_auto] overflow-hidden lg:flex lg:flex-1 lg:grid-rows-none lg:flex-col">
+          <TakeoffMobileCommandBar
+            aiBusy={aiBusy}
+            zoom={zoom}
+            pagesOpen={mobilePanel === "pages"}
+            estimatePath={takeoffEstimatePath(file)}
+            onAiAssist={() => { setMode("ai"); void runAiTakeoff(); }}
+            onTogglePages={() => setMobilePanel((value) => (value === "pages" ? "" : "pages"))}
+            onZoomOut={() => setZoom((z) => Math.max(TAKEOFF_MIN_ZOOM, Number((z - 0.25).toFixed(2))))}
+            onZoomIn={() => setZoom((z) => Math.min(TAKEOFF_MAX_ZOOM, Number((z + 0.25).toFixed(2))))}
+            onFit={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}
+          />
           <div className="flex shrink-0 flex-nowrap items-center gap-2 overflow-x-auto border-b border-border px-2 py-1.5 lg:flex-wrap lg:justify-between">
             <div className="flex shrink-0 items-center gap-1 lg:flex-wrap">
               <div className="lg:hidden">
@@ -2350,17 +2312,17 @@ export default function TakeoffWorkspace() {
                   onLineSize={setPenThickness}
                 />
               </div>
-              <button type="button" onClick={undo} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg p-2 hover:bg-muted" title="Undo"><Undo2 className="h-4 w-4" /></button>
-              <button type="button" onClick={redo} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg p-2 hover:bg-muted" title="Redo"><Redo2 className="h-4 w-4" /></button>
-              <button type="button" onClick={() => setZoom((z) => Math.max(TAKEOFF_MIN_ZOOM, Number((z - 0.25).toFixed(2))))} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg p-2 hover:bg-muted" title="Zoom out"><ZoomOut className="h-4 w-4" /></button>
-              <span className="min-w-12 text-center text-xs font-semibold">{Math.round(zoom * 100)}%</span>
-              <button type="button" onClick={() => setZoom((z) => Math.min(TAKEOFF_MAX_ZOOM, Number((z + 0.25).toFixed(2))))} className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg p-2 hover:bg-muted" title="Zoom in"><ZoomIn className="h-4 w-4" /></button>
-              <button type="button" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} className="inline-flex min-h-10 items-center rounded-lg border border-border px-2 py-1 text-xs font-semibold hover:bg-muted">Fit sheet</button>
+              <button type="button" onClick={undo} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg p-2 hover:bg-muted" title="Undo"><Undo2 className="h-5 w-5" /></button>
+              <button type="button" onClick={redo} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg p-2 hover:bg-muted" title="Redo"><Redo2 className="h-5 w-5" /></button>
+              <button type="button" onClick={() => setZoom((z) => Math.max(TAKEOFF_MIN_ZOOM, Number((z - 0.25).toFixed(2))))} className="hidden min-h-11 min-w-11 items-center justify-center rounded-lg p-2 hover:bg-muted lg:inline-flex" title="Zoom out"><ZoomOut className="h-5 w-5" /></button>
+              <span className="hidden min-w-12 text-center text-sm font-bold lg:inline">{Math.round(zoom * 100)}%</span>
+              <button type="button" onClick={() => setZoom((z) => Math.min(TAKEOFF_MAX_ZOOM, Number((z + 0.25).toFixed(2))))} className="hidden min-h-11 min-w-11 items-center justify-center rounded-lg p-2 hover:bg-muted lg:inline-flex" title="Zoom in"><ZoomIn className="h-5 w-5" /></button>
+              <button type="button" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} className="hidden min-h-11 items-center rounded-lg border border-border px-3 text-sm font-semibold hover:bg-muted lg:inline-flex">Fit sheet</button>
               {sheetMeta.pageCount > 1 && (
-                <div className="ml-2 flex items-center gap-1 rounded-lg border border-border bg-background px-1.5 py-0.5">
-                  <button type="button" disabled={sheetMeta.page <= 1} onClick={() => selectSheet(sheetMeta.page - 1)} className="rounded border border-border px-2 py-1 text-xs font-semibold disabled:opacity-40">Previous</button>
-                  <strong className="min-w-24 px-1 text-center text-xs">Sheet {sheetMeta.page} of {sheetMeta.pageCount}</strong>
-                  <button type="button" disabled={sheetMeta.page >= sheetMeta.pageCount} onClick={() => selectSheet(sheetMeta.page + 1)} className="rounded border border-border px-2 py-1 text-xs font-semibold disabled:opacity-40">Next</button>
+                <div className="ml-2 hidden items-center gap-1 rounded-lg border border-border bg-background px-1.5 py-0.5 lg:flex">
+                  <button type="button" disabled={sheetMeta.page <= 1} onClick={() => selectSheet(sheetMeta.page - 1)} className="min-h-11 rounded border border-border px-3 text-sm font-semibold disabled:opacity-40">Previous</button>
+                  <strong className="min-w-24 px-1 text-center text-sm">Sheet {sheetMeta.page} of {sheetMeta.pageCount}</strong>
+                  <button type="button" disabled={sheetMeta.page >= sheetMeta.pageCount} onClick={() => selectSheet(sheetMeta.page + 1)} className="min-h-11 rounded border border-border px-3 text-sm font-semibold disabled:opacity-40">Next</button>
                 </div>
               )}
               {selectedMark && isDeviceMark(selectedMark) && tool === "select" && (
@@ -2396,12 +2358,12 @@ export default function TakeoffWorkspace() {
                 </div>
               )}
               {selectedId && !(selectedMark && isDeviceMark(selectedMark) && tool === "select") && <button type="button" onClick={deleteSelected} className="rounded-lg px-2 py-1 text-xs font-semibold text-destructive hover:bg-destructive/10">Delete</button>}
-              <button type="button" onClick={openAccuracyReview} className="rounded-lg border border-border px-2 py-1 text-xs font-semibold hover:bg-muted">
+              <button type="button" onClick={openAccuracyReview} className="min-h-11 rounded-lg border border-border px-3 text-sm font-bold hover:bg-muted">
                 Review{accuracyTotals.pending ? ` ${accuracyTotals.pending}` : ""}
               </button>
             </div>
             <div className="flex items-center gap-1">
-              <button type="button" onClick={clearAll} className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" />Clear</button>
+              <button type="button" onClick={clearAll} className="flex min-h-11 items-center gap-1 rounded-lg px-3 text-sm font-bold text-destructive hover:bg-destructive/10"><Trash2 className="h-5 w-5" />Clear</button>
             </div>
           </div>
           <div
@@ -2410,7 +2372,7 @@ export default function TakeoffWorkspace() {
             onWheel={handleDrawingWheel}
             data-testid="takeoff-sheet-viewport"
             className={cn(
-              "takeoff-sheet-viewport min-h-[12rem] min-w-0 overflow-hidden bg-neutral-400/40 dark:bg-neutral-950 lg:min-h-0 lg:flex-1",
+              "takeoff-sheet-viewport min-h-[20rem] min-w-0 overflow-hidden bg-neutral-400/40 dark:bg-neutral-950 lg:min-h-0 lg:flex-1",
               tool === "pan" && "cursor-grab",
             )}
             style={{ touchAction: "none" }}
@@ -2522,6 +2484,7 @@ export default function TakeoffWorkspace() {
                   tool={tool}
                   markerSize={penSize}
                   lineSize={penThickness}
+                  fontSize={wideLayout ? OVERLAY_FONT_SIZE : MOBILE_OVERLAY_FONT_SIZE}
                   lengthFor={(mark) => markLengthFeet(mark, calibration, aspect)}
                 />
                 {(() => {
@@ -2549,24 +2512,24 @@ export default function TakeoffWorkspace() {
                   const y = Math.min(86, Math.max(2, Number(hovered.y) || 0));
                   return (
                     <div
-                      className="pointer-events-none absolute z-50 max-w-72 rounded-lg border border-slate-300 bg-white/95 px-3 py-2 text-xs text-slate-900 shadow-xl"
+                      className="pointer-events-none absolute z-50 max-w-[18rem] rounded-xl border-2 border-slate-900 bg-white px-3 py-2.5 text-base text-slate-950 shadow-2xl dark:border-white dark:bg-slate-950 dark:text-white"
                       style={{ left: `${x}%`, top: `${y}%`, transform: "translate(10px, 10px)" }}
                     >
-                      <div className="font-black">{hoverLegend.code || "Symbol"} · {hoverLegend.label}</div>
-                      <div className="mt-1 text-[11px] text-slate-600">{hoverLegend.label}</div>
-                      <div className="mt-1 text-[10px] font-semibold text-slate-500">{hoverLegend.category}</div>
-                      {!hoverLegend.verified || hovered.requiresClassification ? <div className="mt-1 text-[10px] font-bold text-amber-700">Legend identity not verified — review this symbol before bid use.</div> : null}
-                      {hoverLegend.source ? <div className="mt-1 text-[10px] text-slate-500">Legend source: {hoverLegend.source}</div> : null}
-                      {hoverLegend.page ? <div className="text-[10px] text-slate-500">Legend/schedule sheet {hoverLegend.page}</div> : null}
+                      <div className="text-lg font-black leading-tight">{hoverLegend.code || "Symbol"} · {hoverLegend.label}</div>
+                      <div className="mt-1 text-sm font-semibold">{hoverLegend.label}</div>
+                      <div className="mt-1 text-sm font-bold">{hoverLegend.category}</div>
+                      {!hoverLegend.verified || hovered.requiresClassification ? <div className="mt-1 text-sm font-bold text-amber-800 dark:text-amber-300">Legend identity not verified — review this symbol before bid use.</div> : null}
+                      {hoverLegend.source ? <div className="mt-1 text-sm">Legend source: {hoverLegend.source}</div> : null}
+                      {hoverLegend.page ? <div className="text-sm">Legend/schedule sheet {hoverLegend.page}</div> : null}
                     </div>
                   );
                 })()}
                 {file && searchManifest && !aiBusy && visibleOverlayMarks.length === 0 && !emptyNoticeDismissed && (
-                  <div className="absolute bottom-3 right-3 z-20 max-w-[18rem] rounded-lg border border-border bg-background/95 px-3 py-2 shadow-md">
+                  <div className="absolute bottom-3 right-3 z-20 max-w-[20rem] rounded-lg border border-border bg-background/95 px-3 py-3 shadow-md">
                     <div className="flex items-start gap-2">
                       <div className="min-w-0">
-                        <p className="text-xs font-semibold text-foreground">No takeoff marks on this sheet</p>
-                        <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
+                        <p className="text-base font-bold text-foreground">No takeoff marks on this sheet</p>
+                        <p className="mt-1 text-sm leading-5 text-foreground/80">
                           {marks.length
                             ? "This sheet has no visible takeoff marks. Open another plan sheet or rerun AI Assist."
                             : "AI Assist finished without visible marks on this sheet."}
@@ -2586,8 +2549,44 @@ export default function TakeoffWorkspace() {
               </div>
             </div>
           </div>
-          <AiSearchManifestPanel manifest={searchManifest} trade={trade} />
-          <div className="shrink-0 border-t border-border bg-background px-3 py-1.5 text-xs text-muted-foreground">{status}</div>
+          <div className="hidden lg:block">
+            <AiSearchManifestPanel manifest={searchManifest} trade={trade} />
+            <div className="shrink-0 border-t border-border bg-background px-3 py-1.5 text-xs text-muted-foreground">{status}</div>
+          </div>
+          <TakeoffMobileDock
+            tool={tool}
+            activeToolLabel={activeTool.label}
+            status={status}
+            toolsOpen={mobilePanel === "tools"}
+            devicesOpen={mobilePanel === "devices"}
+            countsOpen={mobilePanel === "counts"}
+            onPan={() => { setTool("pan"); setDraftPoints([]); setMobilePanel(""); }}
+            onToggleTools={() => setMobilePanel((value) => (value === "tools" ? "" : "tools"))}
+            onToggleDevices={() => setMobilePanel((value) => (value === "devices" ? "" : "devices"))}
+            onToggleCounts={() => setMobilePanel((value) => (value === "counts" ? "" : "counts"))}
+            moreMenu={(
+              <TakeoffActionsMenu
+                aiBusy={aiBusy}
+                label="More"
+                onAiAssist={() => { setMode("ai"); void runAiTakeoff(); }}
+                onSave={() => saveTakeoff()}
+                onTrueTakeoff={() => { void buildAndSaveTrueElectricalEstimate(); }}
+                onTakeoffCsv={() => { void buildAndSaveTrueElectricalEstimate({ download: true }); }}
+                onEstimatePath={takeoffEstimatePath(file)}
+                onMarkupPath={takeoffMarkupPath(file)}
+                onCountedDrawings={() => { void downloadMarkedDeviceDrawings(); }}
+                onConduitRoutes={() => { void downloadConduitRouteDrawings(); }}
+                onConduitSchedulePdf={downloadConduitCircuitSchedule}
+                onConduitScheduleCsv={downloadConduitCircuitCsv}
+                onWireMakeupPdf={downloadWireMakeupPdf}
+                onWireMakeupCsv={downloadWireMakeupCsv}
+                onQuoteExcel={downloadQuoteExcel}
+                onQuotePdf={downloadQuotePdf}
+                onReplaceId={DRAWING_INPUT_ID}
+                onClose={closeDrawing}
+              />
+            )}
+          />
           </div>
         </section>
 
@@ -2622,6 +2621,125 @@ export default function TakeoffWorkspace() {
           coverageNote={sheetCoverage ? describeSheetCoverage(sheetCoverage) : undefined}
         />
       </div>
+      <TakeoffMobileSheet
+        open={mobilePanel === "pages"}
+        onOpenChange={(open) => setMobilePanel(open ? "pages" : "")}
+        title="Sheets"
+        description={`${sheetMeta.pageCount} sheet${sheetMeta.pageCount === 1 ? "" : "s"} in this drawing. Pinch and one-finger pan stay on the canvas.`}
+      >
+        <SheetThumbnailPanel
+          layout="sheet"
+          fileBytes={fileBytes}
+          fileUrl={fileUrl}
+          isPdf={isPdf}
+          fileName={file.name}
+          page={sheetMeta.page}
+          pageCount={sheetMeta.pageCount}
+          marks={marks}
+          open
+          onToggle={() => setMobilePanel("")}
+          onSelectPage={(page) => { selectSheet(page); setMobilePanel(""); }}
+        />
+      </TakeoffMobileSheet>
+      <TakeoffMobileSheet
+        open={mobilePanel === "tools"}
+        onOpenChange={(open) => setMobilePanel(open ? "tools" : "")}
+        title="Takeoff tools"
+        description={activeTool.help}
+      >
+        <div className="grid grid-cols-2 gap-2">
+          {TAKEOFF_TOOLS.map((item) => {
+            const Icon = TOOL_ICONS[item.key] || Pencil;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => { setTool(item.key); setDraftPoints([]); setMobilePanel(""); }}
+                className={cn(
+                  "flex min-h-[44px] items-center gap-2 rounded-xl border px-3 py-2 text-left text-base font-bold",
+                  tool === item.key ? "border-blue-600 bg-blue-50 text-blue-800 dark:border-orange-500 dark:bg-orange-500/10 dark:text-orange-200" : "border-border bg-background",
+                )}
+              >
+                <Icon className="h-5 w-5 shrink-0" /><span className="truncate">{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+        {typeSwatches.length ? (
+          <div className="mt-4">
+            <div className="mb-2 text-base font-bold">Type colors</div>
+            <div className="flex flex-wrap gap-2">
+              {typeSwatches.map((item) => (
+                <span key={item.key} className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-border bg-background px-3 text-base font-bold">
+                  <span className="h-5 w-5 rounded-sm border border-black/20" style={{ backgroundColor: item.color }} aria-hidden />
+                  {item.key.toUpperCase()}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </TakeoffMobileSheet>
+      <TakeoffMobileSheet
+        open={mobilePanel === "devices"}
+        onOpenChange={(open) => setMobilePanel(open ? "devices" : "")}
+        title="Devices"
+        description="Pick a legend symbol, then mark a missed printed symbol."
+      >
+        <DevicePicker
+          compact
+          availableSymbols={availableDeviceSymbols}
+          trades={TRADES}
+          trade={trade}
+          onTrade={setTrade}
+          marks={marks}
+          pageKinds={pageKinds}
+          category={category}
+          onCategory={(value) => { setCategory(value); setSymbolQuery(""); }}
+          symbolId={symbolId}
+          onSymbol={setSymbolId}
+          query={symbolQuery}
+          onQuery={setSymbolQuery}
+          onManualMark={() => { setTool("count"); setMobilePanel(""); setStatus("Choose a legend symbol, then tap the missed printed symbol."); }}
+        />
+      </TakeoffMobileSheet>
+      <TakeoffMobileSheet
+        open={mobilePanel === "counts"}
+        onOpenChange={(open) => setMobilePanel(open ? "counts" : "")}
+        title="Counts & legend"
+        description="Quantity schedule, conduit runs, and legend jumps for this takeoff."
+      >
+        <TakeoffInspector
+          embedded
+          rollup={rollup}
+          totals={editedRollup.totals}
+          runs={runs}
+          drawingDocs={drawingDocs}
+          trade={trade}
+          marks={tradeMarks}
+          pageKinds={pageKinds}
+          selected={selectedMark}
+          conduitOptions={conduitChoices}
+          scheduleEdits={scheduleEdits}
+          onSelectRun={(id) => { setSelectedId(id); setTool("select"); setMobilePanel(""); }}
+          onUpdateMark={updateMark}
+          isolationMode={isolationMode}
+          onIsolationMode={setIsolationMode}
+          onEditRow={editScheduleRow}
+          onRenameRow={renameScheduleRow}
+          onSelectSheet={(page) => { selectSheet(page); setMobilePanel(""); }}
+          onCopy={copyQuantities}
+          onDownloadQuoteExcel={downloadQuoteExcel}
+          onDownloadQuotePdf={downloadQuotePdf}
+          globalMarkerSize={penSize}
+          globalLineSize={penThickness}
+          trueAnalysis={trueAnalysis}
+          trueTakeoffResult={trueTakeoffResult}
+          onBuildTrueTakeoff={() => buildAndSaveTrueElectricalEstimate()}
+          reconciliation={reconciliation}
+          reviewSummary={accuracyTotals}
+          coverageNote={sheetCoverage ? describeSheetCoverage(sheetCoverage) : undefined}
+        />
+      </TakeoffMobileSheet>
       <AccuracyPopout
         open={reviewOpen && Boolean(selectedReviewItem && (isDeviceMark(selectedReviewItem) || selectedReviewItem.type === "coverage"))}
         onOpenChange={setReviewOpen}
@@ -2666,16 +2784,16 @@ function conduitPolylines(mark) {
   });
 }
 
-function OverlayLabel({ label, fill }) {
+function OverlayLabel({ label, fill, fontSize = OVERLAY_FONT_SIZE }) {
   return (
     <text
       x={label.x}
       y={label.y}
-      fontSize={OVERLAY_FONT_SIZE}
-      fontWeight="600"
+      fontSize={fontSize}
+      fontWeight="800"
       fill={fill}
       stroke="#ffffff"
-      strokeWidth="0.22"
+      strokeWidth={fontSize > 2 ? 0.45 : 0.28}
       paintOrder="stroke"
     >
       {label.text}
@@ -2757,7 +2875,7 @@ function DeviceFill({ mark, selected, markerSize, focus = false }) {
   );
 }
 
-function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, lengthFor, markerSize = DEFAULT_MARKER_SIZE, lineSize = DEFAULT_LINE_SIZE }) {
+function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, lengthFor, markerSize = DEFAULT_MARKER_SIZE, lineSize = DEFAULT_LINE_SIZE, fontSize = OVERLAY_FONT_SIZE }) {
   const otherRoutes = marks.filter((m) => m.points?.length && !isCircuitMark(m));
   const devices = marks.filter((m) => isDeviceMark(m));
   const circuits = marks.filter((m) => isCircuitMark(m) && m.points?.length);
@@ -2765,6 +2883,7 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
     conduits: circuits.filter((m) => m.tool === "conduit"),
     devices,
     selectedId,
+    fontSize,
     lengthTextFor: (mark) => {
       const feet = lengthFor?.(mark);
       return feet == null ? "" : formatFeet(feet);
@@ -2832,7 +2951,7 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
       })}
       {draftPoints.length > 1 && <polyline points={draftPoints.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#f97316" strokeWidth=".45" strokeDasharray="1 1" vectorEffect="non-scaling-stroke" />}
       {draftEnd && draftFeet != null && (
-        <text x={draftEnd.x} y={Math.max(2, draftEnd.y - 1.2)} fontSize={OVERLAY_FONT_SIZE} fontWeight="600" fill="#ea580c" stroke="#ffffff" strokeWidth="0.22" paintOrder="stroke">{formatFeet(draftFeet)}</text>
+        <text x={draftEnd.x} y={Math.max(2, draftEnd.y - 1.2)} fontSize={fontSize} fontWeight="800" fill="#ea580c" stroke="#ffffff" strokeWidth={fontSize > 2 ? 0.45 : 0.28} paintOrder="stroke">{formatFeet(draftFeet)}</text>
       )}
       {devices.filter((mark) => mark.id !== selectedId).map((mark) => {
         const size = resolvedMarkerSize(mark, markerSize);
@@ -2894,12 +3013,12 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
         );
       })}
       {callouts.conduitLabels.map((label) => (
-        <OverlayLabel key={`conduit-${label.id}`} label={label} fill={label.selected ? "#334155" : "#475569"} />
+        <OverlayLabel key={`conduit-${label.id}`} label={label} fontSize={fontSize} fill={label.selected ? "#0f172a" : "#1e293b"} />
       ))}
       {marks.filter((m) => m.type === "note").map((mark) => (
-        <text key={mark.id} x={mark.x} y={mark.y} fontSize={OVERLAY_FONT_SIZE} fontWeight="600" fill={mark.color || (mark.id === selectedId ? "#ea580c" : "#dc2626")}>{mark.text}</text>
+        <text key={mark.id} x={mark.x} y={mark.y} fontSize={fontSize} fontWeight="800" fill={mark.color || (mark.id === selectedId ? "#ea580c" : "#dc2626")}>{mark.text}</text>
       ))}
-      {tool === "scale" && <text x="2" y="6" fontSize={OVERLAY_FONT_SIZE} fontWeight="600" fill="#b45309">Click a known dimension</text>}
+      {tool === "scale" && <text x="2" y="6" fontSize={fontSize} fontWeight="800" fill="#b45309">Click a known dimension</text>}
     </svg>
   );
 }

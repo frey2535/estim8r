@@ -555,20 +555,20 @@ export default function MarkupPages() {
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3">
         <div className="min-w-0">
-          <p className="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-orange-500">Markup pages</p>
+          <p className="text-sm font-bold uppercase tracking-widest text-blue-600 dark:text-orange-500">Markup pages</p>
           <h1 className="text-2xl font-black">Review AI takeoff</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-foreground/80">
             Devices, notes, conduit, and circuits each get their own page. Plan counts stay on the takeoff — legend totals are a check only.
             {drawingName ? ` Drawing: ${drawingName}.` : ""}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link to="/" className="rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-muted">Estimates</Link>
-          <Link to="/takeoff" className="rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-muted">Takeoff</Link>
-          <button type="button" onClick={() => inputRef.current?.click()} className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-muted">
+          <Link to="/" className="inline-flex min-h-[44px] items-center rounded-lg border border-border px-3 text-base font-semibold hover:bg-muted">Estimates</Link>
+          <Link to="/takeoff" className="inline-flex min-h-[44px] items-center rounded-lg border border-border px-3 text-base font-semibold hover:bg-muted">Takeoff</Link>
+          <button type="button" onClick={() => inputRef.current?.click()} className="inline-flex min-h-[44px] items-center gap-1 rounded-lg border border-border px-3 text-base font-semibold hover:bg-muted">
             <FileUp className="h-4 w-4" /> Import JSON
           </button>
-          <button type="button" onClick={downloadMarkup} className="rounded-lg border border-border px-3 py-2 text-sm font-semibold hover:bg-muted">Download JSON</button>
+          <button type="button" onClick={downloadMarkup} className="inline-flex min-h-[44px] items-center rounded-lg border border-border px-3 text-base font-semibold hover:bg-muted">Download JSON</button>
           <input ref={inputRef} type="file" accept="application/json" className="hidden" onChange={(event) => { importMarkupFile(event.target.files?.[0]); event.target.value = ""; }} />
         </div>
       </div>
@@ -614,9 +614,9 @@ export default function MarkupPages() {
 
         <section className="flex min-h-0 flex-col">
           <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
-            <button type="button" onClick={() => setZoom((value) => Math.max(0.5, Number((value - 0.25).toFixed(2))))} className="rounded-lg p-2 hover:bg-muted" title="Zoom out"><ZoomOut className="h-4 w-4" /></button>
-            <span className="min-w-12 text-center text-xs font-semibold">{Math.round(zoom * 100)}%</span>
-            <button type="button" onClick={() => setZoom((value) => Math.min(4, Number((value + 0.25).toFixed(2))))} className="rounded-lg p-2 hover:bg-muted" title="Zoom in"><ZoomIn className="h-4 w-4" /></button>
+            <button type="button" onClick={() => setZoom((value) => Math.max(0.5, Number((value - 0.25).toFixed(2))))} className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-muted" title="Zoom out"><ZoomOut className="h-5 w-5" /></button>
+            <span className="min-w-14 text-center text-base font-black">{Math.round(zoom * 100)}%</span>
+            <button type="button" onClick={() => setZoom((value) => Math.min(4, Number((value + 0.25).toFixed(2))))} className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-muted" title="Zoom in"><ZoomIn className="h-5 w-5" /></button>
             {selectedId ? (
               <button type="button" onClick={deleteSelected} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-destructive hover:bg-destructive/10">
                 <Trash2 className="h-3.5 w-3.5" /> Delete mark
@@ -685,7 +685,7 @@ export default function MarkupPages() {
           {/could not|is not markup/i.test(status) ? (
             <div role="alert" className="shrink-0 border-t border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" data-testid="markup-error">{status}</div>
           ) : (
-            <div className="shrink-0 border-t border-border px-3 py-1.5 text-xs text-muted-foreground">{status}</div>
+            <div className="shrink-0 border-t border-border px-3 py-2 text-base text-foreground">{status}</div>
           )}
         </section>
 

@@ -1,4 +1,6 @@
 import {
+  MOBILE_OVERLAY_FONT_SIZE,
+  OVERLAY_FONT_SIZE,
   clusterDeviceCallouts,
   compactConduitLabel,
   layoutOverlayCallouts,
@@ -13,6 +15,7 @@ function assert(cond, message) {
   }
 }
 
+assert(MOBILE_OVERLAY_FONT_SIZE > OVERLAY_FONT_SIZE, "phone overlay type is larger than desktop");
 assert(DEFAULT_MARKER_SIZE <= 0.7, `default markers stay small, got ${DEFAULT_MARKER_SIZE}`);
 assert(normalizeSavedMarkerSize(1.6) === DEFAULT_MARKER_SIZE, "legacy 1.6 marker size migrates down");
 assert(normalizeSavedMarkerSize(0.8) === 0.8, "an intentional smaller size is kept");

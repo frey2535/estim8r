@@ -62,19 +62,19 @@ function FolderDocs({ folder }) {
   return (
     <div className="mt-3 flex flex-wrap gap-2">
       {hasDrawing ? (
-        <button type="button" onClick={() => void downloadDrawing()} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-muted">
-          <ImageIcon className="h-3.5 w-3.5" /> Drawing
+        <button type="button" onClick={() => void downloadDrawing()} className="inline-flex min-h-[44px] items-center gap-1 rounded-lg border border-border px-3 text-base font-semibold hover:bg-muted">
+          <ImageIcon className="h-4 w-4" /> Drawing
         </button>
       ) : null}
-      <button type="button" onClick={downloadEstimate} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-muted">
-        <FileText className="h-3.5 w-3.5" /> Estimate PDF
+      <button type="button" onClick={downloadEstimate} className="inline-flex min-h-[44px] items-center gap-1 rounded-lg border border-border px-3 text-base font-semibold hover:bg-muted">
+        <FileText className="h-4 w-4" /> Estimate PDF
       </button>
       {hasDrawing ? (
-        <button type="button" onClick={openMarkup} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-muted">
-          <StickyNote className="h-3.5 w-3.5" /> Markup pages
+        <button type="button" onClick={openMarkup} className="inline-flex min-h-[44px] items-center gap-1 rounded-lg border border-border px-3 text-base font-semibold hover:bg-muted">
+          <StickyNote className="h-4 w-4" /> Markup pages
         </button>
       ) : null}
-      <button type="button" onClick={openEstimate} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-muted">
+      <button type="button" onClick={openEstimate} className="inline-flex min-h-[44px] items-center gap-1 rounded-lg border border-border px-3 text-base font-semibold hover:bg-muted">
         Open estimate
       </button>
     </div>
@@ -101,7 +101,7 @@ export default function Dashboard() {
       <div className="mb-8">
         <p className="text-sm font-semibold uppercase tracking-widest text-blue-600 dark:text-orange-500">Current Flow Consulting</p>
         <h1 className="mt-2 text-3xl sm:text-4xl font-black text-foreground">Estim8r Command Center</h1>
-        <p className="mt-2 max-w-3xl text-muted-foreground">Estimate electrical work with traceable labor sources, company production history and estimator-controlled adjustments.</p>
+        <p className="mt-2 max-w-3xl text-base text-foreground/80">Estimate electrical work with traceable labor sources, company production history and estimator-controlled adjustments.</p>
       </div>
       {canManageEstim8rAccess(user) && (
         <Link to="/admin" className="mb-8 flex items-start gap-3 rounded-2xl border border-blue-500/40 bg-blue-500/5 p-6 shadow-sm dark:border-orange-500/40 dark:bg-orange-500/5">

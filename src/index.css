@@ -19,7 +19,7 @@
     --secondary: 224 14% 90%;
     --secondary-foreground: 224 20% 15%;
     --muted: 224 14% 93%;
-    --muted-foreground: 224 10% 48%;
+    --muted-foreground: 224 16% 32%;
     --accent: 262 83% 58%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 84% 60%;
@@ -55,7 +55,7 @@
     --secondary: 220 14% 16%;
     --secondary-foreground: 220 10% 90%;
     --muted: 220 14% 14%;
-    --muted-foreground: 220 10% 55%;
+    --muted-foreground: 220 12% 78%;
     --accent: 220 14% 16%;
     --accent-foreground: 220 10% 95%;
     --destructive: 0 62.8% 30.6%;
@@ -106,7 +106,16 @@
     user-select: none;
   }
   .h-safe-area-inset-bottom { height: env(safe-area-inset-bottom, 0px); }
-  @media (max-width: 640px) {
-    input, select, textarea { font-size: 16px !important; }
+  @media (max-width: 1023px) {
+    html { font-size: 16px; }
+    body { font-size: 16px; line-height: 1.45; }
+    input, select, textarea { font-size: 16px !important; min-height: 44px; }
+  }
+}
+
+@layer utilities {
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
   }
 }

@@ -115,8 +115,10 @@ export default function OwnerCursorChat() {
     setSnapshot({ evidence, result });
     const lower = text.toLowerCase();
     const reply = /run (?:ai|takeoff)|start (?:ai|takeoff)/.test(lower)
-      ? "Use the Run AI Assist button below to explicitly start the takeoff. It does not modify application source code."
-      : `${inspectionText(evidence, result)}\n\nThis local assistant can inspect the current tab and request AI Assist. Automated GitHub repairs and full-screen visual analysis require a connected, authenticated engineering agent service; they are not active in this version.`;
+      ? "To start detection on this drawing, select Run AI Assist. I cannot confirm its accuracy until the results are checked."
+      : /(?:error|crash|broken|fail|issue|wrong|missing|not working|incorrect|bug)/.test(lower) && result.findings.length
+        ? `I found ${result.findings.length} captured issue(s) on this screen. ${result.findings.slice(0, 2).map((item) => item.what).join(" ")} These observations alone do not establish the root cause or prove a fix.`
+        : "I cannot answer that question reliably with the current local diagnostics. A conversational AI model is not connected yet, so I will not invent an answer or dump unrelated screen details. You can use Inspect screen for a diagnostic report.";
     setMessages((current) => [...current, message("user", text), message("assistant", reply)]);
   }
 
@@ -137,7 +139,7 @@ export default function OwnerCursorChat() {
           <Button type="button" size="icon" variant="ghost" onClick={() => setOpen(false)} aria-label="Close assistant"><X className="h-4 w-4" /></Button>
         </header>
         <div className="border-b border-border px-3 py-2 text-xs text-muted-foreground" data-testid="owner-cursor-chat-status">
-          <Activity className="mr-1 inline h-3.5 w-3.5" /> Local live diagnostics available. Remote code-editing agent not connected.
+          <Activity className="mr-1 inline h-3.5 w-3.5" /> Local diagnostics only · Conversational AI not connected.
           {snapshot && <span className="block">Last inspected: {new Date(snapshot.evidence.capturedAt).toLocaleTimeString()} · {snapshot.result.findings.length} findings</span>}
         </div>
         <div className="flex gap-2 border-b border-border px-3 py-2">
@@ -157,8 +159,8 @@ export default function OwnerCursorChat() {
         </div>
         <form onSubmit={send} className="border-t border-border p-2">
           <Textarea data-testid="owner-cursor-chat-input" value={draft} onChange={(event) => setDraft(event.target.value)}
-            placeholder="Ask about the current screen or its errors…" className="min-h-[64px] resize-none" />
-          <div className="mt-2 flex justify-end"><Button type="submit" size="sm" disabled={!draft.trim()}><Send className="mr-1 h-3.5 w-3.5" /> Inspect request</Button></div>
+            placeholder="Ask a question about Estim8r…" className="min-h-[64px] resize-none" />
+          <div className="mt-2 flex justify-end"><Button type="submit" size="sm" disabled={!draft.trim()}><Send className="mr-1 h-3.5 w-3.5" /> Send</Button></div>
         </form>
       </aside>}
     </>

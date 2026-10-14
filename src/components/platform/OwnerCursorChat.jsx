@@ -123,7 +123,22 @@ export default function OwnerCursorChat() {
         headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
         body: { message: text, history, context: collectOwnerChatEvidence(location.pathname) },
       });
-      if (error) throw new Error("The AI service is unavailable or has not been deployed.");
+      if (error) {
+        let detail = "";
+        try {
+          const response = error.context;
+          const payload = response && typeof response.json === "function" ? await response.json() : null;
+          detail = typeof payload?.error === "string" ? payload.error.slice(0, 240) : "";
+        } catch { /* Gateway errors may not return JSON. */ }
+        const status = error.context?.status;
+        const hint = status === 401 ? "Supabase authentication was rejected."
+          : status === 403 ? "Supabase identity is not authorized."
+          : status === 404 ? "Function is missing from the configured Supabase project."
+          : status === 503 ? "A required function setting is missing."
+          : status === 502 ? "AI provider request failed; inspect function logs."
+          : "Inspect the Edge Function logs and browser network request.";
+        throw new Error("AI request failed" + (status ? " (HTTP " + status + ")" : "") + ": " + (detail || hint));
+      }
       if (!data?.answer) throw new Error(data?.error || "The AI service did not return an answer.");
       setMessages((current) => [...current, message("assistant", data.answer)]);
     } catch (error) {

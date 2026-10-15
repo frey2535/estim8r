@@ -1064,8 +1064,10 @@ export function recoverMissedLegendSymbols(page, dictionary, options = {}) {
     if (remaining < 80) break;
     const hits = scanPageByLegendGeometry(page, { entries: [entry] }, {
       planType,
-      threshold: 0.68,
-      strictSize: false,
+      // Recovery must not turn wall fragments into devices on weak resemblance.
+      // Require close legend geometry and compatible symbol dimensions.
+      threshold: 0.90,
+      strictSize: true,
       occupyRadius: 0.24,
       occupied: [...occupied, ...recovered.map((hit) => ({ x: hit.geometry.cx, y: hit.geometry.cy }))],
       timeBudgetMs: Math.min(4500, remaining),
@@ -1109,7 +1111,7 @@ export function recoverMissedLegendSymbols(page, dictionary, options = {}) {
       recovered.push({
         ...hit,
         entry,
-        recoveryReason: strong ? "high-geometry" : labeledStrong ? "geometry+type-code" : "repeated-prototype",
+        recoveryReason: nearbyCode ? "geometry+type-code" : "high-geometry",
         ambiguous: false,
       });
     }

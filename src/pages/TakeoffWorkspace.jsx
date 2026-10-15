@@ -306,7 +306,7 @@ export default function TakeoffWorkspace() {
   const symbol = symbols.find((item) => item.id === symbolId) || symbols[0];
 
   useEffect(() => {
-    if (categories.length && !categories.includes(category)) setCategory(categories[0]);
+    // Empty category is the explicit "All on drawing" selection, not an invalid category.\n    if (category && categories.length && !categories.includes(category)) setCategory("");
   }, [trade, categories, category]);
 
   useEffect(() => {

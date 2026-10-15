@@ -1,5 +1,5 @@
 import { ACTIVE_ESTIMATE_KEY, estimateStorageKey, WAGE_BOOK_KEY } from "./fromTakeoff.js";
-import { openEstimateSession, persistShopWageBook, readActiveEstimate, readShopWageBook, startNewEstimate, writeEstimate } from "./estimateStore.js";
+import { clearLiveEstimateDraft, consumeRestoreJobRoute, openEstimateSession, persistShopWageBook, readActiveEstimate, readLiveEstimateDraft, readShopWageBook, startNewEstimate, writeEstimate, writeLiveEstimateDraft } from "./estimateStore.js";
 import { defaultCrew } from "../labor/employeeClasses.js";
 import { LABOR_RATES_KEY, LEGACY_DEFAULT_WAGES } from "../labor/rates.js";
 
@@ -15,6 +15,12 @@ globalThis.localStorage = {
   getItem: (key) => (store.has(key) ? store.get(key) : null),
   setItem: (key, value) => { store.set(key, String(value)); },
   removeItem: (key) => { store.delete(key); },
+};
+const session = new Map();
+globalThis.sessionStorage = {
+  getItem: (key) => (session.has(key) ? session.get(key) : null),
+  setItem: (key, value) => { session.set(key, String(value)); },
+  removeItem: (key) => { session.delete(key); },
 };
 
 const saved = writeEstimate({
@@ -102,5 +108,18 @@ writeEstimate({
 assert(readShopWageBook().journeyman === 110, "saving an estimate does not overwrite the shop wage book");
 assert(openEstimateSession({}) === null, "New Estimate still opens a blank template");
 assert(readShopWageBook().journeyman === 110, "New Estimate keeps the last saved shop rates");
+
+writeLiveEstimateDraft({
+  fileName: "",
+  header: { projectName: "Unnamed refresh job" },
+  lines: [{ id: "live", description: "Duplex", quantity: 4 }],
+});
+assert(readLiveEstimateDraft()?.header?.projectName === "Unnamed refresh job", "live estimate draft survives a refresh");
+assert(store.get(estimateStorageKey("soccer.pdf", 99)), "live draft does not delete saved estimates");
+clearLiveEstimateDraft();
+assert(readLiveEstimateDraft() === null, "live estimate draft can be consumed after restore");
+sessionStorage.setItem("estim8r.restoreAfterRefresh", "/estimates/new?file=soccer.pdf");
+assert(consumeRestoreJobRoute().startsWith("/estimates/new") === true, "refresh restore route is consumed once");
+assert(consumeRestoreJobRoute() === "", "New Estimate after a refresh is still a blank template");
 
 if (!process.exitCode) console.log("estimate store checks passed");

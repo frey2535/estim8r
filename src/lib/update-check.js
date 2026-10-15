@@ -53,18 +53,28 @@ function withTimeout(promise, timeoutMs) {
   ]);
 }
 
-export async function clearStaleClientCaches() {
+export async function clearStaleClientCaches({
+  serviceWorker = typeof navigator !== "undefined" ? navigator.serviceWorker : undefined,
+  cacheStore = typeof window !== "undefined" && "caches" in window
+    ? window.caches
+    : (typeof caches !== "undefined" ? caches : null),
+} = {}) {
   await withTimeout((async () => {
     try {
-      if (typeof navigator !== "undefined" && navigator.serviceWorker?.getRegistrations) {
-        const regs = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(regs.map((reg) => reg.unregister().catch(() => false)));
+      if (serviceWorker?.getRegistrations) {
+        const regs = await serviceWorker.getRegistrations();
+        await Promise.all(regs.map(async (reg) => {
+          try {
+            if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
+          } catch { /* skipWaiting is best effort */ }
+          return reg.unregister().catch(() => false);
+        }));
       }
     } catch { /* leftover workers are best effort */ }
     try {
-      if (typeof window !== "undefined" && "caches" in window) {
-        const keys = await caches.keys();
-        await Promise.all(keys.map((key) => caches.delete(key).catch(() => false)));
+      if (cacheStore?.keys) {
+        const keys = await cacheStore.keys();
+        await Promise.all(keys.map((key) => cacheStore.delete(key).catch(() => false)));
       }
     } catch { /* leftover Cache API is best effort */ }
   })(), 1500);
@@ -120,16 +130,19 @@ export function consumeUpdateIntent() {
   } catch { return null; }
 }
 
-export async function applyEstim8rUpdate(targetSha) {
+export async function applyEstim8rUpdate(targetSha, { location, serviceWorker, cacheStore } = {}) {
   const sha = targetSha || currentBuildSha();
   markUpdateIntent(sha);
   try { if (sha && sha !== "local") localStorage.setItem(APPLIED_KEY, sha); } catch { /* private mode */ }
-  await clearStaleClientCaches();
-  const next = new URL(window.location.href);
+  await clearStaleClientCaches({ serviceWorker, cacheStore });
+  const loc = location || (typeof window !== "undefined" ? window.location : null);
+  if (!loc?.href || typeof loc.replace !== "function") return sha;
+  const next = new URL(loc.href);
   next.searchParams.set("t", String(Date.now()));
   if (sha && sha !== "local") next.searchParams.set("build", sha);
   next.searchParams.delete("update");
-  window.location.replace(next.toString());
+  loc.replace(next.toString());
+  return sha;
 }
 
 function promptUpdate(detail) {

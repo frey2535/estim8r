@@ -10,6 +10,8 @@ import AppSwitcher from "@/components/platform/AppSwitcher";
 import GoogleSignInButton from "@/components/platform/GoogleSignInButton";
 import OwnerCursorChat from "@/components/platform/OwnerCursorChat";
 import DrawingFileInput from "@/components/takeoff/DrawingFileInput";
+import AppErrorBoundary from "@/components/AppErrorBoundary";
+import AppRefreshButton from "@/components/AppRefreshButton";
 import { Button } from "@/components/ui/button";
 
 const TABS = [
@@ -37,14 +39,17 @@ export default function AppLayout() {
     <div className="flex h-dvh min-h-dvh w-full flex-col overflow-hidden bg-background">
       <header className="sticky top-0 z-50 shrink-0 border-b border-border bg-background/95 backdrop-blur-xl shadow-sm" style={{ paddingTop: "env(safe-area-inset-top)" }}>
         <div className="w-full px-3 sm:px-6 lg:px-8">
-          <div className="flex min-h-14 items-center justify-between gap-2 py-1">
-            <Link to="/" className="flex min-h-[44px] items-center gap-2.5 min-w-0">
-              <AppLogo className="h-9 w-9 shrink-0 rounded-xl" />
-              <div className="min-w-0">
-                <h1 className="text-base font-black tracking-tight leading-none text-foreground">Estim8r</h1>
-                <p className="hidden xs:block text-xs font-semibold text-muted-foreground tracking-wide">Electrical estimating</p>
-              </div>
-            </Link>
+          <div className="flex min-h-14 flex-wrap items-center justify-between gap-2 py-1">
+            <div className="flex min-w-0 items-center gap-2">
+              <Link to="/" className="flex min-h-[44px] items-center gap-2.5 min-w-0">
+                <AppLogo className="h-9 w-9 shrink-0 rounded-xl" />
+                <div className="min-w-0">
+                  <h1 className="text-base font-black tracking-tight leading-none text-foreground">Estim8r</h1>
+                  <p className="hidden xs:block text-xs font-semibold text-muted-foreground tracking-wide">Electrical estimating</p>
+                </div>
+              </Link>
+              <AppRefreshButton />
+            </div>
 
             <div className="flex items-center gap-1">
               <nav className="hidden lg:flex items-center gap-1">
@@ -123,7 +128,9 @@ export default function AppLayout() {
           ? "overflow-hidden px-0 py-0 pb-[4.75rem] lg:pb-0"
           : "overflow-auto px-4 py-4 pb-28 sm:px-6 lg:px-8 lg:pb-8"
       )}>
-        <Outlet />
+        <AppErrorBoundary resetKey={location.pathname}>
+          <Outlet />
+        </AppErrorBoundary>
       </main>
 
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur-xl shadow-[0_-4px_24px_rgba(0,0,0,0.12)]" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>

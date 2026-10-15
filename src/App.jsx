@@ -1,4 +1,4 @@
-import React, { Component, Suspense, lazy } from "react";
+import React, { Suspense, lazy, useEffect } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter as Router, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
@@ -7,8 +7,10 @@ import { AuthProvider } from "@/lib/AuthContext";
 import { ThemeProvider } from "@/lib/ThemeContext";
 import ProtectedRoute, { LoginRedirect } from "@/components/ProtectedRoute";
 import AppLayout from "@/components/layout/AppLayout";
+import AppErrorBoundary from "@/components/AppErrorBoundary";
 import Login from "@/pages/Login";
 import UpdateAvailablePrompt from "@/components/UpdateAvailablePrompt";
+import { RESET_ERRORS_EVENT } from "@/lib/appRefresh";
 import { installOwnerChatEvidence } from "@/lib/ownerChatEvidence";
 
 installOwnerChatEvidence();
@@ -30,38 +32,15 @@ function PageLoader() {
   return <div className="flex items-center justify-center py-24"><div className="w-8 h-8 border-4 border-slate-200 border-t-blue-600 dark:border-t-orange-500 rounded-full animate-spin" /></div>;
 }
 
-class RouteCrashBoundary extends Component {
-  constructor(props) {
-    super(props);
-    this.state = { crashed: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { crashed: true };
-  }
-
-  componentDidCatch(error) {
-    console.error("Estim8r screen crashed", error);
-  }
-
-  render() {
-    if (this.state.crashed) {
-      return (
-        <div className="mx-auto max-w-lg p-6 text-center">
-          <h1 className="text-lg font-bold text-foreground">This screen hit a problem</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Reload Estim8r to keep working. Your saved takeoff and estimates stay in this browser.</p>
-          <button
-            type="button"
-            className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
-            onClick={() => window.location.reload()}
-          >
-            Reload
-          </button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
+function FailedRequestReset() {
+  useEffect(() => {
+    const onReset = () => {
+      queryClientInstance.clear();
+    };
+    window.addEventListener(RESET_ERRORS_EVENT, onReset);
+    return () => window.removeEventListener(RESET_ERRORS_EVENT, onReset);
+  }, []);
+  return null;
 }
 
 function AppRoutes() {
@@ -102,10 +81,11 @@ export default function App() {
         <ThemeProvider>
           <QueryClientProvider client={queryClientInstance}>
             <Router>
-              <RouteCrashBoundary>
+              <AppErrorBoundary>
                 <AppRoutes />
-              </RouteCrashBoundary>
+              </AppErrorBoundary>
             </Router>
+            <FailedRequestReset />
             <UpdateAvailablePrompt />
             <Toaster />
           </QueryClientProvider>

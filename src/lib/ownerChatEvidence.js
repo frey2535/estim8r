@@ -155,7 +155,7 @@ function snapshotTakeoff() {
     : { present: false };
 }
 
-const CHROME_LABEL = /^(delete|cancel|save|close|sign out|sign in|access|cursor|edit|open|new estimate|takeoff|labor|production|settings|markup)$/i;
+const CHROME_LABEL = /^(delete|cancel|save|close|sign out|sign in|access|cursor|edit|open|new estimate|takeoff|labor|production|settings|markup|refresh)$/i;
 
 export function isChromeLabel(text) {
   const value = String(text || "").trim();

@@ -579,6 +579,12 @@ export default function TakeoffWorkspace() {
   }, [file, marks, calibrations, scheduleEdits, sheetMeta.page, supplyQuote, trade, category, symbolId, conduitId, maxHomeruns, penColor, penThickness, penSize, confirmedCoverageIds, confirmedEmptySheets]);
 
   useEffect(() => {
+    const resetErrors = () => setDrawingError("");
+    window.addEventListener("estim8r-reset-errors", resetErrors);
+    return () => window.removeEventListener("estim8r-reset-errors", resetErrors);
+  }, []);
+
+  useEffect(() => {
     return subscribeDrawingUpload((payload) => {
       if (payload.error) {
         setDrawingError(payload.error);

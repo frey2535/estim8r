@@ -96,6 +96,46 @@ export function writeEstimate(draft) {
   return next;
 }
 
+export const LIVE_ESTIMATE_KEY = "estim8r.liveEstimate.v1";
+export const RESTORE_JOB_KEY = "estim8r.restoreAfterRefresh";
+
+export function consumeRestoreJobRoute() {
+  try {
+    const route = sessionStorage.getItem(RESTORE_JOB_KEY) || "";
+    if (route) sessionStorage.removeItem(RESTORE_JOB_KEY);
+    return route;
+  } catch {
+    return "";
+  }
+}
+
+/** In-session snapshot so Refresh can restore an unsaved / unnamed open estimate. */
+export function writeLiveEstimateDraft(draft) {
+  try {
+    if (!draft) return;
+    sessionStorage.setItem(LIVE_ESTIMATE_KEY, JSON.stringify({ ...draft, savedAt: new Date().toISOString() }));
+  } catch {
+    /* private mode */
+  }
+}
+
+export function readLiveEstimateDraft() {
+  try {
+    const raw = sessionStorage.getItem(LIVE_ESTIMATE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearLiveEstimateDraft() {
+  try {
+    sessionStorage.removeItem(LIVE_ESTIMATE_KEY);
+  } catch {
+    /* private mode */
+  }
+}
+
 /** Copies takeoff quantities into the estimate. Never writes the takeoff sheet. */
 export function syncStoredEstimate({ fileName, fileSize, drawingDocs, rollup, pageCount, markup, marks = [], runs = [], pageKinds = {} }) {
   const existing = readEstimate(fileName, fileSize);

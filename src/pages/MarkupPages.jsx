@@ -192,6 +192,14 @@ export default function MarkupPages() {
   }, [fileName, fileSize]);
 
   useEffect(() => {
+    const resetErrors = () => {
+      setStatus((current) => (/could not|is not markup/i.test(current) ? "Markup pages ready." : current));
+    };
+    window.addEventListener("estim8r-reset-errors", resetErrors);
+    return () => window.removeEventListener("estim8r-reset-errors", resetErrors);
+  }, []);
+
+  useEffect(() => {
     if (reviewPages.length && !reviewPages.some((page) => page.id === pageId)) {
       setPageId(reviewPages[0].id);
     }

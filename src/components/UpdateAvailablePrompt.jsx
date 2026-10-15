@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
-
-const PREPARE_EVENT = "estim8r-before-update";
+import { refreshCurrentFlowApp } from "@/lib/appRefresh";
 
 export default function UpdateAvailablePrompt() {
   const [update, setUpdate] = useState(null);
@@ -20,19 +19,13 @@ export default function UpdateAvailablePrompt() {
     if (applying) return;
     setApplying(true);
     try {
-      window.dispatchEvent(new CustomEvent(PREPARE_EVENT, { detail: { targetSha: update?.targetSha || "" } }));
-      await new Promise((resolve) => window.setTimeout(resolve, 80));
-      if (typeof update?.applyUpdate === "function") {
-        await update.applyUpdate();
-        return;
-      }
+      await refreshCurrentFlowApp({ targetSha: update?.targetSha || "" });
     } catch {
-      /* fall through */
+      const next = new URL(window.location.href);
+      next.searchParams.set("t", String(Date.now()));
+      if (update?.targetSha) next.searchParams.set("build", update.targetSha);
+      window.location.replace(next.toString());
     }
-    const next = new URL(window.location.href);
-    next.searchParams.set("t", String(Date.now()));
-    if (update?.targetSha) next.searchParams.set("build", update.targetSha);
-    window.location.replace(next.toString());
   }, [applying, update]);
 
   if (!update) return null;

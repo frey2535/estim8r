@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { DragDropContext, Draggable, Droppable } from "@hello-pangea/dnd";
 import { Plus } from "lucide-react";
 import { compositeWage, defaultCrew, SHOP_HOURLY_RATE } from "@/domain/labor/employeeClasses";
-import { openEstimateSession, persistShopWageBook, readEstimate, readShopWageBook, writeEstimate } from "@/domain/estimate/estimateStore";
+import { clearLiveEstimateDraft, consumeRestoreJobRoute, openEstimateSession, persistShopWageBook, readActiveEstimate, readEstimate, readLiveEstimateDraft, readShopWageBook, writeEstimate, writeLiveEstimateDraft } from "@/domain/estimate/estimateStore";
 import { estimateFileNameForSave, estimateGrandTotal, isDrawingFileName } from "@/domain/estimate/projectDocuments";
 import SaveProjectDocuments from "@/components/estimate/SaveProjectDocuments";
 import EstimatePdfActions from "@/components/estimate/EstimatePdfActions";
@@ -113,7 +113,17 @@ export default function EstimateBuilder() {
   const wage = compositeWage(crew);
 
   useEffect(() => {
-    const stored = openEstimateSession({ fileName: openFile, fileSize: openSize });
+    const restoreAfterRefresh = consumeRestoreJobRoute().startsWith("/estimates/new");
+    const live = readLiveEstimateDraft();
+    let stored = null;
+    if (openFile) {
+      stored = openEstimateSession({ fileName: openFile, fileSize: openSize });
+    } else if (restoreAfterRefresh) {
+      stored = live || readActiveEstimate();
+    } else {
+      openEstimateSession({});
+    }
+    if (live) clearLiveEstimateDraft();
     const shop = readShopWageBook();
     if (stored) {
       const nextCrew = applyRatesToCrew(stored.crew?.length ? stored.crew : defaultCrew(shop), defaultLaborRates(shop));
@@ -236,6 +246,10 @@ export default function EstimateBuilder() {
     });
   }, [ready, header, crew, lines, contingency, materialMarkup, overhead, profit, bondInsurance, itemized, includeTotalsCard, visibleTotals, meta, factors, namedCrewId, trueTakeoff, completenessChecklist, assemblies, installationConditions, supplierPriceBooks, pdfDesign, storageFileName, storedEstimateId, storedBuildrProjectId, storedBuildrInvoiceId]);
 
+  const draftRef = useRef(null);
+  const storageFileNameRef = useRef(storageFileName);
+  storageFileNameRef.current = storageFileName;
+
   const draft = useMemo(() => ({
     version: 1,
     id: storedEstimate?.id,
@@ -264,6 +278,19 @@ export default function EstimateBuilder() {
     supplierPriceBooks,
     pdfDesign,
   }), [header, crew, factors, namedCrewId, contingency, materialMarkup, overhead, profit, bondInsurance, lines, itemized, includeTotalsCard, visibleTotals, meta, trueTakeoff, completenessChecklist, assemblies, installationConditions, supplierPriceBooks, pdfDesign, storageFileName, storedEstimateId, storedBuildrProjectId, storedBuildrInvoiceId]);
+
+  draftRef.current = draft;
+
+  useEffect(() => {
+    const preserve = () => {
+      const current = draftRef.current;
+      if (!current) return;
+      writeLiveEstimateDraft(current);
+      if (storageFileNameRef.current) writeEstimate(current);
+    };
+    window.addEventListener("estim8r-before-update", preserve);
+    return () => window.removeEventListener("estim8r-before-update", preserve);
+  }, []);
 
   const supplyQuote = useMemo(() => buildEstimateSupplyQuote({
     lines,

@@ -1534,14 +1534,14 @@ export default function TakeoffWorkspace() {
             };
             const nextMarks = applyDeviceTypeColors([...marks, hit]);
             commitMarks(nextMarks, "Drawing object added to takeoff.");
-            persistTakeoff(nextMarks);
+            persistSupplyQuote(nextMarks);
           } else {
             const materialized = materializeDrawingObject(drawingObject, marks);
             hit = materialized?.mark || null;
             if (hit && !materialized.existing) {
               const nextMarks = applyDeviceTypeColors([...marks, hit]);
               commitMarks(nextMarks, "Drawing object added to takeoff.");
-              persistTakeoff(nextMarks);
+              persistSupplyQuote(nextMarks);
             }
           }
         }
@@ -1576,7 +1576,7 @@ export default function TakeoffWorkspace() {
           };
           const nextMarks = applyDeviceTypeColors([...marks, hit]);
           commitMarks(nextMarks, "Drawing object added to takeoff.");
-          persistTakeoff(nextMarks);
+          persistSupplyQuote(nextMarks);
         }
       }
       setSelectedId(hit?.id || null);

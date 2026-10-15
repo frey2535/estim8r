@@ -1111,7 +1111,7 @@ export function recoverMissedLegendSymbols(page, dictionary, options = {}) {
       recovered.push({
         ...hit,
         entry,
-        recoveryReason: strong ? "high-geometry" : labeledStrong ? "geometry+type-code" : "repeated-prototype",
+        recoveryReason: nearbyCode ? "geometry+type-code" : "high-geometry",
         ambiguous: false,
       });
     }

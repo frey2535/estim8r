@@ -9,7 +9,9 @@ export function getPdfDocument(fileBytes) {
   const promise = getDocument({
     data: new Uint8Array(fileBytes.slice(0)),
     disableAutoFetch: true,
-    disableStream: true,
+    disableStream: true, 
+    wasmUrl: `${import.meta.env.BASE_URL}pdfjs/wasm/`, 
+    standardFontDataUrl: `${import.meta.env.BASE_URL}pdfjs/standard_fonts/`,
   }).promise;
   cache.set(fileBytes, promise);
   return promise;

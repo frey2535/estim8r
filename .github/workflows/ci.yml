@@ -37,3 +37,5 @@ jobs:
           VITE_APP_BUILD_SHA: ${{ github.sha }}
           VITE_APP_NAME: Estim8r
           VITE_APP_URL: https://estim8r.currentflowconsulting.org
+      - name: Verify PDF.js decoder and font assets
+        run: node scripts/verifyPdfAssets.mjs

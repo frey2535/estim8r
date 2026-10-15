@@ -65,7 +65,7 @@ export default function TakeoffInspector({
   const fieldInput = embedded ? sheetInputClass : inputClass;
   const Wrapper = embedded ? "div" : "aside";
   return (
-    <Wrapper className={embedded ? "space-y-3 text-base" : "hidden min-h-0 overflow-auto border-l border-border bg-card p-3 lg:block"}>
+    <Wrapper className={embedded ? "space-y-3 text-base" : "hidden min-h-0 min-w-0 overflow-y-auto overflow-x-hidden border-l border-border bg-card p-3 lg:block"}>
       {selected && (
         <div className="mb-3 space-y-2 rounded-lg border border-border p-2">
           <div className={embedded ? "text-sm font-bold uppercase tracking-wider text-muted-foreground" : "text-[10px] font-bold uppercase tracking-wider text-muted-foreground"}>Selected item</div>

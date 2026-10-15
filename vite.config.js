@@ -30,7 +30,9 @@ function buildVersionPlugin() {
       for (const folder of ["wasm", "standard_fonts"]) {
         const source = path.join(rootDir, "node_modules", "pdfjs-dist", folder);
         const destination = path.join(outDir, "pdfjs", folder);
-        if (fs.existsSync(source)) fs.cpSync(source, destination, { recursive: true, force: true });
+        if (!fs.existsSync(source)) throw new Error(`Missing PDF.js resource directory: ${source}`);
+        fs.cpSync(source, destination, { recursive: true, force: true });
+        if (!fs.readdirSync(destination).length) throw new Error(`Empty PDF.js resource directory: ${destination}`);
       }
       fs.writeFileSync(path.join(outDir, "build-version.json"), `${JSON.stringify({ sha: buildSha, builtAt })}\n`);
       const indexPath = path.join(outDir, "index.html");

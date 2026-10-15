@@ -26,6 +26,12 @@ function buildVersionPlugin() {
     writeBundle(outputOptions) {
       const outDir = outputOptions.dir ? path.resolve(rootDir, outputOptions.dir) : path.resolve(rootDir, "dist");
       fs.mkdirSync(outDir, { recursive: true });
+      // PDF.js needs decoder WASM and font resources served as real static files.
+      for (const folder of ["wasm", "standard_fonts"]) {
+        const source = path.join(rootDir, "node_modules", "pdfjs-dist", folder);
+        const destination = path.join(outDir, "pdfjs", folder);
+        if (fs.existsSync(source)) fs.cpSync(source, destination, { recursive: true, force: true });
+      }
       fs.writeFileSync(path.join(outDir, "build-version.json"), `${JSON.stringify({ sha: buildSha, builtAt })}\n`);
       const indexPath = path.join(outDir, "index.html");
       if (!fs.existsSync(indexPath)) return;

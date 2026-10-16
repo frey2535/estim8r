@@ -155,8 +155,9 @@ const labeled = JSON.parse(readFileSync(
   "utf8",
 ));
 const scored = scoreTakeoffAccuracy(labeled);
-assert(scored.truth === 1, "labeled fixture has independent ground truth");
+assert(scored.truth === 1, "labeled fixture has one manually placed symbol");
 assert(scored.found >= 1, `labeled WP must be found, got found=${scored.found}`);
+assert(scored.claimPermitted === false, "one labeled symbol does not certify bid-ready accuracy");
 assert(typeof scored.detectionRecall === "number" && scored.detectionRecall > 0, "accuracy harness reports measured recall");
 status.push(`Accuracy testing: labeled WP fixture recall ${scored.detectionRecall.toFixed(2)} / precision ${(scored.detectionPrecision || 0).toFixed(2)}`);
 

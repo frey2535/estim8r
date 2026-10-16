@@ -28,6 +28,7 @@
       ]
     }
   ],
+  "groundTruthIndependence": "manual",
   "groundTruth": [
     {
       "sheet": 1,
@@ -38,7 +39,9 @@
       "cy": 20,
       "w": 0.55,
       "h": 0.7,
-      "tagOnSymbol": false
+      "tagOnSymbol": false,
+      "source": "manual",
+      "placementMeasured": true
     }
   ]
 }

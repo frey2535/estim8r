@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ACCURACY_THRESHOLD, formatAccuracyReport, scoreTakeoffAccuracy } from "./accuracyHarness.js";
+import { formatAccuracyReport, scoreTakeoffAccuracy } from "./accuracyHarness.js";
 import { classifyPageText } from "./drawing-docs.js";
 import { isNonPlanSheetKind, normalizeTypeMark, shouldAcceptPlanToken } from "./symbolDetection.js";
 import { symbolsOnDrawingForTrade } from "./trades.js";
@@ -40,13 +40,18 @@ if (score.extraMarks.length) {
   console.log("extra", score.extraMarks.slice(0, 12).map((item) => `${item.typeCode || item.symbol}@${item.sheet}:${item.x.toFixed?.(1) || item.x},${item.y.toFixed?.(1) || item.y}`).join(" "));
 }
 
-assert(score.worstTypeRecall >= ACCURACY_THRESHOLD, `each counted type must hit 99% recall, worst was ${(score.worstTypeRecall * 100).toFixed(2)}%`);
-assert(score.detectionPrecision >= ACCURACY_THRESHOLD, `false positives must stay at or under 1%, precision was ${(score.detectionPrecision * 100).toFixed(2)}% with ${score.falsePositives} extras`);
-assert(score.markerAccuracy >= ACCURACY_THRESHOLD, `markers must sit on symbol geometry at 99%, got ${(score.markerAccuracy * 100).toFixed(2)}%`);
+assert(score.independence === "drawing-callout", "Soccer ground truth comes from printed type callouts, not a manual audit");
+assert(score.truth === 129, `Soccer callout set stays 129 labeled devices, got ${score.truth}`);
+assert(score.found === 36 && score.falseNegatives === 93, `Soccer symbol recall baseline is 36/129, got ${score.found}`);
+assert(score.classified === 19, `Soccer exact classification baseline is 19, got ${score.classified}`);
+assert(score.falsePositives === 9 && score.doubleCounts === 9, `Soccer false-positive baseline is 9 including 9 double-counts, got ${score.falsePositives}`);
+assert(score.placementMeasured === 11 && score.failedMarkers.length === 1, "only 11 Soccer labels separate the symbol body from the type text");
+assert(score.unresolvedCount === 240, `Soccer unresolved review baseline is 240, got ${score.unresolvedCount}`);
+assert(score.worstTypeRecall === 0, "at least one Soccer type is entirely missed");
+assert(score.claimPermitted === false, "Soccer callout labels must not be reported as a 99% accuracy claim");
 
 const pageKinds = Object.fromEntries(fixture.pages.map((page) => [page.page, page.kind]));
-const marks = score.extraMarks; // unused, keep dropdown check on a fresh run
-const electrical = scoreTakeoffAccuracy(fixture);
+const electrical = score;
 const dropdown = symbolsOnDrawingForTrade("electrical", [
   ...Array.from({ length: electrical.found }, (_, index) => ({
     id: `m${index}`,

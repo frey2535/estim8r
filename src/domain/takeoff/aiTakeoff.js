@@ -1091,40 +1091,6 @@ export function buildAiMarks({
     const assigned = assignExclusiveGeometry(hits.map((hit) => hit.token), page.paths || [], {
       shapeHintFor: (token) => shapeHintForToken(token.text, dictionary),
     });
-    // Visual legend pass: detect repeated graphical symbols even when the plan has
-    // no adjacent type text. This is required for power receptacles and many light
-    // fixtures whose only identity is their legend geometry.
-    const visualHits = timedScan(page, dictionary, {
-      planType,
-      threshold: 0.74,
-      strictSize: false,
-      occupyRadius: 0.24,
-      occupied: seen.filter((item) => item.sheet === page.page),
-    });
-    for (const visual of visualHits) {
-      const geometry = visual.geometry;
-      const paintOutline = symbolBodyOutline(geometry, page.tokens, { paths: page.paths });
-      const placed = {
-        x: Number(paintOutline?.cx ?? geometry.cx),
-        y: Number(paintOutline?.cy ?? geometry.cy),
-      };
-      if (isVisualOnlyEquipmentHit(visual, page, placed)) continue;
-      if (isVisualOnlySpecialtyHit({ ...visual, geometry }, page, placed)) continue;
-      if (!placementAllowed(placed, { sitePlan })) continue;
-      const duplicate = seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.34);
-      if (duplicate) continue;
-      const review = reviewCandidateMark({
-        trade,
-        sheet: page.page,
-        geometry,
-        reason: "legend-geometry-review",
-        sources: ["legend-geometry", "vector"],
-        scores: { visual: visual.score, legend: visual.score, vector: visual.score },
-      });
-      if (!review) continue;
-      counts.push(review);
-      seen.push({ ...review, tagX: placed.x, tagY: placed.y });
-    }
     for (const hit of hits) {
       let { token, symbol } = hit;
       const hint = shapeHintForToken(token.text, dictionary)
@@ -1300,6 +1266,42 @@ export function buildAiMarks({
       counts.push(mark);
       seen.push({ ...mark, tagX: token.x, tagY: token.y });
       if (geometryAnchored) usedGeometry.add(geometry);
+    }
+    // Process confirmed labeled detections first. Review-only visual candidates
+    // must not reserve geometry and suppress actual legend-linked devices.
+    // Visual legend pass: detect repeated graphical symbols even when the plan has
+    // no adjacent type text. This is required for power receptacles and many light
+    // fixtures whose only identity is their legend geometry.
+    const visualHits = timedScan(page, dictionary, {
+      planType,
+      threshold: 0.74,
+      strictSize: false,
+      occupyRadius: 0.24,
+      occupied: seen.filter((item) => item.sheet === page.page),
+    });
+    for (const visual of visualHits) {
+      const geometry = visual.geometry;
+      const paintOutline = symbolBodyOutline(geometry, page.tokens, { paths: page.paths });
+      const placed = {
+        x: Number(paintOutline?.cx ?? geometry.cx),
+        y: Number(paintOutline?.cy ?? geometry.cy),
+      };
+      if (isVisualOnlyEquipmentHit(visual, page, placed)) continue;
+      if (isVisualOnlySpecialtyHit({ ...visual, geometry }, page, placed)) continue;
+      if (!placementAllowed(placed, { sitePlan })) continue;
+      const duplicate = seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.34);
+      if (duplicate) continue;
+      const review = reviewCandidateMark({
+        trade,
+        sheet: page.page,
+        geometry,
+        reason: "legend-geometry-review",
+        sources: ["legend-geometry", "vector"],
+        scores: { visual: visual.score, legend: visual.score, vector: visual.score },
+      });
+      if (!review) continue;
+      counts.push(review);
+      seen.push({ ...review, tagX: placed.x, tagY: placed.y });
     }
     // After labeled hits exist, copy their extracted bodies and slash/tick
     // fragments across the same sheet to recover devices that have no printed type mark.

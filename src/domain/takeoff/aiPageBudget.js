@@ -1,6 +1,7 @@
 import { looksLikeCoverOrRendering, looksLikeElectricalPlan, looksLikeIndexPage } from "./drawing-docs.js";
 import { tradeFromSheetId } from "./sheetDiscipline.js";
 import { isNonPlanSheetKind } from "./symbolDetection.js";
+import { isScannedOrSparsePage } from "./takeoffQuality.js";
 
 export function shouldExtractRaster(recorded) {
   if (!recorded) return false;
@@ -8,9 +9,10 @@ export function shouldExtractRaster(recorded) {
   if (isNonPlanSheetKind(recorded.kind) || recorded.kind === "spec") return false;
   const fromId = tradeFromSheetId(recorded.sheetId);
   if (fromId && fromId !== "electrical") return false;
-  return recorded.discipline === "electrical"
+  if (recorded.discipline === "electrical"
     || fromId === "electrical"
-    || looksLikeElectricalPlan(recorded);
+    || looksLikeElectricalPlan(recorded)) return true;
+  return isScannedOrSparsePage(recorded) && Boolean(recorded.forceRaster);
 }
 
 export function persistableAiPages(pages) {

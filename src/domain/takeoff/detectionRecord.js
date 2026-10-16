@@ -1,3 +1,5 @@
+import { classifyAiEvidence } from "./takeoffQuality.js";
+
 export const REVIEW_VISUAL_THRESHOLD = 0.72;
 export const ACCEPT_VISUAL_THRESHOLD = 0.9;
 
@@ -72,9 +74,14 @@ export function attachDetectionRecord(mark, fields = {}) {
   const legendScore = Number(fields.legendMatchScore ?? (mark.matchedFrom === "legend" || mark.matchedFrom === "legend-geometry" ? 0.85 : 0));
   const visualScore = Number(fields.visualMatchScore ?? (mark.matchedFrom === "plan-repeat" || mark.matchedFrom === "legend-geometry" ? (mark.geometryScore || 0.8) : 0));
   const textScore = Number(fields.textContextScore ?? (fields.labelLocation ? 0.7 : 0));
+  const evidence = classifyAiEvidence({
+    visual: visualScore,
+    legend: legendScore,
+    context: Math.max(textScore, vectorScore),
+  });
   const combined = Number.isFinite(Number(fields.combinedConfidence))
     ? Number(fields.combinedConfidence)
-    : Math.max(vectorScore, legendScore, visualScore, textScore);
+    : Math.max(vectorScore, legendScore, visualScore, textScore, evidence.combined);
   const textOnly = uniqueSources.length > 0
     && uniqueSources.every((item) => item === "text" || item === "drawing")
     && !uniqueSources.includes("vector")
@@ -97,6 +104,8 @@ export function attachDetectionRecord(mark, fields = {}) {
     legendMatchScore: legendScore,
     textContextScore: textScore,
     combinedConfidence: combined,
+    evidenceDecision: evidence.decision,
+    evidenceSources: evidence.sources,
     detectionSources: uniqueSources,
     requiresReview,
     reviewReason: fields.reviewReason || mark.reviewReason || (textOnly ? "text-only-body" : requiresReview ? "needs-review" : ""),

@@ -333,6 +333,26 @@ export function shapeHintFromLabel(text) {
   return null;
 }
 
+export function isWallOrArchitecturalMark(geometry, nearby = []) {
+  if (!geometry) return true;
+  const long = Math.max(Number(geometry.w) || 0, Number(geometry.h) || 0, (Number(geometry.r) || 0) * 2);
+  const short = Math.min(
+    Number(geometry.w) || long,
+    Number(geometry.h) || long,
+    (Number(geometry.r) || 0) * 2 || long,
+  );
+  const aspect = long / (short || 1e-9);
+  if (long > 8) return true;
+  if (aspect >= 4.2 && long >= 1.15) return true;
+  const walls = (nearby || []).filter((part) => {
+    const partLong = Math.max(Number(part.w) || 0, Number(part.h) || 0);
+    const partShort = Math.min(Number(part.w) || 0, Number(part.h) || 0);
+    return partLong / (partShort || 1e-9) >= 3.6 && partLong >= 1.4;
+  });
+  if (walls.length >= 2 && aspect >= 2.4 && long >= 0.9) return true;
+  return false;
+}
+
 export function looksLikeRecessedCanBody(candidate) {
   if (!candidate || isJunkGeometry(candidate)) return false;
   const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
@@ -342,13 +362,14 @@ export function looksLikeRecessedCanBody(candidate) {
   return candidate.kind === "circle" || candidate.kind === "rect";
 }
 
-export function isJunkGeometry(candidate) {
+export function isJunkGeometry(candidate, nearby = []) {
   if (!candidate) return true;
   const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
   const short = Math.min(Number(candidate.w) || 0, Number(candidate.h) || 0);
   if (long < 0.18 || short < 0.09) return true;
   if (long > 2.7 && short < 0.9) return true;
   if (long / (short || 1e-9) > 6 && long > 1.8) return true;
+  if (isWallOrArchitecturalMark(candidate, nearby)) return true;
   return false;
 }
 

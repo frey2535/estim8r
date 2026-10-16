@@ -32,6 +32,8 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+      - name: Takeoff upgrade categories
+        run: node src/domain/takeoff/takeoffUpgrade.test.js
       - name: Lint
         run: npm run lint
       - name: Typecheck diagnostics

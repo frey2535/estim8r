@@ -1,0 +1,44 @@
+{
+  "drawingSymbols": [
+    {
+      "id": "legend:wp",
+      "abbr": "WP",
+      "label": "Weatherproof receptacle",
+      "category": "From drawing",
+      "takeoffCategory": "Receptacles",
+      "source": "legend",
+      "page": 1
+    }
+  ],
+  "pages": [
+    {
+      "page": 1,
+      "kind": "drawing",
+      "sheetId": "E110",
+      "discipline": "electrical",
+      "planType": "power",
+      "tokens": [
+        { "text": "E110", "x": 88, "y": 92 },
+        { "text": "POWER", "x": 80, "y": 90 },
+        { "text": "PLANS", "x": 88, "y": 90 },
+        { "text": "WP", "x": 20.35, "y": 20.12 }
+      ],
+      "paths": [
+        { "cx": 20, "cy": 20, "w": 0.55, "h": 0.7, "kind": "rect", "source": "vector" }
+      ]
+    }
+  ],
+  "groundTruth": [
+    {
+      "sheet": 1,
+      "type": "WP",
+      "x": 20.35,
+      "y": 20.12,
+      "cx": 20,
+      "cy": 20,
+      "w": 0.55,
+      "h": 0.7,
+      "tagOnSymbol": false
+    }
+  ]
+}

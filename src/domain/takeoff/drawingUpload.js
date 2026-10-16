@@ -1,3 +1,5 @@
+export { drawingProcessingPlan, LARGE_PLAN_BYTES } from "./takeoffQuality.js";
+
 export const DRAWING_INPUT_ID = "estim8r-drawing-file-input";
 export const DRAWING_ACCEPT = [
   "application/pdf",

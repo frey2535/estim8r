@@ -1,4 +1,5 @@
 import { geometrySimilarity } from "./legendGeometry.js";
+import { isScannedOrSparsePage, legendGraphicMatch, rasterCandidateSurvivesNoise } from "./takeoffQuality.js";
 
 function boundsToCandidate(minX, minY, maxX, maxY, width, height) {
   const wPx = maxX - minX + 1;
@@ -115,7 +116,7 @@ export function pagesNeedingRaster(pages, options = {}) {
     .filter((page) => {
       if (!page) return false;
       if ((page.rasterPaths || []).length || (page.rasterCandidates || []).length) return false;
-      return (page.paths || []).length < sparseLimit;
+      return (page.paths || []).length < sparseLimit || isScannedOrSparsePage(page);
     })
     .slice()
     .sort((a, b) => (a.paths?.length || 0) - (b.paths?.length || 0))
@@ -139,12 +140,13 @@ export function matchRasterToLegend(candidates, dictionary, options = {}) {
   if (!entries.length) return [];
   const hits = [];
   for (const candidate of candidates || []) {
+    if (!rasterCandidateSurvivesNoise(candidate)) continue;
     let best = null;
     let bestScore = 0;
     let runner = 0;
     for (const entry of entries) {
       const protos = entry.prototypes?.length ? entry.prototypes : [entry.prototype];
-      const score = Math.max(...protos.map((proto) => geometrySimilarity(candidate, proto) || 0));
+      const score = Math.max(...protos.map((proto) => legendGraphicMatch(candidate, proto) || geometrySimilarity(candidate, proto) || 0));
       if (score > bestScore) {
         runner = bestScore;
         bestScore = score;

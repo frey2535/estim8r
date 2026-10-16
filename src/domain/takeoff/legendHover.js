@@ -122,11 +122,13 @@ export function legendHoverData(mark, drawingSymbols = [], options = {}) {
     };
   }
 
+  const fixtureType = identity.category || clean(locked?.takeoffCategory || locked?.category);
   return {
     entry: locked,
     code: identity.code,
     label: identity.label || clean(locked?.label) || `Type ${identity.code}`,
-    category: identity.category || clean(locked?.takeoffCategory || locked?.category),
+    category: fixtureType,
+    fixtureType,
     source: identity.source || clean(locked?.source),
     page: identity.page || Number(locked?.page) || null,
     verified: Boolean(locked),

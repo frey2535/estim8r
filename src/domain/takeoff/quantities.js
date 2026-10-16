@@ -1,6 +1,7 @@
 import { DEFAULT_DROP_FEET } from "./catalog.js";
 import { areaFromPercent, feetFromPercent, polygonArea, polylineLength } from "./geometry.js";
 import { junctionHardwareRows, isJunctionBoxMark } from "./junctionHardware.js";
+import { isReviewOnlyMark } from "./detectionRecord.js";
 import { DEFAULT_LINE_SIZE, resolvedLineSize } from "./sizes.js";
 import { applyTypicalMultiplier } from "./liveLinkedTakeoff.js";
 
@@ -64,7 +65,10 @@ export function rollupTakeoff(marks, calibration, aspect = 1, sheet = null) {
     // Junction boxes roll up as a single total row; EMT connectors are derived, not drawn as marks.
     if (isJunctionBoxMark(mark)) continue;
     const row = rowFor(mark);
-    if (mark.type === "count" || mark.type === "drop") row.count += 1;
+    if (mark.type === "count" || mark.type === "drop") {
+      if (isReviewOnlyMark(mark)) continue;
+      row.count += 1;
+    }
     const lf = markLengthFeet(mark, calibration, aspect);
     if (lf != null) {
       row.lf += lf;

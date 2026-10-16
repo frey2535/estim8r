@@ -28,6 +28,7 @@ import { attachConfirmedGeometryPrototypes, attachFragmentPrototypes, attachLege
 import { matchRasterToLegend, rasterCandidatesFromPage } from "./rasterSymbols.js";
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
 import { buildTradeSearchManifest } from "./searchManifest.js";
+import { dedupePhysicalSymbols } from "./takeoffQuality.js";
 
 const STOP = new Set(["the", "and", "for", "with", "from", "this", "that", "sheet", "note", "see", "typ", "all", "new", "nic", "nts", "rev"]);
 const TYPE_CODE = /^(?:[A-Z]{1,3}\d{0,2}[A-Z]?|\d{1,2}[A-Z]?)$/i;
@@ -1546,7 +1547,7 @@ export function buildAiMarks({
       }
     }
   }
-  const validatedCounts = validateTaggedEquipmentMarks(counts, pages);
+  const validatedCounts = validateTaggedEquipmentMarks(dedupePhysicalSymbols(counts), pages);
   const anchors = validatedCounts.filter((mark) => mark.anchor && !isReviewOnlyMark(mark));
   const devices = validatedCounts.filter((mark) => !mark.anchor && !isReviewOnlyMark(mark));
   const sections = findConduitSections(pages, trade, dictionary);

@@ -29,7 +29,9 @@ import { buildAiMarks, legendDictionaryFromPages, pagesToScan } from "@/domain/t
 import TakeoffActionsMenu, { takeoffEstimatePath, takeoffMarkupPath } from "@/components/takeoff/TakeoffActionsMenu";
 import { TakeoffMobileCommandBar, TakeoffMobileDock, TakeoffMobileSheet } from "@/components/takeoff/TakeoffMobileChrome";
 import { persistableAiPages, readAiPages } from "@/domain/takeoff/aiPages";
+import { drawingProcessingPlan } from "@/domain/takeoff/drawingUpload";
 import { hydratePagesRaster, pagesNeedingRaster } from "@/domain/takeoff/rasterSymbols";
+import { isScannedOrSparsePage } from "@/domain/takeoff/takeoffQuality";
 import { pickInteractiveSymbolGeometry, matchGeometryToLegend, attachLegendGeometryPrototypes } from "@/domain/takeoff/legendGeometry";
 import { legendHoverData, shouldShowSymbolHover } from "@/domain/takeoff/legendHover";
 import { buildDrawingObjectLayer, hitDrawingObject, materializeDrawingObject } from "@/domain/takeoff/drawingObjectLayer";
@@ -1377,6 +1379,14 @@ export default function TakeoffWorkspace() {
           if (!silent) setStatus(`AI assist is reading sheet ${current} of ${total}…`);
         },
       });
+      const processing = drawingProcessingPlan({ type: "application/pdf", size: fileBytes.byteLength }, {
+        byteLength: fileBytes.byteLength,
+      });
+      if (processing.scanned || processing.largePlan) {
+        for (const page of pages) {
+          if (isScannedOrSparsePage(page)) page.forceRaster = true;
+        }
+      }
       // Raster only the sparse electrical scan pages. Full-set raster at CAD
       // scale OOM'd / jetsam'd the tab while AI takeoff was running.
       const scanDictionary = legendDictionaryFromPages(pages, palette.fromDrawing, palette.symbols, trade);

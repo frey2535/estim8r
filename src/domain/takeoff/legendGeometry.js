@@ -187,7 +187,7 @@ export function isSlashFragment(candidate) {
 
 function allowCandidate(candidate, options = {}) {
   if (!candidate) return false;
-  if (!isJunkGeometry(candidate)) return true;
+  if (!isJunkGeometry(candidate, options.nearby || [])) return true;
   return Boolean(options.allowSlash) && isDeviceFragment(candidate);
 }
 

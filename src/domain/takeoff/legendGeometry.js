@@ -652,6 +652,85 @@ export function findNearbyReceptacleGlyph(point, paths = [], options = {}) {
     })[0]?.path || null;
 }
 
+export function looksLikeOccupancyGlyph(candidate) {
+  if (!candidate || looksLikeHexNoteGlyph(candidate)) return false;
+  const w = Number(candidate.w) || 0;
+  const h = Number(candidate.h) || 0;
+  const long = Math.max(w, h);
+  const short = Math.min(w, h);
+  const aspect = long / (short || 1e-9);
+  // Printed OS sits on a stacked pair of ~0.14x0.21 paths or a ~0.21 circle.
+  // Those are smaller than the recessed-can / junk cutoff, so they need an
+  // explicit glyph test instead of the generic circle hint.
+  if (long < 0.10 || long > 0.32 || short < 0.08 || short > 0.26) return false;
+  if (aspect > 2.2) return false;
+  return candidate.kind === "path" || candidate.kind === "circle" || candidate.kind === "rect" || candidate.kind === "composite";
+}
+
+function occupancyOutline(path) {
+  const w = Math.max(Number(path?.w) || 0, 0.22);
+  const h = Math.max(Number(path?.h) || 0, 0.22);
+  if ((path?.outline?.points || []).length >= 3) {
+    return { ...path.outline, source: path.outline.source || "vector" };
+  }
+  return {
+    kind: path?.kind === "circle" ? "circle" : "rect",
+    source: "vector",
+    w,
+    h,
+    cx: Number(path?.cx) || 0,
+    cy: Number(path?.cy) || 0,
+    points: [],
+  };
+}
+
+export function findNearbyOccupancyGlyph(point, paths = [], options = {}) {
+  const x = Number(point?.x ?? point?.cx) || 0;
+  const y = Number(point?.y ?? point?.cy) || 0;
+  const radius = Number(options.radius) || 0.62;
+  const seeds = (paths || [])
+    .filter((path) => looksLikeOccupancyGlyph(path))
+    .map((path) => ({ path, dist: Math.hypot((Number(path.cx) || 0) - x, (Number(path.cy) || 0) - y) }))
+    .filter((item) => item.dist <= radius)
+    .sort((a, b) => a.dist - b.dist);
+  if (!seeds.length) return null;
+  const seed = seeds[0].path;
+  const twin = seeds.find((item) => (
+    item.path !== seed
+    && Math.abs((Number(item.path.cx) || 0) - (Number(seed.cx) || 0)) < 0.10
+    && Math.abs((Number(item.path.cy) || 0) - (Number(seed.cy) || 0)) < 0.34
+  ));
+  if (!twin) {
+    return {
+      ...seed,
+      source: "vector",
+      outline: occupancyOutline(seed),
+    };
+  }
+  const minX = Math.min((Number(seed.cx) || 0) - (Number(seed.w) || 0) / 2, (Number(twin.path.cx) || 0) - (Number(twin.path.w) || 0) / 2);
+  const maxX = Math.max((Number(seed.cx) || 0) + (Number(seed.w) || 0) / 2, (Number(twin.path.cx) || 0) + (Number(twin.path.w) || 0) / 2);
+  const minY = Math.min((Number(seed.cy) || 0) - (Number(seed.h) || 0) / 2, (Number(twin.path.cy) || 0) - (Number(twin.path.h) || 0) / 2);
+  const maxY = Math.max((Number(seed.cy) || 0) + (Number(seed.h) || 0) / 2, (Number(twin.path.cy) || 0) + (Number(twin.path.h) || 0) / 2);
+  return {
+    cx: (minX + maxX) / 2,
+    cy: (minY + maxY) / 2,
+    w: Math.max(maxX - minX, 0.22),
+    h: Math.max(maxY - minY, 0.22),
+    kind: "rect",
+    source: "vector",
+    parts: [seed, twin.path],
+    outline: {
+      kind: "rect",
+      source: "vector",
+      w: Math.max(maxX - minX, 0.22),
+      h: Math.max(maxY - minY, 0.22),
+      cx: (minX + maxX) / 2,
+      cy: (minY + maxY) / 2,
+      points: [],
+    },
+  };
+}
+
 function classifyNearbyPowerLabel(point, tokens = []) {
   let best = "";
   let bestDist = 1.15;
@@ -695,6 +774,7 @@ export function attachPowerGlyphPrototypes(dictionary, marks = [], page = null) 
     if (!seed) continue;
     const cluster = clusterSymbolGeometry(seed, (page?.paths || []).filter((path) => looksLikeReceptacleGlyph(path)), { maxSpan: 0.55, maxParts: 5, joinGap: 0.12 });
     if (!cluster || looksLikeHexNoteGlyph(cluster) || !looksLikeReceptacleGlyph(cluster)) continue;
+    if (Math.max(Number(cluster.w) || 0, Number(cluster.h) || 0) < 0.16) continue;
     entry.prototype = {
       ...cluster,
       source: "vector",
@@ -1092,6 +1172,9 @@ export function recoverMissedLegendSymbols(page, dictionary, options = {}) {
       if (nearestPrintedCode && nearestPrintedCode !== wanted) continue;
 
       const nearbyCode = Boolean(nearestPrintedCode === wanted);
+      // Unlabeled WP lookalikes were flooding power plans (title ticks, hatch).
+      // Recovery may still copy unlabeled OS / GFI / lighting repeats.
+      if (/^(wp|sp|spr)$/.test(wanted) && !nearbyCode) continue;
       const nearby = nearbyFromIndex(
         buildSpatialIndex(paths.filter((path) => allowCandidate(path, { allowSlash: true }))),
         hit.geometry.cx,

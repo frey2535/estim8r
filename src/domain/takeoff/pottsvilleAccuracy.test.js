@@ -54,10 +54,7 @@ assert(fixture.groundTruth.length >= 8, `Pottsville fixture must include real pl
 assert(!fixture.pages.some((page) => /legend|schedule|oneline|riser|detail/i.test(page.kind) && page.kind === "drawing"), "P/S/C and legend sheets stay out of the plan count");
 assert(fixture.groundTruth.every((device) => device.sheet !== 48), "legend sheet tokens are not ground truth");
 
-const allowedScore = scoreTakeoffAccuracy({
-  ...fixture,
-  drawingSymbols: (fixture.drawingSymbols || []).filter((item) => ALLOWED.has(String(item.abbr || item.type || "").toUpperCase())),
-});
+const allowedScore = scoreTakeoffAccuracy(fixture);
 const score = {
   ...allowedScore,
   extraMarks: (allowedScore.extraMarks || []).filter((mark) => ALLOWED.has(String(mark.typeCode || mark.abbr || "").toUpperCase())),

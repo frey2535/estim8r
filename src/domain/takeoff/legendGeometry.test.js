@@ -8,7 +8,9 @@ import {
   geometrySimilarity,
   isDeviceFragment,
   isHatchTickCluster,
+  findNearbyOccupancyGlyph,
   looksLikeHexNoteGlyph,
+  looksLikeOccupancyGlyph,
   looksLikeReceptacleGlyph,
   looksLikeUnlabeledReceptacleGlyph,
   resolveGeometryMatch,
@@ -186,6 +188,21 @@ assert(symbolBodyOutline(hexBody, [{ text: "G", x: 40, y: 22 }])?.kind === "path
 assert(symbolBodyOutline(hex, [{ text: "13", x: 26.18, y: 79.1 }]) == null, "keynote / 4-digit hex tags never receive fill");
 const hatch = Array.from({ length: 12 }, (_, index) => part(12 + (index % 4) * 0.4, 16 + Math.floor(index / 4) * 0.4, 0.134, 0.187));
 assert(isHatchTickCluster(hatch[0], hatch), "stair/hatch tick lattices are not receptacles");
+
+const osPair = [
+  { kind: "path", source: "vector", cx: 33.09, cy: 73.07, w: 0.14, h: 0.21 },
+  { kind: "path", source: "vector", cx: 33.10, cy: 73.28, w: 0.14, h: 0.21 },
+];
+assert(looksLikeOccupancyGlyph(osPair[0]), "printed OS path is an occupancy glyph");
+const osBody = findNearbyOccupancyGlyph({ x: 33.19, y: 73.07 }, osPair);
+assert(osBody && Math.hypot(osBody.cx - 33.10, osBody.cy - 73.18) < 0.12, "OS token snaps to the stacked occupancy glyph, not a nearby can");
+assert(osBody.parts.length === 2 && osBody.kind === "rect", "dual-tech OS assembles both stacked paths into one body");
+assert(!looksLikeOccupancyGlyph({ kind: "rect", w: 0.63, h: 0.50 }), "recessed cans are not occupancy glyphs");
+const offsetOs = findNearbyOccupancyGlyph(
+  { x: 34.35, y: 78.46 },
+  [{ kind: "path", source: "vector", cx: 34.35, cy: 78.96, w: 0.15, h: 0.20 }],
+);
+assert(offsetOs && Math.abs(offsetOs.cy - 78.96) < 0.02, "OS label 0.5 units from its glyph still snaps to the sensor body");
 
 const densePaths = [];
 for (let i = 0; i < 900; i += 1) {

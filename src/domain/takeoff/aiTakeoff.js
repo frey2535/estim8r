@@ -24,7 +24,7 @@ import { extractSheetNotes, notesToMarks } from "./sheetNotes.js";
 import { looksLikeCoverOrRendering, looksLikeElectricalPlan, looksLikeIndexPage, pagePlanType } from "./drawing-docs.js";
 import { associateGeometry, assignExclusiveGeometry, looksLikeRecessedCanBody, placeOnSymbolGeometry, shapeHintFromLabel, tagOnSymbolGeometry } from "./vectorSymbols.js";
 import { orthogonalizePolyline } from "./ortho.js";
-import { attachConfirmedGeometryPrototypes, attachFragmentPrototypes, attachLegendGeometryPrototypes, attachPowerGlyphPrototypes, attachProjectPrototypes, entryFamily, findNearbyReceptacleGlyph, isEmergencyHatch, isHatchTickCluster, looksLikeHexNoteGlyph, nearbyLegendEntry, recoverMissedLegendSymbols, scanPageByLegendGeometry, scanUnlabeledPowerGlyphs, snapToEntryPrototype, symbolBodyOutline } from "./legendGeometry.js";
+import { attachConfirmedGeometryPrototypes, attachFragmentPrototypes, attachLegendGeometryPrototypes, attachPowerGlyphPrototypes, attachProjectPrototypes, entryFamily, findNearbyOccupancyGlyph, findNearbyReceptacleGlyph, isEmergencyHatch, isHatchTickCluster, looksLikeHexNoteGlyph, looksLikeOccupancyGlyph, nearbyLegendEntry, recoverMissedLegendSymbols, scanPageByLegendGeometry, scanUnlabeledPowerGlyphs, snapToEntryPrototype, symbolBodyOutline } from "./legendGeometry.js";
 import { matchRasterToLegend, rasterCandidatesFromPage } from "./rasterSymbols.js";
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
 import { buildTradeSearchManifest } from "./searchManifest.js";
@@ -882,6 +882,86 @@ function isVisualOnlyEquipmentHit(visual, page, placed) {
   return !hasPrintedEquipmentTagNear(page, family, placed);
 }
 
+function specialtyTypeCode(value) {
+  const text = normalizeTypeMark(value).toUpperCase();
+  if (text === "GFIWP" || text === "WPGFI" || text === "GFI/WP") return "GFI/WP";
+  if (text === "SPR") return "SP";
+  if (/^(WP|GFI|OS|SP)$/.test(text)) return text;
+  return "";
+}
+
+function specialtyCodesMatch(left, right) {
+  if (!left || !right) return false;
+  if (left === right) return true;
+  return (left === "GFI/WP" && right === "GFI") || (left === "GFI" && right === "GFI/WP");
+}
+
+function printedSpecialtyTags(page, code) {
+  return (page?.tokens || []).filter((token) => specialtyCodesMatch(specialtyTypeCode(token.text), code));
+}
+
+function hasPrintedSpecialtyTagNear(page, code, point, radius = 0.72) {
+  if (!page || !code || !point) return false;
+  return printedSpecialtyTags(page, code).some((token) => (
+    Math.hypot((Number(token.x) || 0) - point.x, (Number(token.y) || 0) - point.y) <= radius
+  ));
+}
+
+function isVisualOnlySpecialtyHit(visual, page, placed) {
+  const code = specialtyTypeCode(visual?.entry?.code || visual?.entry?.symbol?.abbr);
+  if (!code) return false;
+  if (code === "WP" || code === "SP") {
+    return !hasPrintedSpecialtyTagNear(page, code, placed, 0.72);
+  }
+  if (code === "OS") {
+    if (hasPrintedSpecialtyTagNear(page, "OS", placed, 0.72)) return false;
+    return !looksLikeOccupancyGlyph(visual.geometry);
+  }
+  return false;
+}
+
+function keepLabeledSpecialtyMarks(marks, pages) {
+  const pageMap = new Map((pages || []).map((page) => [page.page, page]));
+  const claimed = new Set();
+  const ranked = [...(marks || [])].sort((left, right) => {
+    const leftToken = left.matchedFrom === "legend" || left.matchedFrom === "drawing" ? 0 : 1;
+    const rightToken = right.matchedFrom === "legend" || right.matchedFrom === "drawing" ? 0 : 1;
+    return leftToken - rightToken;
+  });
+  const kept = [];
+  for (const mark of ranked) {
+    if (isReviewOnlyMark(mark) || (mark.type !== "count" && mark.type !== "drop")) {
+      kept.push(mark);
+      continue;
+    }
+    const code = specialtyTypeCode(mark.typeCode || mark.abbr);
+    if (code !== "WP" && code !== "SP" && code !== "OS") {
+      kept.push(mark);
+      continue;
+    }
+    const page = pageMap.get(mark.sheet);
+    const nearest = printedSpecialtyTags(page, code)
+      .map((token) => ({
+        token,
+        dist: Math.hypot((Number(token.x) || 0) - mark.x, (Number(token.y) || 0) - mark.y),
+      }))
+      .sort((left, right) => left.dist - right.dist)[0];
+    const fromToken = mark.matchedFrom === "legend" || mark.matchedFrom === "drawing";
+    const tagDist = nearest?.dist ?? Infinity;
+    if ((code === "WP" || code === "SP") && !fromToken && tagDist > 0.72) continue;
+    if (fromToken && tagDist > 1.15 && !mark.labelLocation) continue;
+    if (nearest && tagDist <= 0.85) {
+      const key = `${mark.sheet}|${code}|${Number(nearest.token.x).toFixed(2)}|${Number(nearest.token.y).toFixed(2)}`;
+      if (claimed.has(key)) continue;
+      claimed.add(key);
+    } else if ((code === "WP" || code === "SP") && !fromToken) {
+      continue;
+    }
+    kept.push(mark);
+  }
+  return kept;
+}
+
 function validateTaggedEquipmentMarks(marks, pages) {
   const pageMap = new Map((pages || []).map((page) => [page.page, page]));
   return (marks || []).filter((mark) => {
@@ -1030,7 +1110,8 @@ export function buildAiMarks({
       });
       const effectiveEntry = typed?.entry || visual.entry;
       const symbol = effectiveEntry.symbol;
-      if (isVisualOnlyEquipmentHit(visual, page, placed)) continue;
+      if (isVisualOnlyEquipmentHit({ ...visual, entry: effectiveEntry }, page, placed)) continue;
+      if (isVisualOnlySpecialtyHit({ ...visual, entry: effectiveEntry, geometry }, page, placed)) continue;
       if (!placementAllowed(placed, { sitePlan })) continue;
       const duplicate = seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.34);
       if (duplicate) continue;
@@ -1097,7 +1178,12 @@ export function buildAiMarks({
           allowWpCover: printedCode === "WP",
         })
         : null;
-      let geometry = powerGlyph
+      const occupancyGlyph = printedCode === "OS"
+        ? findNearbyOccupancyGlyph(token, page.paths || [], { radius: 0.62 })
+        : null;
+      let geometry = occupancyGlyph
+        ? { ...occupancyGlyph, source: "vector", outline: occupancyGlyph.outline || { kind: occupancyGlyph.kind || "path", source: "vector", w: occupancyGlyph.w, h: occupancyGlyph.h, points: occupancyGlyph.points || [] } }
+        : powerGlyph
         ? { ...powerGlyph, source: "vector", outline: powerGlyph.outline || { kind: powerGlyph.kind || "rect", source: "vector", w: powerGlyph.w, h: powerGlyph.h, points: powerGlyph.points || [] } }
         : assigned.get(token) || placeOnSymbolGeometry(token, (page.paths || []).filter((item) => !usedGeometry.has(item)), {
           shapeHint: hint,
@@ -1116,7 +1202,7 @@ export function buildAiMarks({
             : null;
         }
       }
-      if (hint === "circle" && geometry) {
+      if (hint === "circle" && geometry && !occupancyGlyph) {
         const away = Math.hypot((geometry.cx || 0) - token.x, (geometry.cy || 0) - token.y);
         const code = normalizeTypeMark(token.text).toUpperCase();
         if (away > 0.48 && code === "OS") {
@@ -1286,8 +1372,9 @@ export function buildAiMarks({
       const effectiveEntry = typed?.entry || visual.entry;
       const symbol = effectiveEntry?.symbol;
       if (!symbol) continue;
-      if (isVisualOnlyEquipmentHit(visual, page, placed)) continue;
-      const titleBand = planType !== "power" && (placed.x > 64 || placed.y < 12);
+      if (isVisualOnlyEquipmentHit({ ...visual, entry: effectiveEntry }, page, placed)) continue;
+      if (isVisualOnlySpecialtyHit({ ...visual, entry: effectiveEntry, geometry }, page, placed)) continue;
+      const titleBand = placed.x > 64 || placed.y < 12;
       if (!placementAllowed(placed, { sitePlan }) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens) || titleBand) continue;
       if (looksLikeHexNoteGlyph(geometry)) continue;
       const existingIndex = counts.findIndex((mark) => mark.sheet === page.page && distance(mark, placed) < 0.34);
@@ -1365,7 +1452,7 @@ export function buildAiMarks({
     for (const visual of reviewHits) {
       const geometry = visual.geometry;
       const placed = { x: geometry.cx, y: geometry.cy };
-      const titleBand = planType !== "power" && (placed.x > 64 || placed.y < 12);
+      const titleBand = placed.x > 64 || placed.y < 12;
       if (!placementAllowed(placed, { sitePlan }) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens) || titleBand) continue;
       if (looksLikeHexNoteGlyph(geometry) || isHatchTickCluster(geometry, page.paths || [])) continue;
       const duplicate = seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.34);
@@ -1401,7 +1488,9 @@ export function buildAiMarks({
         x: Number(paintOutline?.cx ?? geometry.cx),
         y: Number(paintOutline?.cy ?? geometry.cy),
       };
+      if (isVisualOnlySpecialtyHit(visual, page, placed)) continue;
       if (!placementAllowed(placed, { sitePlan }) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens)) continue;
+      if (placed.x > 64 || placed.y < 12) continue;
       if (looksLikeHexNoteGlyph(geometry) || isHatchTickCluster(geometry, page.paths || [])) continue;
       if (seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.28)) continue;
       const mark = attachDetectionRecord({
@@ -1459,7 +1548,8 @@ export function buildAiMarks({
         y: Number(paintOutline?.cy ?? geometry.cy),
       };
       if (isVisualOnlyEquipmentHit(visual, page, placed)) continue;
-      const titleBand = planType !== "power" && (placed.x > 64 || placed.y < 12);
+      if (isVisualOnlySpecialtyHit(visual, page, placed)) continue;
+      const titleBand = placed.x > 64 || placed.y < 12;
       if (!placementAllowed(placed, { sitePlan }) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens) || titleBand) continue;
       if (looksLikeHexNoteGlyph(geometry) || isHatchTickCluster(geometry, page.paths || [])) continue;
       const existing = counts.find((mark) => mark.sheet === page.page && distance(mark, placed) < 0.4);
@@ -1547,7 +1637,10 @@ export function buildAiMarks({
       }
     }
   }
-  const validatedCounts = validateTaggedEquipmentMarks(dedupePhysicalSymbols(counts), pages);
+  const validatedCounts = validateTaggedEquipmentMarks(
+    keepLabeledSpecialtyMarks(dedupePhysicalSymbols(counts), pages),
+    pages,
+  );
   const anchors = validatedCounts.filter((mark) => mark.anchor && !isReviewOnlyMark(mark));
   const devices = validatedCounts.filter((mark) => !mark.anchor && !isReviewOnlyMark(mark));
   const sections = findConduitSections(pages, trade, dictionary);

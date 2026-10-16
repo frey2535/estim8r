@@ -26,6 +26,8 @@ jobs:
         run: node src/domain/takeoff/accuracyGate.test.js
       - name: Takeoff upgrade categories
         run: node src/domain/takeoff/takeoffUpgrade.test.js
+      - name: Pottsville labeled OS/WP accuracy
+        run: node src/domain/takeoff/pottsvilleAccuracy.test.js
       - name: Takeoff pinch viewport math
         run: node src/lib/sheetViewport.test.js
       - name: Lint

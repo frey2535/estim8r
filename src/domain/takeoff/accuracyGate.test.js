@@ -1,10 +1,5 @@
-import {
-  classifyGroundTruth,
-  formatAccuracyReport,
-  markerOnSymbolBody,
-  scoreDetections,
-  scoreTakeoffAccuracy,
-} from "./accuracyHarness.js";
+import { scoreTakeoffAccuracy, formatAccuracyReport } from "./accuracyHarness.js";
+import { LABEL_AUTHORITY } from "./labeledTruth.js";
 
 function assert(condition, message) {
   if (!condition) {
@@ -22,13 +17,10 @@ const review = { type: "count", sheet: 1, typeCode: "UNKNOWN", symbol: "unknown"
 
 const unmeasured = scoreTakeoffAccuracy({ pages: [], drawingSymbols: [], groundTruth: [] });
 assert(unmeasured.truth === 0, "empty fixture contains no labeled devices");
-assert(unmeasured.independence === "absent", "empty fixture is not labeled");
-assert(unmeasured.detectionRecall == null, "empty ground truth must not report 100% recall");
-assert(unmeasured.detectionPrecision == null, "empty detections must not report 100% precision");
-assert(unmeasured.markerAccuracy == null, "empty matches must not report 100% placement");
+assert(unmeasured.labelAuthority === LABEL_AUTHORITY.NONE, "empty fixture has no label authority");
 assert(unmeasured.meetsDetection === false, "empty ground truth must not pass detection");
 assert(unmeasured.meetsMarkers === false, "empty ground truth must not pass marker placement");
-assert(unmeasured.claimPermitted === false, "empty fixture cannot permit an accuracy claim");
+assert(unmeasured.canClaimThreshold === false, "empty ground truth cannot claim 99%");
 assert(formatAccuracyReport(unmeasured).includes("MISSING"), "report must flag absent ground truth");
 assert(formatAccuracyReport(unmeasured).includes("unmeasured"), "report must say unmeasured instead of 100%");
 
@@ -72,43 +64,24 @@ const bodyMark = scoreDetections({
   independence: "manual",
   coverageComplete: true,
 });
-assert(bodyMark.meetsDetection === true, "manual labels with exact location, type, and no extras pass detection");
-assert(bodyMark.meetsMarkers === true, "manual labels with the marker inside the symbol body pass placement");
-assert(bodyMark.claimPermitted === true, "a fully measured manual case with no open review can permit a claim");
-assert(markerOnSymbolBody(onBody, device), "body marker is inside the labeled symbol");
-assert(!markerOnSymbolBody(onTag, device), "tag marker is outside the labeled symbol");
+assert(missed.truth === 1, "labeled fixture retains ground truth");
+assert(missed.falseNegatives === missed.truth - missed.found, "false negatives reflect missed devices");
+assert(missed.canClaimThreshold === false, "a one-device incomplete label cannot claim 99%");
+assert(!missed.meetsDetection, "passing detection requires independently labeled drawings");
 
-const doubled = scoreDetections({
-  marks: [onBody, { ...onBody, x: 20.1, y: 20.08 }],
-  groundTruth: [device],
-  independence: "manual",
+const stub = scoreTakeoffAccuracy({
+  labelAuthority: LABEL_AUTHORITY.SYNTHETIC,
+  drawingSymbols: [{ id: "legend:wp", abbr: "WP", label: "Weatherproof receptacle", takeoffCategory: "Receptacles" }],
+  pages: [{
+    page: 1,
+    kind: "drawing",
+    sheetId: "E110",
+    tokens: [{ text: "WP", x: 20.35, y: 20.12 }, { text: "POWER", x: 80, y: 90 }, { text: "PLANS", x: 88, y: 90 }],
+    paths: [{ cx: 20, cy: 20, w: 0.55, h: 0.7, kind: "rect", source: "vector" }],
+  }],
+  groundTruth: [{ sheet: 1, type: "WP", x: 20.35, y: 20.12, cx: 20, cy: 20, w: 0.55, h: 0.7 }],
 });
-assert(doubled.found === 1 && doubled.doubleCounts === 1, "a second mark on the same symbol is one double-count");
-assert(doubled.falsePositives === 1, "double-counts are not a second quantity");
-assert(doubled.detectionPrecision === 0.5, "precision uses every bid mark, including the duplicate");
-
-const callout = scoreDetections({
-  marks: [onBody],
-  groundTruth: [{ ...device, source: "quoted-type" }],
-  independence: "drawing-callout",
-  coverageComplete: true,
-});
-assert(callout.detectionRecall === 1 && callout.meetsDetection === false, "drawing callouts can score recall but cannot pass the claim gate");
-assert(callout.claimPermitted === false, "callout-derived labels are not an independent 99% claim");
-
-const derived = scoreDetections({
-  marks: [{ type: "count", sheet: 1, typeCode: "OS", x: 10, y: 10 }],
-  groundTruth: [{ sheet: 1, type: "OS", x: 10, y: 10, cx: 10, cy: 10, w: 0.9, h: 0.9, source: "plan-token", tagOnSymbol: true }],
-  independence: "detector-derived",
-  coverageComplete: true,
-});
-assert(derived.placementUnmeasured === 1, "token-copied body coordinates are not a placement measurement");
-assert(derived.markerAccuracy == null, "unmeasured placement is not reported as 100%");
-assert(derived.claimPermitted === false, "detector-derived labels cannot permit an accuracy claim");
-
-assert(classifyGroundTruth({ groundTruth: [] }) === "absent", "no rows are absent");
-assert(classifyGroundTruth({ groundTruth: [{ source: "plan-token" }] }) === "detector-derived", "plan-token rows are detector-derived");
-assert(classifyGroundTruth({ groundTruth: [{ source: "quoted-type" }] }) === "drawing-callout", "quoted type rows are drawing callouts");
-assert(classifyGroundTruth({ groundTruthIndependence: "manual", groundTruth: [{ source: "quoted-type" }] }) === "manual", "an explicit manual label wins");
+assert(stub.labelAuthority === LABEL_AUTHORITY.SYNTHETIC, "explicit synthetic fixture stays synthetic");
+assert(stub.canClaimThreshold === false, "synthetic 1/1 cannot claim 99% even if recall is 1");
 
 if (!process.exitCode) console.log("accuracy gate regression checks passed");

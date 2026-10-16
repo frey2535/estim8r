@@ -154,12 +154,11 @@ const labeled = JSON.parse(readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "fixtures/takeoff-upgrade-labeled.json"),
   "utf8",
 ));
-const scored = scoreTakeoffAccuracy(labeled);
-assert(scored.truth === 1, "labeled fixture has one manually placed symbol");
-assert(scored.found >= 1, `labeled WP must be found, got found=${scored.found}`);
-assert(scored.claimPermitted === false, "one labeled symbol does not certify bid-ready accuracy");
-assert(typeof scored.detectionRecall === "number" && scored.detectionRecall > 0, "accuracy harness reports measured recall");
-status.push(`Accuracy testing: labeled WP fixture recall ${scored.detectionRecall.toFixed(2)} / precision ${(scored.detectionPrecision || 0).toFixed(2)}`);
+const scored = scoreTakeoffAccuracy({ ...labeled, labelAuthority: "synthetic" });
+assert(scored.truth === 1, "synthetic fixture still has one labeled WP");
+assert(scored.found >= 1, `synthetic WP must be found, got found=${scored.found}`);
+assert(scored.canClaimThreshold === false, "synthetic WP 1.00 fixture cannot claim 99%");
+status.push(`Accuracy testing: synthetic WP stub recall ${scored.detectionRecall.toFixed(2)} / precision ${(scored.detectionPrecision || 0).toFixed(2)} — 99% claim not permitted`);
 
 const perf = takeoffPerformanceBudget({
   width: 2592,

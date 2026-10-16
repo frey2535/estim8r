@@ -358,8 +358,57 @@ export function looksLikeRecessedCanBody(candidate) {
   const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
   const short = Math.min(Number(candidate.w) || 0, Number(candidate.h) || 0);
   const aspect = long / (short || 1e-9);
-  if (long < 0.60 || long > 0.82 || short < 0.58 || aspect > 1.35) return false;
+  if (long < 0.38 || long > 0.86 || short < 0.32 || aspect > 1.4) return false;
   return candidate.kind === "circle" || candidate.kind === "rect";
+}
+
+export function looksLikeTrofferShard(candidate) {
+  if (!candidate) return false;
+  const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
+  const short = Math.min(Number(candidate.w) || 0, Number(candidate.h) || 0);
+  if (long < 0.12 || long > 0.48 || short < 0.08) return false;
+  if (long / (short || 1e-9) > 3.4) return false;
+  if (isWallOrArchitecturalMark(candidate)) return false;
+  return candidate.kind === "rect" || candidate.kind === "path" || candidate.kind === "composite";
+}
+
+export function assembleTrofferNearTag(token, candidates = [], options = {}) {
+  if (!token) return null;
+  const radius = Number(options.radius) > 0 ? Number(options.radius) : 1.15;
+  const parts = (candidates || []).filter((candidate) => {
+    if (!looksLikeTrofferShard(candidate) && !isPlausibleSymbolForHint(candidate, "rect")) return false;
+    const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
+    if (long > 1.15) return false;
+    return distanceToCandidate(token, candidate) <= radius || containsPoint(candidate, token);
+  });
+  if (parts.length < 2) return null;
+  const minX = Math.min(...parts.map((part) => (part.cx || 0) - (Number(part.w) || 0) / 2));
+  const maxX = Math.max(...parts.map((part) => (part.cx || 0) + (Number(part.w) || 0) / 2));
+  const minY = Math.min(...parts.map((part) => (part.cy || 0) - (Number(part.h) || 0) / 2));
+  const maxY = Math.max(...parts.map((part) => (part.cy || 0) + (Number(part.h) || 0) / 2));
+  const w = maxX - minX;
+  const h = maxY - minY;
+  if (w < 0.28 || h < 0.16 || Math.max(w, h) > 2.4) return null;
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  const inside = token.x >= minX - 0.12 && token.x <= maxX + 0.12 && token.y >= minY - 0.12 && token.y <= maxY + 0.12;
+  if (!inside && Math.hypot((token.x || 0) - cx, (token.y || 0) - cy) > 1.25) return null;
+  return {
+    cx,
+    cy,
+    w,
+    h,
+    kind: "composite",
+    source: "vector",
+    parts,
+    outline: {
+      kind: "rect",
+      source: "vector",
+      w,
+      h,
+      points: [],
+    },
+  };
 }
 
 export function isJunkGeometry(candidate, nearby = []) {
@@ -382,9 +431,9 @@ export function isPlausibleSymbolForHint(candidate, hint) {
     if (candidate.kind === "circle" && long <= 1.25 && aspect <= 1.45) return true;
     // Recessed-can bodies on E210 are compact rects (~0.6x0.72), not
     // letter-sized ticks (~0.29x0.41) that flood Soccer type 4 / F.
-    return long >= 0.55 && long <= 1.05 && aspect <= 1.45;
+    return long >= 0.28 && long <= 1.05 && aspect <= 1.45;
   }
-  if (hint === "rect") return long >= 0.22 && long <= 2.3 && aspect <= 4.2;
+  if (hint === "rect") return long >= 0.18 && long <= 2.3 && aspect <= 4.2;
   return long <= 2.3 && aspect <= 4.5;
 }
 
@@ -446,6 +495,10 @@ export function associateGeometry(token, candidates = [], options = {}) {
 export function placeOnSymbolGeometry(token, candidates = [], options = {}) {
   const hint = options.shapeHint;
   const radius = Number(options.radius) > 0 ? Number(options.radius) : associateRadiusForHint(hint);
+  if (hint === "rect") {
+    const clustered = assembleTrofferNearTag(token, candidates, { radius: Math.max(radius, 1.15) });
+    if (clustered) return clustered;
+  }
   const near = associateGeometry(token, candidates, { ...options, radius });
   if (near) return near;
   if (hint === "circle") return null;

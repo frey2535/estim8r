@@ -24,6 +24,16 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Accuracy gate regression
         run: node src/domain/takeoff/accuracyGate.test.js
+      - name: Phase 1 takeoff baseline
+        run: node src/domain/takeoff/takeoffBaseline.test.js
+      - name: Phase 2 detection helpers
+        run: node src/domain/takeoff/takeoffPhase2.test.js
+      - name: Phase 3 professional review
+        run: node src/domain/takeoff/professionalReview.test.js
+      - name: Phase 4 performance and pipeline
+        run: node src/domain/takeoff/takeoffPhase4.test.js
+      - name: Soccer Pavilion labeled accuracy
+        run: node src/domain/takeoff/soccerPavilionAccuracy.test.js
       - name: Takeoff upgrade categories
         run: node src/domain/takeoff/takeoffUpgrade.test.js
       - name: Pottsville labeled OS/WP accuracy

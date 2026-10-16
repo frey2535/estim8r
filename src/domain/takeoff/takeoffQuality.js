@@ -141,6 +141,12 @@ export function evidenceScore(mark) {
   );
 }
 
+function labelAttachmentScore(mark) {
+  if (mark?.labelLocation) return 2;
+  if (mark?.matchedFrom === "legend" || mark?.matchedFrom === "drawing") return 1;
+  return 0;
+}
+
 export function dedupePhysicalSymbols(marks = [], radius = PHYSICAL_SYMBOL_RADIUS) {
   const kept = [];
   for (const mark of marks || []) {
@@ -160,7 +166,9 @@ export function dedupePhysicalSymbols(marks = [], radius = PHYSICAL_SYMBOL_RADIU
       kept.push(mark);
       continue;
     }
-    if (evidenceScore(mark) > evidenceScore(kept[index])) kept[index] = mark;
+    const incoming = evidenceScore(mark) + labelAttachmentScore(mark) * 0.05;
+    const existing = evidenceScore(kept[index]) + labelAttachmentScore(kept[index]) * 0.05;
+    if (incoming > existing) kept[index] = mark;
   }
   return kept;
 }

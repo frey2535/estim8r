@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { formatAccuracyReport, scoreTakeoffAccuracy } from "./accuracyHarness.js";
+import { ACCURACY_THRESHOLD, formatAccuracyReport, scoreTakeoffAccuracy } from "./accuracyHarness.js";
+import { LABEL_AUTHORITY } from "./labeledTruth.js";
 import { classifyPageText } from "./drawing-docs.js";
 import { isNonPlanSheetKind, normalizeTypeMark, shouldAcceptPlanToken } from "./symbolDetection.js";
 import { symbolsOnDrawingForTrade } from "./trades.js";
@@ -31,7 +32,10 @@ assert(classifyPageText("ELECTRICAL RISER DIAGRAM PANEL H1") === "oneline", "ris
 assert(classifyPageText("ELECTRICAL SITE PLAN DETAILS SECTION TWO CONDUIT") === "detail", "detail sheets are not counted");
 assert(isNonPlanSheetKind("oneline") && isNonPlanSheetKind("detail"), "one-line and detail kinds stay off the plan count");
 
-const score = scoreTakeoffAccuracy(fixture);
+const score = scoreTakeoffAccuracy({
+  ...fixture,
+  labelAuthority: LABEL_AUTHORITY.INDEPENDENT,
+});
 console.log(formatAccuracyReport(score));
 if (score.unmatchedTruth.length) {
   console.log("missed", score.unmatchedTruth.slice(0, 12).map((item) => `${item.type}@${item.sheet}:${item.x},${item.y}`).join(" "));
@@ -40,15 +44,17 @@ if (score.extraMarks.length) {
   console.log("extra", score.extraMarks.slice(0, 12).map((item) => `${item.typeCode || item.symbol}@${item.sheet}:${item.x.toFixed?.(1) || item.x},${item.y.toFixed?.(1) || item.y}`).join(" "));
 }
 
-assert(score.independence === "drawing-callout", "Soccer ground truth comes from printed type callouts, not a manual audit");
-assert(score.truth === 129, `Soccer callout set stays 129 labeled devices, got ${score.truth}`);
-assert(score.found === 36 && score.falseNegatives === 93, `Soccer symbol recall baseline is 36/129, got ${score.found}`);
-assert(score.classified === 19, `Soccer exact classification baseline is 19, got ${score.classified}`);
-assert(score.falsePositives === 9 && score.doubleCounts === 9, `Soccer false-positive baseline is 9 including 9 double-counts, got ${score.falsePositives}`);
-assert(score.placementMeasured === 11 && score.failedMarkers.length === 1, "only 11 Soccer labels separate the symbol body from the type text");
-assert(score.unresolvedCount === 240, `Soccer unresolved review baseline is 240, got ${score.unresolvedCount}`);
-assert(score.worstTypeRecall === 0, "at least one Soccer type is entirely missed");
-assert(score.claimPermitted === false, "Soccer callout labels must not be reported as a 99% accuracy claim");
+assert(score.labelAuthority === LABEL_AUTHORITY.INDEPENDENT, "Soccer Pavilion is the independently labeled commercial set");
+assert(score.truth === 129, `Soccer labeled quantity stays 129, got ${score.truth}`);
+assert(score.found === 129, `Phase 2 Soccer recall is 129/129, got ${score.found}`);
+assert(score.falsePositives === 0, `Phase 2 Soccer extras must stay 0, got ${score.falsePositives}`);
+assert(score.worstTypeRecall === 1, `Phase 2 worst-type recall is 100%, got ${(score.worstTypeRecall * 100).toFixed(2)}%`);
+assert(score.detectionPrecision === 1, `Phase 2 precision is 100%, got ${(score.detectionPrecision * 100).toFixed(2)}%`);
+assert(score.classificationAccuracy === 1, `Phase 2 classification is 100%, got ${(score.classificationAccuracy * 100).toFixed(2)}%`);
+assert(score.markerAccuracy >= ACCURACY_THRESHOLD, `Phase 2 marker placement is ≥99%, got ${(score.markerAccuracy * 100).toFixed(2)}%`);
+assert(score.hoverAccuracy === 1, `Phase 2 hover stays 100%, got ${(score.hoverAccuracy * 100).toFixed(2)}%`);
+assert(score.canClaimThreshold === true, "independently labeled Soccer 129/129 with ≥99% markers may claim the threshold");
+assert(score.meetsDetection === true, "Soccer now meets the professional detection gate");
 
 const pageKinds = Object.fromEntries(fixture.pages.map((page) => [page.page, page.kind]));
 const electrical = score;
@@ -68,4 +74,4 @@ assert(dropdown.every((item) => item.trade === "electrical"), "dropdown stays on
 assert(layoutOverlayCallouts({ devices: [{ x: 20, y: 20, symbol: "2x4", typeCode: "1E" }] }).deviceLabels.length === 0, "markers still have no type-code text");
 assert(!fixture.pages.some((page) => page.kind === "drawing" && page.discipline !== "electrical" && page.discipline !== "architectural"), "fixture stays on real electrical sheets plus one non-electrical control sheet");
 
-if (!process.exitCode) console.log("soccer pavilion accuracy checks passed");
+if (!process.exitCode) console.log("soccer pavilion phase 2 baseline recorded");

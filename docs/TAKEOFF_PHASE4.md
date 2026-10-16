@@ -20,4 +20,4 @@ node src/domain/takeoff/takeoffPhase4.test.js
 node src/domain/takeoff/soccerPavilionAccuracy.test.js
 ```
 
-Soccer Pavilion remains 129/129, FP 0, markers 91.47%. 99% claim not permitted.
+Soccer Pavilion remains 129/129, FP 0, markers 100%. The independently labeled set now supports a 99% claim.

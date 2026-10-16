@@ -253,8 +253,8 @@ const pottsvilleLabeled = runCase("pottsville-e210 labeled 1-4/OS", {
 }, { filterTypes: true, requirePlacement: false });
 
 assert(soccerFull.truth === 129, "Soccer independent GT stays 129");
-assert(soccerFull.found === 20 && soccerFull.falsePositives === 25, `Phase 1 Soccer baseline is 20/129 FP 25, got ${soccerFull.found}/${soccerFull.truth} FP ${soccerFull.falsePositives}`);
-assert(soccerFull.canClaimThreshold === false, "Soccer 20/129 cannot claim 99%");
+assert(soccerFull.found === 129 && soccerFull.falsePositives === 0, `Phase 2 Soccer baseline is 129/129 FP 0, got ${soccerFull.found}/${soccerFull.truth} FP ${soccerFull.falsePositives}`);
+assert(soccerFull.canClaimThreshold === false, "Soccer marker placement below 99% cannot claim the threshold");
 assert(soccerSite.truth === 2, "Site plan GT stays the two labeled GFI/WP");
 assert(soccerLighting.truth === 95, "Soccer lighting sheet keeps its 95 fixture GT");
 assert(soccerPower.truth === 32, "Soccer power sheet keeps its 32 device GT");

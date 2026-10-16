@@ -18,9 +18,10 @@ const stub = baseline.cases.find((item) => item.name === "synthetic-wp-stub");
 assert(soccer, "Soccer independent corpus is in the baseline");
 assert(soccer.labelAuthority === LABEL_AUTHORITY.INDEPENDENT, "Soccer is the independently labeled commercial set");
 assert(soccer.truth === 129, `Soccer labeled quantity stays 129, got ${soccer.truth}`);
-assert(soccer.found === 20, `Phase 1 Soccer recall lock is 20/129, got ${soccer.found}/${soccer.truth}`);
-assert(soccer.falsePositives === 25, `Phase 1 Soccer extras lock is 25, got ${soccer.falsePositives}`);
-assert(soccer.canClaimThreshold === false, "Soccer 20/129 cannot claim 99%");
+assert(soccer.found === 129, `Phase 2 Soccer recall lock is 129/129, got ${soccer.found}/${soccer.truth}`);
+assert(soccer.falsePositives === 0, `Phase 2 Soccer extras lock is 0, got ${soccer.falsePositives}`);
+assert(soccer.worstTypeRecall === 1, `Phase 2 worst-type lock is 100%, got ${(soccer.worstTypeRecall * 100).toFixed(2)}%`);
+assert(soccer.canClaimThreshold === false, "Soccer marker placement below 99% cannot claim the threshold");
 assert(soccer.meetsDetection === false, "Soccer does not pass the professional detection gate");
 
 assert(pottsville, "Pottsville derived-token OS/WP regression is in the baseline");
@@ -36,4 +37,4 @@ assert(baseline.anyThresholdClaim === false, "no current fixture supports a 99% 
 assert(baseline.zoom.ok, "zoom/pan/pinch budget regressions stay green");
 assert(baseline.independent.length === 1, "only Soccer is treated as independently labeled in Phase 1");
 
-if (!process.exitCode) console.log("phase 1 takeoff baseline recorded");
+if (!process.exitCode) console.log("phase 2 takeoff baseline recorded");

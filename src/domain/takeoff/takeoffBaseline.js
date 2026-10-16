@@ -92,7 +92,7 @@ export function collectTakeoffBaseline() {
     summarize("synthetic-wp-stub", stub),
   ];
   return {
-    generatedAt: "phase-1",
+    generatedAt: "phase-2",
     zoom: zoomCrashRegressions(),
     cases,
     independent: cases.filter((item) => item.labelAuthority === LABEL_AUTHORITY.INDEPENDENT),
@@ -102,7 +102,7 @@ export function collectTakeoffBaseline() {
 
 export function formatBaselineMarkdown(baseline) {
   const lines = [
-    "# Phase 1 takeoff baseline",
+    "# Phase 2 takeoff baseline",
     "",
     "No 99% claim is permitted unless an independently labeled drawing meets recall, per-type recall, precision, classification, and marker placement.",
     "",

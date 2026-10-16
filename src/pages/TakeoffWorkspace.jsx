@@ -33,7 +33,8 @@ import { drawingProcessingPlan } from "@/domain/takeoff/drawingUpload";
 import { hydratePagesRaster, pagesNeedingRaster } from "@/domain/takeoff/rasterSymbols";
 import { isScannedOrSparsePage } from "@/domain/takeoff/takeoffQuality";
 import { pickInteractiveSymbolGeometry, matchGeometryToLegend, attachLegendGeometryPrototypes } from "@/domain/takeoff/legendGeometry";
-import { legendHoverData, shouldShowSymbolHover } from "@/domain/takeoff/legendHover";
+import { shouldShowSymbolHover } from "@/domain/takeoff/legendHover";
+import { filterMarksByInspect, hoverBoundToLegend } from "@/domain/takeoff/professionalReview";
 import { buildDrawingObjectLayer, hitDrawingObject, materializeDrawingObject } from "@/domain/takeoff/drawingObjectLayer";
 import SheetThumbnailPanel, { readThumbsOpen, writeThumbsOpen } from "@/components/takeoff/SheetThumbnailPanel";
 import DevicePicker from "@/components/takeoff/DevicePicker";
@@ -246,6 +247,7 @@ export default function TakeoffWorkspace() {
   const [hoverPoint, setHoverPoint] = useState(null);
   const [hoveredDeviceId, setHoveredDeviceId] = useState(null);
   const [hoveredGeometryInfo, setHoveredGeometryInfo] = useState(null);
+  const [inspectType, setInspectType] = useState("");
   const [wideLayout, setWideLayout] = useState(() => (
     typeof window !== "undefined" ? window.matchMedia("(min-width: 1024px)").matches : true
   ));
@@ -330,7 +332,10 @@ export default function TakeoffWorkspace() {
     [tradeMarks, sheetMeta.page],
   );
   const overlayMarks = useMemo(() => planOverlayMarks(sheetMarks), [sheetMarks]);
-  const visibleOverlayMarks = useMemo(() => isolationMode && selectedId ? overlayMarks.filter((mark) => mark.id === selectedId) : overlayMarks, [overlayMarks, isolationMode, selectedId]);
+  const visibleOverlayMarks = useMemo(() => {
+    const isolated = isolationMode && selectedId ? overlayMarks.filter((mark) => mark.id === selectedId) : overlayMarks;
+    return filterMarksByInspect(isolated, { type: inspectType });
+  }, [overlayMarks, isolationMode, selectedId, inspectType]);
   const typeSwatches = useMemo(() => sheetTypeColorSwatches(overlayMarks), [overlayMarks]);
   const coverageOptions = useMemo(() => ({
     pageKinds,
@@ -2253,10 +2258,17 @@ export default function TakeoffWorkspace() {
               {typeSwatches.length ? (
                 <div className="flex flex-wrap gap-1">
                   {typeSwatches.map((item) => (
-                    <span key={item.key} className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-1.5 py-0.5 text-xs font-bold text-foreground">
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => setInspectType((current) => current === item.key.toUpperCase() ? "" : item.key.toUpperCase())}
+                      className={inspectType === item.key.toUpperCase()
+                        ? "inline-flex items-center gap-1 rounded-md border border-orange-600 bg-orange-50 px-1.5 py-0.5 text-xs font-bold text-foreground"
+                        : "inline-flex items-center gap-1 rounded-md border border-border bg-background px-1.5 py-0.5 text-xs font-bold text-foreground"}
+                    >
                       <span className="h-3.5 w-3.5 rounded-sm border border-black/20" style={{ backgroundColor: item.color }} aria-hidden />
                       {item.key.toUpperCase()}
-                    </span>
+                    </button>
                   ))}
                 </div>
               ) : (
@@ -2534,9 +2546,10 @@ export default function TakeoffWorkspace() {
                       requiresClassification: !rawSymbol,
                     } : null);
                   if (!hovered || !shouldShowSymbolHover(hovered)) return null;
-                  const hoverLegend = legendHoverData(hovered, drawingSymbols, {
+                  const hoverBound = hoverBoundToLegend(hovered, drawingSymbols, {
                     planType: aiPages.find((item) => item.page === sheetMeta.page)?.planType || "",
                   });
+                  const hoverLegend = hoverBound.hover;
                   const legend = hoverLegend.entry;
                   const x = Math.min(82, Math.max(2, Number(hovered.x) || 0));
                   const y = Math.min(86, Math.max(2, Number(hovered.y) || 0));
@@ -2708,10 +2721,17 @@ export default function TakeoffWorkspace() {
             <div className="mb-2 text-base font-bold">Type colors</div>
             <div className="flex flex-wrap gap-2">
               {typeSwatches.map((item) => (
-                <span key={item.key} className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-border bg-background px-3 text-base font-bold">
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setInspectType((current) => current === item.key.toUpperCase() ? "" : item.key.toUpperCase())}
+                  className={inspectType === item.key.toUpperCase()
+                    ? "inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-orange-600 bg-orange-50 px-3 text-base font-bold"
+                    : "inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-border bg-background px-3 text-base font-bold"}
+                >
                   <span className="h-5 w-5 rounded-sm border border-black/20" style={{ backgroundColor: item.color }} aria-hidden />
                   {item.key.toUpperCase()}
-                </span>
+                </button>
               ))}
             </div>
           </div>

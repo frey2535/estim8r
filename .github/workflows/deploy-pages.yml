@@ -10,14 +10,18 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  deployments: write
 
 concurrency:
   group: pages
+  # Do not cancel an in-flight Pages deploy. Mid-deploy cancels leave
+  # updating_pages wedged until deploy-pages@v4 hits Timeout reached, aborting!
   cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -60,10 +64,50 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
     steps:
+      - name: Cancel a stuck Pages deployment
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          now=$(date -u +%s)
+          ids=$(gh api "repos/${GITHUB_REPOSITORY}/deployments?environment=github-pages&per_page=15" --jq '.[].id')
+          for id in $ids; do
+            created=$(gh api "repos/${GITHUB_REPOSITORY}/deployments/${id}" --jq '.created_at')
+            sha=$(gh api "repos/${GITHUB_REPOSITORY}/deployments/${id}" --jq '.sha')
+            state=$(gh api "repos/${GITHUB_REPOSITORY}/deployments/${id}/statuses" --jq '.[0].state // "unknown"')
+            created_s=$(date -u -d "$created" +%s)
+            age=$((now - created_s))
+            echo "deployment ${id} sha=${sha} state=${state} age=${age}s"
+            if [ "$state" = "in_progress" ] && [ "$age" -gt 90 ]; then
+              echo "Canceling stuck Pages deployment ${sha}"
+              gh api -X POST "repos/${GITHUB_REPOSITORY}/pages/deployments/${sha}/cancel" || true
+            fi
+          done
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          # 15 minutes. The default 10m abort left SHA b56c11b stuck on updating_pages.
+          timeout: 900000
+          error_count: 20
+          reporting_interval: 8000
+      - name: Cancel the timed-out Pages attempt
+        if: failure()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${GITHUB_REPOSITORY}/pages/deployments/${GITHUB_SHA}/cancel" || true
+      - name: Retry Pages deploy after a timeout
+        if: failure()
+        id: deployment_retry
+        uses: actions/deploy-pages@v4
+        with:
+          timeout: 900000
+          error_count: 20
+          reporting_interval: 8000

@@ -24,6 +24,8 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Accuracy gate regression
         run: node src/domain/takeoff/accuracyGate.test.js
+      - name: Phase 1 takeoff baseline
+        run: node src/domain/takeoff/takeoffBaseline.test.js
       - name: Takeoff upgrade categories
         run: node src/domain/takeoff/takeoffUpgrade.test.js
       - name: Pottsville labeled OS/WP accuracy

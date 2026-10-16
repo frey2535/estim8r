@@ -87,7 +87,6 @@ Zoom / pan: pixel budget OK, pinch stays in 0.25–8, `stressZoomPan` OK. No cra
 - No residential, industrial, raster-scanned, or low-quality labeled fixtures in the repo.
 - Soccer bodies are tag-centered 0.9 boxes on many occupancy/fixture labels, not CAD-traced outlines.
 - `legendGeometry` recovery tests still fail on the 0.90 `#224` threshold (pre-existing).
-- Pages `deploy-pages` timeout is clamped by GitHub to 600s (warning only).
 
 ## Risks
 

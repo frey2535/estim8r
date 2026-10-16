@@ -11,6 +11,8 @@ function assert(cond, message) {
   }
 }
 
+const ALLOWED = new Set(["OS", "GFI", "GFI/WP", "WP"]);
+
 export function pottsvilleGroundTruth(pages = []) {
   return pottsvilleTokenTruth(pages, ALLOWED);
 }

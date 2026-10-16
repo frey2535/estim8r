@@ -97,8 +97,9 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
         with:
-          # 15 minutes. The default 10m abort left SHA b56c11b stuck on updating_pages.
-          timeout: 900000
+          # 600000 ms is the action maximum. A larger value is clamped and warns:
+          # "timeout value is greater than the allowed maximum".
+          timeout: 600000
           error_count: 20
           reporting_interval: 8000
       - name: Cancel the timed-out Pages attempt
@@ -112,6 +113,6 @@ jobs:
         id: deployment_retry
         uses: actions/deploy-pages@v4
         with:
-          timeout: 900000
+          timeout: 600000
           error_count: 20
           reporting_interval: 8000

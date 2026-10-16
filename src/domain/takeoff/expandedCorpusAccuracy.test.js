@@ -1,12 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  ACCURACY_THRESHOLD,
-  formatAccuracyReport,
-  markTypeKey,
-  scoreTakeoffAccuracy,
-} from "./accuracyHarness.js";
+import { formatAccuracyReport, scoreTakeoffAccuracy } from "./accuracyHarness.js";
 import { reviewQueue } from "./accuracyReview.js";
 import { buildAiMarks } from "./aiTakeoff.js";
 import { reconcilePlanToSchedule } from "./countReconciliation.js";
@@ -167,19 +162,6 @@ function e210LabeledTruth(page) {
   }));
 }
 
-function filterScoreToTruthTypes(score, truth) {
-  const types = new Set(truth.map((device) => markTypeKey({ typeCode: device.type })));
-  const extraMarks = (score.extraMarks || []).filter((mark) => types.has(markTypeKey(mark)));
-  const counts = score.found + extraMarks.length;
-  return {
-    ...score,
-    extraMarks,
-    falsePositives: extraMarks.length,
-    counts,
-    detectionPrecision: counts ? score.found / counts : 1,
-  };
-}
-
 function assertCoverageHonest(pages, marks, label) {
   const coverage = pagesCoverage(pages, marks, { trade: "electrical" });
   for (const sheet of coverage.sheets) {
@@ -196,9 +178,8 @@ function assertCoverageHonest(pages, marks, label) {
   return coverage;
 }
 
-function runCase(name, fixture, options = {}) {
-  const raw = scoreTakeoffAccuracy(fixture);
-  const score = options.filterTypes ? filterScoreToTruthTypes(raw, fixture.groundTruth) : raw;
+function runCase(name, fixture) {
+  const score = scoreTakeoffAccuracy(fixture);
   console.log(`\n${name}\n${formatAccuracyReport(score)}`);
   if (score.unmatchedTruth.length) {
     console.log("missed", score.unmatchedTruth.slice(0, 8).map((item) => `${item.type}@${item.sheet}:${item.x},${item.y}`).join(" "));
@@ -218,6 +199,9 @@ function runCase(name, fixture, options = {}) {
       assert(score.failedMarkers.length === 0, `${name} has ${score.failedMarkers.length} markers off symbol body`);
     }
   }
+  assert(score.truth >= 1, `${name} must use labeled rows, got ${score.truth}`);
+  assert(score.independence !== "manual", `${name} is not an independent manual audit`);
+  assert(score.claimPermitted === false, `${name} must not be reported as a 99% accuracy claim`);
   return score;
 }
 
@@ -235,22 +219,22 @@ const e111 = pottsville.pages.find((page) => page.page === 51);
 const pottsvilleOsWp = runCase("pottsville-os-wp different firm", {
   ...pottsville,
   groundTruth: pottsvilleTokenTruth(pottsville.pages),
-}, { filterTypes: true });
+});
 const pottsvillePowerGlyphs = runCase("pottsville-e110 power glyphs", {
   ...pottsville,
   pages: pottsville.pages.filter((page) => page.page === 48 || page.page === 50),
   groundTruth: e110ReceptacleTruth(e110),
-}, { filterTypes: true });
+});
 const pottsvilleCans = runCase("pottsville-e210 type-2 cans", {
   ...pottsville,
   pages: pottsville.pages.filter((page) => page.page === 48 || page.page === 52),
   groundTruth: e210Type2CanTruth(e210),
-}, { filterTypes: true });
+});
 const pottsvilleLabeled = runCase("pottsville-e210 labeled 1-4/OS", {
   ...pottsville,
   pages: pottsville.pages.filter((page) => page.page === 48 || page.page === 52),
   groundTruth: e210LabeledTruth(e210),
-}, { filterTypes: true, requirePlacement: false });
+});
 
 assert(soccerFull.truth === 129, "Soccer independent GT stays 129");
 assert(soccerFull.found === 129 && soccerFull.falsePositives === 0, `Phase 2 Soccer baseline is 129/129 FP 0, got ${soccerFull.found}/${soccerFull.truth} FP ${soccerFull.falsePositives}`);
@@ -312,10 +296,10 @@ const e111Truth = pottsvilleTokenTruth([e111]);
 console.log(`\nE111 pump-house documented GT: ${e111Truth.length} printed WP. Remaining E111 devices have no coordinate ground truth.`);
 assert(e111Truth.length === 1 && e111Truth[0].type === "WP", "E111 only contributes the one printed WP already in Pottsville OS+WP");
 
-console.log("\nCorpus classes with real fixtures:");
-console.log("- lighting: Soccer E1.01 (95) · Pottsville E210 cans 12 / labeled 23");
-console.log("- power: Soccer E2.01 (32) · Pottsville E110 glyphs 8");
-console.log("- site: Soccer E0.01 (2 GFI/WP)");
+console.log("\nCorpus classes with extracted fixtures (not a 99% claim):");
+console.log("- lighting callouts: Soccer E1.01 (95) · Pottsville E210 cans 12 / token labels");
+console.log("- power callouts: Soccer E2.01 (32) · Pottsville E110 glyphs 8");
+console.log("- site callouts: Soccer E0.01 (2 GFI/WP)");
 console.log("- commercial / different firms: Soccer Pavilion vs MCFD Pottsville");
 console.log("- vector: both extracted path fixtures");
 console.log("- dense: Soccer lighting 95 devices on one sheet");

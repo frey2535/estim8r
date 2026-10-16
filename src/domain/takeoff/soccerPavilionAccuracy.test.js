@@ -57,8 +57,7 @@ assert(score.canClaimThreshold === true, "independently labeled Soccer 129/129 w
 assert(score.meetsDetection === true, "Soccer now meets the professional detection gate");
 
 const pageKinds = Object.fromEntries(fixture.pages.map((page) => [page.page, page.kind]));
-const marks = score.extraMarks; // unused, keep dropdown check on a fresh run
-const electrical = scoreTakeoffAccuracy(fixture);
+const electrical = score;
 const dropdown = symbolsOnDrawingForTrade("electrical", [
   ...Array.from({ length: electrical.found }, (_, index) => ({
     id: `m${index}`,

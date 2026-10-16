@@ -2190,6 +2190,18 @@ export default function TakeoffWorkspace() {
             {aiBusy ? " • AI working…" : savedAt ? ` • saved ${new Date(savedAt).toLocaleTimeString()}` : " • not saved"}
           </div>
         </div>
+        <details className="relative hidden lg:block group">
+          <summary className="flex min-h-11 cursor-pointer items-center rounded-lg border border-border bg-background px-3 text-sm font-semibold hover:bg-muted">Workspace layout</summary>
+          <div className="absolute right-0 top-full z-50 mt-2 w-72 space-y-3 rounded-xl border border-border bg-card p-4 shadow-xl">
+            <label className="block text-xs font-semibold">Tools panel width
+              <input aria-label="Tools panel width" className="mt-2 w-full" type="range" min="190" max="400" step="10" defaultValue="240" onChange={(e) => document.documentElement.style.setProperty("--estim8r-tools-width", `${e.target.value}px`)} />
+            </label>
+            <label className="block text-xs font-semibold">Inspector width
+              <input aria-label="Inspector panel width" className="mt-2 w-full" type="range" min="260" max="520" step="10" defaultValue="300" onChange={(e) => document.documentElement.style.setProperty("--estim8r-inspector-width", `${e.target.value}px`)} />
+            </label>
+            <p className="text-xs text-muted-foreground">Adjust the side panels to give your drawing more room. Available on desktop.</p>
+          </div>
+        </details>
         <div className="hidden lg:block">
           <TakeoffActionsMenu
             aiBusy={aiBusy}
@@ -2215,7 +2227,7 @@ export default function TakeoffWorkspace() {
       </div>
       {drawingError && <div role="alert" className="shrink-0 border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{drawingError}</div>}
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] lg:grid-cols-[240px_minmax(0,1fr)_300px] lg:grid-rows-1">
+      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] lg:grid-cols-[var(--estim8r-tools-width,240px)_minmax(0,1fr)_var(--estim8r-inspector-width,300px)] lg:grid-rows-1">
         <aside className="hidden min-h-0 overflow-auto border-r border-border bg-card p-3 lg:block">
           {TOOL_GROUPS.map((group) => (
             <div key={group.key} className="mb-3">

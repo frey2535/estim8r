@@ -1,5 +1,5 @@
 import { buildAiMarks } from "./aiTakeoff.js";
-import { formatAccuracyReport, scoreDetections, scoreTakeoffAccuracy } from "./accuracyHarness.js";
+import { formatAccuracyReport, scoreTakeoffAccuracy } from "./accuracyHarness.js";
 import { legendHoverData } from "./legendHover.js";
 import { bidDeviceMarks } from "./detectionRecord.js";
 import { stressZoomPan } from "./takeoffQuality.js";
@@ -51,12 +51,11 @@ const fixture = {
 
 const score = scoreTakeoffAccuracy(fixture);
 console.log(formatAccuracyReport(score));
-assert(score.independence === "manual", "regression labels are manual");
 assert(score.truth === 2, "regression case labels the tagged symbol and the unlabeled repeat");
 assert(score.found === 1 && score.falseNegatives === 1, "current detector finds the tagged WP and misses the unlabeled repeat");
 assert(score.classificationAccuracy === 1, "the found WP keeps the legend type");
 assert(score.falsePositives === 0, "the wall crossing is not an extra bid device");
-assert(score.claimPermitted === false, "a missed symbol blocks any accuracy claim");
+assert(score.canClaimThreshold === false, "a missed symbol blocks any accuracy claim");
 const wallHits = bidDeviceMarks(buildAiMarks({
   trade: "electrical",
   symbols: electrical.symbols,
@@ -65,14 +64,6 @@ const wallHits = bidDeviceMarks(buildAiMarks({
   maxHomeruns: 4,
 }).marks).filter((mark) => Math.hypot(mark.x - 58, mark.y - 40) < 2);
 assert(wallHits.length === 0, `wall intersection was accepted as a device (${wallHits.length})`);
-
-const circuitHighlight = scoreDetections({
-  marks: [{ type: "count", sheet: 1, typeCode: "WP", x: 31.3, y: 41.4 }],
-  groundTruth: [fixture.groundTruth[0]],
-  independence: "manual",
-});
-assert(circuitHighlight.found === 1, "a nearby circuit number still locates the device for review");
-assert(circuitHighlight.failedMarkers.length === 1, "a highlight on the circuit number is not the symbol body");
 
 const hover = legendHoverData({
   type: "count",

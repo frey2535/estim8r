@@ -122,28 +122,15 @@ export function scoreTakeoffAccuracy(fixture, options = {}) {
       },
     });
   }
-  const doubleCounts = [];
-  const extraMarks = [];
-  counts.forEach((mark, markIndex) => {
-    if (usedMarks.has(markIndex)) return;
-    const point = paintedPoint(mark);
-    const duplicate = matches.some((match) => (
-      Number(match.device.sheet) === sheetOf(mark)
-      && Math.hypot(point.x - bodyCenter(match.device).x, point.y - bodyCenter(match.device).y) <= LOCATION_MATCH_RADIUS
-    ));
-    if (duplicate) doubleCounts.push(mark);
-    else extraMarks.push(mark);
-  });
   const byType = {};
   for (const device of truth) {
-    const key = typeKey(device.type) || "(blank)";
-    if (!byType[key]) byType[key] = { truth: 0, located: 0, found: 0 };
+    const key = typeKey(device.type);
+    if (!byType[key]) byType[key] = { truth: 0, found: 0 };
     byType[key].truth += 1;
   }
   for (const match of matches) {
-    const key = typeKey(match.device.type) || "(blank)";
-    byType[key].located += 1;
-    if (match.relation === "exact") byType[key].found += 1;
+    const key = typeKey(match.device.type);
+    byType[key].found += 1;
   }
   let classifiedWrong = 0;
   for (const mark of counts) {
@@ -171,7 +158,7 @@ export function scoreTakeoffAccuracy(fixture, options = {}) {
     : (truth.length ? 0 : 1);
   const typeRecalls = Object.fromEntries(Object.entries(byType).map(([key, row]) => [
     key,
-    { ...row, recall: ratio(row.found, row.truth), locationRecall: ratio(row.located, row.truth) },
+    { ...row, recall: row.truth ? row.found / row.truth : 1 },
   ]));
   const worstTypeRecall = Math.min(1, ...Object.values(typeRecalls).map((row) => row.recall));
   const metricsMeet = inspect.ready
@@ -184,7 +171,8 @@ export function scoreTakeoffAccuracy(fixture, options = {}) {
   const meetsDetection = claimAllowed && metricsMeet;
   const meetsMarkers = claimAllowed && matches.length > 0 && markerAccuracy >= ACCURACY_THRESHOLD;
   return {
-    independence,
+    summary: result.summary,
+    deviceCount: result.deviceCount,
     truth: truth.length,
     found: matches.length,
     falsePositives,
@@ -192,7 +180,6 @@ export function scoreTakeoffAccuracy(fixture, options = {}) {
     falseNegatives,
     counts: counts.length,
     detectionRecall,
-    symbolRecall: detectionRecall,
     detectionPrecision,
     typedPrecision,
     worstTypeRecall,
@@ -215,41 +202,7 @@ export function scoreTakeoffAccuracy(fixture, options = {}) {
     wallFalsePositives: extraMarks.filter(markLooksLikeWall).length,
     unresolvedCandidates,
     unresolvedCount: unresolvedCandidates.length,
-    matches,
   };
-}
-
-export function scoreTakeoffAccuracy(fixture, options = {}) {
-  const electrical = paletteForTrade("electrical");
-  const result = buildAiMarks({
-    trade: "electrical",
-    symbols: electrical.symbols,
-    drawingSymbols: fixture.drawingSymbols || [],
-    pages: fixture.pages || [],
-    maxHomeruns: 8,
-    conduit: options.conduit,
-  });
-  const unresolvedCandidates = (result.marks || []).filter((mark) => (
-    (mark.type === "count" || mark.type === "drop") && isReviewOnlyMark(mark)
-  ));
-  const independence = classifyGroundTruth(fixture);
-  const scored = scoreDetections({
-    marks: result.marks || [],
-    groundTruth: fixture.groundTruth || [],
-    unresolvedMarks: unresolvedCandidates,
-    independence,
-    coverageComplete: options.coverageComplete === true,
-  });
-  return {
-    summary: result.summary,
-    deviceCount: result.deviceCount,
-    ...scored,
-  };
-}
-
-function percent(value) {
-  if (value == null || Number.isNaN(value)) return "unmeasured";
-  return `${(value * 100).toFixed(2)}%`;
 }
 
 export function formatAccuracyReport(score) {

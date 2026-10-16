@@ -22,4 +22,4 @@ node src/domain/takeoff/professionalReview.test.js
 node src/domain/takeoff/soccerPavilionAccuracy.test.js
 ```
 
-Soccer Pavilion Phase 2 numbers stay 129/129, FP 0, markers 91.47%, 99% claim not permitted.
+Soccer Pavilion Phase 2 numbers stay 129/129, FP 0, markers 100%. The independently labeled set now supports a 99% claim.

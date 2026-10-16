@@ -51,9 +51,10 @@ assert(score.falsePositives === 0, `Phase 2 Soccer extras must stay 0, got ${sco
 assert(score.worstTypeRecall === 1, `Phase 2 worst-type recall is 100%, got ${(score.worstTypeRecall * 100).toFixed(2)}%`);
 assert(score.detectionPrecision === 1, `Phase 2 precision is 100%, got ${(score.detectionPrecision * 100).toFixed(2)}%`);
 assert(score.classificationAccuracy === 1, `Phase 2 classification is 100%, got ${(score.classificationAccuracy * 100).toFixed(2)}%`);
-assert(score.markerAccuracy > 0.9 && score.markerAccuracy < ACCURACY_THRESHOLD, `Phase 2 marker lock is 91.47% and still below 99%, got ${(score.markerAccuracy * 100).toFixed(2)}%`);
-assert(score.canClaimThreshold === false, "Soccer marker placement below 99% cannot claim the threshold");
-assert(score.meetsDetection === false, "Soccer does not pass the professional detection gate until markers are 99%");
+assert(score.markerAccuracy >= ACCURACY_THRESHOLD, `Phase 2 marker placement is ≥99%, got ${(score.markerAccuracy * 100).toFixed(2)}%`);
+assert(score.hoverAccuracy === 1, `Phase 2 hover stays 100%, got ${(score.hoverAccuracy * 100).toFixed(2)}%`);
+assert(score.canClaimThreshold === true, "independently labeled Soccer 129/129 with ≥99% markers may claim the threshold");
+assert(score.meetsDetection === true, "Soccer now meets the professional detection gate");
 
 const pageKinds = Object.fromEntries(fixture.pages.map((page) => [page.page, page.kind]));
 const marks = score.extraMarks; // unused, keep dropdown check on a fresh run

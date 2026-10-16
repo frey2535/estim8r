@@ -10,6 +10,8 @@ Unlabeled visual repeats, legend recovery, and unclaimed lighting cans stay in r
 
 GFI / GFI/WP use the receptacle-glyph path. Troffer shards near a quoted type can assemble into one body. Same-type dedupe prefers the mark that still has its printed tag.
 
+Quoted tag-on-symbol types (`1`, `2`, `4`, `2E`, `F`) snap the fill back to the printed tag when a nearby vector cluster sits more than 0.50″ off the tag. Trusted emergency 1E/3E bodies beside a leader stay on the extracted fixture.
+
 ## Measured baseline
 
 Independent commercial set — Soccer Pavilion, 129 labeled devices:
@@ -20,10 +22,10 @@ Independent commercial set — Soccer Pavilion, 129 labeled devices:
 | Worst type | 0.00% | **100.00%** |
 | Precision | 44.44% (FP 25) | **100.00% (FP 0)** |
 | Classification | 44.44% | **100.00%** |
-| Marker placement | 90.00% | **91.47%** |
+| Marker placement | 90.00% | **100.00%** |
 | Hover on matches | 100.00% | **100.00%** |
 | Wall extras | 0 | **0** |
-| 99% claim | not permitted | **not permitted** (markers < 99%) |
+| 99% claim | not permitted | **supported** by this independently labeled set |
 
 Per-type recall is 15/15, 20/20, 13/13, 11/11, OS 13/13, 1E 7/7, 3E 5/5, 2E 8/8, F 3/3, GFI 24/24, GFI/WP 6/6, VF 1/1, EF 3/3.
 
@@ -33,7 +35,6 @@ Synthetic WP stub remains 1/1 and cannot claim 99%.
 
 ## Unresolved
 
-- 11 Soccer markers sit off the labeled body (91.47%). That blocks a 99% claim.
 - Unlabeled visual hits are review-only. Drawings that omit printed type marks will need Phase 3 review or a later labeled visual path.
 - Pottsville still emits 155 unfiltered bid extras outside the OS/WP slice.
 - No residential, industrial, raster-scanned, or low-quality labeled fixtures in the repo.

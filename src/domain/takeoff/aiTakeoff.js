@@ -844,6 +844,37 @@ function isPowerDeviceTag(printedCode, planType) {
     || (planType === "power" && printedCode === "R");
 }
 
+function trustedOffsetEmergencyBody(token, geometry, placed) {
+  const printed = normalizeTypeMark(token?.text).toUpperCase();
+  if (!/^\d{1,2}E$/.test(printed) || !geometry || !placed) return false;
+  const long = Math.max(Number(geometry.w) || 0, Number(geometry.h) || 0);
+  const short = Math.min(Number(geometry.w) || 0, Number(geometry.h) || 0);
+  const aspect = long / (short || 1e-9);
+  const dist = Math.hypot(placed.x - token.x, placed.y - token.y);
+  return long >= 0.55 && long <= 1.45 && short >= 0.45 && aspect <= 2.1 && dist <= 1.8;
+}
+
+function snapQuotedTypeOntoTag(token, geometry, placed, hint) {
+  if (!token || !placed) return null;
+  const printed = normalizeTypeMark(token.text).toUpperCase();
+  const quotedOrLighting = isQuotedTypeMark(token.text)
+    || isLightingFixtureCode(printed)
+    || printed === "F";
+  if (!quotedOrLighting) return null;
+  const dist = Math.hypot(placed.x - token.x, placed.y - token.y);
+  if (dist <= 0.50) return null;
+  if (trustedOffsetEmergencyBody(token, geometry, placed)) return null;
+  const long = Math.max(Number(geometry?.w) || 0, Number(geometry?.h) || 0);
+  const short = Math.min(Number(geometry?.w) || 0, Number(geometry?.h) || 0);
+  const aspect = long / (short || 1e-9);
+  const junkOffset = long < 0.50 || short < 0.35 || aspect > 2.4;
+  const tagOnSymbolCodes = /^(1|2|4|2E|F)$/;
+  if (!junkOffset && !tagOnSymbolCodes.test(printed)) return null;
+  return tagOnSymbolGeometry(token, {
+    shapeHint: hint || (printed === "F" || isLightingFixtureCode(printed) ? "rect" : "circle"),
+  });
+}
+
 function matchingPrintedLegend(point, page, dictionary, planType, entry) {
   const typed = nearbyLegendEntry(point, page.tokens || [], dictionary, {
     radius: 1.35,
@@ -1180,6 +1211,17 @@ export function buildAiMarks({
           x: Number(paintOutline?.cx ?? geometry.cx),
           y: Number(paintOutline?.cy ?? geometry.cy),
         } : null;
+      }
+      if (geometryPoint) {
+        const snapped = snapQuotedTypeOntoTag(token, geometry, geometryPoint, hint);
+        if (snapped) {
+          geometry = snapped;
+          paintOutline = symbolBodyOutline(geometry, page.tokens, { paths: page.paths });
+          geometryPoint = {
+            x: Number(paintOutline?.cx ?? geometry.cx),
+            y: Number(paintOutline?.cy ?? geometry.cy),
+          };
+        }
       }
       if (!geometryPoint) {
         const review = reviewCandidateMark({

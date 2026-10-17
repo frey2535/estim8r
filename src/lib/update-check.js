@@ -1,7 +1,8 @@
 const EVENT = "estim8r-update-available";
 const APPLIED_KEY = "estim8r_applied_sha";
 const UPDATE_INTENT_KEY = "estim8r_update_intent_v1";
-const CHECK_MS = 30 * 1000;
+// Open sessions must notice a Pages publish of main within a few seconds.
+export const UPDATE_CHECK_INTERVAL_MS = 2000;
 const FETCH_TIMEOUT_MS = 2000;
 const FETCH_TRIES = 2;
 
@@ -178,10 +179,6 @@ export function startUpdateChecks() {
     if (inFlight) return;
     inFlight = true;
     try {
-      if (!cleared) {
-        await clearStaleClientCaches();
-        cleared = true;
-      }
       const decision = await checkForEstim8rUpdate({
         currentSha,
         appliedSha: readAppliedSha(),
@@ -189,22 +186,31 @@ export function startUpdateChecks() {
         promptedSha,
         fetchImpl: fetch,
       });
-      if (!decision.prompt) return;
-      promptedSha = decision.targetSha;
-      promptUpdate({
-        targetSha: decision.targetSha,
-        required: true,
-        reason: decision.reason,
-        applyUpdate: () => applyEstim8rUpdate(decision.targetSha),
-      });
+      if (decision.prompt) {
+        promptedSha = decision.targetSha;
+        promptUpdate({
+          targetSha: decision.targetSha,
+          required: true,
+          reason: decision.reason,
+          applyUpdate: () => applyEstim8rUpdate(decision.targetSha),
+        });
+      }
+      // Cache cleanup must not delay the popup. A controlling worker keeps
+      // intercepting this page until reload, so the version read already
+      // used a unique URL.
+      if (!cleared) {
+        cleared = true;
+        void clearStaleClientCaches();
+      }
     } finally {
       inFlight = false;
     }
   };
 
   void check();
-  window.setInterval(check, CHECK_MS);
+  window.setInterval(check, UPDATE_CHECK_INTERVAL_MS);
   window.addEventListener("focus", check);
+  window.addEventListener("online", check);
   window.addEventListener("pageshow", check);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") void check();

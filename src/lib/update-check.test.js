@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs";
 import {
+  UPDATE_CHECK_INTERVAL_MS,
   buildVersionUrls,
   checkForEstim8rUpdate,
   decideUpdatePrompt,
@@ -39,6 +41,21 @@ assert(
 assert(
   decideUpdatePrompt({ currentSha: "oldsha", remoteSha: "newsha", promptedSha: "newsha" }).prompt === false,
   "already prompted remote SHA is not repeated",
+);
+assert(
+  decideUpdatePrompt({ currentSha: "oldsha", remoteSha: "thirdsha", promptedSha: "newsha" }).prompt === true
+    && decideUpdatePrompt({ currentSha: "oldsha", remoteSha: "thirdsha", promptedSha: "newsha" }).targetSha === "thirdsha",
+  "a later main upload still prompts after an earlier SHA was shown",
+);
+assert(
+  UPDATE_CHECK_INTERVAL_MS > 0 && UPDATE_CHECK_INTERVAL_MS <= 3000,
+  "open sessions recheck within 3s of a main upload",
+);
+const bootHtml = readFileSync(new URL("../../index.html", import.meta.url), "utf8");
+assert(bootHtml.includes("setInterval(tick, 2000)"), "boot script polls the live SHA every 2s");
+assert(
+  !bootHtml.includes("clearStaleClient().then(function () { return readRemoteSha(); })"),
+  "boot popup does not wait for cache cleanup",
 );
 assert(
   decideUpdatePrompt({ currentSha: "oldsha", remoteSha: "", appliedSha: "oldsha" }).prompt === false,

@@ -29,6 +29,7 @@ import { matchRasterToLegend, rasterCandidatesFromPage } from "./rasterSymbols.j
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
 import { buildTradeSearchManifest } from "./searchManifest.js";
 import { dedupePhysicalSymbols } from "./takeoffQuality.js";
+import { pagesIncludedInTakeoff } from "./interactiveSheet.js";
 
 const STOP = new Set(["the", "and", "for", "with", "from", "this", "that", "sheet", "note", "see", "typ", "all", "new", "nic", "nts", "rev"]);
 const TYPE_CODE = /^(?:[A-Z]{1,3}\d{0,2}[A-Z]?|\d{1,2}[A-Z]?)$/i;
@@ -1051,6 +1052,7 @@ export function buildAiMarks({
   color = "#2563eb",
   projectPrototypes = [],
   timeBudgetMs = 22000,
+  includePage,
 }) {
   const deadline = Date.now() + Math.max(4000, Number(timeBudgetMs) || 22000);
   const remainingMs = () => deadline - Date.now();
@@ -1071,7 +1073,7 @@ export function buildAiMarks({
   // Use exactly the same eligible pages as raster hydration. Previously the
   // raster fallback could extract candidates from a sheet that this loop then
   // silently skipped, producing a completed takeoff with zero device counts.
-  const scanPages = pagesToScan(pages, trade, dictionary);
+  const scanPages = pagesIncludedInTakeoff(pagesToScan(pages, trade, dictionary), includePage);
   for (const page of scanPages) {
     const sitePlan = isSitePlanPage(page);
     const planType = pagePlanType(page);

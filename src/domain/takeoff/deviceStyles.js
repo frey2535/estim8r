@@ -80,6 +80,7 @@ export function planOverlayMarks(marks, options = {}) {
   const list = (marks || []).filter((mark) => !isReviewOnlyMark(mark));
   if (options.devicesOnly) return list.filter((mark) => !isCircuitMark(mark));
   if (options.circuitsOnly) return list.filter((mark) => isCircuitMark(mark) || mark?.type === "note");
+  if (options.interactive) return list;
   // Device-count sheets stay devices-only. Conduit belongs on conduit/circuit pages
   // or on a takeoff sheet that has no counted devices.
   if (list.some(isDeviceMark)) return list.filter((mark) => !isCircuitMark(mark));

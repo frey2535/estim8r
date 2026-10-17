@@ -97,6 +97,47 @@ export default function TakeoffInspector({
           <Field label="Marker text">
             <input className={fieldInput} value={selected.abbr || ""} onChange={(e) => onUpdateMark(selected.id, { abbr: e.target.value })} />
           </Field>
+          {(selected?.objectKind === "room" || selected?.type === "area") && (
+            <>
+              <Field label="Room name">
+                <input
+                  className={fieldInput}
+                  value={selected.roomName || ""}
+                  placeholder="Name this room"
+                  onChange={(e) => onUpdateMark(selected.id, { roomName: e.target.value, objectKind: "room" })}
+                />
+              </Field>
+              <Field label="Height (ft)">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  className={fieldInput}
+                  value={selected.heightFeet || ""}
+                  placeholder="For volume"
+                  onChange={(e) => onUpdateMark(selected.id, { heightFeet: Number(e.target.value) || "" })}
+                />
+              </Field>
+              {selected.prediction || selected.bidUse === false ? (
+                <p className="text-[11px] text-muted-foreground">This room is a geometry prediction. Naming it includes the area in the bid.</p>
+              ) : null}
+            </>
+          )}
+          {(selected?.objectKind === "circuit" || selected?.tool === "circuit") && !selectedIsMarker ? (
+            <>
+              <Field label="Circuit">
+                <input
+                  className={fieldInput}
+                  value={selected.circuit || selected.circuitNumber || ""}
+                  placeholder="Assign a circuit"
+                  onChange={(e) => onUpdateMark(selected.id, { circuit: e.target.value, circuitNumber: e.target.value, symbolLabel: e.target.value || "Line" })}
+                />
+              </Field>
+              {selected.prediction || selected.bidUse === false ? (
+                <p className="text-[11px] text-muted-foreground">This line is selectable geometry. It is not a circuit until you assign one.</p>
+              ) : null}
+            </>
+          ) : null}
           {selectedIsMarker ? (
             <>
               <Field label="Circuit">

@@ -226,6 +226,113 @@ export function toCandidate(geometry) {
   };
 }
 
+function pageBoundsForPoints(pagePoints) {
+  const bounds = boundsOfPoints(pagePoints);
+  if (bounds) return bounds;
+  if (!pagePoints || pagePoints.length < 2) return null;
+  const a = pagePoints[0];
+  const b = pagePoints[pagePoints.length - 1];
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1.6) return null;
+  return {
+    minX: Math.min(a.x, b.x),
+    minY: Math.min(a.y, b.y),
+    maxX: Math.max(a.x, b.x),
+    maxY: Math.max(a.y, b.y),
+    w: Math.max(Math.abs(dx), 0.2),
+    h: Math.max(Math.abs(dy), 0.2),
+    cx: (a.x + b.x) / 2,
+    cy: (a.y + b.y) / 2,
+  };
+}
+
+function isLineOrRoomBounds(bounds) {
+  if (!bounds || isSymbolSized(bounds)) return false;
+  const long = Math.max(bounds.w, bounds.h);
+  const short = Math.min(bounds.w, bounds.h);
+  if (long < 0.12 || long > 96) return false;
+  if (bounds.w > 88 && bounds.h > 88) return false;
+  const aspect = long / Math.max(short, 0.001);
+  const area = bounds.w * bounds.h;
+  if (long >= 4 && short >= 3 && aspect <= 3.2 && area >= 18 && area <= 4200 && long < 78 && short < 70) return true;
+  return long >= 1.6 && short <= 0.55 && aspect >= 5 && long < 90;
+}
+
+export function subpathsFromDrawOps(data) {
+  const list = data ? Array.from(data) : [];
+  const paths = [];
+  let current = [];
+  const flush = () => {
+    if (current.length) paths.push(current);
+    current = [];
+  };
+  for (let index = 0; index < list.length;) {
+    const op = list[index++];
+    if (op === DRAW_MOVE || op === DRAW_LINE) {
+      if (index + 1 >= list.length) break;
+      if (op === DRAW_MOVE && current.length) flush();
+      current.push({ x: list[index++], y: list[index++], curve: false });
+    } else if (op === DRAW_CUBIC) {
+      if (index + 5 >= list.length) break;
+      index += 4;
+      current.push({ x: list[index++], y: list[index++], curve: true });
+    } else if (op === DRAW_QUAD) {
+      if (index + 3 >= list.length) break;
+      index += 2;
+      current.push({ x: list[index++], y: list[index++], curve: true });
+    } else if (op === DRAW_CLOSE) {
+      flush();
+    } else {
+      break;
+    }
+  }
+  flush();
+  return paths;
+}
+
+export function sheetGeometryFromConstructedPaths(entries, toPagePct) {
+  const raw = [];
+  for (const entry of entries || []) {
+    const ctm = entry.ctm || IDENTITY;
+    const groups = subpathsFromDrawOps(entry.drawOps);
+    const parsedGroups = groups.length ? groups : [[]];
+    for (const group of parsedGroups) {
+      const pagePoints = group.map((point) => {
+        const pdf = applyCtm(ctm, point.x, point.y);
+        const page = toPagePct(pdf.x, pdf.y);
+        return { ...page, curve: point.curve };
+      });
+      let bounds = pageBoundsForPoints(pagePoints);
+      if (!bounds && entry.minMax && entry.minMax.length >= 4 && parsedGroups.length === 1) {
+        const aPdf = applyCtm(ctm, entry.minMax[0], entry.minMax[1]);
+        const bPdf = applyCtm(ctm, entry.minMax[2], entry.minMax[3]);
+        const a = toPagePct(aPdf.x, aPdf.y);
+        const b = toPagePct(bPdf.x, bPdf.y);
+        bounds = boxFromExtents(
+          Math.min(a.x, b.x),
+          Math.min(a.y, b.y),
+          Math.max(a.x, b.x),
+          Math.max(a.y, b.y),
+        );
+      }
+      if (!isLineOrRoomBounds(bounds)) continue;
+      const points = pagePoints.length ? pagePoints : rectPoints(bounds);
+      const candidate = toCandidate({
+        kind: "path",
+        w: bounds.w,
+        h: bounds.h,
+        cx: bounds.cx,
+        cy: bounds.cy,
+        points,
+      });
+      if (candidate) raw.push(candidate);
+    }
+  }
+  return raw;
+}
+
 export function candidatesFromConstructedPaths(entries, toPagePct) {
   const raw = [];
   for (const entry of entries || []) {

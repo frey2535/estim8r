@@ -35,7 +35,7 @@ import { isScannedOrSparsePage } from "@/domain/takeoff/takeoffQuality";
 import { pickInteractiveSymbolGeometry, matchGeometryToLegend, attachLegendGeometryPrototypes } from "@/domain/takeoff/legendGeometry";
 import { shouldShowSymbolHover } from "@/domain/takeoff/legendHover";
 import { filterMarksByInspect, hoverBoundToLegend } from "@/domain/takeoff/professionalReview";
-import { buildDrawingObjectLayer, enclosingRoom, hitDrawingObject, materializeDrawingObject } from "@/domain/takeoff/drawingObjectLayer";
+import { buildDrawingObjectLayer, enclosingRoom, hitDrawingObject, materializeDrawingObject, printedHighlightGeometry, printedSelectionId } from "@/domain/takeoff/drawingObjectLayer";
 import ProfessionalToolsPanel from "@/components/takeoff/ProfessionalToolsPanel";
 import {
   COLLAB_CHANNEL_PREFIX,
@@ -443,6 +443,10 @@ export default function TakeoffWorkspace() {
     return out;
   }, [palette.symbols, drawingTypes]);
   const selectedMark = marks.find((mark) => mark.id === selectedId) || null;
+  const printedSelection = drawingObjects.find((item) => printedSelectionId(item) === selectedId) || null;
+  const hoveredPrinted = String(hoveredDeviceId || "").startsWith("object:")
+    ? drawingObjects.find((item) => `object:${item.objectId || item.id}` === hoveredDeviceId) || null
+    : null;
   const selectedReviewItem = selectedMark
     || sheetReview.find((item) => item.id === selectedId)
     || null;
@@ -1648,98 +1652,30 @@ export default function TakeoffWorkspace() {
     const sheetAspectRatio = currentAspect();
 
     if (tool === "select") {
-      let hit = selectMarkAtPoint(overlayMarks, point, {
+      const hit = selectMarkAtPoint(overlayMarks, point, {
         aspect: sheetAspectRatio,
         markerSize: penSize,
         hitRoute: (mark, at, aspect) => hitTestMark(sizedMark(mark), at, aspect, markHitThreshold(mark, 0.7)),
       });
-      if (!hit) {
-        const drawingObject = hitDrawingObject(drawingObjects, point, sheetMeta.page);
-        if (drawingObject) {
-          const symbolObject = drawingObject.objectKind === "unclassified-vector" || drawingObject.objectKind === "recognized-device";
-          const picked = symbolObject ? interactiveGeometryAt(point) : null;
-          const geometry = picked?.geometry;
-          const aligned = Boolean(geometry) && Math.hypot((geometry.cx || 0) - drawingObject.x, (geometry.cy || 0) - drawingObject.y) <= 0.55;
-          const matchedSymbol = aligned ? picked?.match?.entry?.symbol || null : null;
-          if (matchedSymbol) {
-            hit = {
-              id: marks.some((item) => item.id === drawingObject.sourceMarkId) ? crypto.randomUUID() : (drawingObject.sourceMarkId || crypto.randomUUID()),
-              sheet: sheetMeta.page || 1,
-              trade,
-              source: "drawing-object",
-              type: "count",
-              tool: "count",
-              x: drawingObject.x,
-              y: drawingObject.y,
-              symbolBodyLocation: { x: drawingObject.x, y: drawingObject.y },
-              outline: drawingObject.outline || geometry.outline,
-              outlineSource: drawingObject.outline?.source || geometry.outline?.source || geometry.source || "vector",
-              objectId: drawingObject.objectId,
-              sourceObjectId: drawingObject.objectId,
-              category: matchedSymbol.takeoffCategory || matchedSymbol.category || "From drawing",
-              symbol: matchedSymbol.id,
-              symbolLabel: matchedSymbol.label,
-              abbr: matchedSymbol.abbr || picked.match?.entry?.code,
-              typeCode: String(picked.match?.entry?.code || matchedSymbol.abbr || "").toUpperCase(),
-              reviewStatus: picked.match?.ambiguous ? "pending" : "accepted",
-              requiresClassification: false,
-              detectionAmbiguous: Boolean(picked.match?.ambiguous),
-              fillEnabled: true,
-              fillMode: "inside",
-              fillOpacity: 0.34,
-              layer: "device",
-            };
-            const nextMarks = applyDeviceTypeColors([...marks, hit]);
-            commitMarks(nextMarks, "Drawing object added to takeoff.");
-            persistSupplyQuote(nextMarks);
-          } else {
-            const materialized = materializeDrawingObject(drawingObject, marks);
-            hit = materialized?.mark || null;
-            if (hit && !materialized.existing) {
-              const nextMarks = applyDeviceTypeColors([...marks, hit]);
-              commitMarks(nextMarks, "Drawing object added to takeoff.");
-              persistSupplyQuote(nextMarks);
-            }
-          }
-        }
+      if (hit) {
+        setSelectedId(hit.id);
+        setReviewOpen(Boolean(isDeviceMark(hit) && needsAccuracyReview(hit, marks, sheetMeta.page)));
+        setStatus(`Selected ${hit.symbolLabel || hit.typeCode || hit.type}.`);
+        return;
       }
-      if (!hit) {
-        const picked = interactiveGeometryAt(point);
-        if (picked?.geometry) {
-          const matchedSymbol = picked.match?.entry?.symbol || null;
-          hit = {
-            id: crypto.randomUUID(),
-            sheet: sheetMeta.page || 1,
-            trade,
-            source: "manual-geometry-select",
-            type: "count",
-            tool: "count",
-            x: picked.geometry.cx,
-            y: picked.geometry.cy,
-            symbolBodyLocation: { x: picked.geometry.cx, y: picked.geometry.cy },
-            outline: picked.geometry.outline,
-            outlineSource: picked.geometry.outline?.source || picked.geometry.source || "vector",
-            category: matchedSymbol?.takeoffCategory || matchedSymbol?.category || "Unclassified",
-            symbol: matchedSymbol?.id || "unclassified-device",
-            symbolLabel: matchedSymbol?.label || "Unclassified device",
-            abbr: matchedSymbol?.abbr || picked.match?.entry?.code || "?",
-            typeCode: String(picked.match?.entry?.code || matchedSymbol?.abbr || "UNKNOWN").toUpperCase(),
-            reviewStatus: matchedSymbol ? "accepted" : "needs-classification",
-            requiresClassification: !matchedSymbol,
-            fillEnabled: true,
-            fillMode: "inside",
-            fillOpacity: 0.34,
-            layer: "device",
-          };
-          const nextMarks = applyDeviceTypeColors([...marks, hit]);
-          commitMarks(nextMarks, "Drawing object added to takeoff.");
-          persistSupplyQuote(nextMarks);
-        }
+      const drawingObject = hitDrawingObject(drawingObjects, point, sheetMeta.page);
+      if (drawingObject) {
+        const name = drawingObject.objectKind === "room" ? "room" : drawingObject.objectKind === "circuit" ? "line" : "symbol";
+        setSelectedId(printedSelectionId(drawingObject));
+        setIsolationMode(false);
+        setReviewOpen(false);
+        setStatus(`Highlighted the printed ${name} under the pointer. Nothing was added.`);
+        return;
       }
-      setSelectedId(hit?.id || null);
-      if (!hit) setIsolationMode(false);
-      setReviewOpen(Boolean(hit && isDeviceMark(hit) && needsAccuracyReview(hit, marks, sheetMeta.page)));
-      setStatus(hit ? `Selected ${hit.symbolLabel || hit.typeCode || hit.type}. Edit it in the inspector.` : "No selectable electrical device found here.");
+      setSelectedId(null);
+      setIsolationMode(false);
+      setReviewOpen(false);
+      setStatus("Nothing on the print is under the pointer.");
       return;
     }
 
@@ -2031,8 +1967,37 @@ export default function TakeoffWorkspace() {
 
   function deleteSelected() {
     if (!selectedId) return;
+    if (printedSelection) {
+      setSelectedId(null);
+      setStatus("Cleared the printed highlight. Nothing was removed from the drawing.");
+      return;
+    }
     commitMarks(marks.filter((mark) => mark.id !== selectedId), "Mark deleted.");
     setSelectedId(null);
+  }
+
+  function countPrintedSelection() {
+    if (!printedSelection) return;
+    const materialized = materializeDrawingObject(printedSelection, marks);
+    if (!materialized?.mark) return;
+    if (!materialized.existing) {
+      const kind = printedSelection.objectKind;
+      const counted = {
+        ...materialized.mark,
+        fillEnabled: false,
+        bidUse: true,
+        prediction: false,
+        symbolLabel: kind === "room" ? "Printed room" : kind === "circuit" ? "Printed line" : (materialized.mark.symbolLabel || "Printed symbol"),
+        roomName: kind === "room" ? "Printed room" : materialized.mark.roomName,
+      };
+      const nextMarks = applyDeviceTypeColors([...marks, counted]);
+      commitMarks(nextMarks, "Added the printed item to the counted items. The drawing itself was not changed.");
+      persistSupplyQuote(nextMarks);
+      setSelectedId(counted.id);
+    } else {
+      setSelectedId(materialized.mark.id);
+    }
+    setStudioPanel("quantities");
   }
 
   useEffect(() => {
@@ -2500,7 +2465,7 @@ export default function TakeoffWorkspace() {
     const csv = quantitiesToCsv(editedRollup, runs);
     try {
       await navigator.clipboard.writeText(csv);
-      setStatus("Quantity schedule copied as CSV.");
+      setStatus("Counted items copied.");
     } catch {
       window.prompt("Copy quantity CSV", csv);
     }
@@ -2770,6 +2735,8 @@ export default function TakeoffWorkspace() {
                   lineSize={penThickness}
                   fontSize={wideLayout ? OVERLAY_FONT_SIZE : MOBILE_OVERLAY_FONT_SIZE}
                   lengthFor={(mark) => markLengthFeet(mark, calibration, aspect)}
+                  printedHighlight={printedHighlightGeometry(printedSelection)}
+                  hoverHighlight={printedHighlightGeometry(hoveredPrinted && printedSelectionId(hoveredPrinted) !== selectedId ? hoveredPrinted : null)}
                 />
                 {(() => {
                   const rawSymbol = hoveredGeometryInfo?.match?.entry?.symbol || null;
@@ -3048,6 +3015,8 @@ export default function TakeoffWorkspace() {
           marks={tradeMarks}
           pageKinds={pageKinds}
           selected={selectedMark}
+          printed={printedSelection}
+          onCountPrinted={countPrintedSelection}
           conduitOptions={conduitChoices}
           scheduleEdits={scheduleEdits}
           onSelectRun={(id) => { setSelectedId(id); setTool("select"); }}
@@ -3171,8 +3140,8 @@ export default function TakeoffWorkspace() {
       <TakeoffMobileSheet
         open={mobilePanel === "counts"}
         onOpenChange={(open) => setMobilePanel(open ? "counts" : "")}
-        title="Counts & legend"
-        description="Quantity schedule, conduit runs, and legend jumps for this takeoff."
+        title="Counted items"
+        description="Items you counted, conduit you traced, and legend sheets."
       >
         <TakeoffInspector
           embedded
@@ -3184,6 +3153,8 @@ export default function TakeoffWorkspace() {
           marks={tradeMarks}
           pageKinds={pageKinds}
           selected={selectedMark}
+          printed={printedSelection}
+          onCountPrinted={countPrintedSelection}
           conduitOptions={conduitChoices}
           scheduleEdits={scheduleEdits}
           onSelectRun={(id) => { setSelectedId(id); setTool("select"); setMobilePanel(""); }}
@@ -3341,7 +3312,19 @@ function DeviceFill({ mark, selected, markerSize, focus = false }) {
   );
 }
 
-function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, lengthFor, markerSize = DEFAULT_MARKER_SIZE, lineSize = DEFAULT_LINE_SIZE, fontSize = OVERLAY_FONT_SIZE }) {
+function GeometryStroke({ geometry, stroke, width }) {
+  if (!geometry) return null;
+  if (geometry.kind === "circle") {
+    return <circle cx={geometry.cx} cy={geometry.cy} r={geometry.r} fill="none" stroke={stroke} strokeWidth={width} vectorEffect="non-scaling-stroke" />;
+  }
+  const points = geometry.points.map((point) => `${point.x},${point.y}`).join(" ");
+  if (geometry.points.length >= 3) {
+    return <polygon points={points} fill="none" stroke={stroke} strokeWidth={width} vectorEffect="non-scaling-stroke" />;
+  }
+  return <polyline points={points} fill="none" stroke={stroke} strokeWidth={width} vectorEffect="non-scaling-stroke" />;
+}
+
+function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, lengthFor, markerSize = DEFAULT_MARKER_SIZE, lineSize = DEFAULT_LINE_SIZE, fontSize = OVERLAY_FONT_SIZE, printedHighlight = null, hoverHighlight = null }) {
   const otherRoutes = marks.filter((m) => m.points?.length && !isCircuitMark(m));
   const devices = marks.filter((m) => isDeviceMark(m));
   const circuits = marks.filter((m) => isCircuitMark(m) && m.points?.length);
@@ -3364,7 +3347,8 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
         const color = mark.color || (mark.type === "cloud" ? "#dc2626" : "#2563eb");
         const width = resolvedLineSize(mark, lineSize);
         if (mark.type === "area" || mark.type === "cloud") {
-          return <polygon key={mark.id} points={points} fill={mark.type === "cloud" ? "none" : "rgba(37,99,235,0.12)"} stroke={color} strokeWidth={width} strokeDasharray={mark.type === "cloud" ? "1.2 0.8" : undefined} vectorEffect="non-scaling-stroke" />;
+          const onPrint = mark.source === "interactive-geometry" || mark.objectKind === "room";
+          return <polygon key={mark.id} points={points} fill={mark.type === "cloud" || onPrint ? "none" : "rgba(37,99,235,0.12)"} stroke={selected ? "#ea580c" : color} strokeWidth={selected ? width + 0.6 : width} strokeDasharray={mark.type === "cloud" ? "1.2 0.8" : undefined} vectorEffect="non-scaling-stroke" />;
         }
         return (
           <g key={mark.id}>
@@ -3465,19 +3449,8 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
           </g>
         );
       })}
-      {tool === "select" && devices.filter((mark) => mark.id === selectedId).map((mark) => {
-        const w = Math.max(0.2, Number(mark.symbolBodyBounds?.w || mark.outline?.w || 0.7));
-        const h = Math.max(0.2, Number(mark.symbolBodyBounds?.h || mark.outline?.h || 0.7));
-        return (
-          <g key={`resize-${mark.id}`} aria-hidden="true">
-            <rect x={mark.x - w / 2} y={mark.y - h / 2} width={w} height={h}
-              fill="none" stroke="#ea580c" strokeWidth="0.2" strokeDasharray="0.35 0.25"
-              vectorEffect="non-scaling-stroke" />
-            <rect x={mark.x + w / 2 - 0.35} y={mark.y + h / 2 - 0.35} width="0.7" height="0.7"
-              fill="#ffffff" stroke="#ea580c" strokeWidth="0.2" vectorEffect="non-scaling-stroke" />
-          </g>
-        );
-      })}
+      <GeometryStroke geometry={hoverHighlight} stroke="#0f172a" width="1.6" />
+      <GeometryStroke geometry={printedHighlight} stroke="#ea580c" width="2.2" />
       {callouts.conduitLabels.map((label) => (
         <OverlayLabel key={`conduit-${label.id}`} label={label} fontSize={fontSize} fill={label.selected ? "#0f172a" : "#1e293b"} />
       ))}

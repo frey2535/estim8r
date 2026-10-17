@@ -22,6 +22,8 @@ import {
   enclosingRoom,
   hitDrawingObject,
   materializeDrawingObject,
+  printedHighlightGeometry,
+  printedSelectionId,
 } from "./drawingObjectLayer.js";
 import { rollupTakeoff } from "./quantities.js";
 import { buildAiMarks } from "./aiTakeoff.js";
@@ -51,6 +53,14 @@ assert.equal(lineHit.objectKind, "circuit");
 assert.equal(hitDrawingObject(objects, { x: 55, y: 50 }, 2)?.objectKind, "room", "a click inside the room and off the line selects the room");
 assert.equal(hitDrawingObject(objects, { x: 39.9, y: 50 }, 2)?.objectKind, "room", "a click on the room wall stroke selects the room");
 assert.equal(hitDrawingObject(objects, { x: 39.4, y: 50 }, 2), null, "a click beside the wall does not select the room");
+const roomObject = objects.find((item) => item.objectKind === "room");
+const highlight = printedHighlightGeometry(roomObject);
+assert.equal(printedSelectionId(roomObject), `printed:${roomObject.objectId}`);
+assert.deepEqual(highlight.points, roomObject.outline.points, "the highlight is the printed room outline, not a new box");
+const symbolObject = objects.find((item) => item.objectKind === "unclassified-vector");
+const symbolHighlight = printedHighlightGeometry(symbolObject);
+assert.equal(symbolHighlight.points.length, 4);
+assert.equal(symbolHighlight.points[0].x, symbolObject.x - symbolObject.outline.w / 2, "the symbol highlight starts on the printed edge");
 const roomHit = enclosingRoom(objects, { x: 48, y: 48 }, 2);
 assert.equal(roomHit.objectKind, "room");
 

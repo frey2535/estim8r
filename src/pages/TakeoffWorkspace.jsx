@@ -36,6 +36,25 @@ import { pickInteractiveSymbolGeometry, matchGeometryToLegend, attachLegendGeome
 import { shouldShowSymbolHover } from "@/domain/takeoff/legendHover";
 import { filterMarksByInspect, hoverBoundToLegend } from "@/domain/takeoff/professionalReview";
 import { buildDrawingObjectLayer, enclosingRoom, hitDrawingObject, materializeDrawingObject } from "@/domain/takeoff/drawingObjectLayer";
+import ProfessionalToolsPanel from "@/components/takeoff/ProfessionalToolsPanel";
+import {
+  COLLAB_CHANNEL_PREFIX,
+  QUANTITY_LINK_CHANNEL,
+  aerialLengthMark,
+  applyRemoteMark,
+  createSigningKey,
+  cropToObject,
+  markFromAssembly,
+  measureMark,
+  quantityWorkbookRows,
+  rememberLiveQuantity,
+  reportLines,
+  revisionReport,
+  signQuantity,
+  spreadsheetMl,
+} from "@/domain/takeoff/professionalTools";
+import { recognizeImage } from "@/domain/takeoff/ocrText";
+import { jsPDF } from "jspdf";
 import {
   addSlipSheet,
   addToolChestItem,
@@ -230,6 +249,14 @@ export default function TakeoffWorkspace() {
   const [tool, setTool] = useState("select");
   const [pageTakeoff, setPageTakeoff] = useState({});
   const [slipSheets, setSlipSheets] = useState([]);
+  const [comparePage, setComparePage] = useState("");
+  const [sessionId, setSessionId] = useState("");
+  const [pendingAssembly, setPendingAssembly] = useState(null);
+  const [revisionBaseline, setRevisionBaseline] = useState([]);
+  const collabSender = useRef("");
+  const applyingRemote = useRef(false);
+  const sessionJoinRef = useRef("");
+  if (!collabSender.current) collabSender.current = globalThis.crypto?.randomUUID?.() || `tab-${Date.now()}`;
   const [batchQueue, setBatchQueue] = useState([]);
   const [toolChest, setToolChest] = useState(() => {
     try {
@@ -254,6 +281,8 @@ export default function TakeoffWorkspace() {
   panRef.current = pan;
   const draftJunctionIdsRef = useRef([]);
   const [marks, setMarks] = useState([]);
+  const marksRef = useRef(marks);
+  marksRef.current = marks;
   const [draftPoints, setDraftPoints] = useState([]);
   const [status, setStatus] = useState("Upload a drawing to begin.");
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
@@ -613,6 +642,40 @@ export default function TakeoffWorkspace() {
       /* private mode can reject storage */
     }
   }, [toolChest]);
+
+  useEffect(() => {
+    if (!sessionId) return undefined;
+    const channel = new BroadcastChannel(`${COLLAB_CHANNEL_PREFIX}${sessionId}`);
+    channel.onmessage = (event) => {
+      const data = event?.data;
+      if (!data || data.sender === collabSender.current || data.kind !== "estim8r-collab") return;
+      if (data.op === "request") {
+        if (marksRef.current.length) {
+          channel.postMessage({ kind: "estim8r-collab", op: "replace", marks: marksRef.current, sender: collabSender.current });
+        }
+        return;
+      }
+      applyingRemote.current = true;
+      setMarks((current) => applyRemoteMark(current, data));
+    };
+    channel.postMessage({ kind: "estim8r-collab", op: "request", sender: collabSender.current });
+    return () => channel.close();
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!sessionId) return undefined;
+    if (applyingRemote.current) {
+      applyingRemote.current = false;
+      return undefined;
+    }
+    const joining = sessionJoinRef.current !== sessionId;
+    sessionJoinRef.current = sessionId;
+    if (joining && marks.length === 0) return undefined;
+    const channel = new BroadcastChannel(`${COLLAB_CHANNEL_PREFIX}${sessionId}`);
+    channel.postMessage({ kind: "estim8r-collab", op: "replace", marks, sender: collabSender.current });
+    channel.close();
+    return undefined;
+  }, [marks, sessionId]);
 
   useEffect(() => {
     const preserveForUpdate = () => {
@@ -1570,6 +1633,15 @@ export default function TakeoffWorkspace() {
     if (!file || tool === "pan") return;
     const point = drawingPoint(event);
     if (!point) return;
+    if (pendingAssembly) {
+      const placed = markFromAssembly(pendingAssembly, point, sheetMeta.page);
+      if (placed) {
+        commitMarks([...marks, placed], `${placed.symbolLabel} assembly placed. Its components stay on the estimate.`);
+        setSelectedId(placed.id);
+      }
+      setPendingAssembly(null);
+      return;
+    }
     const sheetAspectRatio = currentAspect();
 
     if (tool === "select") {
@@ -1829,8 +1901,15 @@ export default function TakeoffWorkspace() {
     const sheetAspectRatio = currentAspect();
     if (tool === "area") {
       if (draftPoints.length < 3) return;
-      const sf = rollupTakeoff([{ type: "area", points: draftPoints, category }], calibration, sheetAspectRatio).rows[0]?.sf;
-      addMark({ type: "area", points: draftPoints }, calibration ? `Area ${formatArea(sf)}.` : "Area added. Calibrate scale to read SF.");
+      const measured = measureMark({ type: "area", points: draftPoints, heightFeet: 0 }, calibration, sheetAspectRatio);
+      addMark({
+        type: "area",
+        points: draftPoints,
+        areaSf: measured.areaSf,
+        perimeterLf: measured.perimeterLf,
+      }, measured.areaSf == null
+        ? "Area added. Calibrate scale to read SF and perimeter."
+        : `Area ${formatArea(measured.areaSf)}. Perimeter ${measured.perimeterLf == null ? "—" : formatFeet(measured.perimeterLf)}.`);
     } else if (tool === "conduit") {
       finishConduitRun(draftPoints);
     } else {
@@ -2215,6 +2294,132 @@ export default function TakeoffWorkspace() {
     setTool("select");
   }
 
+  function publishLiveQuantities() {
+    const csv = quantityLinkCsv(marks, { slips: slipSheets });
+    const payload = { kind: "estim8r-quantity", csv, updatedAt: new Date().toISOString() };
+    rememberLiveQuantity(payload);
+    const channel = new BroadcastChannel(QUANTITY_LINK_CHANNEL);
+    channel.postMessage(payload);
+    channel.close();
+    window.open("/quantity-link", "estim8r-quantity-link");
+    setStatus("Live quantities published. The quantity window reads this publish when it opens.");
+  }
+
+  async function signQuantityFile() {
+    const csv = quantityLinkCsv(marks, { slips: slipSheets });
+    const stored = localStorage.getItem("estim8r-signing-jwk");
+    let privateKey;
+    let publicJwk;
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      publicJwk = parsed.publicJwk;
+      privateKey = await crypto.subtle.importKey("jwk", parsed.privateJwk, { name: "ECDSA", namedCurve: "P-256" }, true, ["sign"]);
+    } else {
+      const pair = await createSigningKey();
+      publicJwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+      const privateJwk = await crypto.subtle.exportKey("jwk", pair.privateKey);
+      localStorage.setItem("estim8r-signing-jwk", JSON.stringify({ publicJwk, privateJwk }));
+      privateKey = pair.privateKey;
+    }
+    const signature = await signQuantity(privateKey, csv);
+    downloadBlob(new Blob([JSON.stringify({
+      algorithm: "ECDSA-P256-SHA256",
+      signature,
+      publicJwk,
+      purpose: "Device signature for this quantity file. Verification uses the included public key.",
+    }, null, 2)], { type: "application/json" }), `${(file?.name || "takeoff").replace(/\.[^.]+$/, "")}-quantity-signature.json`);
+    setStatus("Quantity file signed with this device key.");
+  }
+
+  function downloadWorkbook() {
+    const xml = spreadsheetMl("Takeoff", quantityWorkbookRows(marks, calibration, currentAspect()));
+    downloadBlob(new Blob([xml], { type: "application/vnd.ms-excel" }), `${(file?.name || "takeoff").replace(/\.[^.]+$/, "")}-quantity-link.xls`);
+    setStatus("Excel workbook downloaded.");
+  }
+
+  function downloadMaterialsReport() {
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text("Bill of materials", 14, 18);
+    doc.setFontSize(10);
+    let y = 30;
+    const lines = reportLines(marks);
+    if (!lines.length) {
+      doc.text("No bid quantities yet.", 14, y);
+    }
+    for (const row of lines) {
+      const parts = [row.category, row.name, row.count ? `${row.count} EA` : "", row.lengthLf ? `${row.lengthLf.toFixed(1)} LF` : "", row.areaSf ? `${row.areaSf.toFixed(1)} SF` : ""].filter(Boolean);
+      doc.text(parts.join("  ·  "), 14, y);
+      y += 7;
+      if (y > 280) {
+        doc.addPage();
+        y = 20;
+      }
+    }
+    downloadBlob(doc.output("blob"), `${(file?.name || "takeoff").replace(/\.[^.]+$/, "")}-bill-of-materials.pdf`);
+    setStatus("Bill of materials downloaded.");
+  }
+
+  async function readScannedText() {
+    const canvas = document.querySelector("[data-testid='takeoff-sheet-viewport'] canvas");
+    if (!canvas) {
+      setStatus("Open a drawing page before reading scanned text.");
+      return;
+    }
+    setStatus("Reading text on this sheet…");
+    try {
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+      const { createWorker } = await import("tesseract.js");
+      const result = await recognizeImage(blob, createWorker);
+      setStatus(result.ok && result.text ? `Scanned text: ${result.text.slice(0, 240)}` : (result.error || "No text was read on this sheet."));
+    } catch (error) {
+      setDrawingError(error?.message || "Scanned text could not be read.");
+    }
+  }
+
+  function cropToSelection() {
+    const object = selectedMark || drawingObjects.find((item) => item.id === selectedId);
+    const frame = cropToObject({
+      object,
+      viewWidth: viewportSize.width,
+      viewHeight: viewportSize.height,
+      sheetWidth: imageSize.width || viewportSize.width || 1,
+      sheetHeight: imageSize.height || viewportSize.height || 1,
+    });
+    if (!frame) {
+      setStatus("Select a symbol, line, or room to crop to it.");
+      return;
+    }
+    setZoom(frame.zoom);
+    setPan(frame.pan);
+    setStatus("Cropped to the selection.");
+  }
+
+  function saveRevisionSnapshot() {
+    setRevisionBaseline(marks.map((mark) => ({ ...mark })));
+    setStatus(`Revision snapshot saved with ${marks.length} takeoff object${marks.length === 1 ? "" : "s"}.`);
+  }
+
+  function compareRevision() {
+    const report = revisionReport(revisionBaseline, marks);
+    setStatus(`Revision compared with the snapshot: ${report.added} added, ${report.removed} removed, ${report.unchanged} unchanged.`);
+  }
+
+  function applyFormulaResult(value, waste) {
+    if (!selectedMark) return;
+    updateMark(selectedMark.id, { formulaResult: value, wastePercent: waste });
+  }
+
+  function placeAerialLength(start, end) {
+    const mark = aerialLengthMark(start, end, sheetMeta.page);
+    if (!mark) {
+      setStatus("Aerial length needs two map points.");
+      return;
+    }
+    commitMarks([...marks, mark], `Aerial length ${Number(mark.storedFeet).toFixed(1)} ft saved on sheet ${sheetMeta.page}.`);
+    setSelectedId(mark.id);
+  }
+
   function downloadQuantityLink() {
     const csv = quantityLinkCsv(marks, { slips: slipSheets });
     downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), `${(file?.name || "takeoff").replace(/\.[^.]+$/, "")}-quantity-link.csv`);
@@ -2529,6 +2734,36 @@ export default function TakeoffWorkspace() {
                 </button>
               )}
             </div>
+            <ProfessionalToolsPanel
+              selected={selectedMark}
+              marks={marks}
+              drawingObjects={drawingObjects}
+              page={sheetMeta.page}
+              pageCount={sheetMeta.pageCount}
+              slips={slipSheets}
+              calibration={calibration}
+              aspect={currentAspect()}
+              comparePage={comparePage}
+              sessionId={sessionId}
+              onStatus={setStatus}
+              onTool={(next) => { setTool(next); setDraftPoints([]); }}
+              onPlaceAssembly={(assembly) => {
+                setPendingAssembly(assembly);
+                setStatus(`${assembly.name} will be placed on the next sheet click.`);
+              }}
+              onCrop={cropToSelection}
+              onCompare={setComparePage}
+              onSnapshot={saveRevisionSnapshot}
+              onRevision={compareRevision}
+              onWorkbook={downloadWorkbook}
+              onSign={() => { void signQuantityFile(); }}
+              onLiveLink={publishLiveQuantities}
+              onSession={setSessionId}
+              onOcr={() => { void readScannedText(); }}
+              onReport={downloadMaterialsReport}
+              onAerialLength={placeAerialLength}
+              onFormula={applyFormulaResult}
+            />
             <DevicePicker
               availableSymbols={availableDeviceSymbols}
               trades={TRADES}
@@ -2657,7 +2892,7 @@ export default function TakeoffWorkspace() {
             )}
             style={{ touchAction: "none" }}
           >
-            <div className="flex h-full w-full items-center justify-center p-2">
+            <div className={cn("flex h-full w-full items-center justify-center p-2", comparePage && "items-stretch gap-2")}>
               <div
                 ref={(node) => {
                   viewerRef.current = node;
@@ -2709,7 +2944,7 @@ export default function TakeoffWorkspace() {
                       zoom={zoom}
                       pageNumber={sheetMeta.page}
                       onPageNumber={(page) => setSheetMeta((current) => (current.page === page ? current : { ...current, page }))}
-                      viewportWidth={viewportSize.width}
+                      viewportWidth={comparePage ? Math.max(160, Math.floor(viewportSize.width / 2)) : viewportSize.width}
                       viewportHeight={viewportSize.height}
                       onPageInfo={(info) => {
                         setSheetMeta((current) => (
@@ -2845,6 +3080,18 @@ export default function TakeoffWorkspace() {
                   </div>
                 )}
               </div>
+              {comparePage && isPdf && fileBytes ? (
+                <div data-testid="compare-sheet" className="flex min-w-0 flex-1 items-center justify-center overflow-hidden border-l border-border bg-neutral-200/50">
+                  <PdfDrawing
+                    fileBytes={fileBytes}
+                    fileName={file.name}
+                    zoom={1}
+                    pageNumber={Number(comparePage)}
+                    viewportWidth={Math.max(160, Math.floor((viewportSize.width || 640) / 2))}
+                    viewportHeight={viewportSize.height || 480}
+                  />
+                </div>
+              ) : null}
             </div>
           </div>
           <div className="hidden lg:block">

@@ -49,6 +49,8 @@ assert.equal(symbolHit.objectKind, "unclassified-vector");
 const lineHit = hitDrawingObject(objects, { x: 40, y: 20 }, 2);
 assert.equal(lineHit.objectKind, "circuit");
 assert.equal(hitDrawingObject(objects, { x: 55, y: 50 }, 2)?.objectKind, "room", "a click inside the room and off the line selects the room");
+assert.equal(hitDrawingObject(objects, { x: 39.9, y: 50 }, 2)?.objectKind, "room", "a click on the room wall stroke selects the room");
+assert.equal(hitDrawingObject(objects, { x: 39.4, y: 50 }, 2), null, "a click beside the wall does not select the room");
 const roomHit = enclosingRoom(objects, { x: 48, y: 48 }, 2);
 assert.equal(roomHit.objectKind, "room");
 

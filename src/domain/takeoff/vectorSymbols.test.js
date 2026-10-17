@@ -111,6 +111,12 @@ const scaled = scaleOutline(rectCandidates[0].outline, 1.45, { x: rectCandidates
 assert(scaled.w > rectCandidates[0].outline.w, "selected outline enlarges the extracted shape");
 assert(pointHitsOutline(rectCandidates[0].outline, { x: rectCandidates[0].cx, y: rectCandidates[0].cy }, { x: rectCandidates[0].cx, y: rectCandidates[0].cy }), "the extracted fill is selectable");
 assert(!pointHitsOutline(rectCandidates[0].outline, { x: rectCandidates[0].cx, y: rectCandidates[0].cy }, { x: 40, y: 40 }), "hit stays on the extracted outline");
+const shifted = { kind: "rect", w: 1.2, h: 0.8, cx: 22, cy: 31 };
+assert(pointHitsOutline(shifted, { x: 5, y: 5 }, { x: 22.1, y: 31 }), "the hit box uses the painted outline center");
+assert(!pointHitsOutline(shifted, { x: 5, y: 5 }, { x: 5, y: 5 }), "a stored origin away from the ink is not the click target");
+const roomWall = { kind: "path", points: [{ x: 20, y: 80 }, { x: 60, y: 80 }, { x: 60, y: 50 }, { x: 20, y: 50 }] };
+assert(pointHitsOutline(roomWall, { x: 40, y: 65 }, { x: 19.9, y: 65 }, 0.2), "the visible wall stroke is selectable");
+assert(!pointHitsOutline(roomWall, { x: 40, y: 65 }, { x: 19.4, y: 65 }, 0.2), "empty space beside the wall is not selected");
 
 assert(shapeHintFromLabel("Type 1 2x4 LED surface troffer") === "rect", "schedule troffer text is a rectangle hint");
 assert(shapeHintFromLabel("Type 2 8 inch recessed downlight") === "circle", "schedule downlight text is a circle hint");

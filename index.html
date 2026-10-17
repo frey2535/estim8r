@@ -101,9 +101,24 @@
           });
         }
         if (!currentSha || currentSha === "local" || currentSha.indexOf("%ESTIM8R") === 0) return;
-        clearStaleClient().then(function () { return readRemoteSha(); }).then(function (remoteSha) {
-          if (remoteSha && remoteSha !== currentSha) showUpdatePopup(remoteSha);
-        }).catch(function () {});
+        var shownSha = "";
+        function consider(remoteSha) {
+          if (!remoteSha || remoteSha === currentSha) return;
+          window.__estim8rPendingUpdate = { targetSha: remoteSha, required: true, reason: "newer-build" };
+          try {
+            window.dispatchEvent(new CustomEvent("estim8r-update-available", { detail: window.__estim8rPendingUpdate }));
+          } catch (e) { /* event dispatch is best effort */ }
+          if (window.__estim8rUpdateChecksStarted) return;
+          if (shownSha === remoteSha && document.getElementById("estim8r-update-popup")) return;
+          shownSha = remoteSha;
+          showUpdatePopup(remoteSha);
+        }
+        function tick() {
+          if (window.__estim8rUpdateChecksStarted) return;
+          readRemoteSha().then(consider).catch(function () {});
+        }
+        tick();
+        setInterval(tick, 2000);
       })();
     </script>
     <script type="module" src="/src/main.jsx"></script>

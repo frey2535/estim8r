@@ -15,6 +15,11 @@ export default function UpdateAvailablePrompt() {
     return () => window.removeEventListener("estim8r-update-available", onUpdateAvailable);
   }, []);
 
+  useEffect(() => {
+    if (!update) return;
+    document.getElementById("estim8r-update-popup")?.remove();
+  }, [update]);
+
   const applyUpdate = useCallback(async () => {
     if (applying) return;
     setApplying(true);

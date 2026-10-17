@@ -1363,7 +1363,7 @@ export default function TakeoffWorkspace() {
     return () => { cancelled = true; };
   }, [fileBytes, isPdf]);
 
-  async function runAiTakeoff({ silent = false } = {}) {
+  async function runAiTakeoff({ silent = false, onlyPage = null } = {}) {
     if (!isPdf || !fileBytes) {
       const message = "AI assist needs a PDF with a text layer. Image drawings stay manual for the selected trade.";
       if (!silent) {
@@ -1401,8 +1401,9 @@ export default function TakeoffWorkspace() {
       await new Promise((resolve) => setTimeout(resolve, 0));
       const persistable = persistableAiPages(pages);
       setAiPages(persistable);
+      const selectedPages = onlyPage == null ? pages : pages.filter((entry) => entry.page === onlyPage || entry.kind === "legend");
       const planned = buildAiMarks({
-        pages,
+        pages: selectedPages,
         trade,
         symbols: palette.symbols,
         drawingSymbols: palette.fromDrawing,
@@ -1436,7 +1437,7 @@ export default function TakeoffWorkspace() {
       let nextMarks = colored;
       setMarks((current) => {
         nextMarks = applyDeviceTypeColors([
-          ...current.filter((mark) => !(mark.source === "ai" && mark.trade === trade)),
+          ...current.filter((mark) => !(mark.source === "ai" && mark.trade === trade && (onlyPage == null || Number(mark.sheet) === Number(onlyPage)))),
           ...colored,
         ]);
         return nextMarks;
@@ -1446,7 +1447,7 @@ export default function TakeoffWorkspace() {
         detectedMarks: nextMarks.filter(isDeviceMark),
         trade,
       }));
-      focusMarkedSheet(nextMarks);
+      if (onlyPage == null) focusMarkedSheet(nextMarks);
       const quote = persistSupplyQuote(nextMarks);
       const devices = nextMarks.filter(isDeviceMark).length;
       const conduits = nextMarks.filter((mark) => mark.tool === "conduit" || mark.type === "homerun").length;
@@ -2202,6 +2203,7 @@ export default function TakeoffWorkspace() {
             <p className="text-xs text-muted-foreground">Adjust the side panels to give your drawing more room. Available on desktop.</p>
           </div>
         </details>
+        <button type="button" disabled={aiBusy || !isPdf} onClick={() => { setMode("ai"); void runAiTakeoff({ onlyPage: sheetMeta.page }); }} className="hidden lg:inline-flex min-h-11 items-center rounded-lg border border-border bg-background px-3 text-sm font-semibold hover:bg-muted disabled:opacity-50" title="Run automatic takeoff only on the current drawing page, preserving marks on other sheets">AI: this sheet</button>
         <div className="hidden lg:block">
           <TakeoffActionsMenu
             aiBusy={aiBusy}

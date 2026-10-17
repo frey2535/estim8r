@@ -46,3 +46,8 @@ assert(stub.labelAuthority === LABEL_AUTHORITY.SYNTHETIC, "explicit synthetic fi
 assert(stub.canClaimThreshold === false, "synthetic 1/1 cannot claim 99% even if recall is 1");
 
 if (!process.exitCode) console.log("accuracy gate regression checks passed");
+
+assert(unmeasured.overallMarkingAccuracy === 0, "missing truth cannot report perfect overall marking");
+assert(missed.overallMarkingAccuracy === 0, "missed device counts as an unmarked reference");
+assert(stub.overallMarkingAccuracy <= stub.detectionRecall, "overall marking cannot exceed detection recall");
+assert(!missed.meetsMarkers, "a missed device cannot pass the marking acceptance gate");

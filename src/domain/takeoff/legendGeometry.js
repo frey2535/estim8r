@@ -1256,9 +1256,31 @@ export function pickInteractiveSymbolGeometry(page, point, options = {}) {
       const contains = Math.abs(point.x-cluster.cx)<=Math.max(0.12,(cluster.w||0)/2+0.12)
         && Math.abs(point.y-cluster.cy)<=Math.max(0.12,(cluster.h||0)/2+0.12);
       const partBonus=Math.min(0.45,(cluster.parts?.length||1)*0.045);
-      const score=(contains?2.2:0.8)-d*1.4+partBonus-Math.max(0,long-1.6)*0.25;
+      const outside = Math.hypot(
+        Math.max(0, Math.abs(point.x - cluster.cx) - (Number(cluster.w) || 0) / 2),
+        Math.max(0, Math.abs(point.y - cluster.cy) - (Number(cluster.h) || 0) / 2),
+      );
+      if (outside > 0.28) continue;
+      const score=(contains?2.2:0.8)-d*1.4+partBonus-Math.max(0,long-1.6)*0.25 - outside * 2;
       if(score>bestScore){best=cluster;bestScore=score;}
     }
+  }
+  if (!best) return null;
+  const under = nearby
+    .map((row) => row.path)
+    .filter((path) => {
+      const dx = Math.max(0, Math.abs(point.x - (path.cx || 0)) - (Number(path.w) || 0) / 2);
+      const dy = Math.max(0, Math.abs(point.y - (path.cy || 0)) - (Number(path.h) || 0) / 2);
+      return Math.hypot(dx, dy) <= 0.22;
+    })
+    .sort((a, b) => Math.hypot((a.cx || 0) - point.x, (a.cy || 0) - point.y) - Math.hypot((b.cx || 0) - point.x, (b.cy || 0) - point.y))[0];
+  if (under && Math.hypot((best.cx || 0) - (under.cx || 0), (best.cy || 0) - (under.cy || 0)) > 0.4) {
+    return {
+      ...under,
+      cx: under.cx,
+      cy: under.cy,
+      outline: under.outline || { kind: under.kind || "rect", source: under.source || "vector", w: under.w, h: under.h, cx: under.cx, cy: under.cy },
+    };
   }
   return best;
 }

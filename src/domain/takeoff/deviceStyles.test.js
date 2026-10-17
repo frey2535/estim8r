@@ -126,6 +126,15 @@ const picked = selectMarkAtPoint(overlapping, { x: 12, y: 20 }, {
   hitRoute: (mark, point) => mark.points?.some((item) => Math.hypot(item.x - point.x, item.y - point.y) < 3),
 });
 assert(picked?.id === "dev", "clicking a device on a circuit selects the device");
+const nearer = { id: "near", type: "count", x: 10, y: 10, outlineSource: "vector", outline: { kind: "circle", source: "vector", r: 0.45, cx: 10, cy: 10 } };
+const farther = { id: "far", type: "count", x: 10.55, y: 10, outlineSource: "vector", outline: { kind: "circle", source: "vector", r: 0.45, cx: 10.55, cy: 10 } };
+assert(selectMarkAtPoint([nearer, farther], { x: 10.05, y: 10 })?.id === "near", "the device under the pointer wins when hit areas overlap");
+const upper = { id: "upper", type: "route", tool: "conduit", points: [{ x: 0, y: 10 }, { x: 40, y: 10 }] };
+const lower = { id: "lower", type: "route", tool: "conduit", points: [{ x: 0, y: 11.2 }, { x: 40, y: 11.2 }] };
+const routePick = selectMarkAtPoint([lower, upper], { x: 20, y: 10.85 }, {
+  hitRoute: (mark, point) => Math.abs(point.y - mark.points[0].y) < 1.3,
+});
+assert(routePick?.id === "lower", "the closer route is selected when two runs are in range");
 
 const shortened = shortenCircuitPath([{ x: 10, y: 10 }, { x: 40, y: 10 }]);
 assert(shortened[0].x > 10 && shortened[0].x < 40, "circuit path starts at the device edge, not on the count");

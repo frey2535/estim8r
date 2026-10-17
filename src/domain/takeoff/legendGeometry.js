@@ -1104,6 +1104,30 @@ export function scanPageByLegendGeometry(page,dictionary,options={}){
 
   const hits=[];
   hypotheses.sort((a,b)=>b.score-a.score);
+  // Rival checks previously scanned every hypothesis for every candidate (O(n²)).
+  // Index the sorted hypotheses spatially so crowded plan sheets remain responsive.
+  const rivalCellSize=0.22;
+  const rivalBuckets=new Map();
+  const cell=(v)=>Math.floor(v/rivalCellSize);
+  const bucketKey=(x,y)=>`${x}:${y}`;
+  for(const hypothesis of hypotheses){
+    const x=cell(hypothesis.cluster.cx),y=cell(hypothesis.cluster.cy);
+    const key=bucketKey(x,y);
+    if(!rivalBuckets.has(key))rivalBuckets.set(key,[]);
+    rivalBuckets.get(key).push(hypothesis);
+  }
+  function nearestRival(row){
+    const x=cell(row.cluster.cx),y=cell(row.cluster.cy);
+    let best=null;
+    for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){
+      for(const other of rivalBuckets.get(bucketKey(x+dx,y+dy))||[]){
+        if(other===row)continue;
+        if(Math.hypot(other.cluster.cx-row.cluster.cx,other.cluster.cy-row.cluster.cy)>=0.22)continue;
+        if(!best||other.score>best.score)best=other;
+      }
+    }
+    return best;
+  }
   for(const row of hypotheses){
     if(row.raw < threshold) continue;
     if(options.strictSize && !row.sizeOk) continue;
@@ -1111,8 +1135,7 @@ export function scanPageByLegendGeometry(page,dictionary,options={}){
     if(occupied.some((point)=>Math.hypot((point.x||0)-cluster.cx,(point.y||0)-cluster.cy)<(Number(options.occupyRadius)||0.26))) continue;
     if(hits.some((hit)=>Math.hypot(hit.geometry.cx-cluster.cx,hit.geometry.cy-cluster.cy)<0.20)) continue;
 
-    const rivals=hypotheses.filter((other)=>other!==row && Math.hypot(other.cluster.cx-cluster.cx,other.cluster.cy-cluster.cy)<0.22);
-    const runner=rivals[0];
+    const runner=nearestRival(row);
     const margin=row.score-(runner?.score||0);
     hits.push({
       geometry:cluster,

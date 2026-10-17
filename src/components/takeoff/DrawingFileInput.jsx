@@ -12,6 +12,7 @@ export default function DrawingFileInput() {
       name="estim8r-drawing"
       type="file"
       accept={DRAWING_ACCEPT}
+      multiple
       className="sr-only"
       tabIndex={-1}
       onChange={(event) => { void handleNativeDrawingChange(event); }}

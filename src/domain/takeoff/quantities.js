@@ -58,6 +58,7 @@ export function rollupTakeoff(marks, calibration, aspect = 1, sheet = null) {
   };
 
   for (const mark of scoped) {
+    if (mark.bidUse === false) continue;
     if (mark.type === "note" || mark.type === "cloud" || mark.type === "measure") {
       if (mark.type === "note" || mark.type === "cloud") rowFor(mark).notes += 1;
       continue;

@@ -35,7 +35,22 @@ import { isScannedOrSparsePage } from "@/domain/takeoff/takeoffQuality";
 import { pickInteractiveSymbolGeometry, matchGeometryToLegend, attachLegendGeometryPrototypes } from "@/domain/takeoff/legendGeometry";
 import { shouldShowSymbolHover } from "@/domain/takeoff/legendHover";
 import { filterMarksByInspect, hoverBoundToLegend } from "@/domain/takeoff/professionalReview";
-import { buildDrawingObjectLayer, hitDrawingObject, materializeDrawingObject } from "@/domain/takeoff/drawingObjectLayer";
+import { buildDrawingObjectLayer, enclosingRoom, hitDrawingObject, materializeDrawingObject } from "@/domain/takeoff/drawingObjectLayer";
+import {
+  addSlipSheet,
+  addToolChestItem,
+  countInteractiveObjects,
+  interactiveOpenMessage,
+  isPageTakeoffEnabled,
+  mergeStudioPackage,
+  normalizePageTakeoff,
+  pagesIncludedInTakeoff,
+  quantityLinkChecksum,
+  quantityLinkCsv,
+  setPageTakeoff as setPageTakeoffEnabled,
+  studioPackage,
+  visualSearchCounts,
+} from "@/domain/takeoff/interactiveSheet";
 import SheetThumbnailPanel, { readThumbsOpen, writeThumbsOpen } from "@/components/takeoff/SheetThumbnailPanel";
 import DevicePicker from "@/components/takeoff/DevicePicker";
 import TakeoffInspector from "@/components/takeoff/TakeoffInspector";
@@ -212,7 +227,19 @@ export default function TakeoffWorkspace() {
   const [scheduleEdits, setScheduleEdits] = useState({});
   const [aiBusy, setAiBusy] = useState(false);
   const [drawingObjects, setDrawingObjects] = useState([]);
-  const [tool, setTool] = useState("pan");
+  const [tool, setTool] = useState("select");
+  const [pageTakeoff, setPageTakeoff] = useState({});
+  const [slipSheets, setSlipSheets] = useState([]);
+  const [batchQueue, setBatchQueue] = useState([]);
+  const [toolChest, setToolChest] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("estim8r-tool-chest") || "[]");
+      return Array.isArray(saved) ? saved : [];
+    } catch {
+      return [];
+    }
+  });
+  const spacePanRef = useRef(false);
   const [category, setCategory] = useState("Receptacles");
   const [symbolId, setSymbolId] = useState("duplex");
   const [zoom, setZoom] = useState(1);
@@ -331,7 +358,7 @@ export default function TakeoffWorkspace() {
     () => tradeMarks.filter((mark) => (mark.sheet || 1) === (sheetMeta.page || 1)),
     [tradeMarks, sheetMeta.page],
   );
-  const overlayMarks = useMemo(() => planOverlayMarks(sheetMarks), [sheetMarks]);
+  const overlayMarks = useMemo(() => planOverlayMarks(sheetMarks, { interactive: true }), [sheetMarks]);
   const visibleOverlayMarks = useMemo(() => {
     const isolated = isolationMode && selectedId ? overlayMarks.filter((mark) => mark.id === selectedId) : overlayMarks;
     return filterMarksByInspect(isolated, { type: inspectType });
@@ -480,6 +507,7 @@ export default function TakeoffWorkspace() {
     setDrawingError("");
     setStatus(`Importing ${nextFile.name || "drawing"}…`);
     setDraftPoints([]);
+    setTool("select");
     setZoom(1);
     setPan({ x: 0, y: 0 });
     setImageSize({ width: 0, height: 0 });
@@ -506,6 +534,8 @@ export default function TakeoffWorkspace() {
     if (saved?.penThickness) setPenThickness(normalizeSavedLineSize(saved.penThickness));
     if (saved?.penSize) setPenSize(normalizeSavedMarkerSize(saved.penSize));
     if (saved?.scheduleEdits) setScheduleEdits(saved.scheduleEdits);
+    if (saved?.pageTakeoff) setPageTakeoff(saved.pageTakeoff);
+    if (Array.isArray(saved?.slipSheets)) setSlipSheets(saved.slipSheets);
     if (saved?.sheet) setSheetMeta((current) => ({ ...current, page: saved.sheet }));
     setSupplyQuote(saved?.supplyQuote || null);
     if (restoredMarks.length) {
@@ -532,9 +562,10 @@ export default function TakeoffWorkspace() {
       fileUrlRef.current = url;
       setFileUrl(url);
       setFileBytes(bytes);
+      const opened = interactiveOpenMessage(file.name, {}, { image: !String(file.type || file.name || "").toLowerCase().includes("pdf") && !String(file.name || "").toLowerCase().endsWith(".pdf") });
       setStatus(restoredMarks.length
-        ? `${file.name} imported with ${restoredMarks.length} saved takeoff object${restoredMarks.length === 1 ? "" : "s"} restored.`
-        : `${file.name} imported. Calibrate scale, then take off the sheet.`);
+        ? `${opened} Restored ${restoredMarks.length} saved takeoff object${restoredMarks.length === 1 ? "" : "s"}.`
+        : opened);
     } catch (error) {
       console.error("Drawing import failed", error);
       clearPendingDrawing();
@@ -576,6 +607,14 @@ export default function TakeoffWorkspace() {
   }, [file, sheetMeta.page]);
 
   useEffect(() => {
+    try {
+      localStorage.setItem("estim8r-tool-chest", JSON.stringify(toolChest));
+    } catch {
+      /* private mode can reject storage */
+    }
+  }, [toolChest]);
+
+  useEffect(() => {
     const preserveForUpdate = () => {
       if (!file) return;
       saveTakeoff(true);
@@ -583,7 +622,7 @@ export default function TakeoffWorkspace() {
     };
     window.addEventListener("estim8r-before-update", preserveForUpdate);
     return () => window.removeEventListener("estim8r-before-update", preserveForUpdate);
-  }, [file, marks, calibrations, scheduleEdits, sheetMeta.page, supplyQuote, trade, category, symbolId, conduitId, maxHomeruns, penColor, penThickness, penSize, confirmedCoverageIds, confirmedEmptySheets]);
+  }, [file, marks, calibrations, scheduleEdits, sheetMeta.page, supplyQuote, trade, category, symbolId, conduitId, maxHomeruns, penColor, penThickness, penSize, confirmedCoverageIds, confirmedEmptySheets, pageTakeoff, slipSheets]);
 
   useEffect(() => {
     const resetErrors = () => setDrawingError("");
@@ -598,6 +637,7 @@ export default function TakeoffWorkspace() {
         setStatus("Drawing import failed.");
         return;
       }
+      if (Array.isArray(payload.queue) && payload.queue.length) setBatchQueue(payload.queue);
       if (payload.file) void applyIncomingDrawing?.(payload.file, payload.bytes);
     });
   }, []);
@@ -630,6 +670,8 @@ export default function TakeoffWorkspace() {
       scheduleEdits,
       sheet: sheetMeta.page,
       pageCount: sheetMeta.pageCount,
+      pageTakeoff,
+      slipSheets,
       supplyQuote,
       confirmedCoverageIds,
       confirmedEmptySheets,
@@ -1072,13 +1114,16 @@ export default function TakeoffWorkspace() {
   function handleDrop(event) {
     event.preventDefault();
     event.stopPropagation();
-    const droppedFile = captureFileList(event.dataTransfer?.files)
+    const dropped = [...(event.dataTransfer?.files || [])].filter((item) => item && !validateDrawingFile(item));
+    const droppedFile = dropped[0]
+      || captureFileList(event.dataTransfer?.files)
       || [...(event.dataTransfer?.items || [])].find((item) => item.kind === "file")?.getAsFile();
     if (!droppedFile) {
       setDrawingError("No drawing selected.");
       setStatus("Drawing import failed.");
       return;
     }
+    setBatchQueue(dropped.slice(1));
     void chooseFile(droppedFile);
   }
 
@@ -1183,7 +1228,10 @@ export default function TakeoffWorkspace() {
   }
 
   function updateMark(id, patch) {
-    const next = marks.map((mark) => (mark.id === id ? { ...mark, ...patch } : mark));
+    const named = Boolean(patch.circuit || patch.circuitNumber || patch.roomName || patch.symbol);
+    const nextPatch = named ? { ...patch, bidUse: true, prediction: false } : patch;
+    if (nextPatch.roomName) nextPatch.symbolLabel = nextPatch.roomName;
+    const next = marks.map((mark) => (mark.id === id ? { ...mark, ...nextPatch } : mark));
     commitMarks(next, "Selected takeoff object updated.");
   }
 
@@ -1354,7 +1402,11 @@ export default function TakeoffWorkspace() {
         if (cancelled) return;
         const persistable = persistableAiPages(pages);
         setAiPages(persistable);
-        setDrawingObjects(buildDrawingObjectLayer({ pages: persistable, detectedMarks: [], trade: "electrical" }));
+        const layer = buildDrawingObjectLayer({ pages: persistable, detectedMarks: [], trade: "electrical" });
+        setDrawingObjects(layer);
+        const counts = countInteractiveObjects(layer);
+        setStatus(interactiveOpenMessage(file?.name, counts));
+        setPageTakeoff((current) => normalizePageTakeoff(current, pages.length || 1));
       } catch (error) {
         if (!cancelled) console.error("Drawing object layer failed", error);
       }
@@ -1395,15 +1447,20 @@ export default function TakeoffWorkspace() {
       // Raster only the sparse electrical scan pages. Full-set raster at CAD
       // scale OOM'd / jetsam'd the tab while AI takeoff was running.
       const scanDictionary = legendDictionaryFromPages(pages, palette.fromDrawing, palette.symbols, trade);
-      const scanPages = pagesToScan(pages, trade, scanDictionary);
+      const pagesForTakeoff = pages.map((page) => {
+        const enabled = onlyPage == null
+          ? isPageTakeoffEnabled(pageTakeoff, page.page)
+          : Number(page.page) === Number(onlyPage) || page.kind === "legend";
+        return enabled ? page : { ...page, takeoffDisabled: true };
+      });
+      const scanPages = pagesIncludedInTakeoff(pagesToScan(pagesForTakeoff, trade, scanDictionary));
       await hydratePagesRaster(pagesNeedingRaster(scanPages));
       if (!silent) setStatus(`AI assist is marking ${tradeLabel} on the drawings…`);
       await new Promise((resolve) => setTimeout(resolve, 0));
       const persistable = persistableAiPages(pages);
       setAiPages(persistable);
-      const selectedPages = onlyPage == null ? pages : pages.filter((entry) => entry.page === onlyPage || entry.kind === "legend");
       const planned = buildAiMarks({
-        pages: selectedPages,
+        pages: pagesForTakeoff,
         trade,
         symbols: palette.symbols,
         drawingSymbols: palette.fromDrawing,
@@ -1416,7 +1473,7 @@ export default function TakeoffWorkspace() {
       // Distinguish a failed/empty scan from a genuine zero-symbol result.
       // This is especially important on mobile where the PDF may render while
       // text and vector extraction produce no usable symbol candidates.
-      const scannedPages = pagesToScan(pages || [], trade, scanDictionary);
+      const scannedPages = pagesIncludedInTakeoff(pagesToScan(pagesForTakeoff, trade, scanDictionary));
       const scanDiagnostics = {
         totalPages: pages.length,
         scannedPages: scannedPages.length,
@@ -1743,6 +1800,22 @@ export default function TakeoffWorkspace() {
       return;
     }
 
+    if (tool === "area" && draftPoints.length === 0) {
+      const room = enclosingRoom(drawingObjects, point, sheetMeta.page);
+      if (room) {
+        const materialized = materializeDrawingObject(room, marks);
+        const hit = materialized?.mark || null;
+        if (hit && !materialized.existing) {
+          commitMarks([...marks, hit], "Room boundary filled from the printed outline. Name the room before using its area in the bid.");
+          setSelectedId(hit.id);
+        } else if (hit) {
+          setSelectedId(hit.id);
+          setStatus("Selected the room. Edit its name in the inspector.");
+        }
+        return;
+      }
+    }
+
     if (["polyline", "area", "circuit"].includes(tool)) {
       const next = [...draftPoints, point];
       setDraftPoints(next);
@@ -1902,13 +1975,26 @@ export default function TakeoffWorkspace() {
         event.preventDefault();
         finishPath(event);
       }
+      if (event.key === " " && !["INPUT", "TEXTAREA"].includes(event.target.tagName)) {
+        event.preventDefault();
+        spacePanRef.current = true;
+      }
+    };
+    const onKeyUp = (event) => {
+      if (event.key === " ") spacePanRef.current = false;
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKeyUp);
+    };
   });
 
   function onPanPointerDown(event) {
-    if (tool !== "pan" || event.button > 0 || pinchActiveRef.current) return;
+    const panGesture = tool === "pan" || event.button === 1 || spacePanRef.current;
+    if (!panGesture || event.button > 1 || pinchActiveRef.current) return;
+    if (tool !== "pan") suppressEditClickRef.current = true;
     event.preventDefault();
     event.stopPropagation();
     const pointerId = event.pointerId;
@@ -2129,6 +2215,74 @@ export default function TakeoffWorkspace() {
     setTool("select");
   }
 
+  function downloadQuantityLink() {
+    const csv = quantityLinkCsv(marks, { slips: slipSheets });
+    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), `${(file?.name || "takeoff").replace(/\.[^.]+$/, "")}-quantity-link.csv`);
+    setStatus("Quantity link CSV downloaded. Open it in Excel. Pages marked bid use no are predictions until you name them.");
+  }
+
+  async function downloadQuantityChecksum() {
+    const csv = quantityLinkCsv(marks, { slips: slipSheets });
+    try {
+      const checksum = await quantityLinkChecksum(csv);
+      downloadBlob(new Blob([JSON.stringify({ ...checksum, fileName: file?.name || "" }, null, 2)], { type: "application/json" }), `${(file?.name || "takeoff").replace(/\.[^.]+$/, "")}-quantity-link.integrity.json`);
+      setStatus("Quantity link checksum saved. This SHA-256 digest checks the CSV. It is not a certificate-backed digital signature.");
+    } catch (error) {
+      setDrawingError(error?.message || "Could not checksum the quantity link.");
+    }
+  }
+
+  function downloadStudioSession() {
+    const payload = studioPackage({ fileName: file?.name, marks, pageTakeoff, slips: slipSheets, toolChest });
+    downloadBlob(new Blob([JSON.stringify(payload)], { type: "application/json" }), `${(file?.name || "takeoff").replace(/\.[^.]+$/, "")}-studio-session.json`);
+    setStatus("Takeoff session file downloaded. Another estimator can import it. This is a shared file, not a live multi-user session.");
+  }
+
+  async function importStudioSession(event) {
+    const picked = event.target.files?.[0];
+    event.target.value = "";
+    if (!picked) return;
+    try {
+      const incoming = JSON.parse(await picked.text());
+      const next = mergeStudioPackage(marks, incoming);
+      if (next === marks) {
+        setDrawingError("That file is not an Estim8r takeoff session.");
+        return;
+      }
+      commitMarks(next, "Imported takeoff session.");
+      if (incoming.pageTakeoff) setPageTakeoff(incoming.pageTakeoff);
+      if (Array.isArray(incoming.slips)) setSlipSheets(incoming.slips);
+      if (Array.isArray(incoming.toolChest) && incoming.toolChest.length) {
+        setToolChest((current) => incoming.toolChest.reduce((chest, item) => addToolChestItem(chest, item), current));
+      }
+    } catch (error) {
+      setDrawingError(error?.message || "Could not read the takeoff session file.");
+    }
+  }
+
+  function insertSlipSheet() {
+    const title = window.prompt("Slip sheet title", "Revision");
+    if (!title) return;
+    setSlipSheets((current) => addSlipSheet(current, sheetMeta.page, title));
+    setStatus(`Slip sheet “${title}” is saved after sheet ${sheetMeta.page}. It travels with the quantity link and the shared session file.`);
+  }
+
+  function countSelectedSymbol() {
+    const rows = visualSearchCounts(marks, selectedMark);
+    if (!rows.length) {
+      setStatus("No accepted matches for this symbol yet. Classify it before counting it across pages.");
+      return;
+    }
+    const total = rows.reduce((sum, row) => sum + row.count, 0);
+    setStatus(`${selectedMark?.typeCode || selectedMark?.symbolLabel || "Symbol"}: ${total} on ${rows.map((row) => `sheet ${row.sheet} (${row.count})`).join(", ")}.`);
+  }
+
+  function openNextBatchDrawing() {
+    const [next, ...rest] = batchQueue;
+    setBatchQueue(rest);
+    if (next) void chooseFile(next);
+  }
+
   async function copyQuantities() {
     const csv = quantitiesToCsv(editedRollup, runs);
     try {
@@ -2204,6 +2358,19 @@ export default function TakeoffWorkspace() {
           </div>
         </details>
         <button type="button" disabled={aiBusy || !isPdf} onClick={() => { setMode("ai"); void runAiTakeoff({ onlyPage: sheetMeta.page }); }} className="hidden lg:inline-flex min-h-11 items-center rounded-lg border border-border bg-background px-3 text-sm font-semibold hover:bg-muted disabled:opacity-50" title="Run automatic takeoff only on the current drawing page, preserving marks on other sheets">AI: this sheet</button>
+        <label className="hidden min-h-11 items-center gap-2 rounded-lg border border-border bg-background px-2 text-sm font-semibold lg:inline-flex" title="Full takeoff includes this page. AI: this sheet still runs the page you are viewing.">
+          <input
+            type="checkbox"
+            data-testid="page-takeoff-toggle"
+            checked={isPageTakeoffEnabled(pageTakeoff, sheetMeta.page)}
+            onChange={(event) => {
+              const enabled = event.target.checked;
+              setPageTakeoff((current) => setPageTakeoffEnabled(current, sheetMeta.page, enabled));
+              setStatus(enabled ? `Takeoff will include sheet ${sheetMeta.page}.` : `Takeoff will skip sheet ${sheetMeta.page}.`);
+            }}
+          />
+          Takeoff on this page
+        </label>
         <div className="hidden lg:block">
           <TakeoffActionsMenu
             aiBusy={aiBusy}
@@ -2294,6 +2461,47 @@ export default function TakeoffWorkspace() {
                   <input type="color" value={penColor} onChange={(event) => setPenColor(event.target.value)} className="h-8 w-full" />
                 </span>
               </label>
+              <div className="space-y-1">
+                <div className="text-xs font-bold text-muted-foreground">Tool chest</div>
+                <button
+                  type="button"
+                  className="w-full rounded-md border border-border px-2 py-1.5 text-left text-xs font-semibold hover:bg-muted"
+                  onClick={() => {
+                    const name = window.prompt("Name this tool", activeTool.label);
+                    if (!name) return;
+                    setToolChest((current) => addToolChestItem(current, {
+                      name,
+                      tool,
+                      color: penColor,
+                      symbolId,
+                      category,
+                      lineSize: penThickness,
+                      markerSize: penSize,
+                    }));
+                  }}
+                >
+                  Save current tool
+                </button>
+                {toolChest.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded-md border border-border px-2 py-1.5 text-left text-xs font-semibold hover:bg-muted"
+                    onClick={() => {
+                      setTool(item.tool || "select");
+                      if (item.color) setPenColor(item.color);
+                      if (item.symbolId) setSymbolId(item.symbolId);
+                      if (item.category) setCategory(item.category);
+                      if (item.lineSize) setPenThickness(item.lineSize);
+                      if (item.markerSize) setPenSize(item.markerSize);
+                      setStatus(`${item.name} is the active tool.`);
+                    }}
+                  >
+                    <span className="h-3 w-3 rounded-sm border border-black/20" style={{ backgroundColor: item.color || "#2563eb" }} />
+                    {item.name}
+                  </button>
+                ))}
+              </div>
             </div>
             <TakeoffSizeControl
               markerSize={penSize}
@@ -2306,6 +2514,21 @@ export default function TakeoffWorkspace() {
             </label>
             <p className="text-[11px] leading-4 text-muted-foreground">Default is 3. AI will not put more homeruns in one conduit unless you raise this.</p>
             <p className="text-[11px] leading-4 text-muted-foreground"><strong className="text-foreground">AI assist</strong> counts the selected trade and draws colored marks on the sheets. <strong className="text-foreground">True Takeoff</strong> marks the drawings (runs AI if empty) then builds the bid-lock estimate.</p>
+            <div className="grid grid-cols-1 gap-1">
+              <button type="button" onClick={downloadQuantityLink} className="rounded-md border border-border px-2 py-1.5 text-left text-xs font-semibold hover:bg-muted">Quantity link CSV</button>
+              <button type="button" onClick={() => { void downloadQuantityChecksum(); }} className="rounded-md border border-border px-2 py-1.5 text-left text-xs font-semibold hover:bg-muted">Quantity link checksum</button>
+              <button type="button" onClick={downloadStudioSession} className="rounded-md border border-border px-2 py-1.5 text-left text-xs font-semibold hover:bg-muted">Share takeoff session</button>
+              <label className="rounded-md border border-border px-2 py-1.5 text-xs font-semibold hover:bg-muted">
+                Import takeoff session
+                <input type="file" accept="application/json,.json" className="sr-only" onChange={(event) => { void importStudioSession(event); }} />
+              </label>
+              <button type="button" onClick={insertSlipSheet} className="rounded-md border border-border px-2 py-1.5 text-left text-xs font-semibold hover:bg-muted">Slip sheet after this page</button>
+              {batchQueue.length > 0 && (
+                <button type="button" onClick={openNextBatchDrawing} className="rounded-md border border-border px-2 py-1.5 text-left text-xs font-semibold hover:bg-muted">
+                  Next drawing ({batchQueue.length} waiting)
+                </button>
+              )}
+            </div>
             <DevicePicker
               availableSymbols={availableDeviceSymbols}
               trades={TRADES}
@@ -2408,6 +2631,7 @@ export default function TakeoffWorkspace() {
                         h: (selectedMark.symbolBodyBounds?.h || selectedMark.outline?.h || 0.7) * 1.25,
                       });
                     }} aria-label="Enlarge selected device highlight">+ Size</button>
+                  <button type="button" onClick={countSelectedSymbol} className="min-h-9 rounded px-3 py-2 text-xs font-semibold hover:bg-muted">Count on all pages</button>
                   <button type="button" onClick={deleteSelected}
                     className="min-h-9 rounded px-3 py-2 text-xs font-semibold text-destructive hover:bg-destructive/10"
                     aria-label="Delete selected takeoff object">Delete</button>
@@ -2559,6 +2783,23 @@ export default function TakeoffWorkspace() {
                       category: rawSymbol?.takeoffCategory || rawSymbol?.category || "Unclassified",
                       requiresClassification: !rawSymbol,
                     } : null);
+                  if (hovered?.objectKind === "circuit" || hovered?.objectKind === "room") {
+                    const x = Math.min(82, Math.max(2, Number(hovered.x) || 0));
+                    const y = Math.min(86, Math.max(2, Number(hovered.y) || 0));
+                    const title = hovered.objectKind === "room" ? "Room" : "Line";
+                    const detail = hovered.objectKind === "room"
+                      ? "Click to select this room, then name it before the area is used in the bid."
+                      : "Click to select this line, then assign a circuit before the length is used in the bid.";
+                    return (
+                      <div
+                        className="pointer-events-none absolute z-50 max-w-[18rem] rounded-xl border-2 border-slate-900 bg-white px-3 py-2.5 text-base text-slate-950 shadow-2xl dark:border-white dark:bg-slate-950 dark:text-white"
+                        style={{ left: `${x}%`, top: `${y}%`, transform: "translate(10px, 10px)" }}
+                      >
+                        <div className="text-lg font-black leading-tight">{title}</div>
+                        <div className="mt-1 text-sm font-semibold">{detail}</div>
+                      </div>
+                    );
+                  }
                   if (!hovered || !shouldShowSymbolHover(hovered)) return null;
                   const hoverBound = hoverBoundToLegend(hovered, drawingSymbols, {
                     planType: aiPages.find((item) => item.page === sheetMeta.page)?.planType || "",

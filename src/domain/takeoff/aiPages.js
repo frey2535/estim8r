@@ -1,5 +1,5 @@
 import { classifyPageItems, inferPlanType, extractPdfPageItems } from "./drawing-docs";
-import { extractPageSymbolPaths } from "./pdfPaths";
+import { extractPageSheetGeometry, extractPageSymbolPaths } from "./pdfPaths";
 import { classifySheetDiscipline, findSheetId, parseSheetId } from "./sheetDiscipline";
 import { getPdfDocument } from "@/lib/pdf-document";
 import { persistableAiPages, shouldExtractRaster } from "./aiPageBudget.js";
@@ -32,7 +32,9 @@ export async function readAiPages(fileBytes, options = {}) {
     const sheetId = findSheetId(tokens) || parseSheetId(text);
     const discipline = classifySheetDiscipline(text, tokens);
     let paths = [];
+    let sheetGeometry = [];
     try { paths = await extractPageSymbolPaths(page); } catch { paths = []; }
+    try { sheetGeometry = await extractPageSheetGeometry(page); } catch { sheetGeometry = []; }
     const recorded = {
       page: pageNumber,
       kind,
@@ -41,6 +43,7 @@ export async function readAiPages(fileBytes, options = {}) {
       discipline,
       planType,
       paths,
+      sheetGeometry,
       pdfPage: page,
       rasterPaths: [],
     };

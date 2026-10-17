@@ -4,6 +4,7 @@ import {
   candidateFromPageBox,
   candidatesFromConstructedPaths,
   multiplyCtm,
+  sheetGeometryFromConstructedPaths,
 } from "./vectorSymbols.js";
 
 const OPS = {
@@ -33,7 +34,7 @@ function drawOpsFromConstructArgs(args = []) {
   return [];
 }
 
-export function symbolPathsFromOperatorList(opList, toPagePct) {
+export function symbolPathsFromOperatorList(opList, toPagePct, options = {}) {
   const fnArray = opList?.fnArray || [];
   const argsArray = opList?.argsArray || [];
   const ctmStack = [];
@@ -90,7 +91,9 @@ export function symbolPathsFromOperatorList(opList, toPagePct) {
     }
   }
 
-  const fromPaths = candidatesFromConstructedPaths(entries, toPagePct);
+  const fromPaths = options.sheetGeometry
+    ? sheetGeometryFromConstructedPaths(entries, toPagePct)
+    : candidatesFromConstructedPaths(entries, toPagePct);
   const fromForms = formBoxes.map(candidateFromPageBox).filter(Boolean);
   return [...fromPaths, ...fromForms];
 }
@@ -106,4 +109,17 @@ export async function extractPageSymbolPaths(page) {
     };
   };
   return symbolPathsFromOperatorList(opList, toPagePct);
+}
+
+export async function extractPageSheetGeometry(page) {
+  const viewport = page.getViewport({ scale: 1 });
+  const opList = await page.getOperatorList();
+  const toPagePct = (x, y) => {
+    const [vx, vy] = viewport.convertToViewportPoint(x, y);
+    return {
+      x: viewport.width ? (vx / viewport.width) * 100 : 0,
+      y: viewport.height ? (vy / viewport.height) * 100 : 0,
+    };
+  };
+  return symbolPathsFromOperatorList(opList, toPagePct, { sheetGeometry: true });
 }

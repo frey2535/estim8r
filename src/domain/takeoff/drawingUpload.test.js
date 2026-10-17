@@ -1,5 +1,6 @@
 import {
   captureFileList,
+  listDrawingFiles,
   drawingFileName,
   inferDrawingMime,
   snapshotDrawingFile,
@@ -24,6 +25,7 @@ assert(captureFileList(null) === null, "null FileList is empty");
 assert(captureFileList({ 0: pdf, length: 1 }) === pdf, "captures the first FileList entry");
 assert(captureFileList({ length: 0 }) === null, "empty FileList is ignored");
 assert(captureFileList({ 0: null, 1: pdf, length: 2 }) === pdf, "skips empty FileList slots");
+assert(listDrawingFiles({ 0: pdf, 1: text, 2: jpgNoType, length: 3 }).length === 2, "batch import keeps drawings and drops other files");
 
 assert(drawingFileName(iosPhoto) === "drawing.jpg", "nameless iOS photos get a drawing name");
 assert(drawingFileName(pdf) === "plan.pdf", "named files keep their name");

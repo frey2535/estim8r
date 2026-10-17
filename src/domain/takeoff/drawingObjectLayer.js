@@ -201,6 +201,46 @@ export function buildDrawingObjectLayer({ pages = [], detectedMarks = [], trade 
   return objects;
 }
 
+export function printedSelectionId(object) {
+  if (!object) return null;
+  return `printed:${object.objectId || object.id}`;
+}
+
+/** Stroke the geometry that is already on the sheet. No extra box is invented. */
+export function printedHighlightGeometry(object) {
+  if (!object) return null;
+  const outline = object.outline || {};
+  const source = outline.points?.length >= 2 ? outline.points : object.points;
+  if (source?.length >= 2) {
+    return {
+      kind: "path",
+      points: source.map((point) => ({ x: Number(point.x) || 0, y: Number(point.y) || 0 })),
+    };
+  }
+  if (outline.kind === "circle" && Number(outline.r) > 0) {
+    return {
+      kind: "circle",
+      cx: Number.isFinite(Number(outline.cx)) ? Number(outline.cx) : Number(object.x) || 0,
+      cy: Number.isFinite(Number(outline.cy)) ? Number(outline.cy) : Number(object.y) || 0,
+      r: Number(outline.r),
+    };
+  }
+  const w = Number(outline.w);
+  const h = Number(outline.h);
+  if (!(w > 0) || !(h > 0)) return null;
+  const cx = Number.isFinite(Number(outline.cx)) ? Number(outline.cx) : Number(object.x) || 0;
+  const cy = Number.isFinite(Number(outline.cy)) ? Number(outline.cy) : Number(object.y) || 0;
+  return {
+    kind: "path",
+    points: [
+      { x: cx - w / 2, y: cy - h / 2 },
+      { x: cx + w / 2, y: cy - h / 2 },
+      { x: cx + w / 2, y: cy + h / 2 },
+      { x: cx - w / 2, y: cy + h / 2 },
+    ],
+  };
+}
+
 export function hitDrawingObject(objects = [], point, sheet = 1) {
   if (!point) return null;
   const hits = (objects || []).filter((item) => (

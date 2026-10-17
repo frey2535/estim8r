@@ -386,11 +386,33 @@ export function displayDeviceOutline(mark, markerSize = 0.55, options = {}) {
   return scaleOutline(outline, displayMax / extent, origin);
 }
 
+function pointerDistance(mark, point) {
+  const x = Number(mark?.symbolBodyLocation?.x ?? mark?.x) || 0;
+  const y = Number(mark?.symbolBodyLocation?.y ?? mark?.y) || 0;
+  return Math.hypot((point?.x || 0) - x, (point?.y || 0) - y);
+}
+
+function routePointerDistance(mark, point) {
+  const points = mark?.points || [];
+  if (points.length < 2) return pointerDistance(mark, point);
+  let best = Infinity;
+  for (let index = 1; index < points.length; index += 1) {
+    const a = points[index - 1];
+    const b = points[index];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len2 = dx * dx + dy * dy;
+    const t = len2 ? Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / len2)) : 0;
+    best = Math.min(best, Math.hypot(point.x - (a.x + t * dx), point.y - (a.y + t * dy)));
+  }
+  return best;
+}
+
 export function hitTestDeviceFill(mark, point, markerSize = 0.55) {
   if (!mark || !point) return false;
   const outline = displayDeviceOutline(mark, markerSize);
   if (!outline) return false;
-  return pointHitsOutline(outline, { x: mark.x, y: mark.y }, point, 0.55);
+  return pointHitsOutline(outline, { x: mark.symbolBodyLocation?.x ?? mark.x, y: mark.symbolBodyLocation?.y ?? mark.y }, point, 0.28);
 }
 
 export function selectMarkAtPoint(marks, point, options = {}) {
@@ -398,10 +420,16 @@ export function selectMarkAtPoint(marks, point, options = {}) {
   const markerSize = options.markerSize || 0.55;
   const hitRoute = options.hitRoute;
   const list = marks || [];
-  const device = [...list].reverse().find((mark) => isDeviceMark(mark) && hitTestDeviceFill(mark, point, markerSize));
-  if (device) return device;
+  const devices = list.filter((mark) => isDeviceMark(mark) && hitTestDeviceFill(mark, point, markerSize));
+  if (devices.length) {
+    devices.sort((a, b) => pointerDistance(a, point) - pointerDistance(b, point));
+    return devices[0];
+  }
   if (!hitRoute) return null;
-  return [...list].reverse().find((mark) => !isDeviceMark(mark) && hitRoute(mark, point, aspect));
+  const routes = list.filter((mark) => !isDeviceMark(mark) && hitRoute(mark, point, aspect));
+  if (!routes.length) return null;
+  routes.sort((a, b) => routePointerDistance(a, point) - routePointerDistance(b, point));
+  return routes[0];
 }
 
 export function shortenCircuitPath(points, pad = 0.55) {

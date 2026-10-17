@@ -14,6 +14,7 @@ import {
   looksLikeReceptacleGlyph,
   looksLikeUnlabeledReceptacleGlyph,
   resolveGeometryMatch,
+  pickInteractiveSymbolGeometry,
   recoverMissedLegendSymbols,
   scanPageByLegendGeometry,
   symbolBodyOutline,
@@ -214,6 +215,12 @@ const denseHits = scanPageByLegendGeometry({ paths: densePaths }, dictionary, { 
 const denseMs = Date.now() - denseStarted;
 assert(denseMs < 2500, `dense geometry scan must finish, took ${denseMs}ms`);
 assert(Array.isArray(denseHits), "dense geometry scan returns hits or an empty list");
+
+const clicked = { cx: 30, cy: 40, w: 0.4, h: 0.4, kind: "rect", source: "vector" };
+const neighbor = { cx: 31, cy: 40, w: 1.2, h: 0.4, kind: "rect", source: "vector" };
+const onGlyph = pickInteractiveSymbolGeometry({ paths: [clicked, neighbor] }, { x: 30, y: 40 }, { radius: 1.35 });
+assert(onGlyph && Math.hypot(onGlyph.cx - 30, onGlyph.cy - 40) < 0.45, "selection stays on the glyph under the pointer");
+assert(pickInteractiveSymbolGeometry({ paths: [clicked, neighbor] }, { x: 30, y: 41.3 }, { radius: 1.35 }) == null, "empty space near a symbol is not snapped to that symbol");
 
 if (!process.exitCode) console.log("legend geometry checks passed");
 

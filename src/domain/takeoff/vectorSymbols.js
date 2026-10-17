@@ -715,16 +715,48 @@ export function scaleOutline(outline, factor, origin) {
   };
 }
 
+function distanceToSegment(point, a, b) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  if (!len2) return Math.hypot(point.x - a.x, point.y - a.y);
+  const t = Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / len2));
+  return Math.hypot(point.x - (a.x + t * dx), point.y - (a.y + t * dy));
+}
+
+function outlineCenter(outline, origin) {
+  const x = Number(outline?.cx);
+  const y = Number(outline?.cy);
+  return {
+    x: Number.isFinite(x) ? x : Number(origin?.x) || 0,
+    y: Number.isFinite(y) ? y : Number(origin?.y) || 0,
+  };
+}
+
 export function pointHitsOutline(outline, origin, point, pad = 0.55) {
   if (!outline || !point) return false;
+  const center = outlineCenter(outline, origin);
+  const grab = Math.max(0, Number(pad) || 0);
+  // Expand only by a stroke, so a click on the ink hits and a click beside it does not.
+  const slop = Math.min(grab, 0.3);
   if (outline.kind === "circle") {
-    return Math.hypot(point.x - origin.x, point.y - origin.y) <= Math.max(outline.r || 0, pad);
+    return Math.hypot(point.x - center.x, point.y - center.y) <= Math.max((outline.r || 0) + slop, grab);
   }
-  if (outline.kind === "path" && outline.points?.length >= 3) {
-    if (pointInPolygon(point, outline.points)) return true;
-    return outline.points.some((item) => Math.hypot(item.x - point.x, item.y - point.y) <= pad);
+  if (outline.kind === "path" && outline.points?.length >= 2) {
+    if (outline.points.length >= 3 && pointInPolygon(point, outline.points)) return true;
+    if (!slop) return false;
+    for (let index = 1; index < outline.points.length; index += 1) {
+      if (distanceToSegment(point, outline.points[index - 1], outline.points[index]) <= slop) return true;
+    }
+    if (outline.points.length >= 3 && distanceToSegment(point, outline.points[outline.points.length - 1], outline.points[0]) <= slop) return true;
+    return false;
   }
-  const w = Math.max((outline.w || 0) / 2, pad);
-  const h = Math.max((outline.h || 0) / 2, pad);
-  return Math.abs(point.x - origin.x) <= w && Math.abs(point.y - origin.y) <= h;
+  if (outline.kind === "composite" && outline.parts?.length) {
+    return outline.parts.some((part) => pointHitsOutline(part, center, point, pad));
+  }
+  const halfW = (Number(outline.w) || 0) / 2;
+  const halfH = (Number(outline.h) || 0) / 2;
+  const w = Math.max(halfW + slop, grab);
+  const h = Math.max(halfH + slop, grab);
+  return Math.abs(point.x - center.x) <= w && Math.abs(point.y - center.y) <= h;
 }

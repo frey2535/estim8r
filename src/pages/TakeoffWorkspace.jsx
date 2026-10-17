@@ -303,6 +303,7 @@ export default function TakeoffWorkspace() {
   const [drawingDocs, setDrawingDocs] = useState(null);
   const [hoverPoint, setHoverPoint] = useState(null);
   const [hoveredDeviceId, setHoveredDeviceId] = useState(null);
+  const [pointerSheet, setPointerSheet] = useState(null);
   const [hoveredGeometryInfo, setHoveredGeometryInfo] = useState(null);
   const [inspectType, setInspectType] = useState("");
   const [wideLayout, setWideLayout] = useState(() => (
@@ -1650,14 +1651,17 @@ export default function TakeoffWorkspace() {
       let hit = selectMarkAtPoint(overlayMarks, point, {
         aspect: sheetAspectRatio,
         markerSize: penSize,
-        hitRoute: (mark, at, aspect) => hitTestMark(sizedMark(mark), at, aspect, markHitThreshold(mark)),
+        hitRoute: (mark, at, aspect) => hitTestMark(sizedMark(mark), at, aspect, markHitThreshold(mark, 0.7)),
       });
       if (!hit) {
         const drawingObject = hitDrawingObject(drawingObjects, point, sheetMeta.page);
         if (drawingObject) {
-          const picked = interactiveGeometryAt(point);
-          const matchedSymbol = picked?.match?.entry?.symbol || null;
-          if (picked?.geometry && matchedSymbol) {
+          const symbolObject = drawingObject.objectKind === "unclassified-vector" || drawingObject.objectKind === "recognized-device";
+          const picked = symbolObject ? interactiveGeometryAt(point) : null;
+          const geometry = picked?.geometry;
+          const aligned = Boolean(geometry) && Math.hypot((geometry.cx || 0) - drawingObject.x, (geometry.cy || 0) - drawingObject.y) <= 0.55;
+          const matchedSymbol = aligned ? picked?.match?.entry?.symbol || null : null;
+          if (matchedSymbol) {
             hit = {
               id: marks.some((item) => item.id === drawingObject.sourceMarkId) ? crypto.randomUUID() : (drawingObject.sourceMarkId || crypto.randomUUID()),
               sheet: sheetMeta.page || 1,
@@ -1665,11 +1669,11 @@ export default function TakeoffWorkspace() {
               source: "drawing-object",
               type: "count",
               tool: "count",
-              x: picked.geometry.cx,
-              y: picked.geometry.cy,
-              symbolBodyLocation: { x: picked.geometry.cx, y: picked.geometry.cy },
-              outline: picked.geometry.outline,
-              outlineSource: picked.geometry.outline?.source || picked.geometry.source || "vector",
+              x: drawingObject.x,
+              y: drawingObject.y,
+              symbolBodyLocation: { x: drawingObject.x, y: drawingObject.y },
+              outline: drawingObject.outline || geometry.outline,
+              outlineSource: drawingObject.outline?.source || geometry.outline?.source || geometry.source || "vector",
               objectId: drawingObject.objectId,
               sourceObjectId: drawingObject.objectId,
               category: matchedSymbol.takeoffCategory || matchedSymbol.category || "From drawing",
@@ -1774,10 +1778,12 @@ export default function TakeoffWorkspace() {
     if (tool === "count" || tool === "drop") {
       const picked = interactiveGeometryAt(point);
       const drawingObject = hitDrawingObject(drawingObjects, point, sheetMeta.page);
-      const geometry = picked?.geometry || (drawingObject?.outline ? {
-        cx: drawingObject.x, cy: drawingObject.y, outline: drawingObject.outline,
-        source: drawingObject.outline?.source || "vector",
-      } : null);
+      const objectGeometry = drawingObject?.objectKind === "unclassified-vector" || drawingObject?.objectKind === "recognized-device"
+        ? { cx: drawingObject.x, cy: drawingObject.y, outline: drawingObject.outline, source: drawingObject.outline?.source || "vector" }
+        : null;
+      const candidates = [picked?.geometry, objectGeometry].filter((item) => item && Number.isFinite(item.cx) && Number.isFinite(item.cy));
+      candidates.sort((a, b) => Math.hypot(a.cx - point.x, a.cy - point.y) - Math.hypot(b.cx - point.x, b.cy - point.y));
+      const geometry = candidates[0] || null;
       if (!geometry) {
         setStatus("No printed symbol geometry detected at that point. Zoom in and click directly inside the symbol.");
         return;
@@ -2675,6 +2681,7 @@ export default function TakeoffWorkspace() {
                   if (panningRef.current || aiBusy) return;
                   const point = drawingPoint(event);
                   if (!point) return;
+                  setPointerSheet((current) => (current && Math.hypot(current.x - point.x, current.y - point.y) < 0.2 ? current : point));
                   const hovered = selectMarkAtPoint(overlayMarks, point, { markerSize: penSize });
                   if (hovered && isDeviceMark(hovered)) {
                     setHoveredGeometryInfo(null);
@@ -2694,8 +2701,8 @@ export default function TakeoffWorkspace() {
                   }
                   setHoverPoint(point);
                 }}
-                onPointerLeave={() => { setHoverPoint(null); setHoveredDeviceId(null); setHoveredGeometryInfo(null); }}
-                className={cn("relative bg-white shadow-xl", tool === "pan" ? "cursor-grab" : tool === "select" ? "cursor-move" : "cursor-crosshair")}
+                onPointerLeave={() => { setHoverPoint(null); setPointerSheet(null); setHoveredDeviceId(null); setHoveredGeometryInfo(null); }}
+                className={cn("relative bg-white shadow-xl", tool === "pan" ? "cursor-grab" : tool === "select" ? "cursor-default" : "cursor-crosshair")}
                 style={{ transform: `translate(${pan.x}px, ${pan.y}px)`, willChange: tool === "pan" ? "transform" : "auto", touchAction: "none" }}
               >
                 {isPdf ? (
@@ -2781,8 +2788,8 @@ export default function TakeoffWorkspace() {
                       requiresClassification: !rawSymbol,
                     } : null);
                   if (hovered?.objectKind === "circuit" || hovered?.objectKind === "room") {
-                    const x = Math.min(82, Math.max(2, Number(hovered.x) || 0));
-                    const y = Math.min(86, Math.max(2, Number(hovered.y) || 0));
+                    const x = Math.min(78, Math.max(2, Number(pointerSheet?.x ?? hovered.x) || 0));
+                    const y = Math.min(78, Math.max(2, Number(pointerSheet?.y ?? hovered.y) || 0));
                     const title = hovered.objectKind === "room" ? "Room" : "Line";
                     const detail = hovered.objectKind === "room"
                       ? "Click to select this room, then name it before the area is used in the bid."
@@ -2802,8 +2809,8 @@ export default function TakeoffWorkspace() {
                     planType: aiPages.find((item) => item.page === sheetMeta.page)?.planType || "",
                   });
                   const hoverLegend = hoverBound.hover;
-                  const x = Math.min(82, Math.max(2, Number(hovered.x) || 0));
-                  const y = Math.min(86, Math.max(2, Number(hovered.y) || 0));
+                  const x = Math.min(78, Math.max(2, Number(pointerSheet?.x ?? hovered.x) || 0));
+                  const y = Math.min(78, Math.max(2, Number(pointerSheet?.y ?? hovered.y) || 0));
                   return (
                     <div
                       className="pointer-events-none absolute z-50 max-w-56 rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground shadow-md"

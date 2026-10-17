@@ -152,6 +152,9 @@ export function scoreTakeoffAccuracy(fixture, options = {}) {
     ? matches.length / (matches.length + typedFalsePositives)
     : 1;
   const markerAccuracy = matches.length ? placedOnGeometry / matches.length : 1;
+  // A missing device has no correctly placed marker. Conditional placement alone
+  // can look perfect when the detector misses most of the drawing.
+  const overallMarkingAccuracy = truth.length ? placedOnGeometry / truth.length : 0;
   const hoverAccuracy = matches.length ? hoverCorrect / matches.length : 1;
   const classificationAccuracy = (matches.length + classifiedWrong)
     ? matches.length / (matches.length + classifiedWrong)
@@ -166,10 +169,11 @@ export function scoreTakeoffAccuracy(fixture, options = {}) {
     && worstTypeRecall >= ACCURACY_THRESHOLD
     && detectionPrecision >= ACCURACY_THRESHOLD
     && classificationAccuracy >= ACCURACY_THRESHOLD
-    && markerAccuracy >= ACCURACY_THRESHOLD;
+    && markerAccuracy >= ACCURACY_THRESHOLD
+    && overallMarkingAccuracy >= ACCURACY_THRESHOLD;
   const claimAllowed = canClaimThreshold(labelAuthority, inspect);
   const meetsDetection = claimAllowed && metricsMeet;
-  const meetsMarkers = claimAllowed && matches.length > 0 && markerAccuracy >= ACCURACY_THRESHOLD;
+  const meetsMarkers = claimAllowed && metricsMeet && overallMarkingAccuracy >= ACCURACY_THRESHOLD;
   return {
     summary: result.summary,
     deviceCount: result.deviceCount,
@@ -184,6 +188,7 @@ export function scoreTakeoffAccuracy(fixture, options = {}) {
     typedPrecision,
     worstTypeRecall,
     markerAccuracy,
+    overallMarkingAccuracy,
     hoverAccuracy,
     classificationAccuracy,
     classifiedWrong,
@@ -221,7 +226,8 @@ export function formatAccuracyReport(score) {
     `classification ${(score.classificationAccuracy * 100).toFixed(2)}% (wrong type ${score.classifiedWrong || 0})`,
     `false negatives ${score.falseNegatives ?? Math.max(0, score.truth - score.found)}`,
     `ground truth ${score.truth > 0 && score.groundTruthReady !== false ? "present" : "MISSING — no accuracy claim permitted"}`,
-    `marker accuracy ${(score.markerAccuracy * 100).toFixed(2)}%`,
+    `marker accuracy ${(score.markerAccuracy * 100).toFixed(2)}% (of matched symbols)`,
+    `overall marking ${(score.overallMarkingAccuracy * 100).toFixed(2)}% (of all reference symbols)`,
     `hover accuracy ${((score.hoverAccuracy ?? 0) * 100).toFixed(2)}%`,
     `wall extras ${score.wallFalsePositives || 0}`,
     `unresolved review ${score.unresolvedCount || 0}`,

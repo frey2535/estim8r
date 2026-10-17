@@ -57,6 +57,7 @@ export default function TakeoffInspector({
   isolationMode = false,
   onIsolationMode,
   embedded = false,
+  className = "",
 }) {
   const selectedIsLine = isLineMark(selected);
   const selectedIsMarker = isMarkerMark(selected);
@@ -65,7 +66,7 @@ export default function TakeoffInspector({
   const fieldInput = embedded ? sheetInputClass : inputClass;
   const Wrapper = embedded ? "div" : "aside";
   return (
-    <Wrapper className={embedded ? "space-y-3 text-base" : "hidden min-h-0 min-w-0 overflow-y-auto overflow-x-hidden border-l border-border bg-card p-3 lg:block"}>
+    <Wrapper className={className || (embedded ? "space-y-3 text-base" : "hidden min-h-0 min-w-0 overflow-y-auto overflow-x-hidden border-l border-border bg-card p-3 lg:block")}>
       {selected && (
         <div className="mb-3 space-y-2 rounded-lg border border-border p-2">
           <div className={embedded ? "text-sm font-bold uppercase tracking-wider text-muted-foreground" : "text-[10px] font-bold uppercase tracking-wider text-muted-foreground"}>Selected item</div>
@@ -73,7 +74,7 @@ export default function TakeoffInspector({
             <button type="button" onClick={() => onIsolationMode?.(!isolationMode)} className={isolationMode ? "min-h-11 rounded-md bg-orange-600 px-3 py-2 text-sm font-bold text-white" : "min-h-11 rounded-md border border-border px-3 py-2 text-sm font-bold hover:bg-muted"}>
               {isolationMode ? "Exit isolation" : "Isolate selected"}
             </button>
-            <span className={embedded ? "text-sm text-muted-foreground" : "text-[10px] text-muted-foreground"}>{isolationMode ? "Only this item is shown for focused editing." : "Selected item is brought forward and editable below."}</span>
+            <span className={embedded ? "text-sm text-muted-foreground" : "text-[11px] text-muted-foreground"}>{isolationMode ? "Only this item is shown." : "Edit it below."}</span>
           </div>
           {selectedIsConduit || selectedIsNote ? (
             <Field label="Name">

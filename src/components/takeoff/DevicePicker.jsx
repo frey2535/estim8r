@@ -79,15 +79,15 @@ export default function DevicePicker({
           </option>
         ))}
       </select>
-      <p className={compact ? "text-base text-foreground" : "text-[11px] text-muted-foreground"}>{visible.length} {tradeLabel} symbol type{visible.length === 1 ? "" : "s"} available from the project legend/catalog</p>
+      <p className={compact ? "text-sm text-muted-foreground" : "text-[11px] text-muted-foreground"}>{visible.length} {tradeLabel} symbol{visible.length === 1 ? "" : "s"}</p>
       {onManualMark ? (
         <button
           type="button"
           onClick={onManualMark}
           disabled={!symbolId && !visible[0]?.id}
           className={compact
-            ? "w-full min-h-[44px] rounded-lg border border-blue-600 bg-blue-50 px-3 py-2 text-base font-bold text-blue-800 hover:bg-blue-100 disabled:opacity-40 dark:border-orange-500 dark:bg-orange-500/10 dark:text-orange-300"
-            : "w-full rounded-lg border border-blue-600 bg-blue-50 px-2 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-40 dark:border-orange-500 dark:bg-orange-500/10 dark:text-orange-300"}
+            ? "w-full min-h-[44px] rounded-lg border border-foreground bg-foreground px-3 py-2 text-base font-semibold text-background hover:opacity-90 disabled:opacity-40"
+            : "w-full rounded-md border border-border px-2 py-1.5 text-xs font-semibold hover:bg-muted disabled:opacity-40"}
         >
           Mark missed symbol manually
         </button>

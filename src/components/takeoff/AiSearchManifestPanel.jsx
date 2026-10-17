@@ -5,19 +5,11 @@ import { tradeById } from "@/domain/takeoff/trades";
 export default function AiSearchManifestPanel({ manifest, trade }) {
   if (!manifest?.sheets?.length) return null;
   return (
-    <div className="shrink-0 border-t border-border bg-card px-3 py-2">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <div className="text-sm font-black uppercase tracking-wider text-foreground">AI search targets</div>
-          <div className="text-sm text-foreground/80">
-            Legend-driven search list for {tradeById(trade).label}. Each applicable symbol is tracked on each plan.
-          </div>
-        </div>
-        <div className="text-sm font-bold text-foreground">
-          {manifest.foundTypes} found · {manifest.notFoundTypes} not found · {manifest.reviewTypes} review · {manifest.textOnlyTypes} text-only
-        </div>
-      </div>
-      <div className="max-h-52 space-y-2 overflow-auto">
+    <details className="shrink-0 border-t border-border bg-card px-3 py-1.5">
+      <summary className="cursor-pointer text-xs font-semibold text-foreground">
+        AI search · {tradeById(trade).label} · {manifest.foundTypes} found · {manifest.notFoundTypes} not found · {manifest.reviewTypes} review
+      </summary>
+      <div className="mt-2 max-h-40 space-y-2 overflow-auto pb-1">
         {manifest.sheets.map((sheet) => (
           <div key={sheet.page} className="rounded-lg border border-border bg-background p-2">
             <div className="mb-1 flex items-center justify-between gap-2">
@@ -52,6 +44,6 @@ export default function AiSearchManifestPanel({ manifest, trade }) {
           </div>
         ))}
       </div>
-    </div>
+    </details>
   );
 }

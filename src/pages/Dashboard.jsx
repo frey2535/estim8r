@@ -61,22 +61,22 @@ function FolderDocs({ folder }) {
 
   return (
     <div className="mt-3 flex flex-wrap gap-2">
-      {hasDrawing ? (
-        <button type="button" onClick={() => void downloadDrawing()} className="inline-flex min-h-[44px] items-center gap-1 rounded-lg border border-border px-3 text-base font-semibold hover:bg-muted">
-          <ImageIcon className="h-4 w-4" /> Drawing
-        </button>
-      ) : null}
-      <button type="button" onClick={downloadEstimate} className="inline-flex min-h-[44px] items-center gap-1 rounded-lg border border-border px-3 text-base font-semibold hover:bg-muted">
+      <button type="button" onClick={openEstimate} className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+        Open estimate
+      </button>
+      <button type="button" onClick={downloadEstimate} className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-border bg-card px-3 text-sm font-medium hover:bg-muted">
         <FileText className="h-4 w-4" /> Estimate PDF
       </button>
       {hasDrawing ? (
-        <button type="button" onClick={openMarkup} className="inline-flex min-h-[44px] items-center gap-1 rounded-lg border border-border px-3 text-base font-semibold hover:bg-muted">
+        <button type="button" onClick={() => void downloadDrawing()} className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-border bg-card px-3 text-sm font-medium hover:bg-muted">
+          <ImageIcon className="h-4 w-4" /> Drawing
+        </button>
+      ) : null}
+      {hasDrawing ? (
+        <button type="button" onClick={openMarkup} className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-border bg-card px-3 text-sm font-medium hover:bg-muted">
           <StickyNote className="h-4 w-4" /> Markup pages
         </button>
       ) : null}
-      <button type="button" onClick={openEstimate} className="inline-flex min-h-[44px] items-center gap-1 rounded-lg border border-border px-3 text-base font-semibold hover:bg-muted">
-        Open estimate
-      </button>
     </div>
   );
 }
@@ -97,58 +97,52 @@ export default function Dashboard() {
   }, []);
 
   return (
-    <div className="py-4 sm:py-6">
-      <div className="mb-8">
-        <p className="text-sm font-semibold uppercase tracking-widest text-blue-600 dark:text-orange-500">Current Flow Consulting</p>
-        <h1 className="mt-2 text-3xl sm:text-4xl font-black text-foreground">Estim8r Command Center</h1>
-        <p className="mt-2 max-w-3xl text-base text-foreground/80">Estimate electrical work with traceable labor sources, company production history and estimator-controlled adjustments.</p>
+    <div className="mx-auto w-full max-w-6xl py-2 sm:py-4">
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Current Flow Consulting</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Estim8r Command Center</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Estimate electrical work with traceable labor sources, company production history and estimator-controlled adjustments.</p>
+        </div>
+        <Link to="/estimates/new" className="inline-flex min-h-[44px] items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+          <Calculator className="h-4 w-4" />
+          New estimate
+        </Link>
       </div>
+
       {canManageEstim8rAccess(user) && (
-        <Link to="/admin" className="mb-8 flex items-start gap-3 rounded-2xl border border-blue-500/40 bg-blue-500/5 p-6 shadow-sm dark:border-orange-500/40 dark:bg-orange-500/5">
-          <Shield className="mt-0.5 h-6 w-6 text-blue-600 dark:text-orange-500" />
-          <div>
-            <h2 className="text-lg font-bold text-foreground">Platform owner access</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Open Access to grant, invite, or revoke who can use Estim8r.</p>
+        <Link to="/admin" className="mt-5 flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
+          <Shield className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-foreground">Platform owner access</h2>
+            <p className="text-sm text-muted-foreground">Open Access to grant, invite, or revoke who can use Estim8r.</p>
           </div>
         </Link>
       )}
-      <div className="mb-8 grid gap-4 md:grid-cols-3">
-        {cards.map(([title, text, to, Icon]) => (
-          <div key={title} className="rounded-2xl border border-border bg-card p-6 shadow-sm transition-all hover:border-blue-500/60 hover:shadow-md dark:hover:border-orange-500/60">
-            <Link to={to} className="block">
-              <Icon className="mb-4 h-7 w-7 text-blue-600 dark:text-orange-500" />
-              <h2 className="text-lg font-bold text-foreground">{title}</h2>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">{text}</p>
-            </Link>
-          </div>
-        ))}
-      </div>
 
-      <section className="mb-8 rounded-2xl border border-border bg-card p-6 shadow-sm">
-        <div className="flex items-start gap-3">
-          <FolderOpen className="mt-0.5 h-6 w-6 text-blue-600 dark:text-orange-500" />
-          <div className="min-w-0 flex-1">
-            <h2 className="text-lg font-bold text-foreground">Estimates folder</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Saved estimates are stored under the project name. Drawings and takeoff are optional.
-              If a Buildr company is linked, the estimate also syncs to that project’s Estimate tab. Otherwise they stay here with the project address under the name.
-            </p>
-          </div>
+      <section className="mt-6">
+        <div className="mb-3 flex items-baseline justify-between gap-3">
+          <h2 className="text-sm font-semibold text-foreground">Estimates folder</h2>
+          <p className="hidden text-xs text-muted-foreground sm:block">Saved under the project name. Drawings and takeoff are optional.</p>
         </div>
         {folders.length === 0 ? (
-          <p className="mt-5 rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-            No saved estimates yet. Open New Estimate to write one, or upload drawings on Takeoff and save after the estimate is created.
-          </p>
+          <div className="rounded-lg border border-dashed border-border bg-card px-4 py-10 text-center">
+            <FolderOpen className="mx-auto h-5 w-5 text-muted-foreground" />
+            <p className="mt-3 text-sm font-medium text-foreground">No saved estimates yet</p>
+            <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+              Open New Estimate to write one. If a Buildr company is linked, the estimate also syncs to that project’s Estimate tab.
+            </p>
+          </div>
         ) : (
-          <div className="mt-5 grid gap-3">
+          <div className="grid gap-2">
             {folders.map((folder) => (
-              <article key={folder.id} className="rounded-xl border border-border px-4 py-4">
+              <article key={folder.id} className="rounded-lg border border-border bg-card px-4 py-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-base font-bold text-foreground">{folder.projectName}</h3>
+                  <div className="min-w-0">
+                    <h3 className="truncate text-base font-semibold text-foreground">{folder.projectName}</h3>
                     <p className="text-sm text-muted-foreground">{folder.projectAddress || "No project address yet"}</p>
                     {folder.savedTo === "buildr" ? (
-                      <p className="mt-1 text-xs font-semibold text-blue-600 dark:text-orange-500">Also saved on the Buildr project Estimate tab</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Also saved on the Buildr project Estimate tab</p>
                     ) : null}
                   </div>
                   <button
@@ -160,7 +154,7 @@ export default function Dashboard() {
                       void deleteDrawingFile(folder.fileName, folder.fileSize).catch(() => {});
                       setFolders(listProjectFolders());
                     }}
-                    className="inline-flex items-center gap-1 rounded-lg border border-destructive/40 px-2.5 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10"
+                    className="inline-flex min-h-[44px] items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                     aria-label={`Delete ${folder.projectName || "project"}`}
                   >
                     <Trash2 className="h-3.5 w-3.5" /> Delete
@@ -173,13 +167,26 @@ export default function Dashboard() {
         )}
       </section>
 
-      <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-6">
-        <div className="flex gap-4">
-          <ShieldCheck className="h-7 w-7 text-emerald-500" />
-          <div>
-            <h2 className="font-bold text-foreground">Production Safety Gate</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Published/master labor is only production-ready when it is verified and explicitly approved. The imported 1,921-row table is experimental / unverified. NECA hours are not populated. Unverified baselines stay visible but cannot silently become bid labor.</p>
-          </div>
+      <section className="mt-8">
+        <h2 className="mb-3 text-sm font-semibold text-foreground">Tools</h2>
+        <div className="grid gap-2 md:grid-cols-3">
+          {cards.map(([title, text, to, Icon]) => (
+            <Link key={title} to={to} className="rounded-lg border border-border bg-card p-4 transition-colors hover:bg-muted/40">
+              <div className="flex items-center gap-2">
+                <Icon className="h-4 w-4 text-muted-foreground" />
+                <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+              </div>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">{text}</p>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <div className="mt-8 flex gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3">
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">Production Safety Gate</h2>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">Published/master labor is only production-ready when it is verified and explicitly approved. The imported 1,921-row table is experimental / unverified. NECA hours are not populated. Unverified baselines stay visible but cannot silently become bid labor.</p>
         </div>
       </div>
     </div>

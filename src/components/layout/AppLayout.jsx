@@ -37,32 +37,28 @@ export default function AppLayout() {
 
   return (
     <div className="flex h-dvh min-h-dvh w-full flex-col overflow-hidden bg-background">
-      <header className="sticky top-0 z-50 shrink-0 border-b border-border bg-background/95 backdrop-blur-xl shadow-sm" style={{ paddingTop: "env(safe-area-inset-top)" }}>
-        <div className="w-full px-3 sm:px-6 lg:px-8">
-          <div className="flex min-h-14 flex-wrap items-center justify-between gap-2 py-1">
-            <div className="flex min-w-0 items-center gap-2">
+      <header className="sticky top-0 z-50 shrink-0 border-b border-border bg-card/95 backdrop-blur-xl" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+        <div className="w-full px-3 sm:px-5 lg:px-6">
+          <div className="flex min-h-14 flex-wrap items-center justify-between gap-2 py-1.5">
+            <div className="flex min-w-0 items-center gap-4">
               <Link to="/" className="flex min-h-[44px] items-center gap-2.5 min-w-0">
-                <AppLogo className="h-9 w-9 shrink-0 rounded-xl" />
+                <AppLogo className="h-8 w-8 shrink-0 rounded-md" />
                 <div className="min-w-0">
-                  <h1 className="text-base font-black tracking-tight leading-none text-foreground">Estim8r</h1>
-                  <p className="hidden xs:block text-xs font-semibold text-muted-foreground tracking-wide">Electrical estimating</p>
+                  <h1 className="text-sm font-semibold tracking-tight leading-none text-foreground">Estim8r</h1>
+                  <p className="mt-0.5 hidden text-[11px] text-muted-foreground sm:block">Electrical estimating</p>
                 </div>
               </Link>
-              <AppRefreshButton />
-            </div>
-
-            <div className="flex items-center gap-1">
-              <nav className="hidden lg:flex items-center gap-1">
+              <nav className="hidden lg:flex items-center gap-0.5" aria-label="Primary">
                 {DESKTOP_TABS.map((tab) => {
                   const Icon = tab.icon;
                   const isActive = active(tab);
                   return (
                     <Link key={tab.key} to={tab.path}>
                       <div className={cn(
-                        "flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold transition-all",
+                        "flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors",
                         isActive
-                          ? "bg-blue-600 text-white shadow-md shadow-blue-200 dark:bg-orange-500 dark:shadow-none"
-                          : "text-foreground hover:bg-muted"
+                          ? "bg-foreground text-background"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
                       )}>
                         <Icon className="h-4 w-4" />
                         {tab.label}
@@ -71,10 +67,13 @@ export default function AppLayout() {
                   );
                 })}
               </nav>
+            </div>
 
+            <div className="flex items-center gap-1">
+              <AppRefreshButton className="h-9 min-h-9 bg-transparent px-2.5 text-foreground shadow-none hover:bg-muted dark:bg-transparent dark:hover:bg-muted" />
               <AppSwitcher />
-              <button type="button" onClick={toggleTheme} className="ml-1 flex h-11 w-11 items-center justify-center rounded-full bg-muted hover:bg-muted/80 active:bg-muted/60" aria-label="Toggle dark mode" title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
-                {theme === "dark" ? <Sun className="h-5 w-5 text-foreground" /> : <Moon className="h-5 w-5 text-foreground" />}
+              <button type="button" onClick={toggleTheme} className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Toggle dark mode" title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
+                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </button>
               {isAuthenticated ? (
                 <>
@@ -91,16 +90,16 @@ export default function AppLayout() {
                         <MessageSquare className="h-4 w-4" />
                         Cursor
                       </Button>
-                      <Button asChild size="touch" className={cn("ml-1 hidden sm:inline-flex", location.pathname.startsWith("/admin") && "ring-2 ring-blue-600 dark:ring-orange-500")}>
+                      <Button asChild size="touch" className={cn("ml-1 hidden sm:inline-flex", location.pathname.startsWith("/admin") && "ring-2 ring-foreground")}>
                         <Link to="/admin"><Shield className="h-4 w-4" />Access</Link>
                       </Button>
                     </>
                   )}
-                  <Link to="/settings" className="ml-1 flex h-11 w-11 items-center justify-center rounded-full bg-muted hover:bg-muted/80" aria-label="Settings">
-                    <Settings className="h-5 w-5 text-foreground" />
+                  <Link to="/settings" className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Settings">
+                    <Settings className="h-4 w-4" />
                   </Link>
-                  <Link to="/profile" className="ml-1 flex h-11 w-11 items-center justify-center rounded-full bg-muted hover:bg-muted/80" aria-label="Profile">
-                    <UserCircle className="h-6 w-6 text-foreground" />
+                  <Link to="/profile" className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Profile">
+                    <UserCircle className="h-4 w-4" />
                   </Link>
                   <Button type="button" variant="outline" size="touch" className="ml-1 hidden sm:inline-flex" onClick={() => void logout()}>
                     <LogOut className="h-4 w-4" />
@@ -109,7 +108,7 @@ export default function AppLayout() {
                 </>
               ) : (
                 <div className="ml-1 flex items-center gap-1.5">
-                  <Button asChild size="touch" className={cn(onLogin && !location.pathname.startsWith("/login/owner") && "ring-2 ring-blue-600 dark:ring-orange-500")}>
+                  <Button asChild size="touch" className={cn(onLogin && !location.pathname.startsWith("/login/owner") && "ring-2 ring-foreground")}>
                     <Link to="/login"><LogIn className="h-4 w-4" />Sign in</Link>
                   </Button>
                   <GoogleSignInButton compact className="h-11 min-h-[44px] px-3" />
@@ -133,7 +132,7 @@ export default function AppLayout() {
         </AppErrorBoundary>
       </main>
 
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur-xl shadow-[0_-4px_24px_rgba(0,0,0,0.12)]" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 backdrop-blur-xl" style={{ paddingBottom: "env(safe-area-inset-bottom)" }} aria-label="Primary">
         <div className="flex items-stretch justify-around px-1 py-1">
           {TABS.map((tab) => {
             const Icon = tab.icon;
@@ -141,11 +140,11 @@ export default function AppLayout() {
             return (
               <Link key={tab.key} to={tab.path} className="min-w-0 flex-1">
                 <div className={cn(
-                  "mx-0.5 flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-xl px-1",
-                  isActive ? "bg-blue-100 text-blue-800 dark:bg-orange-500/15 dark:text-orange-300" : "text-foreground"
+                  "mx-0.5 flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-md px-1",
+                  isActive ? "text-foreground" : "text-muted-foreground"
                 )}>
-                  <Icon className="h-5 w-5" />
-                  <span className="max-w-full truncate text-[13px] font-bold leading-tight">{tab.label}</span>
+                  <Icon className={cn("h-5 w-5", isActive && "stroke-[2.4]")} />
+                  <span className={cn("max-w-full truncate text-[12px] leading-tight", isActive ? "font-semibold" : "font-medium")}>{tab.label}</span>
                 </div>
               </Link>
             );

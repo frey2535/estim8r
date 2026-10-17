@@ -217,3 +217,12 @@ assert(Array.isArray(denseHits), "dense geometry scan returns hits or an empty l
 
 if (!process.exitCode) console.log("legend geometry checks passed");
 
+
+
+const manyPaths = Array.from({ length: 48 }, (_, i) => [
+  part(4 + (i % 8) * 10, 4 + Math.floor(i / 8) * 12, 0.5, 0.5, "circle"),
+  part(4.45 + (i % 8) * 10, 4 + Math.floor(i / 8) * 12, 0.3, 0.12),
+]).flat();
+const manyHits = scanPageByLegendGeometry({ paths: manyPaths }, dictionary, { threshold: 0.8 });
+assert(manyHits.length === 48, "spatial rival matching preserves 48 distinct legend symbol detections");
+assert(new Set(manyHits.map((hit) => `${hit.geometry.cx.toFixed(1)}:${hit.geometry.cy.toFixed(1)}`)).size === 48, "each repeated symbol is counted only once");

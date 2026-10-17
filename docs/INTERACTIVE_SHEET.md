@@ -1,6 +1,6 @@
 # Interactive sheet
 
-An uploaded drawing opens in the takeoff workspace immediately. Pan, zoom, and the takeoff tools are available before AI assist runs. A PDF vector layer is read in the background and becomes selectable geometry:
+The takeoff studio keeps the drawing in the center. An uploaded drawing is interactive immediately. Tools sit in a narrow rail. Quantities, the symbol being marked, and file output are separate panels on the right. Page takeoff, AI for the current sheet, zoom, and review stay in the top bar.
 
 - Symbol-sized geometry can be selected and classified in the inspector.
 - Long thin geometry can be selected as a line. It stays out of the bid until a circuit is assigned.

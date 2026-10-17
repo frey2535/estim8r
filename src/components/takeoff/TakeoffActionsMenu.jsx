@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,6 +29,7 @@ export default function TakeoffActionsMenu({
   onQuotePdf,
   onReplaceId,
   onClose,
+  onClear,
   label = "More",
   className = "",
 }) {
@@ -36,7 +38,7 @@ export default function TakeoffActionsMenu({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className={`inline-flex min-h-[44px] w-full shrink-0 items-center justify-center gap-1 rounded-xl border border-border bg-background px-3 text-base font-bold hover:bg-muted ${className}`}
+          className={cn("inline-flex h-8 shrink-0 items-center justify-center gap-1 rounded-md border border-border bg-background px-2.5 text-xs font-semibold hover:bg-muted", className)}
           aria-label="More takeoff actions"
         >
           {aiBusy ? "AI…" : label}
@@ -73,6 +75,7 @@ export default function TakeoffActionsMenu({
           <label htmlFor={onReplaceId} className="cursor-pointer">Replace drawing</label>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onClose}>Close</DropdownMenuItem>
+        {onClear ? <DropdownMenuItem onSelect={onClear}>Clear takeoff</DropdownMenuItem> : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

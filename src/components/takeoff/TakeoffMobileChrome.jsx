@@ -30,14 +30,14 @@ export function TakeoffMobileCommandBar({
           type="button"
           disabled={aiBusy}
           onClick={onAiAssist}
-          className={cn(commandBtn, "bg-blue-600 text-white dark:bg-orange-500 disabled:opacity-60")}
+          className={cn(commandBtn, "bg-foreground text-background disabled:opacity-60")}
         >
           <ScanSearch className="h-5 w-5 shrink-0" />
           <span>{aiBusy ? "AI working" : "AI assist"}</span>
         </button>
         <Link
           to={estimatePath}
-          className={cn(commandBtn, "border border-blue-600 bg-blue-50 text-blue-800 dark:border-orange-500 dark:bg-orange-500/10 dark:text-orange-200")}
+          className={cn(commandBtn, "border border-border bg-background")}
         >
           <Calculator className="h-5 w-5 shrink-0" />
           Estimate
@@ -49,7 +49,7 @@ export function TakeoffMobileCommandBar({
           className={cn(
             commandBtn,
             "border border-border bg-background",
-            pagesOpen && "border-blue-600 bg-blue-50 text-blue-800 dark:border-orange-500 dark:bg-orange-500/10 dark:text-orange-200",
+            pagesOpen && "border-foreground bg-foreground text-background",
           )}
         >
           Pages
@@ -61,7 +61,7 @@ export function TakeoffMobileCommandBar({
           <button
             type="button"
             onClick={onFit}
-            className="min-w-16 px-1 text-center text-[15px] font-black tabular-nums"
+            className="min-w-16 px-1 text-center text-sm font-semibold tabular-nums"
             title="Fit sheet"
             aria-label={`Zoom ${Math.round(zoom * 100)} percent. Tap to fit sheet.`}
           >
@@ -99,7 +99,7 @@ export function TakeoffMobileDock({
           className={cn(
             commandBtn,
             "flex-col gap-0 border px-1 text-[13px]",
-            tool === "pan" ? "border-blue-600 bg-blue-50 text-blue-800 dark:border-orange-500 dark:bg-orange-500/10 dark:text-orange-200" : "border-border bg-background",
+            tool === "pan" ? "border-foreground bg-foreground text-background" : "border-border bg-background",
           )}
         >
           <Hand className="h-5 w-5" />
@@ -109,7 +109,7 @@ export function TakeoffMobileDock({
           type="button"
           aria-pressed={toolsOpen}
           onClick={onToggleTools}
-          className={cn(commandBtn, "flex-col gap-0 border px-1 text-[13px]", toolsOpen ? "border-blue-600 bg-blue-50 text-blue-800 dark:border-orange-500 dark:bg-orange-500/10" : "border-border bg-background")}
+          className={cn(commandBtn, "flex-col gap-0 border px-1 text-[13px]", toolsOpen ? "border-foreground bg-foreground text-background" : "border-border bg-background")}
         >
           <Wrench className="h-5 w-5" />
           Tools
@@ -118,7 +118,7 @@ export function TakeoffMobileDock({
           type="button"
           aria-pressed={devicesOpen}
           onClick={onToggleDevices}
-          className={cn(commandBtn, "flex-col gap-0 border px-1 text-[13px]", devicesOpen ? "border-blue-600 bg-blue-50 text-blue-800 dark:border-orange-500 dark:bg-orange-500/10" : "border-border bg-background")}
+          className={cn(commandBtn, "flex-col gap-0 border px-1 text-[13px]", devicesOpen ? "border-foreground bg-foreground text-background" : "border-border bg-background")}
         >
           Devices
         </button>
@@ -126,16 +126,15 @@ export function TakeoffMobileDock({
           type="button"
           aria-pressed={countsOpen}
           onClick={onToggleCounts}
-          className={cn(commandBtn, "flex-col gap-0 border px-1 text-[13px]", countsOpen ? "border-blue-600 bg-blue-50 text-blue-800 dark:border-orange-500 dark:bg-orange-500/10" : "border-border bg-background")}
+          className={cn(commandBtn, "flex-col gap-0 border px-1 text-[13px]", countsOpen ? "border-foreground bg-foreground text-background" : "border-border bg-background")}
         >
           <Layers3 className="h-5 w-5" />
           Counts
         </button>
         <div className="min-w-0">{moreMenu}</div>
       </div>
-      <div className="border-t border-border px-3 py-2 text-base text-foreground">
-        <span className="font-bold">{activeToolLabel}.</span>{" "}
-        <span>{status}</span>
+      <div className="border-t border-border px-3 py-1.5 text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">{activeToolLabel}.</span> {status}
       </div>
     </div>
   );
@@ -146,8 +145,8 @@ export function TakeoffMobileSheet({ open, onOpenChange, title, description, chi
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="flex max-h-[72dvh] flex-col gap-3 overflow-hidden p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] lg:hidden">
         <SheetHeader className="text-left">
-          <SheetTitle className="text-xl font-black">{title}</SheetTitle>
-          {description ? <SheetDescription className="text-base text-foreground/80">{description}</SheetDescription> : null}
+          <SheetTitle className="text-base font-semibold">{title}</SheetTitle>
+          {description ? <SheetDescription className="text-sm text-muted-foreground">{description}</SheetDescription> : null}
         </SheetHeader>
         <div className="min-h-0 flex-1 overflow-auto pr-1">{children}</div>
       </SheetContent>

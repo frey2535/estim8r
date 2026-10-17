@@ -1,14 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Cable, Cloud, FileUp, Hand, Image as ImageIcon, MousePointer2,
-  Pencil, Redo2, Route, Ruler, Spline, Square, StickyNote,
-  Trash2, Undo2, Upload, ZoomIn, ZoomOut, Crosshair, Gauge, Lightbulb
+  Cable, Cloud, FileUp, Hand, MousePointer2,
+  Pencil, Route, Ruler, Spline, Square, StickyNote,
+  Upload, Crosshair, Gauge, Lightbulb
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
 import {
-  DEFAULT_DROP_FEET, TAKEOFF_TOOLS, TOOL_GROUPS,
+  DEFAULT_DROP_FEET, TAKEOFF_TOOLS,
   toolByKey,
 } from "@/domain/takeoff/catalog";
 import {
@@ -71,6 +71,7 @@ import {
   visualSearchCounts,
 } from "@/domain/takeoff/interactiveSheet";
 import SheetThumbnailPanel, { readThumbsOpen, writeThumbsOpen } from "@/components/takeoff/SheetThumbnailPanel";
+import { TakeoffCommandBar, TakeoffSelectionBar, TakeoffToolRail } from "@/components/takeoff/TakeoffStudio";
 import DevicePicker from "@/components/takeoff/DevicePicker";
 import TakeoffInspector from "@/components/takeoff/TakeoffInspector";
 import TakeoffSizeControl from "@/components/takeoff/TakeoffSizeControl";
@@ -309,6 +310,7 @@ export default function TakeoffWorkspace() {
   ));
   const [reviewOpen, setReviewOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState("");
+  const [studioPanel, setStudioPanel] = useState("quantities");
   const [aiPages, setAiPages] = useState([]);
   const [searchManifest, setSearchManifest] = useState(null);
   const [emptyNoticeDismissed, setEmptyNoticeDismissed] = useState(false);
@@ -2500,83 +2502,69 @@ export default function TakeoffWorkspace() {
 
   if (!file) {
     return (
-      <div className="mx-auto max-w-5xl space-y-4 p-4">
-        <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-          <p className="text-sm font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-orange-500">Estim8r Takeoff</p>
-          <h1 className="mt-1 text-3xl font-black text-foreground">Electrical takeoff workspace</h1>
-          <p className="mt-2 text-base text-foreground/80">Calibrated counts, conduit LF, circuit traces, areas, and a quantity schedule on the live drawing. Upload a PDF or image to start.</p>
-        </section>
-        <section className="relative rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <div
-            onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
-            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; }}
-            onDrop={handleDrop}
+      <div className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center p-6">
+        <div
+          onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; }}
+          onDrop={handleDrop}
+          className="rounded-lg border border-border bg-card p-6"
+        >
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">Takeoff</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Open a PDF or image. The sheet is ready to pan, zoom, and mark as soon as it loads.</p>
+          <label
+            htmlFor={DRAWING_INPUT_ID}
+            className="mt-5 flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 px-6 py-8 text-center"
           >
-            <label
-              htmlFor={DRAWING_INPUT_ID}
-              className="flex min-h-56 w-full cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-blue-300 bg-blue-50/50 p-8 text-center dark:border-orange-500/30 dark:bg-orange-500/5"
-            >
-              <FileUp className="mb-3 h-12 w-12 text-blue-600 dark:text-orange-500" />
-              <span className="text-xl font-black text-foreground">Upload electrical drawings</span>
-              <span className="mt-2 text-base text-foreground/80">PDF, PNG, JPG, JPEG, or WEBP — full sheet fits the window</span>
-              <span className="mt-5 inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-base font-bold text-white dark:bg-orange-500">
-                <Upload className="h-5 w-5" /> Choose drawing
-              </span>
-            </label>
-          </div>
-          <div className="mt-3 text-base text-foreground">{status}</div>
-          {loadingDrawing && <div className="mt-2 text-base font-semibold text-foreground">Reading drawing…</div>}
-          {drawingError && <div role="alert" className="mt-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-base text-destructive">{drawingError}</div>}
-        </section>
+            <FileUp className="mb-2 h-8 w-8 text-muted-foreground" />
+            <span className="text-sm font-semibold text-foreground">Drop a drawing here</span>
+            <span className="mt-1 text-xs text-muted-foreground">PDF, PNG, JPG, JPEG, or WEBP</span>
+            <span className="mt-4 inline-flex h-9 items-center gap-2 rounded-md bg-foreground px-3 text-sm font-semibold text-background">
+              <Upload className="h-4 w-4" /> Choose drawing
+            </span>
+          </label>
+          {status ? <div className="mt-3 text-sm text-muted-foreground">{status}</div> : null}
+          {loadingDrawing && <div className="mt-2 text-sm font-medium text-foreground">Reading drawing…</div>}
+          {drawingError && <div role="alert" className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{drawingError}</div>}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background">
-      <div
-        onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
-        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; }}
-        onDrop={handleDrop}
-        className="flex min-h-14 shrink-0 items-center gap-2 overflow-hidden border-b border-border bg-card px-3 py-1.5"
-      >
-        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-600 dark:bg-orange-500/10 dark:text-orange-500"><ImageIcon className="h-5 w-5" /></div>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-base font-black text-foreground">{file.name}</div>
-          <div className="truncate text-sm font-semibold text-foreground/80">
-            {isPdf ? `PDF • ${sheetMeta.pageCount} sheet${sheetMeta.pageCount === 1 ? "" : "s"}` : "Drawing image"}
-            {calibration ? ` • ${calibration.scaleLabel ? `scale ${calibration.scaleLabel}` : `calibrated ${calibration.feet} ft`}` : " • scale not set"}
-            {zoom === 1 ? " • fitted" : ` • ${Math.round(zoom * 100)}%`}
-            {aiBusy ? " • AI working…" : savedAt ? ` • saved ${new Date(savedAt).toLocaleTimeString()}` : " • not saved"}
-          </div>
-        </div>
-        <details className="relative hidden lg:block group">
-          <summary className="flex min-h-11 cursor-pointer items-center rounded-lg border border-border bg-background px-3 text-sm font-semibold hover:bg-muted">Workspace layout</summary>
-          <div className="absolute right-0 top-full z-50 mt-2 w-72 space-y-3 rounded-xl border border-border bg-card p-4 shadow-xl">
-            <label className="block text-xs font-semibold">Tools panel width
-              <input aria-label="Tools panel width" className="mt-2 w-full" type="range" min="190" max="400" step="10" defaultValue="240" onChange={(e) => document.documentElement.style.setProperty("--estim8r-tools-width", `${e.target.value}px`)} />
-            </label>
-            <label className="block text-xs font-semibold">Inspector width
-              <input aria-label="Inspector panel width" className="mt-2 w-full" type="range" min="260" max="520" step="10" defaultValue="300" onChange={(e) => document.documentElement.style.setProperty("--estim8r-inspector-width", `${e.target.value}px`)} />
-            </label>
-            <p className="text-xs text-muted-foreground">Adjust the side panels to give your drawing more room. Available on desktop.</p>
-          </div>
-        </details>
-        <button type="button" disabled={aiBusy || !isPdf} onClick={() => { setMode("ai"); void runAiTakeoff({ onlyPage: sheetMeta.page }); }} className="hidden lg:inline-flex min-h-11 items-center rounded-lg border border-border bg-background px-3 text-sm font-semibold hover:bg-muted disabled:opacity-50" title="Run automatic takeoff only on the current drawing page, preserving marks on other sheets">AI: this sheet</button>
-        <label className="hidden min-h-11 items-center gap-2 rounded-lg border border-border bg-background px-2 text-sm font-semibold lg:inline-flex" title="Full takeoff includes this page. AI: this sheet still runs the page you are viewing.">
-          <input
-            type="checkbox"
-            data-testid="page-takeoff-toggle"
-            checked={isPageTakeoffEnabled(pageTakeoff, sheetMeta.page)}
-            onChange={(event) => {
-              const enabled = event.target.checked;
-              setPageTakeoff((current) => setPageTakeoffEnabled(current, sheetMeta.page, enabled));
-              setStatus(enabled ? `Takeoff will include sheet ${sheetMeta.page}.` : `Takeoff will skip sheet ${sheetMeta.page}.`);
-            }}
-          />
-          Takeoff on this page
-        </label>
-        <div className="hidden lg:block">
+    <div
+      className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background"
+      onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
+      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; }}
+      onDrop={handleDrop}
+    >
+      <TakeoffCommandBar
+        fileName={file.name}
+        detail={[
+          isPdf ? `${sheetMeta.pageCount} sheet${sheetMeta.pageCount === 1 ? "" : "s"}` : "Image",
+          calibration ? (calibration.scaleLabel ? `scale ${calibration.scaleLabel}` : `${calibration.feet} ft`) : "scale not set",
+          aiBusy ? "AI working" : mode === "ai" ? "AI ready" : savedAt ? `saved ${new Date(savedAt).toLocaleTimeString()}` : "not saved",
+        ].join(" · ")}
+        page={sheetMeta.page}
+        pageCount={sheetMeta.pageCount}
+        zoom={zoom}
+        aiBusy={aiBusy}
+        isPdf={isPdf}
+        pageTakeoffEnabled={isPageTakeoffEnabled(pageTakeoff, sheetMeta.page)}
+        pendingReview={accuracyTotals.pending}
+        onPrev={() => selectSheet(sheetMeta.page - 1)}
+        onNext={() => selectSheet(sheetMeta.page + 1)}
+        onZoomOut={() => setZoom((z) => Math.max(TAKEOFF_MIN_ZOOM, Number((z - 0.25).toFixed(2))))}
+        onZoomIn={() => setZoom((z) => Math.min(TAKEOFF_MAX_ZOOM, Number((z + 0.25).toFixed(2))))}
+        onFit={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}
+        onUndo={undo}
+        onRedo={redo}
+        onAi={() => { setMode("ai"); void runAiTakeoff({ onlyPage: sheetMeta.page }); }}
+        onPageTakeoff={(enabled) => {
+          setPageTakeoff((current) => setPageTakeoffEnabled(current, sheetMeta.page, enabled));
+          setStatus(enabled ? `Takeoff will include sheet ${sheetMeta.page}.` : `Takeoff will skip sheet ${sheetMeta.page}.`);
+        }}
+        onReview={openAccuracyReview}
+        actions={(
           <TakeoffActionsMenu
             aiBusy={aiBusy}
             label="Actions"
@@ -2596,198 +2584,23 @@ export default function TakeoffWorkspace() {
             onQuotePdf={downloadQuotePdf}
             onReplaceId={DRAWING_INPUT_ID}
             onClose={closeDrawing}
+            onClear={clearAll}
           />
-        </div>
-      </div>
+        )}
+      />
       {drawingError && <div role="alert" className="shrink-0 border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{drawingError}</div>}
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] lg:grid-cols-[var(--estim8r-tools-width,240px)_minmax(0,1fr)_var(--estim8r-inspector-width,300px)] lg:grid-rows-1">
-        <aside className="hidden min-h-0 overflow-auto border-r border-border bg-card p-3 lg:block">
-          {TOOL_GROUPS.map((group) => (
-            <div key={group.key} className="mb-3">
-              <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{group.label}</div>
-              <div className="grid grid-cols-2 gap-1.5">
-                {TAKEOFF_TOOLS.filter((item) => item.group === group.key).map((item) => {
-                  const Icon = TOOL_ICONS[item.key] || Pencil;
-                  return (
-                    <button key={item.key} type="button" onClick={() => { setTool(item.key); setDraftPoints([]); draftJunctionIdsRef.current = []; setMeasureLabel(""); }}
-                      className={cn("flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-left text-[11px] font-semibold",
-                        tool === item.key ? "border-blue-600 bg-blue-50 text-blue-700 dark:border-orange-500 dark:bg-orange-500/10 dark:text-orange-300" : "border-border bg-background hover:bg-muted")}>
-                      <Icon className="h-3.5 w-3.5 shrink-0" />{item.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-          <div className="border-t border-border pt-3 space-y-2">
-            <label className="block text-xs font-bold text-muted-foreground">Conduit size
-              <select value={conduitChoice.id} onChange={(event) => setConduitId(event.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-2 py-2 text-sm font-semibold text-foreground">
-                {conduitChoices.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-              </select>
-            </label>
-            <button
-              type="button"
-              disabled={tool !== "conduit" || !draftPoints.length}
-              onClick={placeJunctionOnDraft}
-              className="w-full rounded-lg border border-amber-700 bg-amber-50 px-2 py-2 text-xs font-bold text-amber-900 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-amber-500/10 dark:text-amber-200"
-              title='While drawing conduit, place a 4" square metal junction box at the last corner (or press J)'
-            >
-              Add 4&quot; square JB
-            </button>
-            <div className="rounded-lg border border-border bg-background px-2 py-2 text-[11px] text-muted-foreground">
-              <div className="flex justify-between"><span>Junction boxes</span><strong className="text-foreground">{hardwareTotals.junctionBoxes}</strong></div>
-              <div className="mt-1 flex justify-between"><span>EMT connectors</span><strong className="text-foreground">{hardwareTotals.emtConnectors}</strong></div>
-            </div>
-            <div className="space-y-1">
-              <div className="text-xs font-bold text-muted-foreground">Type colors</div>
-              {typeSwatches.length ? (
-                <div className="flex flex-wrap gap-1">
-                  {typeSwatches.map((item) => (
-                    <button
-                      key={item.key}
-                      type="button"
-                      onClick={() => setInspectType((current) => current === item.key.toUpperCase() ? "" : item.key.toUpperCase())}
-                      className={inspectType === item.key.toUpperCase()
-                        ? "inline-flex items-center gap-1 rounded-md border border-orange-600 bg-orange-50 px-1.5 py-0.5 text-xs font-bold text-foreground"
-                        : "inline-flex items-center gap-1 rounded-md border border-border bg-background px-1.5 py-0.5 text-xs font-bold text-foreground"}
-                    >
-                      <span className="h-3.5 w-3.5 rounded-sm border border-black/20" style={{ backgroundColor: item.color }} aria-hidden />
-                      {item.key.toUpperCase()}
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-[11px] text-muted-foreground">No device fills on this sheet yet.</p>
-              )}
-              <label className="text-xs font-bold text-muted-foreground">Pen
-                <span className="mt-1 flex items-center gap-2">
-                  <span className="h-8 w-8 shrink-0 rounded-md border border-border" style={{ backgroundColor: penColor }} aria-hidden />
-                  <input type="color" value={penColor} onChange={(event) => setPenColor(event.target.value)} className="h-8 w-full" />
-                </span>
-              </label>
-              <div className="space-y-1">
-                <div className="text-xs font-bold text-muted-foreground">Tool chest</div>
-                <button
-                  type="button"
-                  className="w-full rounded-md border border-border px-2 py-1.5 text-left text-xs font-semibold hover:bg-muted"
-                  onClick={() => {
-                    const name = window.prompt("Name this tool", activeTool.label);
-                    if (!name) return;
-                    setToolChest((current) => addToolChestItem(current, {
-                      name,
-                      tool,
-                      color: penColor,
-                      symbolId,
-                      category,
-                      lineSize: penThickness,
-                      markerSize: penSize,
-                    }));
-                  }}
-                >
-                  Save current tool
-                </button>
-                {toolChest.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className="flex w-full items-center gap-2 rounded-md border border-border px-2 py-1.5 text-left text-xs font-semibold hover:bg-muted"
-                    onClick={() => {
-                      setTool(item.tool || "select");
-                      if (item.color) setPenColor(item.color);
-                      if (item.symbolId) setSymbolId(item.symbolId);
-                      if (item.category) setCategory(item.category);
-                      if (item.lineSize) setPenThickness(item.lineSize);
-                      if (item.markerSize) setPenSize(item.markerSize);
-                      setStatus(`${item.name} is the active tool.`);
-                    }}
-                  >
-                    <span className="h-3 w-3 rounded-sm border border-black/20" style={{ backgroundColor: item.color || "#2563eb" }} />
-                    {item.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <TakeoffSizeControl
-              markerSize={penSize}
-              lineSize={penThickness}
-              onMarkerSize={setPenSize}
-              onLineSize={setPenThickness}
-            />
-            <label className="block text-xs font-bold text-muted-foreground">Homeruns per conduit
-              <input type="number" min="1" max="12" value={maxHomeruns} onChange={(event) => setMaxHomeruns(Math.max(1, Number(event.target.value) || 1))} className="mt-1 w-full rounded-lg border border-input bg-background px-2 py-1 text-sm" />
-            </label>
-            <p className="text-[11px] leading-4 text-muted-foreground">Default is 3. AI will not put more homeruns in one conduit unless you raise this.</p>
-            <p className="text-[11px] leading-4 text-muted-foreground"><strong className="text-foreground">AI assist</strong> counts the selected trade and draws colored marks on the sheets. <strong className="text-foreground">True Takeoff</strong> marks the drawings (runs AI if empty) then builds the bid-lock estimate.</p>
-            <div className="grid grid-cols-1 gap-1">
-              <button type="button" onClick={downloadQuantityLink} className="rounded-md border border-border px-2 py-1.5 text-left text-xs font-semibold hover:bg-muted">Quantity link CSV</button>
-              <button type="button" onClick={() => { void downloadQuantityChecksum(); }} className="rounded-md border border-border px-2 py-1.5 text-left text-xs font-semibold hover:bg-muted">Quantity link checksum</button>
-              <button type="button" onClick={downloadStudioSession} className="rounded-md border border-border px-2 py-1.5 text-left text-xs font-semibold hover:bg-muted">Share takeoff session</button>
-              <label className="rounded-md border border-border px-2 py-1.5 text-xs font-semibold hover:bg-muted">
-                Import takeoff session
-                <input type="file" accept="application/json,.json" className="sr-only" onChange={(event) => { void importStudioSession(event); }} />
-              </label>
-              <button type="button" onClick={insertSlipSheet} className="rounded-md border border-border px-2 py-1.5 text-left text-xs font-semibold hover:bg-muted">Slip sheet after this page</button>
-              {batchQueue.length > 0 && (
-                <button type="button" onClick={openNextBatchDrawing} className="rounded-md border border-border px-2 py-1.5 text-left text-xs font-semibold hover:bg-muted">
-                  Next drawing ({batchQueue.length} waiting)
-                </button>
-              )}
-            </div>
-            <ProfessionalToolsPanel
-              selected={selectedMark}
-              marks={marks}
-              drawingObjects={drawingObjects}
-              page={sheetMeta.page}
-              pageCount={sheetMeta.pageCount}
-              slips={slipSheets}
-              calibration={calibration}
-              aspect={currentAspect()}
-              comparePage={comparePage}
-              sessionId={sessionId}
-              onStatus={setStatus}
-              onTool={(next) => { setTool(next); setDraftPoints([]); }}
-              onPlaceAssembly={(assembly) => {
-                setPendingAssembly(assembly);
-                setStatus(`${assembly.name} will be placed on the next sheet click.`);
-              }}
-              onCrop={cropToSelection}
-              onCompare={setComparePage}
-              onSnapshot={saveRevisionSnapshot}
-              onRevision={compareRevision}
-              onWorkbook={downloadWorkbook}
-              onSign={() => { void signQuantityFile(); }}
-              onLiveLink={publishLiveQuantities}
-              onSession={setSessionId}
-              onOcr={() => { void readScannedText(); }}
-              onReport={downloadMaterialsReport}
-              onAerialLength={placeAerialLength}
-              onFormula={applyFormulaResult}
-            />
-            <DevicePicker
-              availableSymbols={availableDeviceSymbols}
-              trades={TRADES}
-              trade={trade}
-              onTrade={setTrade}
-              marks={marks}
-              pageKinds={pageKinds}
-              category={category}
-              onCategory={(value) => { setCategory(value); setSymbolQuery(""); }}
-              symbolId={symbolId}
-              onSymbol={setSymbolId}
-              query={symbolQuery}
-              onQuery={setSymbolQuery}
-              onManualMark={() => { setTool("count"); setStatus(`Manual symbol marking: choose a legend symbol, then click the missed printed symbol. Estim8r will snap the fill to its extracted geometry.`); }}
-            />
-          </div>
-          <div className="mt-3 rounded-lg bg-muted p-3 text-xs leading-5 text-muted-foreground">
-            <strong className="block text-foreground">{activeTool.label}</strong>{activeTool.help}
-            {measureLabel && <div className="mt-2 font-bold text-foreground">{measureLabel}</div>}
-            {(mode === "ai" || mode === "hybrid") && (
-              <div className="mt-2 text-foreground">{aiBusy ? `Taking off ${tradeById(trade).label}…` : `AI takeoff runs for ${tradeById(trade).label} only. Other trades stay out until you select them.`}</div>
-            )}
-          </div>
-        </aside>
+      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] lg:grid-cols-[5.5rem_minmax(0,1fr)_22rem] lg:grid-rows-1">
+        <TakeoffToolRail
+          tool={tool}
+          onTool={(key) => {
+            setTool(key);
+            setDraftPoints([]);
+            draftJunctionIdsRef.current = [];
+            setMeasureLabel("");
+            if (["count", "drop", "conduit", "homerun"].includes(key)) setStudioPanel("symbol");
+          }}
+        />
 
         <section className="grid min-h-0 min-w-0 grid-rows-[minmax(20rem,1fr)] overflow-hidden bg-card lg:flex lg:grid-rows-none lg:flex-row">
           <SheetThumbnailPanel
@@ -2803,7 +2616,7 @@ export default function TakeoffWorkspace() {
             onToggle={toggleThumbs}
             onSelectPage={selectSheet}
           />
-          <div className="grid min-h-0 min-w-0 grid-rows-[auto_auto_minmax(20rem,1fr)_auto] overflow-hidden lg:flex lg:flex-1 lg:grid-rows-none lg:flex-col">
+          <div className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(20rem,1fr)_auto] overflow-hidden lg:flex lg:flex-1 lg:grid-rows-none lg:flex-col">
           <TakeoffMobileCommandBar
             aiBusy={aiBusy}
             zoom={zoom}
@@ -2815,83 +2628,32 @@ export default function TakeoffWorkspace() {
             onZoomIn={() => setZoom((z) => Math.min(TAKEOFF_MAX_ZOOM, Number((z + 0.25).toFixed(2))))}
             onFit={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}
           />
-          <div className="flex shrink-0 flex-nowrap items-center gap-2 overflow-x-auto border-b border-border px-2 py-1.5 lg:flex-wrap lg:justify-between">
-            <div className="flex shrink-0 items-center gap-1 lg:flex-wrap">
-              <div className="hidden lg:block">
-                <TakeoffSizeControl
-                  compact
-                  markerSize={penSize}
-                  lineSize={penThickness}
-                  onMarkerSize={setPenSize}
-                  onLineSize={setPenThickness}
-                />
-              </div>
-              <button type="button" onClick={undo} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg p-2 hover:bg-muted" title="Undo"><Undo2 className="h-5 w-5" /></button>
-              <button type="button" onClick={redo} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg p-2 hover:bg-muted" title="Redo"><Redo2 className="h-5 w-5" /></button>
-              <button type="button" onClick={() => setZoom((z) => Math.max(TAKEOFF_MIN_ZOOM, Number((z - 0.25).toFixed(2))))} className="hidden min-h-11 min-w-11 items-center justify-center rounded-lg p-2 hover:bg-muted lg:inline-flex" title="Zoom out"><ZoomOut className="h-5 w-5" /></button>
-              <span className="hidden min-w-12 text-center text-sm font-bold lg:inline">{Math.round(zoom * 100)}%</span>
-              <button type="button" onClick={() => setZoom((z) => Math.min(TAKEOFF_MAX_ZOOM, Number((z + 0.25).toFixed(2))))} className="hidden min-h-11 min-w-11 items-center justify-center rounded-lg p-2 hover:bg-muted lg:inline-flex" title="Zoom in"><ZoomIn className="h-5 w-5" /></button>
-              <button type="button" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} className="hidden min-h-11 items-center rounded-lg border border-border px-3 text-sm font-semibold hover:bg-muted lg:inline-flex">Fit sheet</button>
-              {sheetMeta.pageCount > 1 && (
-                <div className="ml-2 hidden items-center gap-1 rounded-lg border border-border bg-background px-1.5 py-0.5 lg:flex">
-                  <button type="button" disabled={sheetMeta.page <= 1} onClick={() => selectSheet(sheetMeta.page - 1)} className="min-h-11 rounded border border-border px-3 text-sm font-semibold disabled:opacity-40">Previous</button>
-                  <strong className="min-w-24 px-1 text-center text-sm">Sheet {sheetMeta.page} of {sheetMeta.pageCount}</strong>
-                  <button type="button" disabled={sheetMeta.page >= sheetMeta.pageCount} onClick={() => selectSheet(sheetMeta.page + 1)} className="min-h-11 rounded border border-border px-3 text-sm font-semibold disabled:opacity-40">Next</button>
-                </div>
-              )}
-              {selectedMark && isDeviceMark(selectedMark) && tool === "select" && (
-                <div className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg border border-border px-2 py-1" aria-label="Direct object editing controls">
-                  <span className="hidden text-[11px] font-semibold text-muted-foreground sm:inline">Edit selected</span>
-                  <label className="flex items-center gap-1 text-xs font-semibold">
-                    Color
-                    <input
-                      type="color"
-                      aria-label="Selected device highlight color"
-                      value={/^#[0-9a-f]{6}$/i.test(selectedMark.color || "") ? selectedMark.color : "#f97316"}
-                      onChange={(event) => updateMark(selectedMark.id, { color: event.target.value, correction: "color" })}
-                      className="h-9 w-10 cursor-pointer border-0 bg-transparent p-0"
-                    />
-                  </label>
-                  <button type="button" className="min-h-9 rounded px-3 py-2 text-xs font-semibold hover:bg-muted"
-                    onClick={() => {
-                      resizeSelectedReview({
-                        w: (selectedMark.symbolBodyBounds?.w || selectedMark.outline?.w || 0.7) * 0.8,
-                        h: (selectedMark.symbolBodyBounds?.h || selectedMark.outline?.h || 0.7) * 0.8,
-                      });
-                    }} aria-label="Shrink selected device highlight">− Size</button>
-                  <button type="button" className="rounded px-2 py-1 text-xs font-semibold hover:bg-muted"
-                    onClick={() => {
-                      resizeSelectedReview({
-                        w: (selectedMark.symbolBodyBounds?.w || selectedMark.outline?.w || 0.7) * 1.25,
-                        h: (selectedMark.symbolBodyBounds?.h || selectedMark.outline?.h || 0.7) * 1.25,
-                      });
-                    }} aria-label="Enlarge selected device highlight">+ Size</button>
-                  <button type="button" onClick={countSelectedSymbol} className="min-h-9 rounded px-3 py-2 text-xs font-semibold hover:bg-muted">Count on all pages</button>
-                  <button type="button" onClick={deleteSelected}
-                    className="min-h-9 rounded px-3 py-2 text-xs font-semibold text-destructive hover:bg-destructive/10"
-                    aria-label="Delete selected takeoff object">Delete</button>
-                </div>
-              )}
-              {selectedId && !(selectedMark && isDeviceMark(selectedMark) && tool === "select") && <button type="button" onClick={deleteSelected} className="rounded-lg px-2 py-1 text-xs font-semibold text-destructive hover:bg-destructive/10">Delete</button>}
-              <button type="button" onClick={openAccuracyReview} className="min-h-11 rounded-lg border border-border px-3 text-sm font-bold hover:bg-muted">
-                Review{accuracyTotals.pending ? ` ${accuracyTotals.pending}` : ""}
-              </button>
-            </div>
-            <div className="flex items-center gap-1">
-              <button type="button" onClick={clearAll} className="flex min-h-11 items-center gap-1 rounded-lg px-3 text-sm font-bold text-destructive hover:bg-destructive/10"><Trash2 className="h-5 w-5" />Clear</button>
-            </div>
-          </div>
           <div
             ref={viewportRef}
             onPointerDown={onPanPointerDown}
             onWheel={handleDrawingWheel}
             data-testid="takeoff-sheet-viewport"
             className={cn(
-              "takeoff-sheet-viewport min-h-[20rem] min-w-0 overflow-hidden bg-neutral-400/40 dark:bg-neutral-950 lg:min-h-0 lg:flex-1",
+              "takeoff-sheet-viewport relative min-h-[20rem] min-w-0 overflow-hidden bg-muted/50 dark:bg-neutral-950 lg:min-h-0 lg:flex-1",
               tool === "pan" && "cursor-grab",
             )}
             style={{ touchAction: "none" }}
           >
+            <TakeoffSelectionBar
+              selected={selectedId ? selectedMark : null}
+              isDevice={Boolean(selectedMark && isDeviceMark(selectedMark) && tool === "select")}
+              onColor={(color) => updateMark(selectedMark.id, { color, correction: "color" })}
+              onShrink={() => resizeSelectedReview({
+                w: (selectedMark.symbolBodyBounds?.w || selectedMark.outline?.w || 0.7) * 0.8,
+                h: (selectedMark.symbolBodyBounds?.h || selectedMark.outline?.h || 0.7) * 0.8,
+              })}
+              onEnlarge={() => resizeSelectedReview({
+                w: (selectedMark.symbolBodyBounds?.w || selectedMark.outline?.w || 0.7) * 1.25,
+                h: (selectedMark.symbolBodyBounds?.h || selectedMark.outline?.h || 0.7) * 1.25,
+              })}
+              onCountPages={countSelectedSymbol}
+              onDelete={deleteSelected}
+            />
             <div className={cn("flex h-full w-full items-center justify-center p-2", comparePage && "items-stretch gap-2")}>
               <div
                 ref={(node) => {
@@ -3027,11 +2789,11 @@ export default function TakeoffWorkspace() {
                       : "Click to select this line, then assign a circuit before the length is used in the bid.";
                     return (
                       <div
-                        className="pointer-events-none absolute z-50 max-w-[18rem] rounded-xl border-2 border-slate-900 bg-white px-3 py-2.5 text-base text-slate-950 shadow-2xl dark:border-white dark:bg-slate-950 dark:text-white"
+                        className="pointer-events-none absolute z-50 max-w-56 rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground shadow-md"
                         style={{ left: `${x}%`, top: `${y}%`, transform: "translate(10px, 10px)" }}
                       >
-                        <div className="text-lg font-black leading-tight">{title}</div>
-                        <div className="mt-1 text-sm font-semibold">{detail}</div>
+                        <div className="font-semibold leading-tight">{title}</div>
+                        <div className="mt-0.5 text-muted-foreground">{detail}</div>
                       </div>
                     );
                   }
@@ -3040,34 +2802,25 @@ export default function TakeoffWorkspace() {
                     planType: aiPages.find((item) => item.page === sheetMeta.page)?.planType || "",
                   });
                   const hoverLegend = hoverBound.hover;
-                  const legend = hoverLegend.entry;
                   const x = Math.min(82, Math.max(2, Number(hovered.x) || 0));
                   const y = Math.min(86, Math.max(2, Number(hovered.y) || 0));
                   return (
                     <div
-                      className="pointer-events-none absolute z-50 max-w-[18rem] rounded-xl border-2 border-slate-900 bg-white px-3 py-2.5 text-base text-slate-950 shadow-2xl dark:border-white dark:bg-slate-950 dark:text-white"
+                      className="pointer-events-none absolute z-50 max-w-56 rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground shadow-md"
                       style={{ left: `${x}%`, top: `${y}%`, transform: "translate(10px, 10px)" }}
                     >
-                      <div className="text-lg font-black leading-tight">{hoverLegend.code || "Symbol"} · {hoverLegend.label}</div>
-                      <div className="mt-1 text-sm font-semibold">{hoverLegend.label}</div>
-                      <div className="mt-1 text-sm font-bold">{hoverLegend.category}</div>
-                      {!hoverLegend.verified || hovered.requiresClassification ? <div className="mt-1 text-sm font-bold text-amber-800 dark:text-amber-300">Legend identity not verified — review this symbol before bid use.</div> : null}
-                      {hoverLegend.source ? <div className="mt-1 text-sm">Legend source: {hoverLegend.source}</div> : null}
-                      {hoverLegend.page ? <div className="text-sm">Legend/schedule sheet {hoverLegend.page}</div> : null}
+                      <div className="font-semibold leading-tight">{hoverLegend.code || "Symbol"} · {hoverLegend.label}</div>
+                      <div className="text-muted-foreground">{hoverLegend.category}</div>
+                      {!hoverLegend.verified || hovered.requiresClassification ? <div className="mt-1 text-amber-800 dark:text-amber-300">Review before bid use.</div> : null}
+                      {hoverLegend.source ? <div className="mt-1">Legend: {hoverLegend.source}</div> : null}
+                      {hoverLegend.page ? <div>Sheet {hoverLegend.page}</div> : null}
                     </div>
                   );
                 })()}
                 {file && searchManifest && !aiBusy && visibleOverlayMarks.length === 0 && !emptyNoticeDismissed && (
-                  <div className="absolute bottom-3 right-3 z-20 max-w-[20rem] rounded-lg border border-border bg-background/95 px-3 py-3 shadow-md">
+                  <div className="absolute bottom-3 right-3 z-20 max-w-xs rounded-md border border-border bg-card px-3 py-2 shadow-sm">
                     <div className="flex items-start gap-2">
-                      <div className="min-w-0">
-                        <p className="text-base font-bold text-foreground">No takeoff marks on this sheet</p>
-                        <p className="mt-1 text-sm leading-5 text-foreground/80">
-                          {marks.length
-                            ? "This sheet has no visible takeoff marks. Open another plan sheet or rerun AI Assist."
-                            : "AI Assist finished without visible marks on this sheet."}
-                        </p>
-                      </div>
+                      <p className="min-w-0 text-xs text-muted-foreground">No marks on this sheet.</p>
                       <button
                         type="button"
                         aria-label="Close no takeoff marks notice"
@@ -3096,7 +2849,10 @@ export default function TakeoffWorkspace() {
           </div>
           <div className="hidden lg:block">
             <AiSearchManifestPanel manifest={searchManifest} trade={trade} />
-            <div className="shrink-0 border-t border-border bg-background px-3 py-1.5 text-xs text-muted-foreground">{status}</div>
+            <div className="flex shrink-0 items-center gap-2 border-t border-border bg-card px-3 py-1.5 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">{activeTool.label}</span>
+              <span className="truncate">{measureLabel || status}</span>
+            </div>
           </div>
           <TakeoffMobileDock
             tool={tool}
@@ -3129,13 +2885,154 @@ export default function TakeoffWorkspace() {
                 onQuotePdf={downloadQuotePdf}
                 onReplaceId={DRAWING_INPUT_ID}
                 onClose={closeDrawing}
+                onClear={clearAll}
+                className="h-11 w-full text-sm"
               />
             )}
           />
           </div>
         </section>
 
+        <aside className="hidden min-h-0 flex-col border-l border-border bg-card lg:flex">
+          <div className="flex shrink-0 border-b border-border" role="tablist" aria-label="Takeoff panel">
+            {[["quantities", "Quantities"], ["symbol", "Symbol"], ["output", "Output"]].map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={studioPanel === id}
+                onClick={() => setStudioPanel(id)}
+                className={cn("h-9 flex-1 text-xs font-semibold", studioPanel === id ? "border-b-2 border-foreground text-foreground" : "text-muted-foreground hover:text-foreground")}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {studioPanel === "symbol" ? (
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+              <DevicePicker
+                availableSymbols={availableDeviceSymbols}
+                trades={TRADES}
+                trade={trade}
+                onTrade={setTrade}
+                marks={marks}
+                pageKinds={pageKinds}
+                category={category}
+                onCategory={(value) => { setCategory(value); setSymbolQuery(""); }}
+                symbolId={symbolId}
+                onSymbol={setSymbolId}
+                query={symbolQuery}
+                onQuery={setSymbolQuery}
+                onManualMark={() => { setTool("count"); setStatus("Choose a legend symbol, then click the missed printed symbol."); }}
+              />
+              <TakeoffSizeControl markerSize={penSize} lineSize={penThickness} onMarkerSize={setPenSize} onLineSize={setPenThickness} />
+              <label className="block text-xs font-semibold text-muted-foreground">Pen
+                <span className="mt-1 flex items-center gap-2">
+                  <span className="h-7 w-7 shrink-0 rounded-md border border-border" style={{ backgroundColor: penColor }} aria-hidden />
+                  <input type="color" value={penColor} onChange={(event) => setPenColor(event.target.value)} className="h-8 w-full" aria-label="Pen color" />
+                </span>
+              </label>
+              <label className="block text-xs font-semibold text-muted-foreground">Conduit size
+                <select value={conduitChoice.id} onChange={(event) => setConduitId(event.target.value)} className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm">
+                  {conduitChoices.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                </select>
+              </label>
+              {(tool === "conduit" || hardwareTotals.junctionBoxes > 0) && (
+                <div className="space-y-2">
+                  <button type="button" disabled={tool !== "conduit" || !draftPoints.length} onClick={placeJunctionOnDraft} className="w-full rounded-md border border-border px-2 py-1.5 text-left text-xs font-semibold hover:bg-muted disabled:opacity-40">Add 4&quot; square JB</button>
+                  <div className="flex justify-between text-xs text-muted-foreground"><span>Junction boxes</span><span className="font-medium text-foreground">{hardwareTotals.junctionBoxes}</span></div>
+                  <div className="flex justify-between text-xs text-muted-foreground"><span>EMT connectors</span><span className="font-medium text-foreground">{hardwareTotals.emtConnectors}</span></div>
+                </div>
+              )}
+              <label className="block text-xs font-semibold text-muted-foreground">Homeruns per conduit
+                <input type="number" min="1" max="12" value={maxHomeruns} onChange={(event) => setMaxHomeruns(Math.max(1, Number(event.target.value) || 1))} className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm" />
+              </label>
+              {typeSwatches.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {typeSwatches.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => setInspectType((current) => current === item.key.toUpperCase() ? "" : item.key.toUpperCase())}
+                      className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-semibold", inspectType === item.key.toUpperCase() ? "border-foreground bg-muted" : "border-border")}
+                    >
+                      <span className="h-3 w-3 rounded-sm border border-black/20" style={{ backgroundColor: item.color }} aria-hidden />
+                      {item.key.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="space-y-1">
+                <button type="button" className="w-full rounded-md border border-border px-2 py-1.5 text-left text-xs font-semibold hover:bg-muted" onClick={() => {
+                  const name = window.prompt("Name this tool", activeTool.label);
+                  if (!name) return;
+                  setToolChest((current) => addToolChestItem(current, { name, tool, color: penColor, symbolId, category, lineSize: penThickness, markerSize: penSize }));
+                }}>Save current tool</button>
+                {toolChest.map((item) => (
+                  <button key={item.id} type="button" className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-medium hover:bg-muted" onClick={() => {
+                    setTool(item.tool || "select");
+                    if (item.color) setPenColor(item.color);
+                    if (item.symbolId) setSymbolId(item.symbolId);
+                    if (item.category) setCategory(item.category);
+                    if (item.lineSize) setPenThickness(item.lineSize);
+                    if (item.markerSize) setPenSize(item.markerSize);
+                    setStatus(`${item.name} is the active tool.`);
+                  }}>
+                    <span className="h-3 w-3 rounded-sm border border-black/20" style={{ backgroundColor: item.color || "#334155" }} />
+                    {item.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {studioPanel === "output" ? (
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
+              <button type="button" onClick={downloadQuantityLink} className="w-full rounded-md px-2 py-1.5 text-left text-xs font-medium hover:bg-muted">Quantity link CSV</button>
+              <button type="button" onClick={() => { void downloadQuantityChecksum(); }} className="w-full rounded-md px-2 py-1.5 text-left text-xs font-medium hover:bg-muted">Quantity link checksum</button>
+              <button type="button" onClick={downloadStudioSession} className="w-full rounded-md px-2 py-1.5 text-left text-xs font-medium hover:bg-muted">Share takeoff session</button>
+              <label className="block cursor-pointer rounded-md px-2 py-1.5 text-xs font-medium hover:bg-muted">
+                Import takeoff session
+                <input type="file" accept="application/json,.json" className="sr-only" onChange={(event) => { void importStudioSession(event); }} />
+              </label>
+              <button type="button" onClick={insertSlipSheet} className="w-full rounded-md px-2 py-1.5 text-left text-xs font-medium hover:bg-muted">Slip sheet after this page</button>
+              {batchQueue.length > 0 && (
+                <button type="button" onClick={openNextBatchDrawing} className="w-full rounded-md px-2 py-1.5 text-left text-xs font-semibold hover:bg-muted">Next drawing ({batchQueue.length} waiting)</button>
+              )}
+              <ProfessionalToolsPanel
+                selected={selectedMark}
+                marks={marks}
+                drawingObjects={drawingObjects}
+                page={sheetMeta.page}
+                pageCount={sheetMeta.pageCount}
+                slips={slipSheets}
+                calibration={calibration}
+                aspect={currentAspect()}
+                comparePage={comparePage}
+                sessionId={sessionId}
+                onStatus={setStatus}
+                onTool={(next) => { setTool(next); setDraftPoints([]); }}
+                onPlaceAssembly={(assembly) => {
+                  setPendingAssembly(assembly);
+                  setStatus(`${assembly.name} will be placed on the next sheet click.`);
+                }}
+                onCrop={cropToSelection}
+                onCompare={setComparePage}
+                onSnapshot={saveRevisionSnapshot}
+                onRevision={compareRevision}
+                onWorkbook={downloadWorkbook}
+                onSign={() => { void signQuantityFile(); }}
+                onLiveLink={publishLiveQuantities}
+                onSession={setSessionId}
+                onOcr={() => { void readScannedText(); }}
+                onReport={downloadMaterialsReport}
+                onAerialLength={placeAerialLength}
+                onFormula={applyFormulaResult}
+              />
+            </div>
+          ) : null}
+          {studioPanel === "quantities" ? (
         <TakeoffInspector
+          className="min-h-0 flex-1 overflow-y-auto bg-card p-3"
           rollup={rollup}
           totals={editedRollup.totals}
           runs={runs}
@@ -3165,6 +3062,8 @@ export default function TakeoffWorkspace() {
           reviewSummary={accuracyTotals}
           coverageNote={sheetCoverage ? describeSheetCoverage(sheetCoverage) : undefined}
         />
+          ) : null}
+        </aside>
       </div>
       <TakeoffMobileSheet
         open={mobilePanel === "pages"}
@@ -3202,7 +3101,7 @@ export default function TakeoffWorkspace() {
                 onClick={() => { setTool(item.key); setDraftPoints([]); setMobilePanel(""); }}
                 className={cn(
                   "flex min-h-[44px] items-center gap-2 rounded-xl border px-3 py-2 text-left text-base font-bold",
-                  tool === item.key ? "border-blue-600 bg-blue-50 text-blue-800 dark:border-orange-500 dark:bg-orange-500/10 dark:text-orange-200" : "border-border bg-background",
+                  tool === item.key ? "border-foreground bg-foreground text-background" : "border-border bg-background",
                 )}
               >
                 <Icon className="h-5 w-5 shrink-0" /><span className="truncate">{item.label}</span>
@@ -3228,7 +3127,7 @@ export default function TakeoffWorkspace() {
                   type="button"
                   onClick={() => setInspectType((current) => current === item.key.toUpperCase() ? "" : item.key.toUpperCase())}
                   className={inspectType === item.key.toUpperCase()
-                    ? "inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-orange-600 bg-orange-50 px-3 text-base font-bold"
+                    ? "inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-foreground bg-foreground px-3 text-base font-semibold text-background"
                     : "inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-border bg-background px-3 text-base font-bold"}
                 >
                   <span className="h-5 w-5 rounded-sm border border-black/20" style={{ backgroundColor: item.color }} aria-hidden />
@@ -3697,7 +3596,7 @@ function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber, viewp
       {rendering && <div className="absolute inset-x-0 top-2 z-10 mx-auto w-fit rounded-lg bg-background/90 px-3 py-2 text-xs font-semibold shadow">Rendering {fileName}…</div>}
       {error && <div className="absolute inset-x-4 top-16 z-10 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">{error}</div>}
       <canvas ref={canvasRef} className="block bg-white" />
-      {selectedMark && (selectedMark.sheet || 1) === pageNumber ? <div className="pointer-events-none absolute z-30" style={{ left: `${selectedMark.x}%`, top: `${selectedMark.y}%`, transform: "translate(-50%, -50%)" }}><div className="relative rounded-xl border-4 border-orange-600 bg-white/80 p-1 shadow-2xl backdrop-blur-[1px]"><canvas ref={focusCanvasRef} className="block h-28 w-28 bg-white" style={{ imageRendering: "auto" }} /><div className="absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-orange-600 px-2 py-1 text-[10px] font-black text-white shadow">SELECTED DEVICE</div></div></div> : null}
+      {selectedMark && (selectedMark.sheet || 1) === pageNumber ? <div className="pointer-events-none absolute z-30" style={{ left: `${selectedMark.x}%`, top: `${selectedMark.y}%`, transform: "translate(-50%, -50%)" }}><div className="rounded-md border-2 border-foreground bg-card p-0.5 shadow-md"><canvas ref={focusCanvasRef} className="block h-16 w-16 bg-white" style={{ imageRendering: "auto" }} /></div></div> : null}
     </div>
   );
 }

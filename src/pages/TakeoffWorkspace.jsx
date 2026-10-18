@@ -2733,7 +2733,8 @@ export default function TakeoffWorkspace() {
                   tool={tool}
                   markerSize={penSize}
                   lineSize={penThickness}
-                  fontSize={wideLayout ? OVERLAY_FONT_SIZE : MOBILE_OVERLAY_FONT_SIZE}
+                  fontSize={OVERLAY_FONT_SIZE}
+                  showConduitLabels={wideLayout}
                   lengthFor={(mark) => markLengthFeet(mark, calibration, aspect)}
                   printedHighlight={printedHighlightGeometry(printedSelection)}
                   hoverHighlight={printedHighlightGeometry(hoveredPrinted && printedSelectionId(hoveredPrinted) !== selectedId ? hoveredPrinted : null)}
@@ -3324,7 +3325,7 @@ function GeometryStroke({ geometry, stroke, width }) {
   return <polyline points={points} fill="none" stroke={stroke} strokeWidth={width} vectorEffect="non-scaling-stroke" />;
 }
 
-function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, lengthFor, markerSize = DEFAULT_MARKER_SIZE, lineSize = DEFAULT_LINE_SIZE, fontSize = OVERLAY_FONT_SIZE, printedHighlight = null, hoverHighlight = null }) {
+function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, lengthFor, markerSize = DEFAULT_MARKER_SIZE, lineSize = DEFAULT_LINE_SIZE, fontSize = OVERLAY_FONT_SIZE, showConduitLabels = true, printedHighlight = null, hoverHighlight = null }) {
   const otherRoutes = marks.filter((m) => m.points?.length && !isCircuitMark(m));
   const devices = marks.filter((m) => isDeviceMark(m));
   const circuits = marks.filter((m) => isCircuitMark(m) && m.points?.length);
@@ -3451,7 +3452,7 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
       })}
       <GeometryStroke geometry={hoverHighlight} stroke="#0f172a" width="1.6" />
       <GeometryStroke geometry={printedHighlight} stroke="#ea580c" width="2.2" />
-      {callouts.conduitLabels.map((label) => (
+      {callouts.conduitLabels.filter((label) => showConduitLabels || label.selected).map((label) => (
         <OverlayLabel key={`conduit-${label.id}`} label={label} fontSize={fontSize} fill={label.selected ? "#0f172a" : "#1e293b"} />
       ))}
       {marks.filter((m) => m.type === "note").map((mark) => (

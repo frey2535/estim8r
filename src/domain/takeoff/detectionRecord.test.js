@@ -5,6 +5,7 @@ import {
   boundsFromGeometry,
   isReviewOnlyMark,
   nearbyCircuitTag,
+  pointFromGeometry,
   reviewCandidateMark,
 } from "./detectionRecord.js";
 import { persistedPlanDeviceCount } from "./symbolDetection.js";
@@ -67,6 +68,10 @@ assert(textOnly.reviewReason === "text-only-body", "text-only body is explained"
 assert(textOnly.symbolBodyBounds === null, "text-only detection must not invent zero-area symbol bounds");
 assert(deviceOutline(textOnly) === null, "text-only detection must not paint an invented body");
 assert(boundsFromGeometry({ cx: 40, cy: 40 }) === null, "point-only geometry has no measurable body");
+assert(pointFromGeometry({ cx: null, cy: 12 }) === null, "null x is not a valid origin");
+assert(pointFromGeometry({ cx: 12, cy: "" }) === null, "blank y is not a valid origin");
+assert(pointFromGeometry({ cx: 0, cy: 0 })?.x === 0, "real zero coordinates remain valid");
+assert(boundsFromGeometry({ cx: 10, cy: 12, w: -0.3, h: 0.2 }) === null, "negative symbol width is invalid");
 assert(!isReviewOnlyMark(textOnly), "a classified text-on-symbol device is still a bid count");
 
 const review = reviewCandidateMark({

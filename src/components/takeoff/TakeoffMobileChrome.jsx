@@ -10,7 +10,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 
-const commandBtn = "inline-flex min-h-[44px] items-center justify-center gap-1 rounded-xl px-2.5 text-[15px] font-bold";
+const commandBtn = "inline-flex min-h-[48px] items-center justify-center gap-1 rounded-xl px-2.5 text-[14px] font-semibold touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 export function TakeoffMobileCommandBar({
   aiBusy,
@@ -25,7 +25,7 @@ export function TakeoffMobileCommandBar({
 }) {
   return (
     <div className="shrink-0 border-b border-border bg-card px-2 py-2 lg:hidden" data-testid="takeoff-mobile-commands">
-      <div className="grid grid-cols-2 gap-1.5">
+      <div className="grid grid-cols-2 gap-2">
         <button
           type="button"
           disabled={aiBusy}
@@ -90,8 +90,8 @@ export function TakeoffMobileDock({
   moreMenu,
 }) {
   return (
-    <div className="shrink-0 border-t border-border bg-card lg:hidden" data-testid="takeoff-mobile-dock">
-      <div className="grid grid-cols-5 gap-1 px-2 py-2">
+    <div className="shrink-0 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] lg:hidden" data-testid="takeoff-mobile-dock">
+      <div className="grid grid-cols-5 gap-1.5 px-2 py-2">
         <button
           type="button"
           onClick={onPan}
@@ -133,7 +133,7 @@ export function TakeoffMobileDock({
         </button>
         <div className="min-w-0">{moreMenu}</div>
       </div>
-      <div className="border-t border-border px-3 py-1.5 text-xs text-muted-foreground">
+      <div role="status" aria-live="polite" className="border-t border-border px-3 py-1.5 text-xs text-muted-foreground line-clamp-2">
         <span className="font-medium text-foreground">{activeToolLabel}.</span> {status}
       </div>
     </div>
@@ -143,12 +143,12 @@ export function TakeoffMobileDock({
 export function TakeoffMobileSheet({ open, onOpenChange, title, description, children }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="flex max-h-[72dvh] flex-col gap-3 overflow-hidden p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] lg:hidden">
+      <SheetContent side="bottom" className="flex max-h-[85dvh] flex-col gap-3 overflow-hidden rounded-t-2xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] lg:hidden">
         <SheetHeader className="text-left">
           <SheetTitle className="text-base font-semibold">{title}</SheetTitle>
           {description ? <SheetDescription className="text-sm text-muted-foreground">{description}</SheetDescription> : null}
         </SheetHeader>
-        <div className="min-h-0 flex-1 overflow-auto pr-1">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">{children}</div>
       </SheetContent>
     </Sheet>
   );

@@ -2,6 +2,7 @@ import { applyDeviceTypeColors, deviceOutline } from "./deviceStyles.js";
 import {
   attachDetectionRecord,
   bidDeviceMarks,
+  boundsFromGeometry,
   isReviewOnlyMark,
   nearbyCircuitTag,
   reviewCandidateMark,
@@ -63,6 +64,9 @@ const textOnly = attachDetectionRecord({
 });
 assert(textOnly.requiresReview === true, "text-only placement stays visible and flagged for review");
 assert(textOnly.reviewReason === "text-only-body", "text-only body is explained");
+assert(textOnly.symbolBodyBounds === null, "text-only detection must not invent zero-area symbol bounds");
+assert(deviceOutline(textOnly) === null, "text-only detection must not paint an invented body");
+assert(boundsFromGeometry({ cx: 40, cy: 40 }) === null, "point-only geometry has no measurable body");
 assert(!isReviewOnlyMark(textOnly), "a classified text-on-symbol device is still a bid count");
 
 const review = reviewCandidateMark({

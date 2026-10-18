@@ -45,7 +45,7 @@ export default function TakeoffActionsMenu({
           <ChevronDown className="h-5 w-5" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
+      <DropdownMenuContent align="end" side="top" sideOffset={8} collisionPadding={12} className="max-h-[min(70dvh,32rem)] w-[min(18rem,calc(100vw-1.5rem))] overflow-y-auto overscroll-contain">
         <DropdownMenuLabel>Takeoff</DropdownMenuLabel>
         <DropdownMenuItem disabled={aiBusy} onSelect={() => { if (!aiBusy) onAiAssist(); }}>
           {aiBusy ? "AI assist is running…" : "AI assist"}

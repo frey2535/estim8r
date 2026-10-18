@@ -34,7 +34,7 @@ export default function AppSwitcher() {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-10 z-[70] w-72 overflow-hidden rounded-2xl border border-border bg-popover shadow-xl"
+          className="fixed left-3 right-3 top-[calc(4.5rem+env(safe-area-inset-top))] z-[70] max-h-[min(70dvh,32rem)] overflow-y-auto overscroll-contain rounded-2xl border border-border bg-popover shadow-xl sm:absolute sm:left-auto sm:right-0 sm:top-10 sm:w-72"
         >
           <div className="border-b border-border px-4 py-3">
             <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Current Flow Apps</div>

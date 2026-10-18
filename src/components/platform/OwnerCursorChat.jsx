@@ -150,12 +150,12 @@ export default function OwnerCursorChat() {
   return (
     <>
       {!open && <button type="button" data-testid="owner-cursor-chat-open" onClick={() => setOpen(true)}
-        className="fixed z-40 right-3 bottom-20 lg:bottom-6 flex items-center gap-2 rounded-full bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-lg dark:bg-orange-500">
-        <Bot className="h-4 w-4" /> Owner workspace assistant
+        className="fixed z-40 right-3 top-[calc(4.5rem+env(safe-area-inset-top))] lg:top-auto lg:bottom-6 flex h-11 w-11 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg dark:bg-orange-500">
+        <Bot className="h-5 w-5" /><span className="sr-only">Open owner workspace assistant</span>
       </button>}
       {open && <aside data-testid="owner-cursor-chat"
-        className={cn("fixed z-40 flex flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl",
-          "right-3 left-3 bottom-20 h-[48vh] lg:left-auto lg:top-16 lg:bottom-6 lg:h-auto lg:w-[25rem]")}>
+        className={cn("fixed z-[60] flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl",
+          "inset-x-2 top-[calc(4rem+env(safe-area-inset-top))] bottom-[calc(4.5rem+env(safe-area-inset-bottom))] lg:left-auto lg:right-3 lg:top-16 lg:bottom-6 lg:w-[25rem]")}>
         <header className="flex items-center justify-between border-b border-border px-3 py-2">
           <div><p className="text-sm font-semibold">Owner workspace assistant</p>
             <p className="text-xs text-muted-foreground">Viewing context: {screen}</p></div>
@@ -166,7 +166,7 @@ export default function OwnerCursorChat() {
           <Activity className="mr-1 inline h-3.5 w-3.5" /> AI chat requires the authenticated owner-agent-chat service.
           {snapshot && <span className="block">Last inspected: {new Date(snapshot.evidence.capturedAt).toLocaleTimeString()} · {snapshot.result.findings.length} findings</span>}
         </div>
-        <div className="flex gap-2 border-b border-border px-3 py-2">
+        <div className="flex flex-wrap gap-2 border-b border-border px-3 py-2">
           <Button type="button" size="sm" variant="outline" onClick={inspect} disabled={inspecting}>
             {inspecting ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1 h-3.5 w-3.5" />} Inspect screen
           </Button>

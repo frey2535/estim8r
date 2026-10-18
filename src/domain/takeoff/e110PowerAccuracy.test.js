@@ -104,8 +104,12 @@ const lightingOnPower = e110Marks.filter((mark) => /^(1|2|3|4)$/.test(String(mar
 const hatchBand = e110Marks.filter((mark) => mark.x >= 10 && mark.x <= 16 && mark.y >= 14 && mark.y <= 22);
 const maxExtent = e110Marks.reduce((max, mark) => {
   const outline = deviceOutline(mark);
+  // A missing symbol body is an accuracy defect, not a reason to crash the harness.
+  // Count it separately and keep evaluating all other E110 failures.
+  if (!outline) return max;
   return Math.max(max, Number(outline.w) || 0, Number(outline.h) || 0, (Number(outline.r) || 0) * 2);
 }, 0);
+const missingBodyMarks = e110Marks.filter((mark) => !deviceOutline(mark));
 const wpOnGlyph = byType("WP").filter((mark) => mark.outlineSource === "vector" || looksLikeUnlabeledReceptacleGlyph({
   cx: mark.x, cy: mark.y, w: mark.outline?.w, h: mark.outline?.h, kind: mark.outline?.kind || "rect",
 }));
@@ -118,6 +122,7 @@ console.log(`WP visible=${visible.wp} found=${found.wp}`);
 console.log(`SP visible=${visible.sp} found=${found.sp}`);
 console.log(`GFI visible=${visible.gfi} found=${found.gfi}`);
 console.log(`OS visible=${visible.os} found=${found.os}`);
+console.log(`E110 missing symbol bodies=${missingBodyMarks.length} examples=${missingBodyMarks.slice(0, 6).map((mark) => `${mark.typeCode || "?"}@${mark.x},${mark.y}`).join(" ")}`);
 console.log(`E110 total=${e110Marks.length} review=${reviewMarks.filter((mark) => mark.sheet === 50).length} hexFP=${hexMarked.length} lightingOnPower=${lightingOnPower.length} hatchBand=${hatchBand.length} maxExtent=${maxExtent.toFixed(2)}`);
 console.log(`E001=${legendMarks.length} cover=${coverMarks.length} WP_on_glyph=${wpOnGlyph.length}/${found.wp}`);
 
@@ -132,6 +137,7 @@ assert(found.extraR === 0, `receptacle marks must sit on glyph coordinates, extr
 assert(lightingOnPower.length === 0, `lighting types / site poles must not mark a power sheet, got ${lightingOnPower.length}`);
 assert(hexMarked.length === 0, `hex notes must not get text chips, got ${hexMarked.length}`);
 assert(hatchBand.length <= 4, `stair/hatch ticks must not become room-full of marks, got ${hatchBand.length}`);
+assert(missingBodyMarks.length === 0, `E110 accepted marks missing measurable symbol bodies: ${missingBodyMarks.length}`);
 assert(maxExtent <= 1.65, `fills must stay Beam-tight, max extent ${maxExtent}`);
 assert(wpOnGlyph.length === found.wp, `every WP fill must sit on the printed glyph, ${wpOnGlyph.length}/${found.wp}`);
 assert(!(e110?.tokens || []).some((token) => (

@@ -7,8 +7,11 @@ const CIRCUIT_TAG_RE = /^(?:LN|LP|PP|RP|H|L|EM)\d{1,2}$|^P\d{2}$/i;
 
 export function pointFromGeometry(geometry) {
   if (!geometry) return null;
-  const x = Number(geometry.cx ?? geometry.x);
-  const y = Number(geometry.cy ?? geometry.y);
+  const rawX = geometry.cx ?? geometry.x;
+  const rawY = geometry.cy ?? geometry.y;
+  if (rawX == null || rawY == null || rawX === "" || rawY === "") return null;
+  const x = Number(rawX);
+  const y = Number(rawY);
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
   return { x, y };
 }
@@ -20,6 +23,7 @@ export function boundsFromGeometry(geometry) {
   const r = Number(geometry.r ?? geometry.outline?.r) || 0;
   const body = pointFromGeometry(geometry);
   if (!body || !Number.isFinite(w) || !Number.isFinite(h) || !Number.isFinite(r)) return null;
+  if (w < 0 || h < 0 || r < 0) return null;
   if (w <= 0 && h <= 0 && r <= 0) return null;
   return {
     x: body.x - (w || r * 2) / 2,

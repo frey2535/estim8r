@@ -1027,7 +1027,7 @@ export function scanPageByLegendGeometry(page,dictionary,options={}){
   const threshold=Number(options.threshold)||0.76;
   const entries=(dictionary?.entries||[]).filter((e)=>{
     if(!e.prototype) return false;
-    if (!options.planType) return true;
+    if (!options.planType || options.allowCrossFamilyReview) return true;
     const family = entryFamily(e);
     return !family || family === options.planType;
   });
@@ -1158,6 +1158,7 @@ export function recoverMissedLegendSymbols(page, dictionary, options = {}) {
     : Date.now() + Math.max(200, Number(options.timeBudgetMs) > 0 ? Number(options.timeBudgetMs) : 8000);
   const entries = (dictionary?.entries || []).filter((entry) => {
     if (!entry?.prototype) return false;
+    if (options.allowCrossFamilyReview !== false) return true;
     const family = entryFamily(entry);
     return !planType || !family || family === planType;
   });
@@ -1177,6 +1178,7 @@ export function recoverMissedLegendSymbols(page, dictionary, options = {}) {
       maxSeeds: 2200,
       allowSlash: true,
       keepSeedBody: true,
+      allowCrossFamilyReview: true,
     });
     if (!hits.length) continue;
     const repeated = hits.length >= 2;

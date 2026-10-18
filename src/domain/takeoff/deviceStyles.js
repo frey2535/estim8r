@@ -77,7 +77,7 @@ export function marksForTrade(marks, trade) {
 export function planOverlayMarks(marks, options = {}) {
   // Review/unknown AI candidates belong in the review queue, never painted on
   // the normal bid drawing.
-  const list = (marks || []).filter((mark) => !isReviewOnlyMark(mark));
+  const list = (marks || []).filter((mark) => !isReviewOnlyMark(mark) && mark?.requiresReview !== true);
   if (options.devicesOnly) return list.filter((mark) => !isCircuitMark(mark));
   if (options.circuitsOnly) return list.filter((mark) => isCircuitMark(mark) || mark?.type === "note");
   if (options.interactive) return list;

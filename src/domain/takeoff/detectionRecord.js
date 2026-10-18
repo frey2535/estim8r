@@ -19,7 +19,8 @@ export function boundsFromGeometry(geometry) {
   const h = Number(geometry.h ?? geometry.outline?.h) || 0;
   const r = Number(geometry.r ?? geometry.outline?.r) || 0;
   const body = pointFromGeometry(geometry);
-  if (!body) return null;
+  if (!body || !Number.isFinite(w) || !Number.isFinite(h) || !Number.isFinite(r)) return null;
+  if (w <= 0 && h <= 0 && r <= 0) return null;
   return {
     x: body.x - (w || r * 2) / 2,
     y: body.y - (h || r * 2) / 2,
@@ -96,7 +97,7 @@ export function attachDetectionRecord(mark, fields = {}) {
     x: body.x,
     y: body.y,
     symbolBodyLocation: body,
-    symbolBodyBounds: fields.symbolBodyBounds || boundsFromGeometry(fields.geometry || { ...mark.outline, cx: body.x, cy: body.y, w: mark.outline?.w, h: mark.outline?.h, r: mark.outline?.r, kind: mark.outline?.kind }),
+    symbolBodyBounds: fields.symbolBodyBounds || boundsFromGeometry(fields.geometry || { ...(mark.outline || {}), cx: body.x, cy: body.y, w: mark.outline?.w, h: mark.outline?.h, r: mark.outline?.r, kind: mark.outline?.kind }),
     labelLocation: fields.labelLocation || null,
     circuitTagLocation: fields.circuitTagLocation || null,
     visualMatchScore: visualScore,

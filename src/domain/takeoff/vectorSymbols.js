@@ -29,6 +29,19 @@ export function applyCtm(ctm = IDENTITY, x = 0, y = 0) {
   };
 }
 
+// A PDF minMax rectangle must transform all four corners: transforming only
+// opposite corners collapses or shifts bounds under rotated/sheared CTMs.
+export function transformedMinMaxBounds(minMax, ctm, toPagePct) {
+  if (!Array.isArray(minMax) || minMax.length < 4) return null;
+  const [x0, y0, x1, y1] = minMax.map(Number);
+  if (![x0, y0, x1, y1].every(Number.isFinite)) return null;
+  const points = [[x0, y0], [x0, y1], [x1, y0], [x1, y1]].map(([x, y]) => {
+    const pdf = applyCtm(ctm, x, y);
+    return toPagePct(pdf.x, pdf.y);
+  });
+  return boundsOfPoints(points);
+}
+
 export function boundsOfPoints(points = []) {
   if (!points.length) return null;
   let minX = Infinity;
@@ -306,16 +319,7 @@ export function sheetGeometryFromConstructedPaths(entries, toPagePct) {
       });
       let bounds = pageBoundsForPoints(pagePoints);
       if (!bounds && entry.minMax && entry.minMax.length >= 4 && parsedGroups.length === 1) {
-        const aPdf = applyCtm(ctm, entry.minMax[0], entry.minMax[1]);
-        const bPdf = applyCtm(ctm, entry.minMax[2], entry.minMax[3]);
-        const a = toPagePct(aPdf.x, aPdf.y);
-        const b = toPagePct(bPdf.x, bPdf.y);
-        bounds = boxFromExtents(
-          Math.min(a.x, b.x),
-          Math.min(a.y, b.y),
-          Math.max(a.x, b.x),
-          Math.max(a.y, b.y),
-        );
+        bounds = transformedMinMaxBounds(entry.minMax, ctm, toPagePct);
       }
       if (!isLineOrRoomBounds(bounds)) continue;
       const points = pagePoints.length ? pagePoints : rectPoints(bounds);
@@ -345,16 +349,7 @@ export function candidatesFromConstructedPaths(entries, toPagePct) {
     });
     let bounds = boundsOfPoints(pagePoints);
     if (!bounds && entry.minMax && entry.minMax.length >= 4) {
-      const aPdf = applyCtm(ctm, entry.minMax[0], entry.minMax[1]);
-      const bPdf = applyCtm(ctm, entry.minMax[2], entry.minMax[3]);
-      const a = toPagePct(aPdf.x, aPdf.y);
-      const b = toPagePct(bPdf.x, bPdf.y);
-      bounds = boxFromExtents(
-        Math.min(a.x, b.x),
-        Math.min(a.y, b.y),
-        Math.max(a.x, b.x),
-        Math.max(a.y, b.y),
-      );
+      bounds = transformedMinMaxBounds(entry.minMax, ctm, toPagePct);
     }
     if (!isSymbolSized(bounds)) continue;
     const geometry = classifySymbolGeometry(pagePoints.length ? pagePoints : rectPoints(bounds), bounds, {

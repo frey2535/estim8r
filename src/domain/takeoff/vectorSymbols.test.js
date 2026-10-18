@@ -18,6 +18,7 @@ import {
   scaleOutline,
   shapeHintFromLabel,
   tagOnSymbolGeometry,
+  transformedMinMaxBounds,
 } from "./vectorSymbols.js";
 
 function assert(cond, message) {
@@ -47,6 +48,14 @@ assert(rectCandidates.length === 1, "one closed rectangle becomes one candidate"
 assert(rectCandidates[0].kind === "rect", `2x4-like path is a rect, got ${rectCandidates[0]?.kind}`);
 assert(Math.abs(rectCandidates[0].w - 2.2) < 0.05, "rect width is the extracted path width");
 assert(Math.abs(rectCandidates[0].h - 1.1) < 0.05, "rect height is the extracted path height");
+
+const rotatedBounds = transformedMinMaxBounds([0, 0, 2, 1], [0, 1, -1, 0, 10, 20], identityPct);
+assert(rotatedBounds && Math.abs(rotatedBounds.w - 1) < 1e-9 && Math.abs(rotatedBounds.h - 2) < 1e-9, "90-degree rotated PDF minMax retains full symbol extent");
+assert(rotatedBounds && Math.abs(rotatedBounds.cx - 9.5) < 1e-9 && Math.abs(rotatedBounds.cy - 21) < 1e-9, "rotated minMax center follows transformed corners");
+const shearedBounds = transformedMinMaxBounds([0, 0, 2, 1], [1, 0, 1, 1, 0, 0], identityPct);
+assert(shearedBounds && Math.abs(shearedBounds.w - 3) < 1e-9, "sheared PDF minMax includes off-diagonal corners");
+const fallbackRotated = candidatesFromConstructedPaths([{ ctm: [0, 1, -1, 0, 10, 20], drawOps: [], minMax: [0, 0, 2, 1] }], identityPct);
+assert(fallbackRotated.length === 1 && Math.abs(fallbackRotated[0].w - 1) < 1e-9, "rotated fallback produces correctly sized symbol candidate");
 
 const circleOps = [
   DRAW_MOVE, 20, 20.6,

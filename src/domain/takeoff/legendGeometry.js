@@ -809,6 +809,7 @@ export function scanUnlabeledPowerGlyphs(page, options = {}) {
       score: 0.91,
       margin: 0.08,
       ambiguous: true,
+      source: "unlabeled-power-glyph",
     });
   }
   return hits;

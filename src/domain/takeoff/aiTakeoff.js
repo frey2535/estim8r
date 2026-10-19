@@ -827,6 +827,29 @@ function isVisualOnlyEquipmentHit(visual, page, placed) {
   return !hasPrintedEquipmentTagNear(page, family, placed);
 }
 
+function isTrustedUnlabeledPowerGlyph(visual, planType) {
+  if (planType !== "power") return false;
+  if (visual?.source !== "unlabeled-power-glyph") return false;
+  const code = String(visual?.entry?.code || "").toUpperCase();
+  if (code !== "R") return false;
+  const geometry = visual?.geometry || {};
+  if ((geometry.source || geometry.outline?.source) !== "vector") return false;
+  return Number(visual?.score) >= 0.9;
+}
+
+function removeNearbyReviewMarks(counts, seen, sheet, point, radius = 0.34) {
+  for (let index = counts.length - 1; index >= 0; index -= 1) {
+    const mark = counts[index];
+    if (mark.sheet !== sheet || !isReviewOnlyMark(mark)) continue;
+    if (distance(mark, point) <= radius) counts.splice(index, 1);
+  }
+  for (let index = seen.length - 1; index >= 0; index -= 1) {
+    const mark = seen[index];
+    if (mark.sheet !== sheet || !isReviewOnlyMark(mark)) continue;
+    if (distance(mark, point) <= radius) seen.splice(index, 1);
+  }
+}
+
 function compactLegendCode(value) {
   return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
@@ -966,6 +989,70 @@ function keepLabeledSpecialtyMarks(marks, pages) {
     kept.push(mark);
   }
   return kept;
+}
+
+function addMissingSpecialtyTokenReviewMarks(marks, pages, options = {}) {
+  const out = [...(marks || [])];
+  const symbols = options.symbols || [];
+  const aliases = options.aliases || [];
+  for (const page of pages || []) {
+    if (!shouldScan(page, options.trade || "electrical")) continue;
+    const planType = pagePlanType(page);
+    for (const token of page.tokens || []) {
+      const code = specialtyTypeCode(token.text);
+      if (!code) continue;
+      if (!shouldAcceptPlanToken(token, page.tokens || [], { planType, paths: page.paths || [] })) continue;
+      const alreadyCovered = out.some((mark) => {
+        if (mark.sheet !== page.page || !specialtyCodesMatch(specialtyTypeCode(mark.typeCode || mark.abbr), code)) return false;
+        const labelDist = mark.labelLocation
+          ? Math.hypot((Number(mark.labelLocation.x) || 0) - (Number(token.x) || 0), (Number(mark.labelLocation.y) || 0) - (Number(token.y) || 0))
+          : Infinity;
+        const bodyDist = Math.hypot((Number(mark.x) || 0) - (Number(token.x) || 0), (Number(mark.y) || 0) - (Number(token.y) || 0));
+        return labelDist <= 0.22 || bodyDist <= 0.42;
+      });
+      if (alreadyCovered) continue;
+      const symbol = matchTradeSymbol(token.text, symbols, aliases, {
+        planType,
+        nearbyText: nearbyText(token, page.tokens || []),
+        reject: (item) => !shouldAcceptPlanToken({ ...token, text: item.text }, page.tokens || [], { planType, paths: page.paths || [] }),
+      });
+      if (!symbol) continue;
+      const shapeHint = code === "OS" || code === "GFI" || code === "GFI/WP" ? "circle" : "rect";
+      const geometry = tagOnSymbolGeometry(token, { shapeHint });
+      const mark = attachDetectionRecord({
+        id: newId(),
+        source: "ai",
+        trade: options.trade || "electrical",
+        type: "count",
+        sheet: page.page,
+        x: token.x,
+        y: token.y,
+        category: symbol.takeoffCategory || symbol.category,
+        symbol: symbol.id,
+        symbolLabel: symbol.label,
+        abbr: symbol.abbr,
+        typeCode: code,
+        color: options.color || "#2563eb",
+        matchedFrom: "drawing",
+        outline: geometry?.outline || null,
+        outlineSource: "text",
+        detectSource: DETECT_SOURCE_ORIGINAL_PDF,
+        confidence: "low",
+        reviewStatus: "pending",
+        layer: "device",
+      }, {
+        geometry,
+        symbolBodyLocation: { x: Number(token.x) || 0, y: Number(token.y) || 0 },
+        labelLocation: labelLocationFromToken(token),
+        detectionSources: ["drawing", "text"],
+        textContextScore: 0.7,
+        requiresReview: true,
+        reviewReason: "text-only-body",
+      });
+      out.push(mark);
+    }
+  }
+  return out;
 }
 
 function validateTaggedEquipmentMarks(marks, pages) {
@@ -1341,23 +1428,64 @@ export function buildAiMarks({
         occupied,
       }),
       ...twinHits,
-      ...(planType === "power" ? scanUnlabeledPowerGlyphs(page, { occupied, symbols: matchSymbols }) : []),
+      ...(planType === "power" ? scanUnlabeledPowerGlyphs(page, { occupied: occupied.filter((item) => !isReviewOnlyMark(item)), symbols: matchSymbols }) : []),
     ];
     for (const visual of unlabeledHits) {
       const geometry = visual.geometry;
-      const paintOutline = symbolBodyOutline(geometry, page.tokens, { paths: page.paths });
+      const trustedPowerGlyph = isTrustedUnlabeledPowerGlyph(visual, planType);
+      const paintOutline = trustedPowerGlyph
+        ? (geometry.outline || geometry)
+        : symbolBodyOutline(geometry, page.tokens, { paths: page.paths });
       const placed = {
-        x: Number(paintOutline?.cx ?? geometry.cx),
-        y: Number(paintOutline?.cy ?? geometry.cy),
+        x: Number((trustedPowerGlyph ? geometry.cx : paintOutline?.cx) ?? geometry.cx),
+        y: Number((trustedPowerGlyph ? geometry.cy : paintOutline?.cy) ?? geometry.cy),
       };
-      const titleBand = placed.x > 64 || placed.y < 12;
+      const titleBand = placed.y < 12;
       if (!placementAllowed(placed, { sitePlan }) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens) || titleBand) continue;
       if (looksLikeHexNoteGlyph(geometry)) continue;
       const existingIndex = counts.findIndex((mark) => mark.sheet === page.page && distance(mark, placed) < 0.34);
       const existing = existingIndex >= 0 ? counts[existingIndex] : null;
-      if (existing) continue;
+      if (existing && !(trustedPowerGlyph && isReviewOnlyMark(existing))) continue;
       if (isVisualOnlyEquipmentHit(visual, page, placed)) continue;
       if (isVisualOnlySpecialtyHit({ ...visual, geometry }, page, placed)) continue;
+      if (trustedPowerGlyph) {
+        removeNearbyReviewMarks(counts, seen, page.page, placed);
+        const symbol = visual.entry?.symbol;
+        const mark = attachDetectionRecord({
+          id: newId(),
+          source: "ai",
+          trade,
+          type: "count",
+          sheet: page.page,
+          x: placed.x,
+          y: placed.y,
+          category: symbol?.takeoffCategory || symbol?.category || "Receptacles",
+          symbol: symbol?.id || "duplex",
+          symbolLabel: symbol?.label || "Duplex receptacle",
+          abbr: symbol?.abbr || "R",
+          typeCode: "R",
+          color,
+          matchedFrom: "plan-glyph",
+          outline: paintOutline,
+          outlineSource: paintOutline?.source || geometry?.source || "vector",
+          detectSource: DETECT_SOURCE_ORIGINAL_PDF,
+          confidence: "high",
+          reviewStatus: "pending",
+          layer: "device",
+          geometryScore: visual.score,
+        }, {
+          geometry,
+          symbolBodyLocation: placed,
+          detectionSources: ["plan-glyph", "vector"],
+          vectorMatchScore: visual.score,
+          visualMatchScore: visual.score,
+          combinedConfidence: visual.score,
+          requiresReview: false,
+        });
+        counts.push(mark);
+        seen.push({ ...mark, tagX: placed.x, tagY: placed.y });
+        continue;
+      }
       const review = reviewCandidateMark({
         trade,
         sheet: page.page,
@@ -1384,7 +1512,7 @@ export function buildAiMarks({
     for (const visual of reviewHits) {
       const geometry = visual.geometry;
       const placed = { x: geometry.cx, y: geometry.cy };
-      const titleBand = placed.x > 64 || placed.y < 12;
+      const titleBand = placed.y < 12;
       if (!placementAllowed(placed, { sitePlan }) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens) || titleBand) continue;
       if (looksLikeHexNoteGlyph(geometry) || isHatchTickCluster(geometry, page.paths || [])) continue;
       const duplicate = seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.34);
@@ -1422,7 +1550,7 @@ export function buildAiMarks({
       };
       if (isVisualOnlySpecialtyHit(visual, page, placed)) continue;
       if (!placementAllowed(placed, { sitePlan }) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens)) continue;
-      if (placed.x > 64 || placed.y < 12) continue;
+      if (placed.y < 12) continue;
       if (looksLikeHexNoteGlyph(geometry) || isHatchTickCluster(geometry, page.paths || [])) continue;
       if (seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.28)) continue;
       const review = reviewCandidateMark({
@@ -1453,7 +1581,7 @@ export function buildAiMarks({
       };
       if (isVisualOnlyEquipmentHit(visual, page, placed)) continue;
       if (isVisualOnlySpecialtyHit(visual, page, placed)) continue;
-      const titleBand = placed.x > 64 || placed.y < 12;
+      const titleBand = placed.y < 12;
       if (!placementAllowed(placed, { sitePlan }) || !isPlanInterior(placed) || isPlotStampToken(placed, page.tokens) || titleBand) continue;
       if (looksLikeHexNoteGlyph(geometry) || isHatchTickCluster(geometry, page.paths || [])) continue;
       const existing = counts.find((mark) => mark.sheet === page.page && distance(mark, placed) < 0.4);
@@ -1541,10 +1669,16 @@ export function buildAiMarks({
       }
     }
   }
-  const validatedCounts = validateTaggedEquipmentMarks(
+  let validatedCounts = validateTaggedEquipmentMarks(
     keepLabeledSpecialtyMarks(dedupePhysicalSymbols(counts), pages),
     pages,
   );
+  validatedCounts = addMissingSpecialtyTokenReviewMarks(validatedCounts, pages, {
+    trade,
+    color,
+    symbols: matchSymbols,
+    aliases,
+  });
   const anchors = validatedCounts.filter((mark) => mark.anchor && !isReviewOnlyMark(mark));
   const devices = validatedCounts.filter((mark) => !mark.anchor && !isReviewOnlyMark(mark));
   const sections = findConduitSections(pages, trade, dictionary);

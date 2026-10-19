@@ -338,12 +338,15 @@ export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
     // Paint the measured symbol body. Slightly oversize or tiny CAD glyphs are
     // still the device — displayDeviceOutline scales them into the visible cap.
     // Room-sized junk, text-only boxes, and circuit-number glyphs stay unpainted.
-    if (!trustedAiSource) return null;
+    if (!trustedAiSource) {
+      return mark?.requiresReview === true ? genericDeviceOutline(mark, markerSize) : null;
+    }
     const core = isTrustedAiBodyOutline(cleaned, origin, mark)
       ? cleaned
       : coreDeviceOutline(cleaned, origin, mark);
     if (core && !outlineOnPrintedTag(core, mark) && isTrustedAiBodyOutline(core, origin, mark)) {
-      return scaleOutline(core, 1, origin);
+      const extent = outlineExtent(core);
+      return extent > maxExtent ? scaleOutline(core, maxExtent / extent, origin) : scaleOutline(core, 1, origin);
     }
     if ((!cleaned || outlineExtent(cleaned) < MIN_TRUSTED_AI_BODY) && mark.symbolBodyLocation && !outlineOnPrintedTag(cleaned, mark)) {
       return genericDeviceOutline(mark, markerSize);

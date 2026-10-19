@@ -48,6 +48,21 @@ assert.equal(countInteractiveObjects(objects).rooms, 1);
 
 const symbolHit = hitDrawingObject(objects, { x: 10, y: 12 }, 2);
 assert.equal(symbolHit.objectKind, "unclassified-vector");
+const recognizedObjects = buildDrawingObjectLayer({
+  pages: [{ page: 2, paths: [symbol] }],
+  detectedMarks: [{
+    id: "detected-os",
+    type: "count",
+    sheet: 2,
+    x: 10,
+    y: 12,
+    symbolLabel: "OS - Occupancy sensor",
+    outline: { kind: "rect", source: "vector", cx: 10, cy: 12, w: 0.8, h: 0.6 },
+  }],
+});
+const recognizedHit = hitDrawingObject(recognizedObjects, { x: 10, y: 12 }, 2);
+assert.equal(recognizedHit.objectKind, "recognized-device", "detected devices win over raw printed symbol hits");
+assert.equal(recognizedHit.sourceMarkId, "detected-os", "recognized-device hits retain the source takeoff mark id");
 const lineHit = hitDrawingObject(objects, { x: 40, y: 20 }, 2);
 assert.equal(lineHit.objectKind, "circuit");
 assert.equal(hitDrawingObject(objects, { x: 55, y: 50 }, 2)?.objectKind, "room", "a click inside the room and off the line selects the room");

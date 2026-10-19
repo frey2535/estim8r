@@ -40,6 +40,15 @@ const colored = applyDeviceTypeColors(planned.marks || []);
 const devices = planOverlayMarks(colored).filter(isDeviceMark);
 assert(devices.length >= 8, `Pottsville AI must count devices, got ${devices.length}`);
 
+const liveDevices = planOverlayMarks(colored, { interactive: true }).filter(isDeviceMark);
+const liveReviewDevices = liveDevices.filter((mark) => (
+  mark.requiresReview === true
+  || mark.layer === "review"
+  || String(mark.typeCode || "").toUpperCase() === "UNKNOWN"
+));
+assert(liveDevices.length > devices.length, `live drawing must show review candidates beside bid devices (${liveDevices.length}/${devices.length})`);
+assert(liveReviewDevices.some((mark) => displayDeviceOutline(mark)), "live drawing must paint at least one review candidate for selection/correction");
+
 const powerPages = (fixture.pages || []).filter((page) => /power/i.test(`${page.title || ""} ${page.kind || ""}`));
 assert(powerPages.length >= 1, "fixture includes a power sheet");
 
@@ -64,6 +73,8 @@ for (const mark of devices) {
 }
 assert(painted >= 8, `Pottsville AI must paint in-symbol fills, got ${painted}`);
 assert(painted >= Math.floor(devices.length * 0.9), `at least 90% of counted devices must keep a visible fill (${painted}/${devices.length})`);
+const livePainted = liveDevices.filter((mark) => displayDeviceOutline(mark)).length;
+assert(livePainted >= painted, `live drawing must not lose visible fills (${livePainted}/${painted})`);
 
 for (const page of powerPages) {
   const sheetMarks = planOverlayMarks(colored.filter((mark) => (mark.sheet || 1) === page.page));

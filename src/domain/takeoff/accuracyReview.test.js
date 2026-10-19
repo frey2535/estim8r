@@ -85,6 +85,12 @@ assert(accepted.find((mark) => mark.id === "b1").reviewStatus !== "accepted", "t
 assert(accepted.find((mark) => mark.id === "u1").reviewStatus === "pending", "uncertain 1E still needs its own look");
 assert(reviewQueue(accepted, 1).map((mark) => mark.id).join(",") === "b1,u1", "after a type accept, only other types and uncertain items remain");
 
+const acceptedUncertain = applyReviewDecision(marks, uncertain, "accepted");
+const promotedUncertain = acceptedUncertain.find((mark) => mark.id === "u1");
+assert(promotedUncertain.reviewStatus === "accepted", "accepted uncertain marks record the review decision");
+assert(promotedUncertain.requiresReview === false, "accepted uncertain marks are no longer filtered as requiring review");
+assert(promotedUncertain.layer === "device", "accepted known-type uncertain marks are promoted to the device layer");
+
 const rejectedOne = applyReviewDecision(marks, uncertain, "rejected");
 assert(rejectedOne.find((mark) => mark.id === "u1").reviewStatus === "rejected", "uncertain reject is this count only");
 assert(rejectedOne.find((mark) => mark.id === "a1").reviewStatus !== "rejected", "rejecting an uncertain 1E does not reject the type");

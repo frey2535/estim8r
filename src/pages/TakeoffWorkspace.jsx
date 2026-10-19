@@ -1485,6 +1485,15 @@ export default function TakeoffWorkspace() {
     return () => { cancelled = true; };
   }, [fileBytes, isPdf]);
 
+  useEffect(() => {
+    if (!isPdf || !aiPages.length) return;
+    setDrawingObjects(buildDrawingObjectLayer({
+      pages: aiPages,
+      detectedMarks: marks.filter(isDeviceMark),
+      trade,
+    }));
+  }, [aiPages, isPdf, marks, trade]);
+
   async function runAiTakeoff({ silent = false, onlyPage = null } = {}) {
     if (!isPdf || !fileBytes) {
       const message = "AI assist needs a PDF with a text layer. Image drawings stay manual for the selected trade.";
@@ -1558,6 +1567,7 @@ export default function TakeoffWorkspace() {
           source: mark.source || "ai",
           trade: mark.trade || trade,
           markerSize: mark.markerSize || Math.max(penSize, 1.35),
+          markerSizeOverride: mark.markerSizeOverride ?? true,
           reviewStatus: mark.reviewStatus || "pending",
         })),
       );
@@ -1654,7 +1664,7 @@ export default function TakeoffWorkspace() {
     if (tool === "select") {
       const hit = selectMarkAtPoint(overlayMarks, point, {
         aspect: sheetAspectRatio,
-        markerSize: penSize,
+        markerSize: (mark) => resolvedMarkerSize(mark, penSize),
         hitRoute: (mark, at, aspect) => hitTestMark(sizedMark(mark), at, aspect, markHitThreshold(mark, 0.7)),
       });
       if (hit) {
@@ -1665,6 +1675,15 @@ export default function TakeoffWorkspace() {
       }
       const drawingObject = hitDrawingObject(drawingObjects, point, sheetMeta.page);
       if (drawingObject) {
+        if (drawingObject.objectKind === "recognized-device" && drawingObject.sourceMarkId) {
+          const sourceMark = overlayMarks.find((mark) => mark.id === drawingObject.sourceMarkId)
+            || marks.find((mark) => mark.id === drawingObject.sourceMarkId);
+          setSelectedId(drawingObject.sourceMarkId);
+          setIsolationMode(false);
+          setReviewOpen(Boolean(sourceMark && isDeviceMark(sourceMark) && needsAccuracyReview(sourceMark, marks, sheetMeta.page)));
+          setStatus(`Selected ${sourceMark?.symbolLabel || sourceMark?.typeCode || "detected device"}.`);
+          return;
+        }
         const name = drawingObject.objectKind === "room" ? "room" : drawingObject.objectKind === "circuit" ? "line" : "symbol";
         setSelectedId(printedSelectionId(drawingObject));
         setIsolationMode(false);
@@ -2647,7 +2666,7 @@ export default function TakeoffWorkspace() {
                   const point = drawingPoint(event);
                   if (!point) return;
                   setPointerSheet((current) => (current && Math.hypot(current.x - point.x, current.y - point.y) < 0.2 ? current : point));
-                  const hovered = selectMarkAtPoint(overlayMarks, point, { markerSize: penSize });
+                  const hovered = selectMarkAtPoint(overlayMarks, point, { markerSize: (mark) => resolvedMarkerSize(mark, penSize) });
                   if (hovered && isDeviceMark(hovered)) {
                     setHoveredGeometryInfo(null);
                     setHoveredDeviceId(hovered.id);
@@ -3245,12 +3264,12 @@ function DeviceFill({ mark, selected, markerSize, focus = false }) {
   const outline = interiorDeviceOutline(measured, Number(mark.fillInset) || 0.86);
   if (!outline) return null;
   const color = readableFillColor(mark.color || "#1e3a8a");
-  const opacity = focus ? 0.46 : (mark.fillOpacity ?? DEVICE_FILL_OPACITY);
+  const opacity = focus ? 0.5 : Math.max(Number(mark.fillOpacity ?? DEVICE_FILL_OPACITY), mark.source === "ai" ? 0.46 : DEVICE_FILL_OPACITY);
   // PlanSwift-style marking: paint only inside the detected symbol body.
   // The original black PDF symbol remains visible on top visually because
-  // we do not redraw a colored perimeter over the printed symbol lines.
-  const stroke = selected || focus ? "#ea580c" : "none";
-  const strokeWidth = selected || focus ? DEVICE_FILL_STROKE_PX + 0.35 : 0;
+  // the measured fill is inset before we draw the colored perimeter.
+  const stroke = selected || focus ? "#ea580c" : color;
+  const strokeWidth = selected || focus ? DEVICE_FILL_STROKE_PX + 0.35 : (mark.source === "ai" ? 1.15 : 0.75);
   if (outline.kind === "composite" && outline.parts?.length) {
     return (
       <g>

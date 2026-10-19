@@ -129,6 +129,21 @@ assert(picked?.id === "dev", "clicking a device on a circuit selects the device"
 const nearer = { id: "near", type: "count", x: 10, y: 10, outlineSource: "vector", outline: { kind: "circle", source: "vector", r: 0.45, cx: 10, cy: 10 } };
 const farther = { id: "far", type: "count", x: 10.55, y: 10, outlineSource: "vector", outline: { kind: "circle", source: "vector", r: 0.45, cx: 10.55, cy: 10 } };
 assert(selectMarkAtPoint([nearer, farther], { x: 10.05, y: 10 })?.id === "near", "the device under the pointer wins when hit areas overlap");
+const aiOverrideHit = {
+  id: "ai-os",
+  source: "ai",
+  type: "count",
+  symbol: "occupancy-sensor",
+  abbr: "OS",
+  typeCode: "OS",
+  x: 32,
+  y: 32,
+  markerSize: 1.35,
+  markerSizeOverride: true,
+  outlineSource: "text",
+  requiresReview: true,
+};
+assert(selectMarkAtPoint([aiOverrideHit], { x: 32.42, y: 32 }, { markerSize: () => aiOverrideHit.markerSize })?.id === "ai-os", "AI marker-size overrides are honored during device hit testing");
 const upper = { id: "upper", type: "route", tool: "conduit", points: [{ x: 0, y: 10 }, { x: 40, y: 10 }] };
 const lower = { id: "lower", type: "route", tool: "conduit", points: [{ x: 0, y: 11.2 }, { x: 40, y: 11.2 }] };
 const routePick = selectMarkAtPoint([lower, upper], { x: 20, y: 10.85 }, {
@@ -151,6 +166,17 @@ const livePlan = planOverlayMarks([
   { id: "ckt", type: "route", tool: "conduit", points: [{ x: 12, y: 20 }, { x: 70, y: 20 }] },
 ], { interactive: true });
 assert(livePlan.some((mark) => mark.tool === "conduit") && livePlan.some((mark) => mark.type === "count"), "the live sheet keeps circuits selectable beside devices");
+const reviewCandidates = [
+  { id: "accepted", type: "count", layer: "review", symbol: "unknown", typeCode: "UNKNOWN", reviewStatus: "accepted", requiresReview: true, x: 18, y: 20 },
+  { id: "pending", type: "count", layer: "review", symbol: "unknown", typeCode: "UNKNOWN", reviewStatus: "pending", requiresReview: true, x: 20, y: 20 },
+  { id: "rejected", type: "count", layer: "review", symbol: "unknown", typeCode: "UNKNOWN", reviewStatus: "rejected", requiresReview: true, x: 22, y: 20 },
+];
+const bidPlan = planOverlayMarks(reviewCandidates);
+assert(bidPlan.length === 0, "review candidates stay off the normal bid overlay");
+const interactiveReviewPlan = planOverlayMarks(reviewCandidates, { interactive: true });
+assert(interactiveReviewPlan.some((mark) => mark.id === "accepted"), "accepted review candidates remain visible on the live sheet");
+assert(interactiveReviewPlan.some((mark) => mark.id === "pending"), "pending review candidates remain visible and selectable on the live sheet");
+assert(!interactiveReviewPlan.some((mark) => mark.id === "rejected"), "rejected review candidates stay hidden on the live sheet");
 const devicesOnly = planOverlayMarks(plan, { devicesOnly: true });
 assert(devicesOnly.every((mark) => mark.type === "count"), "devicesOnly still hides circuits for PDF count sheets");
 assert(!devicesOnly.some((mark) => mark.tool === "conduit" || mark.type === "homerun"), "grouped circuits stay off the count sheet export");

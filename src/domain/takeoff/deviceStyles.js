@@ -76,8 +76,12 @@ export function marksForTrade(marks, trade) {
 
 export function planOverlayMarks(marks, options = {}) {
   // Review/unknown AI candidates belong in the review queue, never painted on
-  // the normal bid drawing.
-  const list = (marks || []).filter((mark) => !isReviewOnlyMark(mark) && mark?.requiresReview !== true);
+  // the normal bid drawing. The live interactive sheet still needs pending and
+  // accepted review candidates so users can see, select, and correct them.
+  const source = marks || [];
+  const list = options.interactive
+    ? source.filter((mark) => mark?.reviewStatus !== "rejected")
+    : source.filter((mark) => !isReviewOnlyMark(mark) && mark?.requiresReview !== true);
   if (options.devicesOnly) return list.filter((mark) => !isCircuitMark(mark));
   if (options.circuitsOnly) return list.filter((mark) => isCircuitMark(mark) || mark?.type === "note");
   if (options.interactive) return list;
@@ -420,10 +424,12 @@ export function hitTestDeviceFill(mark, point, markerSize = 0.55) {
 
 export function selectMarkAtPoint(marks, point, options = {}) {
   const aspect = options.aspect || 1;
-  const markerSize = options.markerSize || 0.55;
+  const markerSizeFor = typeof options.markerSize === "function"
+    ? options.markerSize
+    : () => (options.markerSize || 0.55);
   const hitRoute = options.hitRoute;
   const list = marks || [];
-  const devices = list.filter((mark) => isDeviceMark(mark) && hitTestDeviceFill(mark, point, markerSize));
+  const devices = list.filter((mark) => isDeviceMark(mark) && hitTestDeviceFill(mark, point, markerSizeFor(mark)));
   if (devices.length) {
     devices.sort((a, b) => pointerDistance(a, point) - pointerDistance(b, point));
     return devices[0];

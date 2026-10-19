@@ -286,11 +286,12 @@ function coreDeviceOutline(outline, origin, mark) {
 function genericDeviceOutline(mark, markerSize = 0.55) {
   const scale = Math.min(1.15, Math.max(0.7, Number(markerSize) || 0.55) / 0.55);
   const blob = deviceFillBlob(mark);
+  const aiPointRadius = mark?.source === "ai" ? 0.32 * scale : DEVICE_CHIP_R * scale;
   if (isCanDeviceText(blob) || /downlight|pendant|high bay|low bay|occup|sensor|switch|\bos\b/.test(blob)) {
-    return { kind: "circle", r: DEVICE_CHIP_R * scale };
+    return { kind: "circle", r: aiPointRadius };
   }
   if (/recept|gfci|gfi|duplex|outlet|\br\b|quad/.test(blob)) {
-    return { kind: "circle", r: 0.18 * scale };
+    return { kind: "circle", r: mark?.source === "ai" ? 0.32 * scale : 0.18 * scale };
   }
   const size = blob.match(/(\d)\s*[x×]\s*(\d)/);
   if (size) {
@@ -381,7 +382,7 @@ export function displayDeviceOutline(mark, markerSize = 0.55, options = {}) {
   }
   const displayMax = isFixtureDevice(mark)
     ? MAX_DISPLAY_FIXTURE_FILL
-    : isPointDevice(mark) ? MAX_DISPLAY_POINT_FILL : MAX_DISPLAY_GENERIC_FILL;
+    : isPointDevice(mark) ? (mark?.source === "ai" ? 0.72 : MAX_DISPLAY_POINT_FILL) : MAX_DISPLAY_GENERIC_FILL;
   const extent = outlineExtent(outline);
   const origin = {
     x: Number(mark?.symbolBodyLocation?.x ?? mark?.x) || 0,
@@ -419,7 +420,10 @@ export function hitTestDeviceFill(mark, point, markerSize = 0.55) {
   if (!mark || !point) return false;
   const outline = displayDeviceOutline(mark, markerSize);
   if (!outline) return false;
-  return pointHitsOutline(outline, { x: mark.symbolBodyLocation?.x ?? mark.x, y: mark.symbolBodyLocation?.y ?? mark.y }, point, 0.28);
+  const tolerance = mark?.source === "ai"
+    ? Math.max(0.28, (Number(markerSize) || 0.55) * 0.35)
+    : 0.28;
+  return pointHitsOutline(outline, { x: mark.symbolBodyLocation?.x ?? mark.x, y: mark.symbolBodyLocation?.y ?? mark.y }, point, tolerance);
 }
 
 export function selectMarkAtPoint(marks, point, options = {}) {

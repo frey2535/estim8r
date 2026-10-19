@@ -1590,6 +1590,7 @@ export default function TakeoffWorkspace() {
           ...mark,
           source: mark.source || "ai",
           trade: mark.trade || trade,
+          sheet: mark.sheet || mark.page,
           markerSize: mark.markerSize || Math.max(penSize, 1.35),
           markerSizeOverride: mark.markerSizeOverride ?? true,
           reviewStatus: mark.reviewStatus || "pending",

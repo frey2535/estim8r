@@ -143,6 +143,7 @@ const aiOverrideHit = {
   outlineSource: "text",
   requiresReview: true,
 };
+assert(outlineExtent(displayDeviceOutline(aiOverrideHit, aiOverrideHit.markerSize)) >= 0.55, "AI review chips stay visibly large enough on the live drawing");
 assert(selectMarkAtPoint([aiOverrideHit], { x: 32.42, y: 32 }, { markerSize: () => aiOverrideHit.markerSize })?.id === "ai-os", "AI marker-size overrides are honored during device hit testing");
 const upper = { id: "upper", type: "route", tool: "conduit", points: [{ x: 0, y: 10 }, { x: 40, y: 10 }] };
 const lower = { id: "lower", type: "route", tool: "conduit", points: [{ x: 0, y: 11.2 }, { x: 40, y: 11.2 }] };

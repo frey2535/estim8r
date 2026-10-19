@@ -344,7 +344,8 @@ export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
     // still the device — displayDeviceOutline scales them into the visible cap.
     // Room-sized junk, text-only boxes, and circuit-number glyphs stay unpainted.
     if (!trustedAiSource) {
-      return mark?.requiresReview === true ? genericDeviceOutline(mark, markerSize) : null;
+      // For point devices (like OS), always show a generic chip even without trusted geometry
+      return mark?.requiresReview === true || isPointDevice(mark) ? genericDeviceOutline(mark, markerSize) : null;
     }
     const core = isTrustedAiBodyOutline(cleaned, origin, mark)
       ? cleaned

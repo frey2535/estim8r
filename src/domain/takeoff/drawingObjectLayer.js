@@ -108,6 +108,7 @@ export function buildDrawingObjectLayer({ pages = [], detectedMarks = [], trade 
     objectId: mark.objectId || `drawing-object:${mark.id}`,
     sourceMarkId: mark.id,
     objectKind: "recognized-device",
+    outline: mark.outline || (/^(OS|GFI|GFI\/WP|WP|SP|SPR)$/i.test(mark.typeCode || mark.abbr || "") ? { kind: "circle", source: "generic", r: 0.32 } : mark.outline),
     selectable: true,
     editable: true,
   }));

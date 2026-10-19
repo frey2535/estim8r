@@ -1666,6 +1666,15 @@ export default function TakeoffWorkspace() {
       }
       const drawingObject = hitDrawingObject(drawingObjects, point, sheetMeta.page);
       if (drawingObject) {
+        if (drawingObject.objectKind === "recognized-device" && drawingObject.sourceMarkId) {
+          const sourceMark = overlayMarks.find((mark) => mark.id === drawingObject.sourceMarkId)
+            || marks.find((mark) => mark.id === drawingObject.sourceMarkId);
+          setSelectedId(drawingObject.sourceMarkId);
+          setIsolationMode(false);
+          setReviewOpen(Boolean(sourceMark && isDeviceMark(sourceMark) && needsAccuracyReview(sourceMark, marks, sheetMeta.page)));
+          setStatus(`Selected ${sourceMark?.symbolLabel || sourceMark?.typeCode || "detected device"}.`);
+          return;
+        }
         const name = drawingObject.objectKind === "room" ? "room" : drawingObject.objectKind === "circuit" ? "line" : "symbol";
         setSelectedId(printedSelectionId(drawingObject));
         setIsolationMode(false);

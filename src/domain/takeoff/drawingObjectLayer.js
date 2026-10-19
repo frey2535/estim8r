@@ -1,4 +1,4 @@
-import { isDeviceMark } from "./deviceStyles.js";
+import { isDeviceMark, isPointDevice } from "./deviceStyles.js";
 import { looksLikeHexNoteGlyph } from "./legendGeometry.js";
 import { isJunkGeometry, pointHitsOutline } from "./vectorSymbols.js";
 
@@ -105,6 +105,7 @@ function objectContainsPoint(item, point) {
 export function buildDrawingObjectLayer({ pages = [], detectedMarks = [], trade = "electrical" } = {}) {
   const objects = (detectedMarks || []).filter(isDeviceMark).map((mark) => ({
     ...mark,
+    outline: detectedDeviceOutline(mark),
     objectId: mark.objectId || `drawing-object:${mark.id}`,
     sourceMarkId: mark.id,
     objectKind: "recognized-device",
@@ -200,6 +201,22 @@ export function buildDrawingObjectLayer({ pages = [], detectedMarks = [], trade 
     objects.push(...circuits.slice(0, MAX_CIRCUITS), ...rooms.slice(0, MAX_ROOMS));
   }
   return objects;
+}
+
+function detectedDeviceOutline(mark) {
+  if (mark?.outline) return mark.outline;
+  if (!isPointDevice(mark)) return mark?.outline || null;
+  const x = Number(mark?.symbolBodyLocation?.x ?? mark?.x) || 0;
+  const y = Number(mark?.symbolBodyLocation?.y ?? mark?.y) || 0;
+  return {
+    kind: "circle",
+    source: "generic",
+    cx: x,
+    cy: y,
+    r: 0.52,
+    w: 1.04,
+    h: 1.04,
+  };
 }
 
 export function printedSelectionId(object) {

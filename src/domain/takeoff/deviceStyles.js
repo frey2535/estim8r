@@ -424,10 +424,12 @@ export function hitTestDeviceFill(mark, point, markerSize = 0.55) {
 
 export function selectMarkAtPoint(marks, point, options = {}) {
   const aspect = options.aspect || 1;
-  const markerSize = options.markerSize || 0.55;
+  const markerSizeFor = typeof options.markerSize === "function"
+    ? options.markerSize
+    : () => (options.markerSize || 0.55);
   const hitRoute = options.hitRoute;
   const list = marks || [];
-  const devices = list.filter((mark) => isDeviceMark(mark) && hitTestDeviceFill(mark, point, markerSize));
+  const devices = list.filter((mark) => isDeviceMark(mark) && hitTestDeviceFill(mark, point, markerSizeFor(mark)));
   if (devices.length) {
     devices.sort((a, b) => pointerDistance(a, point) - pointerDistance(b, point));
     return devices[0];

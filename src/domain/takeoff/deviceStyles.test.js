@@ -129,6 +129,21 @@ assert(picked?.id === "dev", "clicking a device on a circuit selects the device"
 const nearer = { id: "near", type: "count", x: 10, y: 10, outlineSource: "vector", outline: { kind: "circle", source: "vector", r: 0.45, cx: 10, cy: 10 } };
 const farther = { id: "far", type: "count", x: 10.55, y: 10, outlineSource: "vector", outline: { kind: "circle", source: "vector", r: 0.45, cx: 10.55, cy: 10 } };
 assert(selectMarkAtPoint([nearer, farther], { x: 10.05, y: 10 })?.id === "near", "the device under the pointer wins when hit areas overlap");
+const aiOverrideHit = {
+  id: "ai-os",
+  source: "ai",
+  type: "count",
+  symbol: "occupancy-sensor",
+  abbr: "OS",
+  typeCode: "OS",
+  x: 32,
+  y: 32,
+  markerSize: 1.35,
+  markerSizeOverride: true,
+  outlineSource: "text",
+  requiresReview: true,
+};
+assert(selectMarkAtPoint([aiOverrideHit], { x: 32.42, y: 32 }, { markerSize: () => aiOverrideHit.markerSize })?.id === "ai-os", "AI marker-size overrides are honored during device hit testing");
 const upper = { id: "upper", type: "route", tool: "conduit", points: [{ x: 0, y: 10 }, { x: 40, y: 10 }] };
 const lower = { id: "lower", type: "route", tool: "conduit", points: [{ x: 0, y: 11.2 }, { x: 40, y: 11.2 }] };
 const routePick = selectMarkAtPoint([lower, upper], { x: 20, y: 10.85 }, {

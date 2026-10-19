@@ -1655,7 +1655,7 @@ export default function TakeoffWorkspace() {
     if (tool === "select") {
       const hit = selectMarkAtPoint(overlayMarks, point, {
         aspect: sheetAspectRatio,
-        markerSize: penSize,
+        markerSize: (mark) => resolvedMarkerSize(mark, penSize),
         hitRoute: (mark, at, aspect) => hitTestMark(sizedMark(mark), at, aspect, markHitThreshold(mark, 0.7)),
       });
       if (hit) {
@@ -2648,7 +2648,7 @@ export default function TakeoffWorkspace() {
                   const point = drawingPoint(event);
                   if (!point) return;
                   setPointerSheet((current) => (current && Math.hypot(current.x - point.x, current.y - point.y) < 0.2 ? current : point));
-                  const hovered = selectMarkAtPoint(overlayMarks, point, { markerSize: penSize });
+                  const hovered = selectMarkAtPoint(overlayMarks, point, { markerSize: (mark) => resolvedMarkerSize(mark, penSize) });
                   if (hovered && isDeviceMark(hovered)) {
                     setHoveredGeometryInfo(null);
                     setHoveredDeviceId(hovered.id);

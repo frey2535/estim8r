@@ -102,6 +102,43 @@ export function parseDrawOps(data) {
   return { points, hasCurves, closed };
 }
 
+// Sample Bezier segments for geometric bounds. PDF drawing operators store curve
+// control points separately from endpoints; endpoint-only bounds miss curved ink.
+export function drawOpsExtentPoints(data) {
+  const list = data ? Array.from(data) : [];
+  const points = [];
+  let current = null;
+  for (let i = 0; i < list.length;) {
+    const op = list[i++];
+    if (op === DRAW_MOVE || op === DRAW_LINE) {
+      if (i + 1 >= list.length) break;
+      current = { x: Number(list[i++]), y: Number(list[i++]) };
+      points.push(current);
+    } else if (op === DRAW_CUBIC || op === DRAW_QUAD) {
+      const n = op === DRAW_CUBIC ? 6 : 4;
+      if (i + n - 1 >= list.length) break;
+      const values = list.slice(i, i + n).map(Number);
+      i += n;
+      const end = { x: values[n - 2], y: values[n - 1] };
+      if (current) {
+        for (let step = 1; step <= 16; step++) {
+          const t = step / 16;
+          const u = 1 - t;
+          const x = op === DRAW_CUBIC
+            ? u ** 3 * current.x + 3 * u ** 2 * t * values[0] + 3 * u * t ** 2 * values[2] + t ** 3 * end.x
+            : u ** 2 * current.x + 2 * u * t * values[0] + t ** 2 * end.x;
+          const y = op === DRAW_CUBIC
+            ? u ** 3 * current.y + 3 * u ** 2 * t * values[1] + 3 * u * t ** 2 * values[3] + t ** 3 * end.y
+            : u ** 2 * current.y + 2 * u * t * values[1] + t ** 2 * end.y;
+          points.push({ x, y });
+        }
+      } else points.push(end);
+      current = end;
+    } else if (op !== DRAW_CLOSE) break;
+  }
+  return points;
+}
+
 export function isSymbolSized(bounds) {
   if (!bounds) return false;
   const long = Math.max(bounds.w, bounds.h);
@@ -347,7 +384,13 @@ export function candidatesFromConstructedPaths(entries, toPagePct) {
       const page = toPagePct(pdf.x, pdf.y);
       return { ...page, curve: point.curve };
     });
-    let bounds = boundsOfPoints(pagePoints);
+    const extentPoints = parsed.hasCurves
+      ? drawOpsExtentPoints(entry.drawOps).map((point) => {
+        const pdf = applyCtm(ctm, point.x, point.y);
+        return toPagePct(pdf.x, pdf.y);
+      })
+      : pagePoints;
+    let bounds = boundsOfPoints(extentPoints);
     if (!bounds && entry.minMax && entry.minMax.length >= 4) {
       bounds = transformedMinMaxBounds(entry.minMax, ctm, toPagePct);
     }

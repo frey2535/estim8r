@@ -2,10 +2,12 @@ import {
   DRAW_CLOSE,
   DRAW_CUBIC,
   DRAW_LINE,
+  DRAW_QUAD,
   DRAW_MOVE,
   associateGeometry,
   assignExclusiveGeometry,
   candidatesFromConstructedPaths,
+  drawOpsExtentPoints,
   classifySymbolGeometry,
   isJunkGeometry,
   isPlausibleSymbolForHint,
@@ -56,6 +58,14 @@ const shearedBounds = transformedMinMaxBounds([0, 0, 2, 1], [1, 0, 1, 1, 0, 0], 
 assert(shearedBounds && Math.abs(shearedBounds.w - 3) < 1e-9, "sheared PDF minMax includes off-diagonal corners");
 const fallbackRotated = candidatesFromConstructedPaths([{ ctm: [0, 1, -1, 0, 10, 20], drawOps: [], minMax: [0, 0, 2, 1] }], identityPct);
 assert(fallbackRotated.length === 1 && Math.abs(fallbackRotated[0].w - 1) < 1e-9, "rotated fallback produces correctly sized symbol candidate");
+
+const archedOps = [DRAW_MOVE, 30, 30, DRAW_QUAD, 31, 32, 32, 30, DRAW_LINE, 30, 30, DRAW_CLOSE];
+const archedPoints = drawOpsExtentPoints(archedOps);
+assert(Math.max(...archedPoints.map((p) => p.y)) > 30.9, "quadratic control point contributes visible curve height");
+const archedCandidates = candidatesFromConstructedPaths([{ drawOps: archedOps }], identityPct);
+assert(archedCandidates.length === 1 && archedCandidates[0].h > 0.9, "curved symbol bounds include the arc, not just its endpoints");
+const cubicExtent = drawOpsExtentPoints([DRAW_MOVE, 0, 0, DRAW_CUBIC, 0, 2, 2, 2, 2, 0]);
+assert(Math.max(...cubicExtent.map((p) => p.y)) > 1.4, "cubic curve extent includes its curved ink");
 
 const circleOps = [
   DRAW_MOVE, 20, 20.6,

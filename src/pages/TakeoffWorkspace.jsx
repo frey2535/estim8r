@@ -1558,6 +1558,7 @@ export default function TakeoffWorkspace() {
           source: mark.source || "ai",
           trade: mark.trade || trade,
           markerSize: mark.markerSize || Math.max(penSize, 1.35),
+          markerSizeOverride: mark.markerSizeOverride ?? true,
           reviewStatus: mark.reviewStatus || "pending",
         })),
       );
@@ -3244,12 +3245,12 @@ function DeviceFill({ mark, selected, markerSize, focus = false }) {
   const outline = interiorDeviceOutline(measured, Number(mark.fillInset) || 0.86);
   if (!outline) return null;
   const color = readableFillColor(mark.color || "#1e3a8a");
-  const opacity = focus ? 0.46 : (mark.fillOpacity ?? DEVICE_FILL_OPACITY);
+  const opacity = focus ? 0.5 : Math.max(Number(mark.fillOpacity ?? DEVICE_FILL_OPACITY), mark.source === "ai" ? 0.46 : DEVICE_FILL_OPACITY);
   // PlanSwift-style marking: paint only inside the detected symbol body.
   // The original black PDF symbol remains visible on top visually because
-  // we do not redraw a colored perimeter over the printed symbol lines.
-  const stroke = selected || focus ? "#ea580c" : "none";
-  const strokeWidth = selected || focus ? DEVICE_FILL_STROKE_PX + 0.35 : 0;
+  // the measured fill is inset before we draw the colored perimeter.
+  const stroke = selected || focus ? "#ea580c" : color;
+  const strokeWidth = selected || focus ? DEVICE_FILL_STROKE_PX + 0.35 : (mark.source === "ai" ? 1.15 : 0.75);
   if (outline.kind === "composite" && outline.parts?.length) {
     return (
       <g>

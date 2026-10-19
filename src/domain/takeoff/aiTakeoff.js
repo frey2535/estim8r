@@ -1319,7 +1319,7 @@ export function buildAiMarks({
         paintOutline = {
           kind: "circle",
           source: "generic",
-          r: 0.32,
+          r: 0.52,
         };
       }
       const mark = attachDetectionRecord({

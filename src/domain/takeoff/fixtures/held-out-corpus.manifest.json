@@ -47,22 +47,22 @@
       "reasonNotHeldOut": "Publicly discoverable bid set, but not archived in repo and no independent body-label file exists."
     },
     {
-      "id": "missouri-lidr-g20-bid-set",
-      "organization": "University of Missouri",
-      "url": "https://operations-webapps.missouri.edu/pdc/adsite/projects/cp220691/plans/CP220691_Laboratory_for_Infectious_Disease_Research_-_G20_Improvements_Bid_Set_Drawings.pdf",
-      "observedSheets": ["E0.00", "E0.01", "E1.01", "E1.02", "E2.01", "E2.02", "E2.03", "E3.01"],
+      "id": "skagit-concrete-community-center-electrical",
+      "organization": "Skagit County",
+      "url": "https://www.skagitcounty.net/Rfp/Documents/2025ConcreteCommunityCenter/202502_B121_DD_BidSetElectrical.pdf",
+      "observedSheets": ["electrical-notes-legend-index", "main-building-lighting-plan", "storage-building-lighting-plan", "power-system-riser-and-panel-schedules"],
       "observedModes": ["vector-or-searchable-pdf"],
       "status": "candidate-needs-license-review-and-human-labeling",
-      "reasonNotHeldOut": "Publicly discoverable multi-sheet set, but not archived in repo and no independent body-label file exists."
+      "reasonNotHeldOut": "Publicly discoverable electrical bid set, but not archived in repo and no independent body-label file exists."
     },
     {
-      "id": "colusa-admin-electrical-sheets",
-      "organization": "County of Colusa",
-      "url": "https://www.countyofcolusaca.gov/DocumentCenter/View/5708/Electrical-Sheets-ColusaCoAdminOff_Elec_BidAdd3",
-      "observedSheets": ["E1.1"],
+      "id": "smccd-theater-house-lighting-retrofit",
+      "organization": "San Mateo County Community College District",
+      "url": "https://downloads.smccd.edu/file?du=%2Fsites%2Fdownloads%2Ffacilities%2FFacilities+Public%2FFacilities+Downloads%2FFPMO%2FBusiness+Opportunities%2FCollege+of+San+Mateo%2FTheater+House+Lighting+Retrofit+Project%2F2014+0916+Bid+Set+Drawings.pdf&s=%2Fsites%2Fdownloads%2Ffacilities",
+      "observedSheets": ["E0.1", "E2.1", "E2.2"],
       "observedModes": ["vector-or-searchable-pdf"],
       "status": "candidate-needs-license-review-and-human-labeling",
-      "reasonNotHeldOut": "Publicly discoverable electrical sheets, but not archived in repo and no independent body-label file exists."
+      "reasonNotHeldOut": "Publicly discoverable electrical drawing set, but not archived in repo and no independent body-label file exists."
     },
     {
       "id": "asc-2018-electrical-drawings",

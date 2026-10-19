@@ -22,6 +22,7 @@ console.log(formatHeldOutCorpusStatus(summary));
 assert(summary.ready === false, "empty held-out corpus must block readiness");
 assert(summary.canClaimProduction99 === false, "production 99% claims must remain blocked without held-out corpus");
 assert(summary.projects === 0, "manifest must not pretend existing regressions are held-out projects");
+assert(summary.candidateSources >= 3, "public candidate sources are tracked separately from held-out projects");
 assert(summary.blockers.some((item) => /held-out projects/.test(item)), "missing held-out projects blocker is reported");
 assert(summary.blockers.some((item) => /different firms/.test(item)), "missing multi-firm blocker is reported");
 assert(summary.blockers.some((item) => /vector PDFs/.test(item)), "missing vector blocker is reported");

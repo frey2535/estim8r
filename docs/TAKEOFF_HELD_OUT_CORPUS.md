@@ -24,7 +24,15 @@ Do not add synthetic drawings, generated labels, token-derived labels, schedule 
 
 ## Current status
 
-The manifest is intentionally `not-populated`. Existing Soccer Pavilion and Pottsville fixtures remain regressions, not sufficient held-out production evidence. The validator must continue to block production 99% claims until real projects and label files are added.
+The manifest is intentionally `not-populated`. Existing Soccer Pavilion and Pottsville fixtures remain regressions, not sufficient held-out production evidence. Publicly discoverable drawing URLs are tracked as `candidateSources`, but they do not count as held-out projects until license review, repo archival, and independent human body-labeling are complete. The validator must continue to block production 99% claims until real projects and label files are added.
+
+## Candidate intake workflow
+
+1. Review each `candidateSources` URL for permission to store and use the drawing in this repository.
+2. Archive the approved drawing file under a corpus storage path.
+3. Produce an independent human label file with device type, sheet, symbol-body center, and symbol-body bounds.
+4. Move the candidate into `projects` with `partition: "held-out"`, `labelAuthority: "independent"`, and `bodyLabeled: true`.
+5. Run the corpus validator and the accuracy harness.
 
 Run:
 

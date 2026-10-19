@@ -36,6 +36,7 @@ function projectBlockers(project) {
 
 export function summarizeHeldOutCorpus(manifest = {}) {
   const projects = Array.isArray(manifest.projects) ? manifest.projects : [];
+  const candidateSources = Array.isArray(manifest.candidateSources) ? manifest.candidateSources : [];
   const projectFindings = projects.map((project) => ({
     id: project?.id || "",
     partition: project?.partition || "",
@@ -68,6 +69,7 @@ export function summarizeHeldOutCorpus(manifest = {}) {
     ready: blockers.length === 0,
     canClaimProduction99: blockers.length === 0,
     projects: projects.length,
+    candidateSources: candidateSources.length,
     heldOutProjects: usableHeldOut.length,
     heldOutFirms: heldOutFirms.length,
     hasVector,
@@ -85,6 +87,7 @@ export function formatHeldOutCorpusStatus(summary) {
   return [
     `held-out corpus ${status}`,
     `projects ${summary?.projects || 0}`,
+    `candidate sources ${summary?.candidateSources || 0}`,
     `held-out projects ${summary?.heldOutProjects || 0}`,
     `held-out firms ${summary?.heldOutFirms || 0}`,
     `vector ${summary?.hasVector ? "yes" : "no"}`,

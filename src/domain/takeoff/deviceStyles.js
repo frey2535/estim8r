@@ -76,8 +76,12 @@ export function marksForTrade(marks, trade) {
 
 export function planOverlayMarks(marks, options = {}) {
   // Review/unknown AI candidates belong in the review queue, never painted on
-  // the normal bid drawing.
-  const list = (marks || []).filter((mark) => !isReviewOnlyMark(mark) && mark?.requiresReview !== true);
+  // the normal bid drawing. The live interactive sheet still needs pending and
+  // accepted review candidates so users can see, select, and correct them.
+  const source = marks || [];
+  const list = options.interactive
+    ? source.filter((mark) => mark?.reviewStatus !== "rejected")
+    : source.filter((mark) => !isReviewOnlyMark(mark) && mark?.requiresReview !== true);
   if (options.devicesOnly) return list.filter((mark) => !isCircuitMark(mark));
   if (options.circuitsOnly) return list.filter((mark) => isCircuitMark(mark) || mark?.type === "note");
   if (options.interactive) return list;

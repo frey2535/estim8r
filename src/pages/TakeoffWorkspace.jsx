@@ -1485,6 +1485,15 @@ export default function TakeoffWorkspace() {
     return () => { cancelled = true; };
   }, [fileBytes, isPdf]);
 
+  useEffect(() => {
+    if (!isPdf || !aiPages.length) return;
+    setDrawingObjects(buildDrawingObjectLayer({
+      pages: aiPages,
+      detectedMarks: marks.filter(isDeviceMark),
+      trade,
+    }));
+  }, [aiPages, isPdf, marks, trade]);
+
   async function runAiTakeoff({ silent = false, onlyPage = null } = {}) {
     if (!isPdf || !fileBytes) {
       const message = "AI assist needs a PDF with a text layer. Image drawings stay manual for the selected trade.";

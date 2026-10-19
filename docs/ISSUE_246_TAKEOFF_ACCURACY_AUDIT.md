@@ -9,6 +9,7 @@
 - Accuracy scoring and ground-truth authority checks: `src/domain/takeoff/accuracyHarness.js`, `src/domain/takeoff/labeledTruth.js`
 - Overlay rendering, fill boundaries, and selection surfaces: `src/domain/takeoff/deviceStyles.js`, `src/domain/takeoff/drawingObjectLayer.js`
 - End-to-end pipeline: `src/domain/takeoff/aiTakeoff.js`, `src/domain/takeoff/takeoffPipeline.js`, `src/pages/TakeoffWorkspace.jsx`
+- Independent held-out corpus gate: `src/domain/takeoff/heldOutCorpus.js`, `src/domain/takeoff/fixtures/held-out-corpus.manifest.json`, `docs/TAKEOFF_HELD_OUT_CORPUS.md`
 
 ## Findings
 
@@ -17,6 +18,7 @@
 3. The current repository fixtures are not sufficient to demonstrate the issue's full acceptance contract. Soccer Pavilion has independent labels and currently scores at threshold in the harness. Pottsville contains useful regressions but several truth sets are derived from tokens, not independent body-labeled ground truth, so the harness correctly blocks a 99% claim.
 4. No real scanned/flattened raster ground-truth fixture exists in the repository. `rasterReconcile.test.js` exercises synthetic raster candidates only.
 5. Pottsville E110 receptacle glyphs were detected by `scanUnlabeledPowerGlyphs()` but were not promoted to typed bid marks because the downstream review path kept them as UNKNOWN candidates, filtered right-side plan-interior glyphs as title-band content, and allowed nearby UNKNOWN review candidates to suppress typed recovery.
+6. The independent held-out corpus requirement is now executable and intentionally blocked until real multi-firm vector and raster/scanned body-labeled projects are added.
 
 ## Changes in this branch
 
@@ -25,6 +27,7 @@
 - Trusted unlabeled power receptacle glyphs now become body-backed `R` marks and can replace overlapping UNKNOWN review candidates.
 - Review-required text-only specialty tags remain review-visible without being painted on the normal bid overlay; missing printed specialty tokens are recovered only on scannable plan sheets, not legends or schedules.
 - Raw AI device outlines are capped to the trusted glyph fill extent so highlights stay within the symbol body.
+- Added the versioned held-out corpus manifest, validation module, and documentation. The manifest is intentionally empty rather than populated with fake drawings.
 
 ## Current measured status
 
@@ -35,10 +38,11 @@ Latest focused measurements from this branch:
 - `node src/domain/takeoff/e110PowerAccuracy.test.js`: pass, E110 receptacle glyphs `8/8`, SP `21/21`, extras `0`, max extent `0.95`
 - `node src/domain/takeoff/e210LightingAccuracy.test.js`: pass, type-2 cans `12/12`, labeled plan `24/24`
 - `node src/domain/takeoff/expandedCorpusAccuracy.test.js`: pass overall, including Pottsville E110 `R 8/8`; only Soccer fixtures have independent authority, so Pottsville and skipped classes do not permit a 99% production claim
+- `node src/domain/takeoff/heldOutCorpus.test.js`: pass, confirms production 99% claims stay blocked until the held-out corpus is populated
 
 ## Release blockers for issue 246
 
-- Establish a versioned independent ground-truth corpus covering multiple firms, vector PDFs, scanned/raster sheets, varied legends, rotations, scales, crowded plans, and held-out projects.
+- Populate `src/domain/takeoff/fixtures/held-out-corpus.manifest.json` with real independent ground-truth projects covering multiple firms, vector PDFs, scanned/raster sheets, varied legends, rotations, scales, crowded plans, and held-out partitions.
 - Convert remaining text-only review-required specialty counts into body-backed symbols where drawing geometry exists, or keep them review-only when no body can be recovered.
 - Add real raster-scanned body-labeled fixtures and run the raster recognizer against them.
 - Re-run full lint, typecheck, production build, focused takeoff tests, and benchmark suite after each correction.

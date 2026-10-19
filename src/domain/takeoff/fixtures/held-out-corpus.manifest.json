@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "name": "Estim8r independent held-out takeoff accuracy corpus",
+  "status": "not-populated",
+  "purpose": "Production 99% symbol detection, classification, and placement claims may only be made from this held-out corpus when it is populated with real independent human-labeled drawings.",
+  "requirements": {
+    "minHeldOutProjects": 3,
+    "minHeldOutFirms": 3,
+    "requiredModes": ["vector", "raster-or-scanned"],
+    "requiredLabelAuthority": "independent",
+    "bodyLabeled": true,
+    "noTuningOnHeldOut": true
+  },
+  "knownRepositoryFixtures": [
+    {
+      "id": "soccer-pavilion",
+      "file": "soccer-pavilion-electrical.json",
+      "role": "regression",
+      "labelAuthority": "independent",
+      "reasonNotSufficient": "Single firm/project; extracted vector fixture only; not a multi-firm held-out corpus with raster/scanned sheets."
+    },
+    {
+      "id": "pottsville",
+      "file": "pottsville-electrical.json",
+      "role": "regression",
+      "labelAuthority": "derived-tokens-and-derived-glyphs",
+      "reasonNotSufficient": "Useful regression fixture, but not independent human body-labeled ground truth for all devices."
+    }
+  ],
+  "projects": []
+}

@@ -63,6 +63,22 @@ const recognizedObjects = buildDrawingObjectLayer({
 const recognizedHit = hitDrawingObject(recognizedObjects, { x: 10, y: 12 }, 2);
 assert.equal(recognizedHit.objectKind, "recognized-device", "detected devices win over raw printed symbol hits");
 assert.equal(recognizedHit.sourceMarkId, "detected-os", "recognized-device hits retain the source takeoff mark id");
+const recognizedFallbackObjects = buildDrawingObjectLayer({
+  pages: [{ page: 2, paths: [] }],
+  detectedMarks: [{
+    id: "detected-os-no-outline",
+    source: "ai",
+    type: "count",
+    sheet: 2,
+    x: 14,
+    y: 16,
+    symbolLabel: "OS - Occupancy sensor",
+    abbr: "OS",
+    typeCode: "OS",
+  }],
+});
+const fallbackHit = hitDrawingObject(recognizedFallbackObjects, { x: 14.45, y: 16 }, 2);
+assert.equal(fallbackHit?.sourceMarkId, "detected-os-no-outline", "detected point devices without outlines still have a selectable live chip");
 const lineHit = hitDrawingObject(objects, { x: 40, y: 20 }, 2);
 assert.equal(lineHit.objectKind, "circuit");
 assert.equal(hitDrawingObject(objects, { x: 55, y: 50 }, 2)?.objectKind, "room", "a click inside the room and off the line selects the room");

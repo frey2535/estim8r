@@ -1,4 +1,4 @@
-import { isDeviceMark } from "./deviceStyles.js";
+import { isDeviceMark, isPointDevice } from "./deviceStyles.js";
 import { looksLikeHexNoteGlyph } from "./legendGeometry.js";
 import { isJunkGeometry, pointHitsOutline } from "./vectorSymbols.js";
 
@@ -99,12 +99,14 @@ function objectArea(item) {
 function objectContainsPoint(item, point) {
   if (!item || !point) return false;
   if (item.objectKind === "circuit") return pointNearLine(item, point, 0.7);
-  return pointHitsOutline(item.outline, { x: item.x, y: item.y }, point, item.objectKind === "room" ? 0.15 : 0.5);
+  const tolerance = item.objectKind === "room" ? 0.15 : item.objectKind === "recognized-device" ? 1.0 : 0.5;
+  return pointHitsOutline(item.outline, { x: item.x, y: item.y }, point, tolerance);
 }
 
 export function buildDrawingObjectLayer({ pages = [], detectedMarks = [], trade = "electrical" } = {}) {
   const objects = (detectedMarks || []).filter(isDeviceMark).map((mark) => ({
     ...mark,
+    outline: detectedDeviceOutline(mark),
     objectId: mark.objectId || `drawing-object:${mark.id}`,
     sourceMarkId: mark.id,
     objectKind: "recognized-device",
@@ -199,6 +201,36 @@ export function buildDrawingObjectLayer({ pages = [], detectedMarks = [], trade 
     objects.push(...circuits.slice(0, MAX_CIRCUITS), ...rooms.slice(0, MAX_ROOMS));
   }
   return objects;
+}
+
+function detectedDeviceOutline(mark) {
+  // Upgrade small generic outlines (r < 0.5) to the larger standard hit-test size
+  if (mark?.outline?.kind === "circle" && mark.outline.source === "generic" && Number(mark.outline.r || 0) < 0.5) {
+    const x = Number(mark?.symbolBodyLocation?.x ?? mark?.outline?.cx ?? mark?.x) || 0;
+    const y = Number(mark?.symbolBodyLocation?.y ?? mark?.outline?.cy ?? mark?.y) || 0;
+    return {
+      kind: "circle",
+      source: "generic",
+      cx: x,
+      cy: y,
+      r: 0.52,
+      w: 1.04,
+      h: 1.04,
+    };
+  }
+  if (mark?.outline) return mark.outline;
+  if (!isPointDevice(mark)) return mark?.outline || null;
+  const x = Number(mark?.symbolBodyLocation?.x ?? mark?.x) || 0;
+  const y = Number(mark?.symbolBodyLocation?.y ?? mark?.y) || 0;
+  return {
+    kind: "circle",
+    source: "generic",
+    cx: x,
+    cy: y,
+    r: 0.52,
+    w: 1.04,
+    h: 1.04,
+  };
 }
 
 export function printedSelectionId(object) {

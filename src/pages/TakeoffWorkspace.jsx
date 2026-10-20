@@ -216,6 +216,27 @@ function loadSession(file) {
   }
 }
 
+function normalizeRestoredMarks(savedMarks = []) {
+  return applyDeviceTypeColors((savedMarks || []).map((mark) => {
+    if (mark?.source !== "ai" || !isDeviceMark(mark)) return mark;
+    return {
+      ...mark,
+      markerSize: mark.markerSize || 1.35,
+      markerSizeOverride: mark.markerSizeOverride ?? true,
+      fillOpacity: mark.fillOpacity ?? DEVICE_FILL_OPACITY,
+    };
+  }));
+}
+
+function restoredSessionSheet(saved, fallbackPage) {
+  const marks = Array.isArray(saved?.marks) ? saved.marks : [];
+  const requested = Number(saved?.sheet || fallbackPage);
+  if (requested && marks.some((mark) => (mark.sheet || 1) === requested && (isDeviceMark(mark) || isCircuitMark(mark)))) {
+    return requested;
+  }
+  return marks.find((mark) => isDeviceMark(mark) || isCircuitMark(mark))?.sheet || requested || 1;
+}
+
 
 function rememberActiveDrawing(file, page = 1) {
   try {
@@ -554,7 +575,7 @@ export default function TakeoffWorkspace() {
     setAiPages([]);
 
     const saved = loadSession(nextFile);
-    const restoredMarks = Array.isArray(saved?.marks) ? saved.marks : [];
+    const restoredMarks = normalizeRestoredMarks(Array.isArray(saved?.marks) ? saved.marks : []);
     setMarks(restoredMarks);
     historyRef.current = { past: [], future: [] };
     setConfirmedCoverageIds(Array.isArray(saved?.confirmedCoverageIds) ? saved.confirmedCoverageIds : []);
@@ -572,7 +593,7 @@ export default function TakeoffWorkspace() {
     if (saved?.scheduleEdits) setScheduleEdits(saved.scheduleEdits);
     if (saved?.pageTakeoff) setPageTakeoff(saved.pageTakeoff);
     if (Array.isArray(saved?.slipSheets)) setSlipSheets(saved.slipSheets);
-    if (saved?.sheet) setSheetMeta((current) => ({ ...current, page: saved.sheet }));
+    if (saved?.sheet || restoredMarks.length) setSheetMeta((current) => ({ ...current, page: restoredSessionSheet(saved, current.page) }));
     setSupplyQuote(saved?.supplyQuote || null);
     if (restoredMarks.length) {
       setStatus(`Restored ${restoredMarks.length} saved takeoff object${restoredMarks.length === 1 ? "" : "s"} for ${nextFile.name || "drawing"}.`);
@@ -627,7 +648,10 @@ export default function TakeoffWorkspace() {
         const stored = await getDrawingFile(active.name, active.size);
         if (!cancelled && stored) {
           await chooseFile(stored);
-          if (active.page) setSheetMeta((current) => ({ ...current, page: active.page }));
+          if (active.page) {
+            const saved = loadSession(stored);
+            setSheetMeta((current) => ({ ...current, page: restoredSessionSheet(saved, active.page) }));
+          }
           setStatus(`${stored.name} restored after update.`);
         }
       } catch (error) {
@@ -1566,6 +1590,7 @@ export default function TakeoffWorkspace() {
           ...mark,
           source: mark.source || "ai",
           trade: mark.trade || trade,
+          sheet: mark.sheet || mark.page,
           markerSize: mark.markerSize || Math.max(penSize, 1.35),
           markerSizeOverride: mark.markerSizeOverride ?? true,
           reviewStatus: mark.reviewStatus || "pending",

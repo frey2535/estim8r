@@ -42,6 +42,7 @@ export default function DevicePicker({
     <div className="space-y-3">
       <label className={labelClass}>
         Trade
+        <span className={compact ? "mt-0.5 block text-sm font-normal text-muted-foreground" : "mt-0.5 block font-normal text-muted-foreground"}>Which trade's symbols you can count on this drawing.</span>
         <select
           aria-label="Trade"
           value={trade}
@@ -53,32 +54,40 @@ export default function DevicePicker({
           ))}
         </select>
       </label>
-      <label className={labelClass}>Search devices</label>
-      <input
-        type="search"
-        value={query}
-        onChange={(event) => onQuery(event.target.value)}
-        placeholder="Search devices on this drawing…"
-        className={controlClass}
-      />
+      <label className={labelClass}>
+        Search devices
+        <span className={compact ? "mt-0.5 block text-sm font-normal text-muted-foreground" : "mt-0.5 block font-normal text-muted-foreground"}>Narrows the symbol list. It does not change the drawing.</span>
+        <input
+          type="search"
+          aria-label="Search devices"
+          value={query}
+          onChange={(event) => onQuery(event.target.value)}
+          placeholder="Type a name or abbreviation"
+          className={controlClass}
+        />
+      </label>
       {cats.length > 0 && (
-        <label className={labelClass}>Category</label>
+        <label className={labelClass}>
+          Category
+          <span className={compact ? "mt-0.5 block text-sm font-normal text-muted-foreground" : "mt-0.5 block font-normal text-muted-foreground"}>Shows only symbols in this group.</span>
+          <select aria-label="Category" value={activeCategory} onChange={(event) => onCategory(event.target.value)} className={controlClass}>
+            <option value="">All on drawing</option>
+            {cats.map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>
+        </label>
       )}
-      {cats.length > 0 && (
-        <select aria-label="Category" value={activeCategory} onChange={(event) => onCategory(event.target.value)} className={controlClass}>
-          <option value="">All on drawing</option>
-          {cats.map((item) => <option key={item} value={item}>{item}</option>)}
+      <label className={labelClass}>
+        Symbol to count
+        <span className={compact ? "mt-0.5 block text-sm font-normal text-muted-foreground" : "mt-0.5 block font-normal text-muted-foreground"}>The device placed when you use Count on a printed symbol.</span>
+        <select aria-label="Symbol to count" data-trade={trade} value={visible.some((item) => item.id === symbolId) ? symbolId : (visible[0]?.id || "")} onChange={(event) => onSymbol(event.target.value)} className={controlClass}>
+          {visible.length === 0 ? <option value="">No devices on this drawing</option> : null}
+          {visible.map((item) => (
+            <option key={item.id} value={item.id} data-trade={item.trade}>
+              {item.abbr} — {item.label}
+            </option>
+          ))}
         </select>
-      )}
-      <label className={labelClass}>Device / symbol</label>
-      <select aria-label="Device / symbol" data-trade={trade} value={visible.some((item) => item.id === symbolId) ? symbolId : (visible[0]?.id || "")} onChange={(event) => onSymbol(event.target.value)} className={controlClass}>
-        {visible.length === 0 ? <option value="">No devices on this drawing</option> : null}
-        {visible.map((item) => (
-          <option key={item.id} value={item.id} data-trade={item.trade}>
-            {item.abbr} — {item.label}
-          </option>
-        ))}
-      </select>
+      </label>
       <p className={compact ? "text-sm text-muted-foreground" : "text-[11px] text-muted-foreground"}>{visible.length} {tradeLabel} symbol{visible.length === 1 ? "" : "s"}</p>
       {onManualMark ? (
         <button

@@ -530,7 +530,7 @@ export default function EstimateBuilder() {
           <TabsTrigger value="labor-markup" className="min-h-[44px] px-4 text-base">Labor</TabsTrigger>
           <TabsTrigger value="assemblies" className="min-h-[44px] px-4 text-base">Assemblies</TabsTrigger>
           <TabsTrigger value="supplier-prices" className="min-h-[44px] px-4 text-base">Prices</TabsTrigger>
-          <TabsTrigger value="pdf-designer" className="min-h-[44px] px-4 text-base">PDF</TabsTrigger>
+          <TabsTrigger value="pdf-designer" className="min-h-[44px] px-4 text-base">PDF layout</TabsTrigger>
           {draft.trueTakeoff?.analysis ? <TabsTrigger value="audit" className="min-h-[44px] px-4 text-base">Audit</TabsTrigger> : null}
         </TabsList>
 

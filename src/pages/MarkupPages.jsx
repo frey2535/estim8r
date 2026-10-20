@@ -703,10 +703,12 @@ export default function MarkupPages() {
             <div className="mt-3 space-y-2 rounded-lg border border-border p-3">
               {selected.tool === "conduit" || selected.type === "route" || selected.category === "Raceway" || selected.type === "note" ? (
                 <label className="block text-xs font-bold text-muted-foreground">Name
+                  <span className="mt-0.5 block font-normal">The name stored for this conduit, route, or note.</span>
                   <input className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm" value={selected.symbolLabel || ""} onChange={(e) => updateMark(selected.id, { symbolLabel: e.target.value })} />
                 </label>
               ) : (
-                <label className="block text-xs font-bold text-muted-foreground">Device / symbol
+                <label className="block text-xs font-bold text-muted-foreground">Symbol
+                  <span className="mt-0.5 block font-normal">What this mark is counted as.</span>
                   <TradeSymbolSelect
                     trade={trade}
                     marks={marks}
@@ -718,9 +720,11 @@ export default function MarkupPages() {
                 </label>
               )}
               <label className="block text-xs font-bold text-muted-foreground">Category
+                <span className="mt-0.5 block font-normal">The group this symbol belongs to. It follows the symbol you chose.</span>
                 <input className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm" value={selected.category || ""} readOnly />
               </label>
-              <label className="block text-xs font-bold text-muted-foreground">Marker
+              <label className="block text-xs font-bold text-muted-foreground">Letters on the mark
+                <span className="mt-0.5 block font-normal">The short code drawn on the symbol.</span>
                 <input className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm" value={selected.abbr || ""} onChange={(e) => updateMark(selected.id, { abbr: e.target.value })} />
               </label>
               {selected.type === "note" ? (
@@ -729,8 +733,9 @@ export default function MarkupPages() {
                 </label>
               ) : null}
               {selected.type === "count" || selected.type === "drop" ? (
-                <label className="block text-xs font-bold text-muted-foreground">Conduit group
-                  <select
+                <label className="block text-xs font-bold text-muted-foreground">Conduit this device belongs to
+                  <span className="mt-0.5 block font-normal">Moves the device into a traced conduit, or leaves it unassigned.</span>
+                  <select aria-label="Conduit this device belongs to"
                     className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
                     value={selected.circuitRunId || groups.find((group) => group.deviceIds.includes(selected.id))?.conduitId || ""}
                     onChange={(e) => reassignCircuit(selected.id, e.target.value)}

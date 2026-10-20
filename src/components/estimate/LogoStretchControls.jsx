@@ -4,8 +4,8 @@ export default function LogoStretchControls({
   stretchX,
   stretchY,
   onChange,
-  xLabel = "Horizontal stretch",
-  yLabel = "Vertical stretch",
+  xLabel = "Logo width",
+  yLabel = "Logo height",
 }) {
   return (
     <div className="grid gap-2">
@@ -40,7 +40,7 @@ export default function LogoStretchControls({
         />
       </label>
       <p className="text-[11px] text-muted-foreground">
-        Width and height stretch separately. They do not lock to the image aspect ratio.
+        100% is the original size. Width and height change separately, so the logo does not keep its original shape.
       </p>
     </div>
   );

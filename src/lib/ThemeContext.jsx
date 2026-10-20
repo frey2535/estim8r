@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/AuthContext";
+import { COLOR_TOKENS } from "@/lib/appearanceLabels";
+
+export { COLOR_TOKENS };
 
 const ThemeContext = createContext({ theme: "light", toggleTheme: () => {}, appearance: {}, updateAppearance: () => {}, resetAppearance: () => {} });
 const STORAGE_KEY = "estim8r-theme";
-export const COLOR_TOKENS = ["background", "foreground", "card", "card-foreground", "primary", "primary-foreground", "secondary", "secondary-foreground", "muted", "muted-foreground", "accent", "accent-foreground", "border", "input", "ring", "sidebar-background", "sidebar-foreground", "sidebar-primary", "sidebar-primary-foreground", "sidebar-accent", "sidebar-accent-foreground", "sidebar-border"];
 export const FONT_OPTIONS = ["Plus Jakarta Sans", "Inter", "Arial", "Georgia", "Verdana", "Tahoma", "Trebuchet MS", "Times New Roman", "Courier New", "system-ui"];
 const validHex = (value) => typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value);
 function hexToHsl(hex) {

@@ -15,10 +15,11 @@ import {
 import TradeSymbolSelect from "@/components/takeoff/TradeSymbolSelect";
 import ReconciliationPanel from "@/components/takeoff/ReconciliationPanel";
 
-function Field({ label, children, compact = true }) {
+function Field({ label, hint, children, compact = true }) {
   return (
     <label className={compact ? "block text-[11px]" : "block text-base"}>
       <span className="mb-0.5 block font-bold text-muted-foreground">{label}</span>
+      {hint ? <span className="mb-0.5 block font-normal leading-4 text-muted-foreground">{hint}</span> : null}
       {children}
     </label>
   );
@@ -107,10 +108,10 @@ export default function TakeoffInspector({
               />
             </Field>
           )}
-          <Field label="Category">
+          <Field label="Category" hint="Where this item is grouped. It follows the device you chose.">
             <input className={fieldInput} value={selected.category || ""} readOnly />
           </Field>
-          <Field label="Marker text">
+          <Field label="Letters on the mark" hint="The short code drawn on this symbol, such as REC.">
             <input className={fieldInput} value={selected.abbr || ""} onChange={(e) => onUpdateMark(selected.id, { abbr: e.target.value })} />
           </Field>
           {(selected?.objectKind === "room" || selected?.type === "area") && (
@@ -230,33 +231,35 @@ export default function TakeoffInspector({
           ) : null}
           {selectedIsMarker ? (
             <div className="rounded-md border border-border bg-muted/30 p-2">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Symbol fill</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Color painted on the symbol</div>
               <label className="mt-1 flex items-center gap-2 text-[11px] font-semibold">
                 <input
                   type="checkbox"
                   checked={selected.fillEnabled !== false && selected.fillMode !== "off"}
                   onChange={(e) => onUpdateMark(selected.id, { fillEnabled: e.target.checked, fillMode: e.target.checked ? "inside" : "off" })}
                 />
-                Fill inside printed symbol lines
+                Paint color inside the printed symbol
               </label>
               <div className="mt-2 grid grid-cols-2 gap-2">
-                <Field label="Fill opacity">
+                <Field label="How solid the color is" hint="Lower is more see-through. Higher covers more of the print.">
                   <input
                     type="range"
                     min="0.08"
                     max="0.75"
                     step="0.01"
+                    aria-label="How solid the color is"
                     value={selected.fillOpacity ?? 0.34}
                     onChange={(e) => onUpdateMark(selected.id, { fillOpacity: Number(e.target.value) })}
                     className="w-full"
                   />
                 </Field>
-                <Field label="Inside inset">
+                <Field label="Gap between color and symbol edge" hint="Lower pulls the color away from the printed outline.">
                   <input
                     type="range"
                     min="0.55"
                     max="1"
                     step="0.01"
+                    aria-label="Gap between color and symbol edge"
                     value={selected.fillInset ?? 0.86}
                     onChange={(e) => onUpdateMark(selected.id, { fillInset: Number(e.target.value) })}
                     className="w-full"
@@ -266,30 +269,30 @@ export default function TakeoffInspector({
             </div>
           ) : null}
           <div className="grid grid-cols-2 gap-2">
-            <Field label="Color">
-              <input type="color" className="h-8 w-full" value={selected.color || "#2563eb"} onChange={(e) => onUpdateMark(selected.id, { color: e.target.value })} />
+            <Field label="Color of this item" hint="Changes only the selected mark or line.">
+              <input type="color" aria-label="Color of this item" className="h-8 w-full" value={selected.color || "#2563eb"} onChange={(e) => onUpdateMark(selected.id, { color: e.target.value })} />
             </Field>
             {selectedIsLine && (
-              <Field label="Line size">
+              <Field label="This line's thickness" hint="Changes only the selected line. New lines still use the thickness in the Symbol panel.">
                 <input
                   type="number"
                   min="0.5"
                   step="0.1"
                   className={fieldInput}
-                  aria-label="This line size"
+                  aria-label="This line's thickness"
                   value={resolvedLineSize(selected, globalLineSize)}
                   onChange={(e) => onUpdateMark(selected.id, lineSizePatch(e.target.value))}
                 />
               </Field>
             )}
             {selectedIsMarker && (
-              <Field label="Marker size">
+              <Field label="This mark's size" hint="Changes only the selected mark. New counts still use the size in the Symbol panel.">
                 <input
                   type="number"
                   min="0.5"
                   step="0.1"
                   className={fieldInput}
-                  aria-label="This marker size"
+                  aria-label="This mark's size"
                   value={resolvedMarkerSize(selected, globalMarkerSize)}
                   onChange={(e) => onUpdateMark(selected.id, markerSizePatch(e.target.value))}
                 />

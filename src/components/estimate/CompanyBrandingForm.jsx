@@ -12,10 +12,11 @@ import {
 import CompanyLogo from "./CompanyLogo";
 import LogoStretchControls from "./LogoStretchControls";
 
-function ColorField({ label, value, onChange }) {
+function ColorField({ label, hint, value, onChange }) {
   return (
     <label className="min-w-0">
-      <span className="mb-1 block text-xs font-bold text-muted-foreground">{label}</span>
+      <span className="mb-0.5 block text-xs font-bold text-muted-foreground">{label}</span>
+      {hint ? <span className="mb-1 block text-[11px] font-normal leading-4 text-muted-foreground">{hint}</span> : null}
       <div className="flex items-center gap-2">
         <input
           type="color"
@@ -35,10 +36,11 @@ function ColorField({ label, value, onChange }) {
   );
 }
 
-function SelectField({ label, value, options, onChange }) {
+function SelectField({ label, hint, value, options, onChange }) {
   return (
     <label className="min-w-0">
-      <span className="mb-1 block text-xs font-bold text-muted-foreground">{label}</span>
+      <span className="mb-0.5 block text-xs font-bold text-muted-foreground">{label}</span>
+      {hint ? <span className="mb-1 block text-[11px] font-normal leading-4 text-muted-foreground">{hint}</span> : null}
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -157,20 +159,21 @@ export default function CompanyBrandingForm({ showEstimateLink = false }) {
       </section>
 
       <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-        <h3 className="mb-3 text-sm font-bold">Colors, type, and sizes</h3>
+        <h3 className="mb-1 text-sm font-bold">Colors, type, and sizes</h3>
+        <p className="mb-3 text-xs leading-4 text-muted-foreground">Each label says which document uses that color or size. The preview under this section shows the header, page, and card colors.</p>
         <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-3">
-          <ColorField label="Company / primary color" value={branding.primaryColor} onChange={(v) => patch("primaryColor", v)} />
-          <ColorField label="Secondary color" value={branding.secondaryColor} onChange={(v) => patch("secondaryColor", v)} />
-          <ColorField label="Text color" value={branding.textColor} onChange={(v) => patch("textColor", v)} />
-          <ColorField label="Header color" value={branding.headerColor} onChange={(v) => patch("headerColor", v)} />
-          <ColorField label="Header text color" value={branding.headerTextColor} onChange={(v) => patch("headerTextColor", v)} />
-          <ColorField label="Card color" value={branding.cardColor} onChange={(v) => patch("cardColor", v)} />
-          <ColorField label="Page color" value={branding.pageColor} onChange={(v) => patch("pageColor", v)} />
-          <ColorField label="Accent / total color" value={branding.accentColor} onChange={(v) => patch("accentColor", v)} />
-          <SelectField label="Font" value={branding.fontFamily} options={FONT_OPTIONS} onChange={(v) => patch("fontFamily", v)} />
-          <SelectField label="Header size" value={branding.headerSize} options={SIZE_OPTIONS} onChange={(v) => patch("headerSize", v)} />
-          <SelectField label="Card size" value={branding.cardSize} options={CARD_SIZE_OPTIONS} onChange={(v) => patch("cardSize", v)} />
-          <SelectField label="Logo size" value={branding.logoSize} options={SIZE_OPTIONS} onChange={(v) => patch("logoSize", v)} />
+          <ColorField label="Quote column titles" hint="Background of the column headings on a supply-house quote PDF." value={branding.primaryColor} onChange={(v) => patch("primaryColor", v)} />
+          <ColorField label="Quote top bar" hint="Background of the company bar at the top of a supply-house quote PDF." value={branding.secondaryColor} onChange={(v) => patch("secondaryColor", v)} />
+          <ColorField label="Document text" hint="Body text on the customer estimate PDF and the supply quote." value={branding.textColor} onChange={(v) => patch("textColor", v)} />
+          <ColorField label="Estimate header background" hint="The bar across the top of the customer estimate PDF." value={branding.headerColor} onChange={(v) => patch("headerColor", v)} />
+          <ColorField label="Preview header text" hint="Text in the preview below. The downloaded estimate picks white or black from how dark the header is." value={branding.headerTextColor} onChange={(v) => patch("headerTextColor", v)} />
+          <ColorField label="Card and quote row fill" hint="Project cards on the estimate PDF, and every other row on the supply quote." value={branding.cardColor} onChange={(v) => patch("cardColor", v)} />
+          <ColorField label="Estimate page color" hint="The paper color of the customer estimate PDF." value={branding.pageColor} onChange={(v) => patch("pageColor", v)} />
+          <ColorField label="Stored accent" hint="Saved with the company settings. It does not change the estimate PDF or the supply quote." value={branding.accentColor} onChange={(v) => patch("accentColor", v)} />
+          <SelectField label="PDF typeface" hint="Helvetica, Times, or Courier on downloaded PDFs." value={branding.fontFamily} options={FONT_OPTIONS} onChange={(v) => patch("fontFamily", v)} />
+          <SelectField label="Estimate header height" hint="Small, medium, or large changes how tall the company header is." value={branding.headerSize} options={SIZE_OPTIONS} onChange={(v) => patch("headerSize", v)} />
+          <SelectField label="Estimate card padding" hint="How much space is inside the project and company cards." value={branding.cardSize} options={CARD_SIZE_OPTIONS} onChange={(v) => patch("cardSize", v)} />
+          <SelectField label="Logo size before stretch" hint="Small, medium, or large. Width and height stretch below can change it further." value={branding.logoSize} options={SIZE_OPTIONS} onChange={(v) => patch("logoSize", v)} />
         </div>
         <div className="mt-4 overflow-hidden rounded-xl border border-border">
           <div className="flex items-center gap-3 px-4 py-3 text-sm font-bold" style={{ background: branding.headerColor, color: branding.headerTextColor }}>

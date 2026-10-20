@@ -2900,14 +2900,18 @@ export default function TakeoffWorkspace() {
                 onManualMark={() => { setTool("count"); setStatus("Choose a legend symbol, then click the missed printed symbol."); }}
               />
               <TakeoffSizeControl markerSize={penSize} lineSize={penThickness} onMarkerSize={setPenSize} onLineSize={setPenThickness} />
-              <label className="block text-xs font-semibold text-muted-foreground">Pen
+              <label className="block text-xs font-semibold text-muted-foreground">
+                Color of new marks
+                <span className="mt-0.5 block font-normal">Used the next time you count, trace, or run AI. It does not recolor marks already on the sheet.</span>
                 <span className="mt-1 flex items-center gap-2">
                   <span className="h-7 w-7 shrink-0 rounded-md border border-border" style={{ backgroundColor: penColor }} aria-hidden />
-                  <input type="color" value={penColor} onChange={(event) => setPenColor(event.target.value)} className="h-8 w-full" aria-label="Pen color" />
+                  <input type="color" value={penColor} onChange={(event) => setPenColor(event.target.value)} className="h-8 w-full" aria-label="Color of new marks" />
                 </span>
               </label>
-              <label className="block text-xs font-semibold text-muted-foreground">Conduit size
-                <select value={conduitChoice.id} onChange={(event) => setConduitId(event.target.value)} className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm">
+              <label className="block text-xs font-semibold text-muted-foreground">
+                Conduit for the next trace
+                <span className="mt-0.5 block font-normal">Size and material applied when you finish a conduit line, and when AI traces conduit.</span>
+                <select aria-label="Conduit for the next trace" value={conduitChoice.id} onChange={(event) => setConduitId(event.target.value)} className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm">
                   {conduitChoices.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
                 </select>
               </label>
@@ -2918,8 +2922,10 @@ export default function TakeoffWorkspace() {
                   <div className="flex justify-between text-xs text-muted-foreground"><span>EMT connectors</span><span className="font-medium text-foreground">{hardwareTotals.emtConnectors}</span></div>
                 </div>
               )}
-              <label className="block text-xs font-semibold text-muted-foreground">Homeruns per conduit
-                <input type="number" min="1" max="12" value={maxHomeruns} onChange={(event) => setMaxHomeruns(Math.max(1, Number(event.target.value) || 1))} className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm" />
+              <label className="block text-xs font-semibold text-muted-foreground">
+                Home runs in one conduit
+                <span className="mt-0.5 block font-normal">When AI traces conduit, this is the most home runs it puts in a single run.</span>
+                <input aria-label="Home runs in one conduit" type="number" min="1" max="12" value={maxHomeruns} onChange={(event) => setMaxHomeruns(Math.max(1, Number(event.target.value) || 1))} className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm" />
               </label>
               {typeSwatches.length > 0 && (
                 <div className="flex flex-wrap gap-1">

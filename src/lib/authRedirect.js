@@ -59,6 +59,10 @@ export function authCallbackSearch(search = "", hash = "") {
   return encoded ? `?${encoded}` : "";
 }
 
+/**
+ * @param {any} error
+ * @param {{ google?: boolean, supabaseUrl?: string }} [options]
+ */
 export function describeAuthError(error, { google = false, supabaseUrl } = {}) {
   const message = String(error?.message || error || "").trim();
   const status = Number(error?.status || error?.code) || null;

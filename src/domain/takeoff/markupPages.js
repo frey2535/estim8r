@@ -102,6 +102,9 @@ export function associateDevicesToConduits(marks) {
   return groups;
 }
 
+/**
+ * @param {{ marks?: any[], reconciliation?: any, skippedSheets?: any }} [options]
+ */
 export function buildReviewMarkupPages({ marks, reconciliation, skippedSheets } = {}) {
   const list = marks || [];
   const sheets = [...new Set(list.map((mark) => Number(mark.sheet) || 1))].sort((a, b) => a - b);

@@ -128,31 +128,22 @@ Existing estimates keep their stored man-hours. Takeoff, drawings, auth, and Sup
 
 ## Checks
 
+The repo has two test formats. Do not run all `*.test.js` files through Vitest — most are standalone Node assert scripts with no `test()`/`it()` blocks.
+
 ```bash
-node src/domain/labor/auditedLibrary.test.js
-node src/domain/labor/architecture.test.js
-node src/domain/estimate/fromDrawings.test.js
-node src/domain/estimate/fromTakeoff.test.js
-node src/domain/estimate/manualLineLabor.test.js
-node src/domain/estimate/lineLaborCatalog.test.js
-node src/domain/estimate/estimateStore.test.js
-node src/domain/estimate/branding.test.js
-node src/domain/estimate/estimatePdf.test.js
-node src/api/buildrBridge.test.js
-node src/domain/estimate/projectDocuments.test.js
-node src/lib/platformIdentity.test.js
-node src/lib/ownerCursorChat.test.js
-node src/lib/ownerChatInspector.test.js
-node src/lib/buildrCompany.test.js
-node src/lib/authRedirect.test.js
-node src/lib/ownerAccessRules.test.js
-node src/domain/takeoff/aiTakeoff.test.js
-node src/domain/takeoff/deviceStyles.test.js
-node src/domain/takeoff/ortho.test.js
-node src/domain/takeoff/junctionHardware.test.js
-node src/domain/takeoff/quantities.hardware.test.js
-node src/domain/takeoff/markupPages.test.js
-node src/domain/takeoff/sizes.test.js
+npm run test          # standalone Node suites, then Vitest
+npm run test:node     # assert + process.exitCode scripts under src/
+npm run test:vitest   # Vitest suites only (see vitest.config.js)
+npm run typecheck
+npm run build
+npm run lint
+```
+
+Individual Node accuracy / domain checks still work the same way, for example:
+
+```bash
 node src/domain/takeoff/soccerPavilionAccuracy.test.js
 node src/domain/takeoff/expandedCorpusAccuracy.test.js
+node src/domain/takeoff/e110PowerAccuracy.test.js
+node src/domain/labor/auditedLibrary.test.js
 ```

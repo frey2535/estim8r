@@ -164,6 +164,15 @@ function mhForDisplayUnit(itemUnit, takeoffUnit, mh) {
   return mh;
 }
 
+/**
+ * @param {{
+ *   category?: any,
+ *   symbol?: any,
+ *   unit?: any,
+ *   items?: any[],
+ *   minScore?: number,
+ * }} [options]
+ */
 export function matchAuditedLaborHours({ category, symbol, unit, items, minScore = 0 } = {}) {
   const catalog = items?.length ? items : AUDITED_LABOR_ITEMS;
   const text = `${category || ""} ${symbol || ""}`.toLowerCase();

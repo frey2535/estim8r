@@ -115,6 +115,14 @@ import {
 import { conduitCircuitScheduleCsv } from "@/domain/takeoff/markupPages";
 import { conduitWireMakeupCsv } from "@/domain/takeoff/conduitWireMakeup";
 import { reconcilePlanToSchedule } from "@/domain/takeoff/countReconciliation";
+import {
+  isSheetPanDrag,
+  pagePercentFromClient,
+  panAfterZoomAtCursor,
+  pointerDistance,
+  sheetPanOffset,
+  sheetPinchZoom,
+} from "@/lib/sheetViewport";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -199,10 +207,15 @@ export default function TakeoffWorkspace() {
   const [symbolId, setSymbolId] = useState("duplex");
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [pageRotation, setPageRotation] = useState(0);
   const panRef = useRef(pan);
+  const zoomRef = useRef(zoom);
   const panLayerRef = useRef(null);
   const panningRef = useRef(false);
+  const pointersRef = useRef(new Map());
+  const pinchRef = useRef(null);
   panRef.current = pan;
+  zoomRef.current = zoom;
   const draftJunctionIdsRef = useRef([]);
   const [marks, setMarks] = useState([]);
   const [draftPoints, setDraftPoints] = useState([]);
@@ -571,10 +584,15 @@ export default function TakeoffWorkspace() {
     };
   }
 
-  function saveTakeoff(silent = false) {
+  function persistTakeoff(nextMarks = marks, silent = true) {
     if (!file) return;
-    const quote = persistSupplyQuote();
-    const payload = { ...sessionPayload(), supplyQuote: quote };
+    const quote = persistSupplyQuote(nextMarks);
+    const payload = {
+      ...sessionPayload(),
+      marks: nextMarks,
+      supplyQuote: quote,
+      savedAt: new Date().toISOString(),
+    };
     try {
       localStorage.setItem(storageKey(file), JSON.stringify(payload));
       setSavedAt(payload.savedAt);
@@ -582,6 +600,10 @@ export default function TakeoffWorkspace() {
     } catch {
       setStatus("Could not save takeoff in this browser.");
     }
+  }
+
+  function saveTakeoff(silent = false) {
+    persistTakeoff(marks, silent);
   }
 
   function downloadTakeoff() {
@@ -882,11 +904,11 @@ export default function TakeoffWorkspace() {
 
   function drawingPoint(event) {
     const rect = viewerRef.current?.getBoundingClientRect();
-    if (!rect?.width || !rect?.height) return null;
-    return {
-      x: ((event.clientX - rect.left) / rect.width) * 100,
-      y: ((event.clientY - rect.top) / rect.height) * 100,
-    };
+    return pagePercentFromClient(
+      { x: event.clientX, y: event.clientY },
+      rect,
+      pageRotation,
+    );
   }
 
   function handleDrawingWheel(event) {
@@ -907,15 +929,16 @@ export default function TakeoffWorkspace() {
       const nextZoom = Math.min(4, Math.max(0.25, Number((currentZoom + direction * step).toFixed(2))));
       if (nextZoom === currentZoom) return currentZoom;
 
-      const ratio = nextZoom / currentZoom;
-      const cursorX = event.clientX - (viewport.left + viewport.width / 2);
-      const cursorY = event.clientY - (viewport.top + viewport.height / 2);
-      const currentPan = panRef.current;
-
-      const nextPan = {
-        x: currentPan.x + (cursorX - currentPan.x) * (1 - ratio),
-        y: currentPan.y + (cursorY - currentPan.y) * (1 - ratio),
+      const cursorFromViewportCenter = {
+        x: event.clientX - (viewport.left + viewport.width / 2),
+        y: event.clientY - (viewport.top + viewport.height / 2),
       };
+      const nextPan = panAfterZoomAtCursor({
+        pan: panRef.current,
+        zoom: currentZoom,
+        nextZoom,
+        cursorFromViewportCenter,
+      });
       panRef.current = nextPan;
       setPan(nextPan);
 
@@ -1516,37 +1539,71 @@ export default function TakeoffWorkspace() {
   });
 
   function onPanPointerDown(event) {
-    if (tool !== "pan" || event.button > 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const pointerId = event.pointerId;
-    const originX = event.clientX;
-    const originY = event.clientY;
-    const startX = panRef.current.x;
-    const startY = panRef.current.y;
+    if (event.button > 0) return;
     const target = event.currentTarget;
-    panningRef.current = true;
-    target.setPointerCapture?.(pointerId);
-    const move = (moveEvent) => {
-      if (moveEvent.pointerId !== pointerId) return;
-      const next = {
-        x: startX + (moveEvent.clientX - originX),
-        y: startY + (moveEvent.clientY - originY),
+    const pointerId = event.pointerId;
+    const canPan = tool === "pan";
+    pointersRef.current.set(pointerId, { x: event.clientX, y: event.clientY });
+    if (pointersRef.current.size >= 2) {
+      const points = [...pointersRef.current.values()];
+      pinchRef.current = {
+        distance: pointerDistance(points[0], points[1]) || 1,
+        zoom: zoomRef.current,
       };
+      event.preventDefault();
+      event.stopPropagation();
+    } else if (!canPan) {
+      // Single-finger non-pan tools keep click/draw handlers; drop the tracked pointer.
+      pointersRef.current.delete(pointerId);
+      return;
+    } else {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    const origin = { x: event.clientX, y: event.clientY };
+    const start = { ...panRef.current };
+    let dragged = false;
+    let pinched = pointersRef.current.size >= 2;
+
+    const move = (moveEvent) => {
+      if (pointersRef.current.has(moveEvent.pointerId)) {
+        pointersRef.current.set(moveEvent.pointerId, { x: moveEvent.clientX, y: moveEvent.clientY });
+      }
+      if (pointersRef.current.size >= 2) {
+        pinched = true;
+        panningRef.current = true;
+        const points = [...pointersRef.current.values()];
+        const startPinch = pinchRef.current;
+        if (startPinch) {
+          setZoom(sheetPinchZoom(startPinch.zoom, startPinch.distance, pointerDistance(points[0], points[1])));
+        }
+        return;
+      }
+      if (!canPan || pinched || moveEvent.pointerId !== pointerId) return;
+      const current = { x: moveEvent.clientX, y: moveEvent.clientY };
+      if (!dragged && !isSheetPanDrag(origin, current)) return;
+      dragged = true;
+      panningRef.current = true;
+      const next = sheetPanOffset(start, origin, current);
       panRef.current = next;
       // Update the transform directly so pan does not re-render the PDF each frame.
       if (panLayerRef.current) {
         panLayerRef.current.style.transform = `translate(${next.x}px, ${next.y}px)`;
       }
     };
+
     const up = (upEvent) => {
+      pointersRef.current.delete(upEvent.pointerId);
+      if (pointersRef.current.size < 2) pinchRef.current = null;
       if (upEvent.pointerId !== pointerId) return;
       panningRef.current = false;
-      setPan(panRef.current);
+      if (dragged || pinched) setPan(panRef.current);
       target.removeEventListener("pointermove", move);
       target.removeEventListener("pointerup", up);
       target.removeEventListener("pointercancel", up);
     };
+
     target.addEventListener("pointermove", move, { passive: true });
     target.addEventListener("pointerup", up);
     target.addEventListener("pointercancel", up);
@@ -1985,6 +2042,7 @@ export default function TakeoffWorkspace() {
                         setSheetMeta((current) => (
                           current.page === info.page && current.pageCount === info.pageCount ? current : info
                         ));
+                        if (Number.isFinite(info?.rotate)) setPageRotation(Number(info.rotate) || 0);
                         setDrawingError("");
                       }}
                     />
@@ -2352,6 +2410,19 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
   );
 }
 
+/**
+ * @param {{
+ *   fileBytes: any,
+ *   fileName?: any,
+ *   zoom: any,
+ *   pageNumber: any,
+ *   onPageNumber: any,
+ *   viewportWidth: any,
+ *   viewportHeight: any,
+ *   onPageInfo: any,
+ *   selectedMark?: any,
+ * }} props
+ */
 function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber, viewportWidth, viewportHeight, onPageInfo, selectedMark }) {
   const canvasRef = useRef(null);
   const focusCanvasRef = useRef(null);
@@ -2393,12 +2464,16 @@ function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber, viewp
         }
         const page = await pdf.getPage(safePage);
         if (cancelled) return;
-        const base = page.getViewport({ scale: 1 });
+        // Render in the PDF's native page.rotate so displayed pixels match page-percent marks.
+        const base = page.getViewport({ scale: 1, rotation: page.rotate || 0 });
         const fitted = fitSheetSize(base.width, base.height, viewportWidth, viewportHeight, zoom);
         if (!fitted.width || !fitted.height) return;
         setDisplaySize(fitted);
         const outputScale = Math.min(2, window.devicePixelRatio || 1);
-        const viewport = page.getViewport({ scale: (fitted.width / base.width) * outputScale });
+        const viewport = page.getViewport({
+          scale: (fitted.width / base.width) * outputScale,
+          rotation: page.rotate || 0,
+        });
         const canvas = canvasRef.current;
         const context = canvas.getContext("2d", { alpha: false });
         canvas.width = Math.floor(viewport.width);
@@ -2408,7 +2483,16 @@ function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber, viewp
         context.setTransform(1, 0, 0, 1, 0, 0);
         renderTask = page.render({ canvasContext: context, viewport });
         await renderTask.promise;
-        if (!cancelled) onPageInfoRef.current?.({ page: safePage, pageCount: pdf.numPages });
+        if (!cancelled) {
+          onPageInfoRef.current?.({
+            page: safePage,
+            pageCount: pdf.numPages,
+            // Displayed canvas already includes page.rotate; extra UI rotation stays 0
+            // until an independent rotation GT fixture exists for remapping marks.
+            rotate: 0,
+            pdfRotate: page.rotate || 0,
+          });
+        }
       } catch (err) {
         if (!cancelled && err?.name !== "RenderingCancelledException") {
           console.error("PDF render failed", err);

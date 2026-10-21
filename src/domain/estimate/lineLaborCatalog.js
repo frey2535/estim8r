@@ -186,6 +186,10 @@ function matchesLegacyCategory(item, type, category) {
   ));
 }
 
+/**
+ * @param {any} item
+ * @param {{ itemType?: any, category?: any }} [options]
+ */
 export function laborItemMatchesLine(item, { itemType, category } = {}) {
   if (!item || item.active === false) return false;
   const type = String(itemType || "").trim();

@@ -16,6 +16,18 @@ export function isJunctionBoxMark(mark) {
   );
 }
 
+/**
+ * @param {{
+ *   id?: string,
+ *   sheet?: number,
+ *   trade?: string,
+ *   point: { x: number, y: number },
+ *   color?: string,
+ *   conduitId?: string | null,
+ *   connectorCount?: number,
+ *   source?: string,
+ * }} args
+ */
 export function createJunctionBoxMark({
   id,
   sheet,

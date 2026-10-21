@@ -104,6 +104,18 @@ const lightingOnPower = e110Marks.filter((mark) => /^(1|2|3|4)$/.test(String(mar
 const hatchBand = e110Marks.filter((mark) => mark.x >= 10 && mark.x <= 16 && mark.y >= 14 && mark.y <= 22);
 const maxExtent = e110Marks.reduce((max, mark) => {
   const outline = deviceOutline(mark);
+  if (!outline) {
+    // AI may count a printed tag without a trusted vector/raster perimeter.
+    // Those marks intentionally return null from deviceOutline (no fabricated
+    // symbol boundary) and paint only a display locator chip — not a fill to
+    // size-check. Anything else with a null outline is a detection defect.
+    assert(
+      mark.source === "ai"
+        && (String(mark.outlineSource || "").toLowerCase() === "text" || !mark.outline),
+      `bid mark missing paint outline must be text-located AI, got ${mark.typeCode}@${mark.sheet} outlineSource=${mark.outlineSource}`,
+    );
+    return max;
+  }
   return Math.max(max, Number(outline.w) || 0, Number(outline.h) || 0, (Number(outline.r) || 0) * 2);
 }, 0);
 const wpOnGlyph = byType("WP").filter((mark) => mark.outlineSource === "vector" || looksLikeUnlabeledReceptacleGlyph({

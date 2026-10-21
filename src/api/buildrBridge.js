@@ -168,6 +168,11 @@ export async function verifyBuildrFamilyAppSso(token, audience = "estim8r") {
   return verified;
 }
 
+/**
+ * @param {string} email
+ * @param {string} [companyId]
+ * @param {{ ssoToken?: string }} [options]
+ */
 export async function fetchBuildrAccountStatus(email, companyId, { ssoToken } = {}) {
   const api = buildrApiUrl();
   if (!api || !email) {
@@ -211,6 +216,26 @@ export async function fetchBuildrAccountStatus(email, companyId, { ssoToken } = 
   }
 }
 
+/**
+ * @param {{
+ *   email?: any,
+ *   companyId?: any,
+ *   projectName?: any,
+ *   projectAddress?: any,
+ *   createProject?: any,
+ *   estimate?: any,
+ *   drawingFile?: any,
+ *   markupPages?: any,
+ *   estim8rEstimateId?: any,
+ *   buildrProjectId?: any,
+ *   buildrInvoiceId?: any,
+ *   customerCompany?: any,
+ *   customerName?: any,
+ *   customerEmail?: any,
+ *   customerPhone?: any,
+ *   ssoToken?: any,
+ * }} args
+ */
 export async function saveBuildrProjectDocuments({
   email,
   companyId,

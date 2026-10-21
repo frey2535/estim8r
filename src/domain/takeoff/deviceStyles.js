@@ -8,6 +8,9 @@ export const DEVICE_FILL_OPACITY = 0.2;
 export const MIN_VISIBLE_FILL = 0.28;
 export const MAX_POINT_FILL = 0.55;
 export const MAX_FIXTURE_FILL = 1.65;
+// Vector 2x4 bodies are often drawn ~2.0–2.3 across (see isPlausibleSymbolForHint
+// rect). That exceeds the Beam paint cap but is still a fixture, not a room.
+export const MAX_FIXTURE_EXTRACT = 2.5;
 export const MAX_GENERIC_FILL = 0.95;
 export const DEVICE_CHIP_R = 0.16;
 export const DEVICE_FILL_STROKE_PX = 1.25;
@@ -221,6 +224,14 @@ export function maxFillExtent(mark) {
   return MAX_GENERIC_FILL;
 }
 
+/** Upper bound for trusted AI geometry that may still be clamped to the paint cap. */
+export function maxExtractExtent(mark) {
+  if (isFixtureDevice(mark)) return MAX_FIXTURE_EXTRACT;
+  // Point bodies (recessed cans ~0.6–1.1) sit between MAX_POINT_FILL and the
+  // fixture paint cap. Room-sized outlines stay above this and remain rejected.
+  return MAX_FIXTURE_FILL;
+}
+
 export function isUsablePaintOutline(outline, origin, maxExtent = MAX_GENERIC_FILL) {
   if (!outline) return false;
   if (outline.kind === "path" && (outline.points || []).length < 3) return false;
@@ -272,8 +283,19 @@ export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
   if (mark?.source === "ai") {
     // AI is never allowed to invent a visual marker. It may paint only the
     // measured symbol body returned by vector/raster analysis.
-    if (!trustedAiSource || !usable) return null;
-    return scaleOutline(mark.outline, 1, origin);
+    if (!trustedAiSource || !mark?.outline) return null;
+    if (usable) return scaleOutline(mark.outline, 1, origin);
+    // Trusted vector/raster bodies are often larger than the Beam paint cap
+    // (cans ~0.6–1.1 vs MAX_POINT_FILL; 2x4 troffers ~2.1 vs MAX_FIXTURE_FILL).
+    // Keep the measured perimeter shape and clamp to the paint cap instead of
+    // returning null. Room-sized outlines exceed maxExtractExtent and stay out.
+    if (isUsablePaintOutline(mark.outline, origin, maxExtractExtent(mark))) {
+      const extent = outlineExtent(mark.outline);
+      if (extent > maxExtent) {
+        return scaleOutline(mark.outline, maxExtent / extent, origin);
+      }
+    }
+    return null;
   }
 
   if (usable) {

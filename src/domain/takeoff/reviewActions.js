@@ -70,6 +70,17 @@ export function resizeReviewBounds(marks, current, bounds = {}) {
   });
 }
 
+/**
+ * @param {{
+ *   sheet?: number,
+ *   trade?: string,
+ *   symbol?: any,
+ *   x?: number,
+ *   y?: number,
+ *   w?: number,
+ *   h?: number,
+ * }} [options]
+ */
 export function createManualDeviceMark({
   sheet = 1,
   trade = "electrical",

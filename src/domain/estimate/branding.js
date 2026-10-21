@@ -63,6 +63,9 @@ export function clampLogoStretch(value, fallback = DEFAULT_BRANDING.logoStretchX
   return Math.max(20, Math.min(400, Math.round(next)));
 }
 
+/**
+ * @param {Record<string, any>} [input]
+ */
 export function normalizeBranding(input = {}) {
   const source = input && typeof input === "object" ? input : {};
   return {

@@ -18,6 +18,10 @@ export function matchProjectByName(projects, projectName) {
   return (projects || []).find((project) => projectFolderKey(project.name) === key) || null;
 }
 
+/**
+ * @param {any[]} projects
+ * @param {{ projectId?: any, projectName?: any, projectAddress?: any }} [options]
+ */
 export function matchCompanyProject(projects, { projectId, projectName, projectAddress } = {}) {
   const rows = projects || [];
   const id = String(projectId || "").trim();
@@ -35,6 +39,14 @@ export function matchCompanyProject(projects, { projectId, projectName, projectA
   return matches.length === 1 ? matches[0] : null;
 }
 
+/**
+ * @param {{
+ *   canUseBuildr?: any,
+ *   matchingProject?: any,
+ *   existingProjectId?: any,
+ *   accountError?: any,
+ * }} [options]
+ */
 export function decideSaveDestination({
   canUseBuildr,
   matchingProject,
@@ -75,6 +87,10 @@ export function parseEstim8rEstimateId(notes) {
   return match?.[1] || null;
 }
 
+/**
+ * @param {any[]} invoices
+ * @param {{ invoiceId?: any, estimateId?: any, invoiceNumber?: any }} [options]
+ */
 export function findInvoiceForEstim8r(invoices, { invoiceId, estimateId, invoiceNumber } = {}) {
   const rows = invoices || [];
   if (invoiceId) {
@@ -91,6 +107,10 @@ export function findInvoiceForEstim8r(invoices, { invoiceId, estimateId, invoice
   return null;
 }
 
+/**
+ * @param {any[]} docs
+ * @param {{ docType?: any, estimateId?: any, title?: any }} [options]
+ */
 export function findDocumentForEstim8r(docs, { docType, estimateId, title } = {}) {
   const rows = docs || [];
   if (estimateId) {
@@ -137,6 +157,17 @@ export function buildrSyncFromResult(result, estimateId) {
   };
 }
 
+/**
+ * @param {{
+ *   fileName?: any,
+ *   pageCount?: any,
+ *   marks?: any,
+ *   calibration?: any,
+ *   titleBlock?: any,
+ *   reconciliation?: any,
+ *   skippedSheets?: any,
+ * }} args
+ */
 export function buildMarkupPages({ fileName, pageCount, marks, calibration, titleBlock, reconciliation, skippedSheets }) {
   const count = Math.max(1, Number(pageCount) || 1);
   const pages = [];
@@ -342,16 +373,25 @@ export function standaloneEstimateFileName(projectName) {
   return key ? `${STANDALONE_ESTIMATE_PREFIX}${key}` : "";
 }
 
-/** Storage identity for an estimate: keep a real drawing name, otherwise key by project. */
+/**
+ * Storage identity for an estimate: keep a real drawing name, otherwise key by project.
+ * @param {{ fileName?: any, projectName?: any }} [options]
+ */
 export function estimateFileNameForSave({ fileName, projectName } = {}) {
   if (isDrawingFileName(fileName)) return String(fileName).trim();
   return standaloneEstimateFileName(projectName);
 }
 
+/**
+ * @param {{ projectName?: any }} [options]
+ */
 export function canSaveProjectDocuments({ projectName } = {}) {
   return Boolean(String(projectName || "").trim());
 }
 
+/**
+ * @param {{ projectName?: any }} [options]
+ */
 export function saveRequiresProjectName({ projectName } = {}) {
   return canSaveProjectDocuments({ projectName }) ? "" : "Enter a project name to save this estimate.";
 }

@@ -63,6 +63,10 @@ export function nearbyCircuitTag(token, tokens = []) {
   return best;
 }
 
+/**
+ * @param {any} mark
+ * @param {Record<string, any>} [fields]
+ */
 export function attachDetectionRecord(mark, fields = {}) {
   const body = fields.symbolBodyLocation || pointFromGeometry(fields.geometry) || { x: Number(mark.x) || 0, y: Number(mark.y) || 0 };
   const sources = fields.detectionSources
@@ -103,6 +107,18 @@ export function attachDetectionRecord(mark, fields = {}) {
   };
 }
 
+/**
+ * @param {{
+ *   trade: any,
+ *   sheet: any,
+ *   geometry?: any,
+ *   label?: any,
+ *   reason?: any,
+ *   color?: string,
+ *   sources?: any[],
+ *   scores?: Record<string, any>,
+ * }} args
+ */
 export function reviewCandidateMark({
   trade,
   sheet,

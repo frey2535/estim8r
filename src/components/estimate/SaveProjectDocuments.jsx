@@ -152,6 +152,9 @@ export default function SaveProjectDocuments({ estimate, onProjectName }) {
     return result;
   }
 
+  /**
+   * @param {{ forceLocal?: boolean, force?: boolean, nameOverride?: string }} [options]
+   */
   async function runSave({ forceLocal = false, force = false, nameOverride } = {}) {
     const name = String(nameOverride || projectName || "").trim();
     if (!estimate) return;

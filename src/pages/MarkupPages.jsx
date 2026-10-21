@@ -795,6 +795,9 @@ export default function MarkupPages() {
   );
 }
 
+/**
+ * @param {{ marks: any, selectedId: any, groups?: any }} props
+ */
 function ReviewOverlay({ marks, selectedId }) {
   const styled = applyDeviceTypeColors(marks);
   const devices = styled.filter((mark) => isDeviceMark(mark));

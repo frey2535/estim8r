@@ -167,6 +167,10 @@ function first(value) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+/**
+ * @param {any} payload
+ * @param {{ fetchedAt?: any, quantity?: number }} [options]
+ */
 export function normalizeMouserResponse(payload, { fetchedAt, quantity = 1 } = {}) {
   const parts = payload?.SearchResults?.Parts || payload?.Parts || [];
   return parts.map((part, index) => {
@@ -195,6 +199,10 @@ export function normalizeMouserResponse(payload, { fetchedAt, quantity = 1 } = {
   }).filter(Boolean);
 }
 
+/**
+ * @param {any} payload
+ * @param {{ fetchedAt?: any, quantity?: number }} [options]
+ */
 export function normalizeDigikeyResponse(payload, { fetchedAt, quantity = 1 } = {}) {
   const products = payload?.Products || payload?.ExactMatches || [];
   return products.map((product, index) => {
@@ -228,6 +236,10 @@ export function normalizeDigikeyResponse(payload, { fetchedAt, quantity = 1 } = 
   }).filter(Boolean);
 }
 
+/**
+ * @param {any} payload
+ * @param {{ fetchedAt?: any, quantity?: number }} [options]
+ */
 export function normalizeNexarResponse(payload, { fetchedAt, quantity = 1 } = {}) {
   const results = payload?.data?.supSearch?.results
     || payload?.data?.supSearchMpn?.results
@@ -268,6 +280,10 @@ export function normalizeNexarResponse(payload, { fetchedAt, quantity = 1 } = {}
   return offers;
 }
 
+/**
+ * @param {any} payload
+ * @param {{ fetchedAt?: any, quantity?: number }} [options]
+ */
 export function normalizeElement14Response(payload, { fetchedAt, quantity = 1 } = {}) {
   const block = payload?.keywordSearchReturn
     || payload?.manufacturerPartNumberSearchReturn

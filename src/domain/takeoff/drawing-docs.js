@@ -389,7 +389,7 @@ export async function readDrawingDocuments(fileBytes) {
     if (kind === "legend") symbols.push(...parseLegendRows(rows, { hasQtyColumn: hasPrintedQtyHeader(rows) }).map((item) => ({ ...item, page: pageNumber })));
     if (kind === "lighting-schedule" || kind === "device-schedule" || kind === "equipment-schedule" || kind === "spec") {
       scheduleItems.push(...parseScheduleRows(rows, kind).map((item) => ({ ...item, page: pageNumber })));
-      if (kind === "spec" || kind === "legend") {
+      if (kind === "spec") {
         symbols.push(...parseLegendRows(rows).map((item) => ({ ...item, page: pageNumber })));
       }
     }

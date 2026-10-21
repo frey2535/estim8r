@@ -7,9 +7,11 @@ import {
   assignExclusiveGeometry,
   candidatesFromConstructedPaths,
   classifySymbolGeometry,
+  containsPoint,
   isJunkGeometry,
   isPlausibleSymbolForHint,
   isSymbolSized,
+  isAdjacentThinFixtureBar,
   looksLikeTextGlyph,
   mergeOverlappingCandidates,
   parseDrawOps,
@@ -17,6 +19,7 @@ import {
   pointHitsOutline,
   scaleOutline,
   shapeHintFromLabel,
+  tagAdjacentToSymbolBody,
   tagOnSymbolGeometry,
 } from "./vectorSymbols.js";
 
@@ -131,5 +134,183 @@ assert(tagCan?.kind === "circle" && Math.abs(tagCan.cx - 53.4) < 0.01 && Math.ab
 assert(tagCan.r <= 0.3, "tag-on-symbol can fills stay small");
 const tagTroffer = tagOnSymbolGeometry({ text: "'1'", x: 25.7, y: 22.1 }, { shapeHint: "rect" });
 assert(tagTroffer?.kind === "rect" && tagTroffer.cx === 25.7 && tagTroffer.cy === 22.1, "quoted type 1 stays on the printed mark when no body extracts");
+
+// Pottsville E210 type-3 regression: printed "3" at (69.549,77.862) beside the
+// genuine thin fixture bar (69.825,77.442 / 0.201×0.548). Digit ink, a foreign
+// rect, and a neighboring can must stay rejected; the bar must associate.
+const type3Token = { text: "3", x: 69.549, y: 77.862 };
+const type3DigitGlyph = {
+  kind: "path",
+  cx: 69.547,
+  cy: 78.144,
+  w: 0.152,
+  h: 0.196,
+  outline: { kind: "path", source: "vector", w: 0.152, h: 0.196, points: [] },
+};
+const type3FixtureBar = {
+  kind: "rect",
+  cx: 69.825,
+  cy: 77.442,
+  w: 0.201,
+  h: 0.548,
+  outline: { kind: "rect", source: "vector", w: 0.201, h: 0.548, points: [] },
+};
+const neighborCan = {
+  kind: "circle",
+  cx: 70.148,
+  cy: 78.562,
+  w: 0.726,
+  h: 0.959,
+  r: 0.48,
+  outline: { kind: "circle", source: "vector", w: 0.726, h: 0.959, r: 0.48, points: [] },
+};
+const neighborRect = {
+  kind: "rect",
+  cx: 70.337,
+  cy: 77.168,
+  w: 0.628,
+  h: 0.503,
+  outline: { kind: "rect", source: "vector", w: 0.628, h: 0.503, points: [] },
+};
+assert(looksLikeTextGlyph(type3DigitGlyph, type3Token), "type-3 digit path is a text glyph");
+assert(!looksLikeTextGlyph(type3FixtureBar, type3Token), "type-3 fixture bar is not a text glyph");
+assert(isAdjacentThinFixtureBar(type3Token, type3FixtureBar), "type-3 fixture bar matches adjacent thin-bar geometry");
+assert(tagAdjacentToSymbolBody(type3Token, type3FixtureBar), "type-3 tag is adjacent to its fixture bar");
+assert(!isAdjacentThinFixtureBar(type3Token, neighborRect), "foreign rect is not an adjacent thin fixture bar");
+assert(!tagAdjacentToSymbolBody(type3Token, neighborRect), "type-3 tag is not adjacent to the foreign rect");
+assert(
+  associateGeometry(type3Token, [type3DigitGlyph, neighborCan, neighborRect], { shapeHint: "rect" }) == null,
+  "rect-hint type 3 does not bind to a neighboring can circle or foreign rect",
+);
+const type3Place = placeOnSymbolGeometry(type3Token, [type3DigitGlyph, neighborCan, neighborRect], { shapeHint: "rect" });
+assert(type3Place == null, "type 3 with only neighbor bodies falls through to tag-on-symbol placement");
+assert(
+  associateGeometry(
+    type3Token,
+    [type3DigitGlyph, type3FixtureBar, neighborCan, neighborRect],
+    { shapeHint: "rect" },
+  ) === type3FixtureBar,
+  "rect-hint type 3 binds the adjacent thin fixture bar, not digit ink or neighbors",
+);
+assert(
+  placeOnSymbolGeometry(
+    type3Token,
+    [type3DigitGlyph, type3FixtureBar, neighborCan, neighborRect],
+    { shapeHint: "rect" },
+  ) === type3FixtureBar,
+  "type 3 places on the extracted E210 fixture bar",
+);
+// Soccer E1.01 FP path: a horizontal hatch scrap near "'1E'" must not qualify as
+// a thin fixture bar or outrank the real troffer body at (38.183,26.481).
+const soccerScrap = {
+  kind: "rect",
+  cx: 36.815,
+  cy: 25.811,
+  w: 0.504,
+  h: 0.2,
+  outline: { kind: "rect", source: "vector", w: 0.504, h: 0.2, points: [] },
+};
+const soccerTroffer = {
+  kind: "rect",
+  cx: 38.183,
+  cy: 26.481,
+  w: 0.802,
+  h: 1.25,
+  outline: { kind: "rect", source: "vector", w: 0.802, h: 1.25, points: [] },
+};
+const soccerFpTag = { text: "'1E'", x: 37.052, y: 25.655 };
+assert(!isAdjacentThinFixtureBar(soccerFpTag, soccerScrap), "horizontal Soccer hatch scrap is not a thin fixture bar");
+assert(tagAdjacentToSymbolBody(soccerFpTag, soccerTroffer), "Soccer FP tag is adjacent to its troffer body");
+assert(
+  associateGeometry(soccerFpTag, [soccerScrap, soccerTroffer], { shapeHint: "rect" }) === soccerTroffer,
+  "Soccer 1E binds the troffer body, not the horizontal scrap",
+);
+// Oversized corridor scrap beside a second type-3 tag must not win association.
+const type3TokenB = { text: "3", x: 69.048, y: 79.524 };
+const type3MidBar = {
+  kind: "rect",
+  cx: 68.786,
+  cy: 79.423,
+  w: 0.331,
+  h: 0.548,
+  outline: { kind: "rect", source: "vector", w: 0.331, h: 0.548, points: [] },
+};
+const type3RoomScrap = {
+  kind: "rect",
+  cx: 68.153,
+  cy: 79.509,
+  w: 1.614,
+  h: 0.634,
+  outline: { kind: "rect", source: "vector", w: 1.614, h: 0.634, points: [] },
+};
+assert(isAdjacentThinFixtureBar(type3TokenB, type3MidBar), "mid-width vertical type-3 bar is an adjacent fixture bar");
+assert(
+  associateGeometry(type3TokenB, [type3RoomScrap, type3MidBar], { shapeHint: "rect" }) === type3MidBar,
+  "type 3 prefers its fixture bar over an oversized room scrap",
+);
+const type3Tag = tagOnSymbolGeometry(type3Token, { shapeHint: "rect" });
+assert(type3Tag && Math.abs(type3Tag.cx - type3Token.x) < 0.01 && Math.abs(type3Tag.cy - type3Token.y) < 0.01, "type 3 fill stays on the printed tag when no body extracts");
+assert(
+  associateGeometry(type3Token, [neighborCan], { shapeHint: "circle" }) === neighborCan
+  || placeOnSymbolGeometry(type3Token, [neighborCan], { shapeHint: "circle" }) === neighborCan,
+  "circle-hint devices may still bind to a nearby can body",
+);
+// Runtime often flips type 3 to circle via legend seed kind; that bind is not
+// adjacent to the printed tag and must be rejected by the lighting demotion
+// (aiTakeoff), leaving tag-on-symbol placement for E210 3@52 when the bar is absent.
+assert(!tagAdjacentToSymbolBody(type3Token, neighborCan), "type-3 tag is not adjacent to the neighboring can");
+assert(!containsPoint(neighborCan, type3Token), "type-3 tag does not sit inside the neighboring can");
+assert(
+  associateGeometry(type3Token, [type3FixtureBar, neighborCan], { shapeHint: "rect" }) === type3FixtureBar,
+  "rect-hint prefers the adjacent thin bar over a neighboring circle",
+);
+
+// Tag sitting beside a real 2x4 body must still associate (Soccer troffer case).
+const trofferBeside = {
+  kind: "rect",
+  cx: 21.05,
+  cy: 36.525,
+  w: 2.1,
+  h: 1.05,
+  outline: { kind: "rect", source: "vector", w: 2.1, h: 1.05, points: [] },
+};
+const trofferTag = { text: "1E", x: 21.05, y: 35.75 };
+assert(tagAdjacentToSymbolBody(trofferTag, trofferBeside), "tag beside a 2x4 is adjacent to that body");
+assert(
+  associateGeometry(trofferTag, [trofferBeside], { shapeHint: "rect" }) === trofferBeside,
+  "rect-hint still binds a tag that sits on the long edge of its troffer",
+);
+
+// Soccer E1.01 side-tagged fixtures: tag sits ~0.6–0.8 beyond the AABB on one
+// axis while staying in the body's vertical/horizontal band. Cardinal-edge
+// adjacency must accept these; the prior flat pad=0.35 rejected all 7 type 1E.
+const soccer1eBody = {
+  kind: "rect",
+  cx: 26.369,
+  cy: 18.431,
+  w: 0.627,
+  h: 0.972,
+  outline: { kind: "rect", source: "vector", w: 0.627, h: 0.972, points: [] },
+};
+const soccer1eTag = { text: "1E", x: 25.464, y: 18.095 };
+assert(tagAdjacentToSymbolBody(soccer1eTag, soccer1eBody), "Soccer 1E side tag is adjacent to its troffer body");
+assert(
+  associateGeometry(soccer1eTag, [soccer1eBody], { shapeHint: "rect" }) === soccer1eBody,
+  "Soccer 1E rect-hint binds the side-tagged fixture body, not the printed tag",
+);
+const soccer3eBody = {
+  kind: "rect",
+  cx: 23.869,
+  cy: 27.742,
+  w: 1.04,
+  h: 0.628,
+  outline: { kind: "rect", source: "vector", w: 1.04, h: 0.628, points: [] },
+};
+const soccer3eTag = { text: "3E", x: 22.575, y: 27.394 };
+assert(tagAdjacentToSymbolBody(soccer3eTag, soccer3eBody), "Soccer 3E side tag is adjacent to its body");
+assert(
+  associateGeometry(soccer3eTag, [soccer3eBody], { shapeHint: "rect" }) === soccer3eBody,
+  "Soccer 3E rect-hint binds the side-tagged body",
+);
 
 if (!process.exitCode) console.log("vector symbol checks passed");

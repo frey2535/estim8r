@@ -333,6 +333,9 @@ assert(type1e.length === 1, `legend type 1E is found once on the plan, got ${typ
 const fixtureBody = [...mixedPaths].sort((a, b) => (b.w * b.h) - (a.w * a.h))[0];
 assert(Math.abs(type1e[0].x - fixtureBody.cx) < 0.08, "1E marker sits on the fixture geometry, not the type-tag glyph");
 assert(type1e[0].outlineSource === "vector", "legend-matched 1E uses extracted geometry");
+assert(deviceOutline(type1e[0])?.kind === "rect", "legend-matched 1E paints the extracted troffer rectangle");
+assert(Math.abs((type1e[0].outline?.w || 0) - fixtureBody.w) < 0.05, "legend-matched 1E keeps the real fixture width");
+assert((deviceOutline(type1e[0])?.w || 0) <= 1.65, "legend-matched 1E paint stays inside the Beam-tight cap");
 assert(planR.length === 1, `legend type R is found once on the plan, got ${planR.length}`);
 assert(legendCounts.some((mark) => mark.symbol === "gfci"), "catalog GFI on the plan still counts");
 assert(persistedPlanDeviceCount(legendFirst.marks, { 2: "drawing", 8: "legend" }) === legendCounts.length, "quote/estimate counts come from persisted plan detections");

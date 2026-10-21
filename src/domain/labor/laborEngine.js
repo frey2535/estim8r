@@ -15,6 +15,7 @@ export function assertProductionSafeLaborUnit(input) {
   const laborUnit = LaborUnitSchema.parse(input);
 
   if (laborUnit.verificationStatus !== 'verified' || !laborUnit.productionAllowed) {
+    /** @type {Error & { code?: string, laborUnit?: any }} */
     const error = new Error(
       `Labor unit ${laborUnit.id} is not approved for production estimating.`
     );
@@ -32,6 +33,7 @@ export function getConditionMh(laborUnitInput, conditionInput = 'normal') {
   const value = laborUnit[conditionField[condition]];
 
   if (value === null || value === undefined) {
+    /** @type {Error & { code?: string }} */
     const error = new Error(`No ${condition} labor value exists for labor unit ${laborUnit.id}.`);
     error.code = 'LABOR_CONDITION_VALUE_MISSING';
     throw error;

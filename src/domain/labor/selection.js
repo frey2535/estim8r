@@ -19,6 +19,14 @@ export function emptyPublishedReference() {
   };
 }
 
+/**
+ * @param {{
+ *   laborItem?: any,
+ *   companyUnit?: any,
+ *   customUnit?: any,
+ *   condition?: string,
+ * }} [options]
+ */
 export function buildLaborSourceOptions({
   laborItem,
   companyUnit = null,
@@ -132,6 +140,17 @@ export function buildLaborSourceOptions({
   return [published, company, experimental, custom];
 }
 
+/**
+ * @param {{
+ *   laborItemId?: string,
+ *   option?: any,
+ *   condition?: string,
+ *   factors?: any[],
+ *   estimatorOverrideMhPerUnit?: any,
+ *   overrideReason?: string,
+ *   acknowledgedUnverified?: boolean,
+ * }} [options]
+ */
 export function makeLaborSelection({
   laborItemId = "",
   option,

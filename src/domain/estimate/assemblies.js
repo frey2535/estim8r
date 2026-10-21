@@ -88,6 +88,7 @@ export function validateAssembly(input) {
 export function assemblyToEstimateLines(input, assemblyQuantity = 1, laborRate = 0) {
   const { assembly, errors, valid } = validateAssembly(input);
   if (!valid) {
+    /** @type {Error & { code?: string }} */
     const error = new Error(errors.join(" "));
     error.code = "INVALID_ASSEMBLY";
     throw error;

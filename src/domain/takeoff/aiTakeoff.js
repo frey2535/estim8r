@@ -1,5 +1,5 @@
 import { attachDetectionRecord, isReviewOnlyMark, labelLocationFromToken, nearbyCircuitTag, reviewCandidateMark, REVIEW_VISUAL_THRESHOLD } from "./detectionRecord.js";
-import { applyDeviceTypeColors } from "./deviceStyles.js";
+import { applyDeviceTypeColors, isUsablePaintOutline } from "./deviceStyles.js";
 import { findSheetId, isSheetChrome, pageDiscipline, pageMatchesTrade, tradeFromSheetId } from "./sheetDiscipline.js";
 import {
   fixtureSizeFromWholeToken,
@@ -22,9 +22,9 @@ import { DETECT_SOURCE_ORIGINAL_PDF } from "./accuracyReview.js";
 import { describeReconciliation, reconcilePlanToSchedule } from "./countReconciliation.js";
 import { extractSheetNotes, notesToMarks } from "./sheetNotes.js";
 import { looksLikeCoverOrRendering, looksLikeElectricalPlan, looksLikeIndexPage, pagePlanType } from "./drawing-docs.js";
-import { associateGeometry, assignExclusiveGeometry, looksLikeRecessedCanBody, placeOnSymbolGeometry, shapeHintFromLabel, tagOnSymbolGeometry } from "./vectorSymbols.js";
+import { associateGeometry, assignExclusiveGeometry, containsPoint, looksLikeRecessedCanBody, placeOnSymbolGeometry, shapeHintFromLabel, tagAdjacentToSymbolBody, tagOnSymbolGeometry } from "./vectorSymbols.js";
 import { orthogonalizePolyline } from "./ortho.js";
-import { attachConfirmedGeometryPrototypes, attachFragmentPrototypes, attachLegendGeometryPrototypes, attachPowerGlyphPrototypes, attachProjectPrototypes, findNearbyReceptacleGlyph, isEmergencyHatch, isHatchTickCluster, looksLikeHexNoteGlyph, scanPageByLegendGeometry, scanUnlabeledPowerGlyphs, snapToEntryPrototype } from "./legendGeometry.js";
+import { attachConfirmedGeometryPrototypes, attachFragmentPrototypes, attachLegendGeometryPrototypes, attachPowerGlyphPrototypes, attachProjectPrototypes, findNearbyReceptacleGlyph, isEmergencyHatch, isHatchTickCluster, looksLikeHexNoteGlyph, paintableGlyphOutline, scanPageByLegendGeometry, scanUnlabeledPowerGlyphs, snapToEntryPrototype } from "./legendGeometry.js";
 import { matchRasterToLegend, rasterCandidatesFromPage } from "./rasterSymbols.js";
 import { ANCHOR_SYMBOL_IDS, DEFAULT_MAX_HOMERUNS } from "./trades.js";
 
@@ -301,6 +301,19 @@ function lightingSymbolForCode(code, symbols) {
     || null;
 }
 
+/**
+ * @param {{
+ *   trade: any,
+ *   sheet: any,
+ *   geometry?: any,
+ *   placed: any,
+ *   tokens?: any[],
+ *   symbols?: any[],
+ *   color?: string,
+ *   sources?: any[],
+ *   scores?: Record<string, any>,
+ * }} args
+ */
 function typedLightingBodyMark({
   trade,
   sheet,
@@ -1003,29 +1016,47 @@ export function buildAiMarks({
       const printedCode = normalizeTypeMark(token.text).toUpperCase();
       const powerDeviceTag = /^(WP|SP|SPR|P2|DB|DOORBELL)$/.test(printedCode)
         || (planType === "power" && printedCode === "R");
+      const powerCoverTag = /^(WP|SP|SPR)$/.test(printedCode);
       const powerGlyph = powerDeviceTag
         ? findNearbyReceptacleGlyph(token, page.paths || [], {
           radius: printedCode === "WP" ? 0.55 : 0.62,
-          allowWpCover: printedCode === "WP",
+          // SP/SPR share weatherproof cover plates with WP on E110; without
+          // cover preference they claim empty path AABBs that deviceOutline
+          // rejects (vector + null paint).
+          allowWpCover: powerCoverTag,
         })
         : null;
-      let geometry = powerGlyph
-        ? { ...powerGlyph, source: "vector", outline: powerGlyph.outline || { kind: powerGlyph.kind || "rect", source: "vector", w: powerGlyph.w, h: powerGlyph.h, points: powerGlyph.points || [] } }
-        : assigned.get(token) || placeOnSymbolGeometry(token, (page.paths || []).filter((item) => !usedGeometry.has(item)), {
+      const asPowerVector = (glyph) => {
+        if (!glyph) return null;
+        const outline = paintableGlyphOutline(glyph);
+        const origin = { x: Number(glyph.cx) || 0, y: Number(glyph.cy) || 0 };
+        // Never claim outlineSource=vector for a body that cannot paint.
+        if (!outline || !isUsablePaintOutline(outline, origin)) return null;
+        return { ...glyph, source: "vector", outline };
+      };
+      let geometry = asPowerVector(powerGlyph)
+        || assigned.get(token) || placeOnSymbolGeometry(token, (page.paths || []).filter((item) => !usedGeometry.has(item)), {
           shapeHint: hint,
           rivals: hits.map((other) => other.token).filter((other) => other !== token),
         }) || snapToEntryPrototype(token, page, entry, { used: usedGeometry }) || tagOnSymbolGeometry(token, { shapeHint: hint });
       if (geometry && looksLikeHexNoteGlyph(geometry)) {
-        geometry = powerGlyph
-          ? { ...powerGlyph, source: "vector", outline: powerGlyph.outline || { kind: powerGlyph.kind || "rect", source: "vector", w: powerGlyph.w, h: powerGlyph.h } }
-          : tagOnSymbolGeometry(token, { shapeHint: hint || "rect" });
+        geometry = asPowerVector(powerGlyph)
+          || tagOnSymbolGeometry(token, { shapeHint: hint || "rect" });
       }
       if (geometry && powerDeviceTag) {
         const away = Math.hypot((geometry.cx || 0) - token.x, (geometry.cy || 0) - token.y);
         if (away > 0.62) {
-          geometry = powerGlyph
-            ? { ...powerGlyph, source: "vector", outline: powerGlyph.outline || { kind: powerGlyph.kind || "rect", source: "vector", w: powerGlyph.w, h: powerGlyph.h } }
-            : tagOnSymbolGeometry(token, { shapeHint: hint || "rect" });
+          geometry = asPowerVector(powerGlyph)
+            || tagOnSymbolGeometry(token, { shapeHint: hint || "rect" });
+        }
+      }
+      // Power tags that still hold an unpaintable vector scrap demote to text
+      // rather than leaving outlineSource=vector with a null paint outline.
+      if (geometry && powerDeviceTag && geometry.source !== "text" && geometry.outline?.source !== "text") {
+        const origin = { x: Number(geometry.cx) || 0, y: Number(geometry.cy) || 0 };
+        if (!geometry.outline || !isUsablePaintOutline(geometry.outline, origin)) {
+          geometry = asPowerVector(powerGlyph)
+            || tagOnSymbolGeometry(token, { shapeHint: hint || "rect" });
         }
       }
       if (hint === "circle" && geometry) {
@@ -1034,6 +1065,26 @@ export function buildAiMarks({
         if (away > 0.48 && code === "OS") {
           geometry = tagOnSymbolGeometry(token, { shapeHint: hint });
         }
+      }
+      // Labeled lighting types (Pottsville type 3, Soccer 1E/3/3E) must not keep
+      // a neighboring can/OS circle or a foreign rect the tag does not sit
+      // on/beside. Legend seeds sometimes flip shapeHint to "circle" for a
+      // generic "Type 3 lighting fixture", which would otherwise steal a can
+      // ~0.85 away (marker-on-text 3@52). Fall back to an adjacent rect body
+      // or the printed tag — never invent a boundary, never paint the wrong symbol.
+      const labeledLightingType = /^\d{1,2}E?$/i.test(printedCode);
+      if (
+        (hint === "rect" || labeledLightingType)
+        && geometry
+        && geometry.source !== "text"
+        && geometry.outline?.source !== "text"
+        && !containsPoint(geometry, token)
+        && !tagAdjacentToSymbolBody(token, geometry)
+      ) {
+        geometry = placeOnSymbolGeometry(token, (page.paths || []).filter((item) => !usedGeometry.has(item) && item !== geometry), {
+          shapeHint: "rect",
+          rivals: hits.map((other) => other.token).filter((other) => other !== token),
+        }) || tagOnSymbolGeometry(token, { shapeHint: hint || "rect" });
       }
       if (isCanDeviceText(token.text, token.nearbyText, symbol.label) && geometry?.kind !== "rect") {
         symbol = resolveCanSymbol(matchSymbols) || symbol;

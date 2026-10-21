@@ -248,7 +248,7 @@ const pottsvilleLabeled = runCase("pottsville-e210 labeled 1-4/OS", {
   ...pottsville,
   pages: pottsville.pages.filter((page) => page.page === 48 || page.page === 52),
   groundTruth: e210LabeledTruth(e210),
-}, { filterTypes: true, requirePlacement: false });
+}, { filterTypes: true });
 
 assert(soccerFull.found === 129 && soccerFull.falsePositives === 0, "Soccer Pavilion regression stays 129/129 FP 0");
 assert(soccerSite.found === 2 && soccerSite.falsePositives === 0, "Site plan uses the two real GFI/WP bodies already in Soccer GT");

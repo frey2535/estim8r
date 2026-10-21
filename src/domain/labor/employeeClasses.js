@@ -1,16 +1,18 @@
-/** Editable crew classes. Wages are starting values the estimator can change. */
+/** Shop default is $95/hr for every class. The estimator can change a class; that value persists until changed again. */
+export const SHOP_HOURLY_RATE = 95;
+
 export const EMPLOYEE_CLASSES = [
-  { id: "superintendent", label: "Superintendent", defaultWage: 110 },
-  { id: "general-foreman", label: "General Foreman", defaultWage: 95 },
-  { id: "foreman", label: "Foreman", defaultWage: 85 },
-  { id: "supervisor", label: "Supervisor", defaultWage: 78 },
-  { id: "journeyman", label: "Journeyman", defaultWage: 68 },
-  { id: "apprentice-1", label: "Apprentice 1", defaultWage: 61 },
-  { id: "apprentice-2", label: "Apprentice 2", defaultWage: 54 },
-  { id: "apprentice-3", label: "Apprentice 3", defaultWage: 48 },
-  { id: "apprentice-4", label: "Apprentice 4", defaultWage: 41 },
-  { id: "apprentice-5", label: "Apprentice 5", defaultWage: 34 },
-  { id: "helper", label: "Helper", defaultWage: 28 },
+  { id: "superintendent", label: "Superintendent", defaultWage: SHOP_HOURLY_RATE },
+  { id: "general-foreman", label: "General Foreman", defaultWage: SHOP_HOURLY_RATE },
+  { id: "foreman", label: "Foreman", defaultWage: SHOP_HOURLY_RATE },
+  { id: "supervisor", label: "Supervisor", defaultWage: SHOP_HOURLY_RATE },
+  { id: "journeyman", label: "Journeyman", defaultWage: SHOP_HOURLY_RATE },
+  { id: "apprentice-1", label: "Apprentice 1", defaultWage: SHOP_HOURLY_RATE },
+  { id: "apprentice-2", label: "Apprentice 2", defaultWage: SHOP_HOURLY_RATE },
+  { id: "apprentice-3", label: "Apprentice 3", defaultWage: SHOP_HOURLY_RATE },
+  { id: "apprentice-4", label: "Apprentice 4", defaultWage: SHOP_HOURLY_RATE },
+  { id: "apprentice-5", label: "Apprentice 5", defaultWage: SHOP_HOURLY_RATE },
+  { id: "helper", label: "Helper", defaultWage: SHOP_HOURLY_RATE },
 ];
 
 export const DEFAULT_CLASS_ID = "journeyman";

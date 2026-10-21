@@ -2,10 +2,12 @@ import {
   DRAW_CLOSE,
   DRAW_CUBIC,
   DRAW_LINE,
+  DRAW_QUAD,
   DRAW_MOVE,
   associateGeometry,
   assignExclusiveGeometry,
   candidatesFromConstructedPaths,
+  drawOpsExtentPoints,
   classifySymbolGeometry,
   containsPoint,
   isJunkGeometry,
@@ -21,6 +23,7 @@ import {
   shapeHintFromLabel,
   tagAdjacentToSymbolBody,
   tagOnSymbolGeometry,
+  transformedMinMaxBounds,
 } from "./vectorSymbols.js";
 
 function assert(cond, message) {
@@ -50,6 +53,22 @@ assert(rectCandidates.length === 1, "one closed rectangle becomes one candidate"
 assert(rectCandidates[0].kind === "rect", `2x4-like path is a rect, got ${rectCandidates[0]?.kind}`);
 assert(Math.abs(rectCandidates[0].w - 2.2) < 0.05, "rect width is the extracted path width");
 assert(Math.abs(rectCandidates[0].h - 1.1) < 0.05, "rect height is the extracted path height");
+
+const rotatedBounds = transformedMinMaxBounds([0, 0, 2, 1], [0, 1, -1, 0, 10, 20], identityPct);
+assert(rotatedBounds && Math.abs(rotatedBounds.w - 1) < 1e-9 && Math.abs(rotatedBounds.h - 2) < 1e-9, "90-degree rotated PDF minMax retains full symbol extent");
+assert(rotatedBounds && Math.abs(rotatedBounds.cx - 9.5) < 1e-9 && Math.abs(rotatedBounds.cy - 21) < 1e-9, "rotated minMax center follows transformed corners");
+const shearedBounds = transformedMinMaxBounds([0, 0, 2, 1], [1, 0, 1, 1, 0, 0], identityPct);
+assert(shearedBounds && Math.abs(shearedBounds.w - 3) < 1e-9, "sheared PDF minMax includes off-diagonal corners");
+const fallbackRotated = candidatesFromConstructedPaths([{ ctm: [0, 1, -1, 0, 10, 20], drawOps: [], minMax: [0, 0, 2, 1] }], identityPct);
+assert(fallbackRotated.length === 1 && Math.abs(fallbackRotated[0].w - 1) < 1e-9, "rotated fallback produces correctly sized symbol candidate");
+
+const archedOps = [DRAW_MOVE, 30, 30, DRAW_QUAD, 31, 32, 32, 30, DRAW_LINE, 30, 30, DRAW_CLOSE];
+const archedPoints = drawOpsExtentPoints(archedOps);
+assert(Math.max(...archedPoints.map((p) => p.y)) > 30.9, "quadratic control point contributes visible curve height");
+const archedCandidates = candidatesFromConstructedPaths([{ drawOps: archedOps }], identityPct);
+assert(archedCandidates.length === 1 && archedCandidates[0].h > 0.9, "curved symbol bounds include the arc, not just its endpoints");
+const cubicExtent = drawOpsExtentPoints([DRAW_MOVE, 0, 0, DRAW_CUBIC, 0, 2, 2, 2, 2, 0]);
+assert(Math.max(...cubicExtent.map((p) => p.y)) > 1.4, "cubic curve extent includes its curved ink");
 
 const circleOps = [
   DRAW_MOVE, 20, 20.6,
@@ -114,6 +133,12 @@ const scaled = scaleOutline(rectCandidates[0].outline, 1.45, { x: rectCandidates
 assert(scaled.w > rectCandidates[0].outline.w, "selected outline enlarges the extracted shape");
 assert(pointHitsOutline(rectCandidates[0].outline, { x: rectCandidates[0].cx, y: rectCandidates[0].cy }, { x: rectCandidates[0].cx, y: rectCandidates[0].cy }), "the extracted fill is selectable");
 assert(!pointHitsOutline(rectCandidates[0].outline, { x: rectCandidates[0].cx, y: rectCandidates[0].cy }, { x: 40, y: 40 }), "hit stays on the extracted outline");
+const shifted = { kind: "rect", w: 1.2, h: 0.8, cx: 22, cy: 31 };
+assert(pointHitsOutline(shifted, { x: 5, y: 5 }, { x: 22.1, y: 31 }), "the hit box uses the painted outline center");
+assert(!pointHitsOutline(shifted, { x: 5, y: 5 }, { x: 5, y: 5 }), "a stored origin away from the ink is not the click target");
+const roomWall = { kind: "path", points: [{ x: 20, y: 80 }, { x: 60, y: 80 }, { x: 60, y: 50 }, { x: 20, y: 50 }] };
+assert(pointHitsOutline(roomWall, { x: 40, y: 65 }, { x: 19.9, y: 65 }, 0.2), "the visible wall stroke is selectable");
+assert(!pointHitsOutline(roomWall, { x: 40, y: 65 }, { x: 19.4, y: 65 }, 0.2), "empty space beside the wall is not selected");
 
 assert(shapeHintFromLabel("Type 1 2x4 LED surface troffer") === "rect", "schedule troffer text is a rectangle hint");
 assert(shapeHintFromLabel("Type 2 8 inch recessed downlight") === "circle", "schedule downlight text is a circle hint");

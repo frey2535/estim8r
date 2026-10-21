@@ -9,6 +9,8 @@ import {
   displayDeviceOutline,
   deviceOutline,
   hitTestDeviceFill,
+  interiorDeviceOutline,
+  deviceFillEnabled,
   marksForTrade,
   outlineExtent,
   planOverlayMarks,
@@ -124,6 +126,31 @@ const picked = selectMarkAtPoint(overlapping, { x: 12, y: 20 }, {
   hitRoute: (mark, point) => mark.points?.some((item) => Math.hypot(item.x - point.x, item.y - point.y) < 3),
 });
 assert(picked?.id === "dev", "clicking a device on a circuit selects the device");
+const nearer = { id: "near", type: "count", x: 10, y: 10, outlineSource: "vector", outline: { kind: "circle", source: "vector", r: 0.45, cx: 10, cy: 10 } };
+const farther = { id: "far", type: "count", x: 10.55, y: 10, outlineSource: "vector", outline: { kind: "circle", source: "vector", r: 0.45, cx: 10.55, cy: 10 } };
+assert(selectMarkAtPoint([nearer, farther], { x: 10.05, y: 10 })?.id === "near", "the device under the pointer wins when hit areas overlap");
+const aiOverrideHit = {
+  id: "ai-os",
+  source: "ai",
+  type: "count",
+  symbol: "occupancy-sensor",
+  abbr: "OS",
+  typeCode: "OS",
+  x: 32,
+  y: 32,
+  markerSize: 1.35,
+  markerSizeOverride: true,
+  outlineSource: "text",
+  requiresReview: true,
+};
+assert(outlineExtent(displayDeviceOutline(aiOverrideHit, aiOverrideHit.markerSize)) >= 0.55, "AI review chips stay visibly large enough on the live drawing");
+assert(selectMarkAtPoint([aiOverrideHit], { x: 32.42, y: 32 }, { markerSize: () => aiOverrideHit.markerSize })?.id === "ai-os", "AI marker-size overrides are honored during device hit testing");
+const upper = { id: "upper", type: "route", tool: "conduit", points: [{ x: 0, y: 10 }, { x: 40, y: 10 }] };
+const lower = { id: "lower", type: "route", tool: "conduit", points: [{ x: 0, y: 11.2 }, { x: 40, y: 11.2 }] };
+const routePick = selectMarkAtPoint([lower, upper], { x: 20, y: 10.85 }, {
+  hitRoute: (mark, point) => Math.abs(point.y - mark.points[0].y) < 1.3,
+});
+assert(routePick?.id === "lower", "the closer route is selected when two runs are in range");
 
 const shortened = shortenCircuitPath([{ x: 10, y: 10 }, { x: 40, y: 10 }]);
 assert(shortened[0].x > 10 && shortened[0].x < 40, "circuit path starts at the device edge, not on the count");
@@ -135,6 +162,22 @@ const plan = planOverlayMarks([
   { id: "hr", type: "homerun", points: [{ x: 12, y: 20 }, { x: 40, y: 10 }] },
 ]);
 assert(plan.some((mark) => mark.type === "count") && !plan.some((mark) => mark.tool === "conduit" || mark.type === "homerun"), "device-count sheets hide conduit overlays");
+const livePlan = planOverlayMarks([
+  { id: "dev", type: "count", symbol: "2x4", x: 12, y: 20 },
+  { id: "ckt", type: "route", tool: "conduit", points: [{ x: 12, y: 20 }, { x: 70, y: 20 }] },
+], { interactive: true });
+assert(livePlan.some((mark) => mark.tool === "conduit") && livePlan.some((mark) => mark.type === "count"), "the live sheet keeps circuits selectable beside devices");
+const reviewCandidates = [
+  { id: "accepted", type: "count", layer: "review", symbol: "unknown", typeCode: "UNKNOWN", reviewStatus: "accepted", requiresReview: true, x: 18, y: 20 },
+  { id: "pending", type: "count", layer: "review", symbol: "unknown", typeCode: "UNKNOWN", reviewStatus: "pending", requiresReview: true, x: 20, y: 20 },
+  { id: "rejected", type: "count", layer: "review", symbol: "unknown", typeCode: "UNKNOWN", reviewStatus: "rejected", requiresReview: true, x: 22, y: 20 },
+];
+const bidPlan = planOverlayMarks(reviewCandidates);
+assert(bidPlan.length === 0, "review candidates stay off the normal bid overlay");
+const interactiveReviewPlan = planOverlayMarks(reviewCandidates, { interactive: true });
+assert(interactiveReviewPlan.some((mark) => mark.id === "accepted"), "accepted review candidates remain visible on the live sheet");
+assert(interactiveReviewPlan.some((mark) => mark.id === "pending"), "pending review candidates remain visible and selectable on the live sheet");
+assert(!interactiveReviewPlan.some((mark) => mark.id === "rejected"), "rejected review candidates stay hidden on the live sheet");
 const devicesOnly = planOverlayMarks(plan, { devicesOnly: true });
 assert(devicesOnly.every((mark) => mark.type === "count"), "devicesOnly still hides circuits for PDF count sheets");
 assert(!devicesOnly.some((mark) => mark.tool === "conduit" || mark.type === "homerun"), "grouped circuits stay off the count sheet export");
@@ -172,5 +215,45 @@ const idleOutline = deviceOutline({
   outline: { kind: "circle", source: "vector", r: 0.6, w: 1.2, h: 1.2, points: [] },
 }, 0.55);
 assert(selectedOutline.r === idleOutline.r, "selection does not enlarge dots");
+
+const insideCircle = interiorDeviceOutline({ kind: "circle", r: 0.5, w: 1, h: 1 }, 0.8);
+assert(insideCircle.r === 0.4, "inside fill stays within the printed circle perimeter");
+const compositeFill = interiorDeviceOutline({
+  kind: "composite",
+  parts: [
+    { kind: "circle", cx: 10, cy: 10, r: 0.5, w: 1, h: 1 },
+    { kind: "rect", cx: 10, cy: 10, w: 0.8, h: 0.05 },
+  ],
+}, 0.86);
+assert(compositeFill.parts.length === 1 && compositeFill.parts[0].kind === "circle", "thin internal symbol strokes are not painted over");
+assert(deviceFillEnabled({ fillEnabled: false }) === false, "per-symbol fill can be disabled");
+assert(deviceFillEnabled({ fillMode: "inside" }) === true, "inside fill mode is enabled");
+
+const numberFill = displayDeviceOutline({
+  source: "ai",
+  type: "count",
+  x: 50.6,
+  y: 20,
+  typeCode: "G",
+  circuitTagLocation: { x: 50.6, y: 20, text: "5" },
+  outlineSource: "vector",
+  outline: { kind: "rect", source: "vector", cx: 50.6, cy: 20, w: 0.22, h: 0.26 },
+});
+assert(numberFill == null, "AI fill must not sit on the circuit number outside the symbol");
+
+const bodyFill = displayDeviceOutline({
+  source: "ai",
+  type: "count",
+  x: 50,
+  y: 20,
+  typeCode: "G",
+  symbolBodyLocation: { x: 50, y: 20 },
+  labelLocation: { x: 50, y: 20 },
+  circuitTagLocation: { x: 50.6, y: 20, text: "5" },
+  outlineSource: "vector",
+  outline: { kind: "rect", source: "vector", cx: 50, cy: 20, w: 0.5, h: 0.46 },
+});
+assert(bodyFill, "symbol body still receives a tight interior fill");
+assert(Math.abs((Number(bodyFill.cx) || 50) - 50) < 0.08, "fill stays centered on the symbol, not the outside number");
 
 if (!process.exitCode) console.log("device style checks passed");

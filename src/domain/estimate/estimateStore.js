@@ -4,6 +4,7 @@ import {
   estimateStorageKey,
   syncEstimateDraft,
 } from "./fromTakeoff.js";
+import { LABOR_RATES_KEY, defaultLaborRates, ratesToWageBook, resolveShopRates } from "../labor/rates.js";
 import { makeEstimateId } from "./projectDocuments.js";
 
 function readJson(key) {
@@ -16,7 +17,11 @@ function readJson(key) {
 }
 
 export function readWageBook() {
-  return readJson(WAGE_BOOK_KEY) || {};
+  return readShopWageBook();
+}
+
+export function readShopWageBook() {
+  return ratesToWageBook(resolveShopRates(readJson(LABOR_RATES_KEY) || [], readJson(WAGE_BOOK_KEY) || {}));
 }
 
 export function writeWageBook(crew) {
@@ -24,10 +29,15 @@ export function writeWageBook(crew) {
   for (const row of crew || []) book[row.id] = Number(row.wage) || 0;
   try {
     localStorage.setItem(WAGE_BOOK_KEY, JSON.stringify(book));
+    localStorage.setItem(LABOR_RATES_KEY, JSON.stringify(defaultLaborRates(book)));
   } catch {
     /* private mode */
   }
   return book;
+}
+
+export function persistShopWageBook(crew) {
+  return writeWageBook(crew);
 }
 
 export function readEstimate(fileName, fileSize) {
@@ -86,8 +96,47 @@ export function writeEstimate(draft) {
   const key = estimateStorageKey(next.fileName, next.fileSize);
   localStorage.setItem(key, JSON.stringify(next));
   localStorage.setItem(ACTIVE_ESTIMATE_KEY, key);
-  if (next.crew) writeWageBook(next.crew);
   return next;
+}
+
+export const LIVE_ESTIMATE_KEY = "estim8r.liveEstimate.v1";
+export const RESTORE_JOB_KEY = "estim8r.restoreAfterRefresh";
+
+export function consumeRestoreJobRoute() {
+  try {
+    const route = sessionStorage.getItem(RESTORE_JOB_KEY) || "";
+    if (route) sessionStorage.removeItem(RESTORE_JOB_KEY);
+    return route;
+  } catch {
+    return "";
+  }
+}
+
+/** In-session snapshot so Refresh can restore an unsaved / unnamed open estimate. */
+export function writeLiveEstimateDraft(draft) {
+  try {
+    if (!draft) return;
+    sessionStorage.setItem(LIVE_ESTIMATE_KEY, JSON.stringify({ ...draft, savedAt: new Date().toISOString() }));
+  } catch {
+    /* private mode */
+  }
+}
+
+export function readLiveEstimateDraft() {
+  try {
+    const raw = sessionStorage.getItem(LIVE_ESTIMATE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearLiveEstimateDraft() {
+  try {
+    sessionStorage.removeItem(LIVE_ESTIMATE_KEY);
+  } catch {
+    /* private mode */
+  }
 }
 
 /** Copies takeoff quantities into the estimate. Never writes the takeoff sheet. */
@@ -100,7 +149,7 @@ export function syncStoredEstimate({ fileName, fileSize, drawingDocs, rollup, pa
     rollup,
     pageCount,
     markup,
-    wageBook: readWageBook(),
+    wageBook: readShopWageBook(),
     marks,
     runs,
     pageKinds,

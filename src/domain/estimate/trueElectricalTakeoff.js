@@ -6,7 +6,7 @@ import { estimateLineHours, estimateLineLaborCost } from "./manualLineLabor.js";
 
 /** @type {{ laborRate: number, contingency: number, materialMarkup: number, overhead: number, profit: number, bondInsurance: number }} */
 export const DEFAULT_TRUE_BID_SETTINGS = Object.freeze({
-  laborRate: 72,
+  laborRate: 95,
   contingency: 3,
   materialMarkup: 0,
   overhead: 10,

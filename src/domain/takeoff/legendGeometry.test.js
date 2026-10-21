@@ -3,17 +3,21 @@ import {
   attachConfirmedGeometryPrototypes,
   attachFragmentPrototypes,
   clusterSymbolGeometry,
+  entryFamily,
   findNearbyReceptacleGlyph,
   geometrySimilarity,
   isDeviceFragment,
   isHatchTickCluster,
+  findNearbyOccupancyGlyph,
   looksLikeHexNoteGlyph,
+  looksLikeOccupancyGlyph,
   looksLikeReceptacleGlyph,
   looksLikeUnlabeledReceptacleGlyph,
-  looksLikeWpCoverGlyph,
-  paintableGlyphOutline,
   resolveGeometryMatch,
+  pickInteractiveSymbolGeometry,
+  recoverMissedLegendSymbols,
   scanPageByLegendGeometry,
+  symbolBodyOutline,
 } from "./legendGeometry.js";
 
 function assert(v, m) {
@@ -39,6 +43,40 @@ const dictionary = { entries: [{ code: "R", symbol: { id: "duplex", label: "Dupl
 const hits = scanPageByLegendGeometry({ paths: planParts }, dictionary, { threshold: 0.8 });
 assert(hits.length === 1, "unlabeled plan symbol found from legend geometry");
 
+const recoveryPlan = {
+  page: 5,
+  planType: "lighting",
+  tokens: [],
+  paths: [
+    ...planParts,
+    part(55, 45, 0.5, 0.5, "circle"),
+    part(55.45, 45, 0.3, 0.12),
+    part(68, 55, 0.5, 0.5, "circle"),
+    part(68.45, 55, 0.3, 0.12),
+  ],
+};
+const recovered = recoverMissedLegendSymbols(recoveryPlan, dictionary, {
+  planType: "lighting",
+  occupied: [{ x: 40, y: 30 }],
+});
+assert(recovered.some((hit) => Math.hypot(hit.geometry.cx - 55.2, hit.geometry.cy - 45) < 0.6), "per-legend recovery finds a repeated symbol missed by occupied primary pass");
+assert(recovered.some((hit) => Math.hypot(hit.geometry.cx - 68.2, hit.geometry.cy - 55) < 0.6), "per-legend recovery finds multiple remaining copies");
+
+
+const layoutA = clusterSymbolGeometry(part(60, 20, 0.5, 0.5, "circle"), [
+  part(60, 20, 0.5, 0.5, "circle"),
+  part(60.42, 20, 0.24, 0.10, "rect"),
+], { maxSpan: 1.2, joinGap: 0.2 });
+const layoutB = clusterSymbolGeometry(part(70, 20, 0.5, 0.5, "circle"), [
+  part(70, 20, 0.5, 0.5, "circle"),
+  part(70, 20.42, 0.24, 0.10, "rect"),
+], { maxSpan: 1.2, joinGap: 0.2 });
+const layoutCopy = clusterSymbolGeometry(part(80, 20, 0.5, 0.5, "circle"), [
+  part(80, 20, 0.5, 0.5, "circle"),
+  part(80.42, 20, 0.24, 0.10, "rect"),
+], { maxSpan: 1.2, joinGap: 0.2 });
+assert(geometrySimilarity(layoutA, layoutCopy) > geometrySimilarity(layoutA, layoutB), "complete part layout distinguishes lookalike symbols");
+
 const canProto = clusterSymbolGeometry(part(12, 12, 0.48, 0.48, "circle"), [part(12, 12, 0.48, 0.48, "circle")], { maxSpan: 2 });
 const gfiProto = clusterSymbolGeometry(part(14, 14, 0.5, 0.5, "circle"), [part(14, 14, 0.5, 0.5, "circle")], { maxSpan: 2 });
 const lookalikes = {
@@ -52,6 +90,19 @@ const lighting = resolveGeometryMatch(cluster, lookalikes.entries, { planType: "
 const power = resolveGeometryMatch(cluster, lookalikes.entries, { planType: "power" });
 assert(lighting?.entry.code === "2" && lighting.ambiguous === false, `lighting sheet settles the can, got ${lighting?.entry.code} amb=${lighting?.ambiguous}`);
 assert(power?.entry.code === "GFI" && power.ambiguous === false, `power sheet settles the receptacle, got ${power?.entry.code} amb=${power?.ambiguous}`);
+
+const fanEntry = {
+  code: "F2",
+  symbol: { id: "f2-fan", label: "Type F2 8' BAY CEILING FAN", category: "Lighting", takeoffCategory: "Lighting" },
+  prototype: canProto,
+};
+assert(entryFamily(fanEntry) === "lighting", "ceiling fan F2 is a lighting family, not power");
+const fanOnPower = scanPageByLegendGeometry(
+  { paths: [part(50, 40, 0.49, 0.49, "circle")] },
+  { entries: [fanEntry, lookalikes.entries[1]] },
+  { planType: "power", threshold: 0.7 },
+);
+assert(!fanOnPower.some((hit) => String(hit.entry?.code || "").toUpperCase() === "F2"), "power sheets do not identify circles as ceiling-fan F2");
 
 const twins = {
   entries: [
@@ -115,43 +166,70 @@ assert(!looksLikeReceptacleGlyph(hex), "hex keys are not receptacle glyphs");
 assert(looksLikeReceptacleGlyph(box) && looksLikeUnlabeledReceptacleGlyph(box), "duplex box is a receptacle glyph");
 assert(looksLikeReceptacleGlyph(stroke) && looksLikeUnlabeledReceptacleGlyph(stroke), "box-with-strokes is a receptacle glyph");
 assert(findNearbyReceptacleGlyph({ x: 17.214, y: 69.416 }, [hex, box]) === box, "WP/SP fills prefer the box, not the hex");
-// E110 WP@50: letter-stroke scrap (~0.09×0.13) under the tag must not become a
-// vector outline that deviceOutline rejects (extent < 0.14). Prefer the WP cover.
-const wpMicro = part(27.075, 83.207, 0.09, 0.126);
-const wpCover = part(27.251, 83.631, 0.391, 0.503);
-assert(!looksLikeReceptacleGlyph(wpMicro), "WP letter-stroke scraps are not receptacle glyphs");
-assert(looksLikeWpCoverGlyph(wpCover), "WP weatherproof plate is a cover glyph");
-assert(
-  findNearbyReceptacleGlyph({ x: 27.055, y: 83.33 }, [wpMicro, wpCover], { radius: 0.55, allowWpCover: true }) === wpCover,
-  "WP prefers the cover plate over an unpaintable scrap",
-);
-assert(
-  findNearbyReceptacleGlyph({ x: 17.214, y: 69.416 }, [box, wpCover], { radius: 0.55, allowWpCover: true }) === box,
-  "WP still prefers a real duplex box over the cover when both exist",
-);
-// E110 SP@50: hex plates beside SP tags are note keys (not covers). A real
-// weatherproof cover (~0.39×0.50, non-hex) must win over letter-stroke scraps
-// the same way WP does; empty path AABBs promote to paintable rects.
-const spCover = part(33.85, 78.95, 0.391, 0.503, "path");
-const spMicro = part(33.78, 78.85, 0.09, 0.126);
-assert(looksLikeHexNoteGlyph(hex), "0.44×0.62 plate beside SP stays a hex note key");
-assert(!looksLikeWpCoverGlyph(hex), "hex note keys are not WP/SP cover glyphs");
-assert(looksLikeWpCoverGlyph(spCover), "SP weatherproof plate matches the cover glyph");
-assert(
-  findNearbyReceptacleGlyph({ x: 33.78, y: 78.852 }, [spMicro, spCover, hex], { radius: 0.62, allowWpCover: true }) === spCover,
-  "SP prefers the cover plate over an unpaintable scrap",
-);
-assert(
-  findNearbyReceptacleGlyph({ x: 33.78, y: 78.852 }, [spMicro, hex], { radius: 0.62, allowWpCover: true }) == null,
-  "SP with only hex/micro nearby does not claim a vector glyph",
-);
-const spOutline = paintableGlyphOutline(spCover);
-assert(spOutline && spOutline.kind === "rect" && spOutline.source === "vector", "SP cover empty-path AABB promotes to a paintable rect");
-assert((spOutline.points || []).length < 3, "promoted SP cover keeps empty points (AABB fill, not fabricated path)");
-const spPathScrap = part(62.290, 72.591, 0.114, 0.276, "path");
-assert(paintableGlyphOutline(spPathScrap)?.kind === "rect", "empty path receptacle AABB promotes to rect for paint");
+
+const bodyWithNumber = {
+  kind: "composite",
+  source: "vector",
+  w: 1.5,
+  h: 0.65,
+  parts: [
+    { kind: "circle", source: "vector", cx: 30, cy: 30, r: 0.24, w: 0.48, h: 0.48 },
+    { kind: "rect", source: "vector", cx: 31.0, cy: 30, w: 0.28, h: 0.42 },
+  ],
+};
+const cleanedBody = symbolBodyOutline({ outline: bodyWithNumber }, [{ text: "27", x: 31.0, y: 30 }]);
+assert(cleanedBody.parts.length === 1, "printed number geometry is removed from the paint outline");
+assert(Math.abs(cleanedBody.parts[0].cx - 30) < 0.01, "symbol body remains after nearby number is removed");
+
+const hexBody = { kind: "path", source: "vector", cx: 40, cy: 22, w: 0.52, h: 0.48, points: [{ x: 39.74, y: 22 }, { x: 40, y: 21.76 }, { x: 40.26, y: 22 }] };
+const numberOnly = { kind: "rect", source: "vector", cx: 40.62, cy: 22, w: 0.22, h: 0.28 };
+const snapped = symbolBodyOutline(numberOnly, [{ text: "5", x: 40.62, y: 22 }], { paths: [hexBody, numberOnly] });
+assert(snapped && Math.abs((snapped.cx || 0) - 40) < 0.08, "outside circuit number snaps fill to the nearby symbol body");
+assert(symbolBodyOutline(hexBody, [{ text: "G", x: 40, y: 22 }])?.kind === "path", "type letter inside the symbol does not steal the body fill");
+assert(symbolBodyOutline(hex, [{ text: "13", x: 26.18, y: 79.1 }]) == null, "keynote / 4-digit hex tags never receive fill");
 const hatch = Array.from({ length: 12 }, (_, index) => part(12 + (index % 4) * 0.4, 16 + Math.floor(index / 4) * 0.4, 0.134, 0.187));
 assert(isHatchTickCluster(hatch[0], hatch), "stair/hatch tick lattices are not receptacles");
 
+const osPair = [
+  { kind: "path", source: "vector", cx: 33.09, cy: 73.07, w: 0.14, h: 0.21 },
+  { kind: "path", source: "vector", cx: 33.10, cy: 73.28, w: 0.14, h: 0.21 },
+];
+assert(looksLikeOccupancyGlyph(osPair[0]), "printed OS path is an occupancy glyph");
+const osBody = findNearbyOccupancyGlyph({ x: 33.19, y: 73.07 }, osPair);
+assert(osBody && Math.hypot(osBody.cx - 33.10, osBody.cy - 73.18) < 0.12, "OS token snaps to the stacked occupancy glyph, not a nearby can");
+assert(osBody.parts.length === 2 && osBody.kind === "rect", "dual-tech OS assembles both stacked paths into one body");
+assert(!looksLikeOccupancyGlyph({ kind: "rect", w: 0.63, h: 0.50 }), "recessed cans are not occupancy glyphs");
+const offsetOs = findNearbyOccupancyGlyph(
+  { x: 34.35, y: 78.46 },
+  [{ kind: "path", source: "vector", cx: 34.35, cy: 78.96, w: 0.15, h: 0.20 }],
+);
+assert(offsetOs && Math.abs(offsetOs.cy - 78.96) < 0.02, "OS label 0.5 units from its glyph still snaps to the sensor body");
+
+const densePaths = [];
+for (let i = 0; i < 900; i += 1) {
+  densePaths.push(part(4 + (i % 30) * 3, 6 + Math.floor(i / 30) * 3, 0.2 + (i % 5) * 0.04, 0.16));
+}
+densePaths.push(...planParts);
+const denseStarted = Date.now();
+const denseHits = scanPageByLegendGeometry({ paths: densePaths }, dictionary, { threshold: 0.8, timeBudgetMs: 2500, maxSeeds: 900 });
+const denseMs = Date.now() - denseStarted;
+assert(denseMs < 2500, `dense geometry scan must finish, took ${denseMs}ms`);
+assert(Array.isArray(denseHits), "dense geometry scan returns hits or an empty list");
+
+const clicked = { cx: 30, cy: 40, w: 0.4, h: 0.4, kind: "rect", source: "vector" };
+const neighbor = { cx: 31, cy: 40, w: 1.2, h: 0.4, kind: "rect", source: "vector" };
+const onGlyph = pickInteractiveSymbolGeometry({ paths: [clicked, neighbor] }, { x: 30, y: 40 }, { radius: 1.35 });
+assert(onGlyph && Math.hypot(onGlyph.cx - 30, onGlyph.cy - 40) < 0.45, "selection stays on the glyph under the pointer");
+assert(pickInteractiveSymbolGeometry({ paths: [clicked, neighbor] }, { x: 30, y: 41.3 }, { radius: 1.35 }) == null, "empty space near a symbol is not snapped to that symbol");
+
 if (!process.exitCode) console.log("legend geometry checks passed");
 
+
+
+const manyPaths = Array.from({ length: 48 }, (_, i) => [
+  part(4 + (i % 8) * 10, 4 + Math.floor(i / 8) * 12, 0.5, 0.5, "circle"),
+  part(4.45 + (i % 8) * 10, 4 + Math.floor(i / 8) * 12, 0.3, 0.12),
+]).flat();
+const manyHits = scanPageByLegendGeometry({ paths: manyPaths }, dictionary, { threshold: 0.8 });
+assert(manyHits.length === 48, "spatial rival matching preserves 48 distinct legend symbol detections");
+assert(new Set(manyHits.map((hit) => `${hit.geometry.cx.toFixed(1)}:${hit.geometry.cy.toFixed(1)}`)).size === 48, "each repeated symbol is counted only once");

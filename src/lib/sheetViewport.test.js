@@ -1,13 +1,11 @@
 import {
   isSheetPanDrag,
-  normalizePageRotation,
-  pagePercentFromClient,
-  panAfterZoomAtCursor,
+  pinchMidpoint,
   pointerDistance,
-  rotatePagePercent,
   sheetPanOffset,
+  sheetPinchViewport,
   sheetPinchZoom,
-  unrotatePagePercent,
+  sheetZoomAboutPoint,
 } from "./sheetViewport.js";
 
 function assert(cond, message) {
@@ -15,6 +13,10 @@ function assert(cond, message) {
     console.error("FAIL", message);
     process.exitCode = 1;
   }
+}
+
+function assertClose(actual, expected, message) {
+  assert(Math.abs(actual - expected) < 0.01, `${message} (got ${actual}, expected ${expected})`);
 }
 
 assert(sheetPanOffset({ x: 10, y: 4 }, { x: 20, y: 20 }, { x: 50, y: 5 }).x === 40, "pan x follows pointer delta");
@@ -27,45 +29,55 @@ assert(sheetPinchZoom(2, 200, 100) === 1, "pinch in halves zoom");
 assert(sheetPinchZoom(1, 100, 800) === 4, "pinch zoom clamps to 4");
 assert(sheetPinchZoom(1, 100, 10) === 0.5, "pinch zoom clamps to 0.5");
 assert(sheetPinchZoom(1.25, 0, 40) === 1.25, "zero start distance keeps zoom");
+assert(sheetPinchZoom(1, 100, 800, 0.25, 8) === 8, "takeoff pinch clamps to 8");
+assert(sheetPinchZoom(1, 100, 10, 0.25, 8) === 0.25, "takeoff pinch clamps to 0.25");
 
-assert(normalizePageRotation(90) === 90, "90 stays 90");
-assert(normalizePageRotation(-90) === 270, "negative rotation wraps");
-assert(normalizePageRotation(45) === 90, "near-90 snaps to 90");
-assert(normalizePageRotation(405) === 90, "405 wraps to 45 then snaps to 90");
-assert(normalizePageRotation(0) === 0, "0 stays 0");
+assert(pinchMidpoint({ x: 10, y: 20 }, { x: 30, y: 40 }).x === 20, "pinch midpoint x");
+assert(pinchMidpoint({ x: 10, y: 20 }, { x: 30, y: 40 }).y === 30, "pinch midpoint y");
 
-const origin = { x: 25, y: 10 };
-assert(rotatePagePercent(origin, 0).x === 25 && rotatePagePercent(origin, 0).y === 10, "0° keeps page percent");
-assert(Math.abs(rotatePagePercent(origin, 90).x - 10) < 1e-9, "90° maps y→x");
-assert(Math.abs(rotatePagePercent(origin, 90).y - 75) < 1e-9, "90° maps x→100-x");
-assert(Math.abs(unrotatePagePercent(rotatePagePercent(origin, 90), 90).x - 25) < 1e-9, "unrotate undoes 90°");
-assert(Math.abs(unrotatePagePercent(rotatePagePercent(origin, 180), 180).y - 10) < 1e-9, "unrotate undoes 180°");
-assert(Math.abs(unrotatePagePercent(rotatePagePercent(origin, 270), 270).x - 25) < 1e-9, "unrotate undoes 270°");
-
-const rect = { left: 100, top: 50, width: 200, height: 100 };
-const mid = pagePercentFromClient({ x: 200, y: 100 }, rect, 0);
-assert(mid && Math.abs(mid.x - 50) < 1e-9 && Math.abs(mid.y - 50) < 1e-9, "client mid maps to 50,50 page percent");
-const zoomedRect = { left: 50, top: 0, width: 400, height: 200 };
-const midZoomed = pagePercentFromClient({ x: 250, y: 100 }, zoomedRect, 0);
-assert(midZoomed && Math.abs(midZoomed.x - 50) < 1e-9 && Math.abs(midZoomed.y - 50) < 1e-9, "zoomed sheet rect still maps mid to 50,50");
-const pannedRect = { left: 140, top: 70, width: 200, height: 100 };
-const midPanned = pagePercentFromClient({ x: 240, y: 120 }, pannedRect, 0);
-assert(midPanned && Math.abs(midPanned.x - 50) < 1e-9 && Math.abs(midPanned.y - 50) < 1e-9, "panned sheet rect still maps mid to 50,50");
-const rotated = pagePercentFromClient({ x: 200, y: 100 }, rect, 90);
-assert(rotated && Math.abs(rotated.x - 50) < 1e-9 && Math.abs(rotated.y - 50) < 1e-9, "mid stays mid under 90° remap");
-
-const compensated = panAfterZoomAtCursor({
-  pan: { x: 10, y: -5 },
+const aboutCenter = sheetZoomAboutPoint({
   zoom: 1,
   nextZoom: 2,
-  cursorFromViewportCenter: { x: 40, y: 20 },
+  pan: { x: 0, y: 0 },
+  focusClient: { x: 200, y: 150 },
+  viewportRect: { left: 0, top: 0, width: 400, height: 300 },
 });
-assert(Math.abs(compensated.x - (10 + (40 - 10) * (1 - 2))) < 1e-9, "zoom pan x keeps cursor subject");
-assert(Math.abs(compensated.y - (-5 + (20 - -5) * (1 - 2))) < 1e-9, "zoom pan y keeps cursor subject");
+assert(aboutCenter.zoom === 2, "zoom-about-point reports next zoom");
+assert(aboutCenter.pan.x === 0 && aboutCenter.pan.y === 0, "zooming at viewport center keeps pan");
 
-// Unresolved prerequisite (do not fabricate): no independent PDF-page rotation
-// ground-truth fixture exists under src/domain/takeoff/fixtures/. Unit math above
-// covers synthetic 0/90/180/270 remaps only.
-console.log("UNRESOLVED_PREREQUISITE: no labeled rotation/calibration GT fixture for real PDF pages");
+const aboutRight = sheetZoomAboutPoint({
+  zoom: 1,
+  nextZoom: 2,
+  pan: { x: 0, y: 0 },
+  focusClient: { x: 300, y: 150 },
+  viewportRect: { left: 0, top: 0, width: 400, height: 300 },
+});
+assertClose(aboutRight.pan.x, -100, "zooming at a right-side point shifts pan left");
+assertClose(aboutRight.pan.y, 0, "horizontal pinch does not invent a y pan");
+
+const pinchOut = sheetPinchViewport({
+  startZoom: 1,
+  startDistance: 100,
+  startPan: { x: 0, y: 0 },
+  startMid: { x: 200, y: 150 },
+  currentDistance: 200,
+  currentMid: { x: 200, y: 150 },
+  viewportRect: { left: 0, top: 0, width: 400, height: 300 },
+});
+assert(pinchOut.zoom === 2, "spread doubles takeoff zoom");
+assert(pinchOut.pan.x === 0 && pinchOut.pan.y === 0, "spread about center keeps the midpoint");
+
+const pinchMove = sheetPinchViewport({
+  startZoom: 1,
+  startDistance: 100,
+  startPan: { x: 0, y: 0 },
+  startMid: { x: 200, y: 150 },
+  currentDistance: 100,
+  currentMid: { x: 230, y: 170 },
+  viewportRect: { left: 0, top: 0, width: 400, height: 300 },
+});
+assert(pinchMove.zoom === 1, "two-finger slide without spread keeps zoom");
+assertClose(pinchMove.pan.x, 30, "pinch midpoint travel pans x");
+assertClose(pinchMove.pan.y, 20, "pinch midpoint travel pans y");
 
 if (!process.exitCode) console.log("sheetViewport ok");

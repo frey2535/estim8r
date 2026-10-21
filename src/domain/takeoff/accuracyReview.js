@@ -113,10 +113,10 @@ export function applyReviewDecision(marks, current, status) {
   const instanceOnly = isUncertainDetection(current) || !type;
   return (marks || []).map((mark) => {
     if (!isDeviceMark(mark)) return mark;
-    if (instanceOnly) return mark.id === current.id ? { ...mark, reviewStatus: status } : mark;
+    if (instanceOnly) return mark.id === current.id ? reviewDecisionFields(mark, status) : mark;
     if (isUncertainDetection(mark)) return mark;
     if (deviceTypeKey(mark) !== type) return mark;
-    return { ...mark, reviewStatus: status };
+    return reviewDecisionFields(mark, status);
   });
 }
 
@@ -148,4 +148,16 @@ export function reviewSummary(marks, sheet) {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function reviewDecisionFields(mark, status) {
+  if (status !== "accepted") return { ...mark, reviewStatus: status };
+  const knownType = Boolean(deviceTypeKey(mark));
+  return {
+    ...mark,
+    reviewStatus: "accepted",
+    requiresReview: false,
+    reviewReason: "",
+    layer: knownType ? "device" : mark.layer,
+  };
 }

@@ -48,15 +48,12 @@ export function screenLabel(pathname = "/") {
 }
 
 export function describeCursorSession(status) {
-  if (status?.state === "loading") return "Looking for this Cursor Project session…";
-  if (status?.state === "ready") {
-    const who = status.session?.ownerEmail ? ` (${status.session.ownerEmail})` : "";
-    return `Attached to this Cursor Project session${who}. No API key and no Cloud Agents billing. I only report what this tab shows, and corrections go through this session.`;
-  }
+  if (status?.state === "loading") return "Connecting to the Buildr in-app agent…";
+  if (status?.state === "ready") return "Connected. I will apply the fix from this chat.";
   if (status?.state === "detached") {
-    return "This tab can inspect the current screen from console errors, failed requests, and validation. A Cursor Project session is not attached, so I cannot edit Estim8r from here. Open the project in Cursor — do not paste an API key.";
+    return status?.message || "Runtime unreachable. I can still run AI Assist on this tab.";
   }
-  return status?.message || "Could not reach a Cursor Project session.";
+  return status?.message || "Runtime unreachable.";
 }
 
 export function allowedLocalEmails() {

@@ -1,7 +1,7 @@
 import { listBundledLaborCategories, listBundledLaborLibrary, listBundledLaborTaxonomy, verificationSummary } from '../domain/labor/auditedLibrary';
 import { CUSTOM_LABOR_KEY, normalizeCustomLabor, upsertCustomLabor } from '../domain/labor/customLabor';
 import { NAMED_CREWS_KEY, upsertNamedCrew } from '../domain/labor/crews';
-import { LABOR_RATES_KEY, defaultLaborRates, mergeLaborRates } from '../domain/labor/rates';
+import { LABOR_RATES_KEY, defaultLaborRates, resolveShopRates } from '../domain/labor/rates';
 import { PRODUCTIVITY_FACTOR_CATALOG } from '../domain/labor/productivity';
 import { asExperimentalLaborItem } from '../domain/labor/sources';
 import { isSupabaseConfigured, requireSupabase } from './supabaseClient';
@@ -154,14 +154,14 @@ export async function saveCustomLabor(input) {
 }
 
 export async function listLaborRates(wageBook = {}) {
-  const local = mergeLaborRates(readLocal(LABOR_RATES_KEY, []), wageBook);
+  const local = resolveShopRates(readLocal(LABOR_RATES_KEY, []), wageBook);
   if (!isSupabaseConfigured) return local;
   try {
     const client = requireSupabase();
     const { data, error } = await client.from('labor_rates').select('*').order('label');
     if (error) throw error;
     if (!data?.length) return local;
-    return mergeLaborRates(data.map((row) => ({
+    return resolveShopRates(data.map((row) => ({
       classId: row.class_id,
       label: row.label,
       hourlyRate: Number(row.hourly_rate),

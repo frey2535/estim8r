@@ -1,4 +1,5 @@
-export const OVERLAY_FONT_SIZE = 1.05;
+export const OVERLAY_FONT_SIZE = 1.55;
+export const MOBILE_OVERLAY_FONT_SIZE = 3.6;
 export const DEVICE_CLUSTER_RADIUS = 2.8;
 
 export function compactConduitLabel(mark, options = {}) {

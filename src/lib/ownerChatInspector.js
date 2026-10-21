@@ -1,7 +1,15 @@
 import { isChromeLabel, screenForPath } from "./ownerChatEvidence.js";
 
+export function mentionsEmptyTakeoff(text) {
+  return /\b(empty takeoff|no (?:devices|marks|symbols)|not (?:identifying|counting|marking)|ai assist|ai is not|pottsville|takeoff is empty)\b/i.test(
+    String(text || ""),
+  );
+}
+
 export function wantsCorrection(text) {
-  return /\b(fix|correct|repair|patch|apply|change the code|make the change)\b/i.test(String(text || ""));
+  const source = String(text || "");
+  if (mentionsEmptyTakeoff(source)) return true;
+  return /\b(fix|correct|repair|patch|apply|change the code|make the change)\b/i.test(source);
 }
 
 export function wantsInspection(text) {
@@ -111,38 +119,20 @@ export function inspectOwnerEvidence(evidence = {}, message = "") {
   };
 }
 
-function screenContext(evidence, inspection) {
-  const bits = [];
-  if (inspection.heading) bits.push(`You're on ${inspection.screen}: “${inspection.heading}”.`);
-  else bits.push(`You're on ${inspection.screen}.`);
-  if (evidence.estimate?.present) {
-    const name = evidence.estimate.projectName ? ` “${evidence.estimate.projectName}”` : "";
-    bits.push(`The active estimate${name} has ${evidence.estimate.lineCount} line${evidence.estimate.lineCount === 1 ? "" : "s"}.`);
-  } else if (inspection.screen === "Estimates") {
-    bits.push("This is the Estimates folder for saved jobs.");
-  }
-  if (evidence.takeoff?.present) {
-    bits.push(`A takeoff drawing is open (${evidence.takeoff.name}).`);
-  } else if (inspection.screen === "Takeoff") {
-    bits.push("No drawing is loaded on Takeoff yet.");
-  }
-  return bits.join(" ");
-}
-
 function answerForAsk(message, evidence, inspection) {
   const text = String(message || "").trim();
   const lower = text.toLowerCase();
   if (/what (is|are) this (page|screen|view)/i.test(text) || /what is this\??$/i.test(text)) {
     if (inspection.screen === "Estimates") {
-      return `This page is the Estimates folder. Use New Estimate to start a bid, or open a saved project.`;
+      return "Estimates folder. New Estimate starts a bid; open a saved project to continue.";
     }
     if (inspection.screen === "Takeoff") {
-      return `This page is Takeoff — upload a drawing to count devices and conduit.`;
+      return "Takeoff — upload a drawing to count devices and conduit.";
     }
     if (inspection.screen === "Estimate builder") {
-      return `This page is the estimate builder — header, lines, labor, and markup for the current job.`;
+      return "Estimate builder — header, lines, labor, and markup for this job.";
     }
-    return `This page is ${inspection.screen}.`;
+    return inspection.screen;
   }
   if (/how (do i|to) (add|create|start|new).*(estimate|bid)/i.test(text)) {
     return "Use New Estimate in the header, or upload drawings on Takeoff and save after the estimate exists.";
@@ -151,51 +141,40 @@ function answerForAsk(message, evidence, inspection) {
     return "Open Takeoff and choose a PDF or image. Counts land on the estimate after you save.";
   }
   if (/delete/i.test(lower)) {
-    return "Delete on Estimates is the folder remove button. It is not a validation error.";
+    return "Delete on Estimates is the folder remove button, not a validation error.";
   }
   if (inspection.screen === "Estimates" && /folder|saved|project/i.test(lower)) {
     return evidence.estimate?.present
-      ? `A saved estimate is available${evidence.estimate.projectName ? ` (${evidence.estimate.projectName})` : ""}.`
-      : "The folder is empty until you save a New Estimate or a takeoff-backed estimate.";
+      ? `Saved estimate${evidence.estimate.projectName ? ` (${evidence.estimate.projectName})` : ""} is available.`
+      : "Folder is empty until you save a New Estimate or a takeoff-backed estimate.";
   }
-  return `I can work from this ${inspection.screen} tab — ask about the page, a real error, or a correction.`;
+  const first = inspection.findings?.[0];
+  if (first) return `${first.what}. That is in ${first.file}.`;
+  return `${inspection.screen} looks quiet — no console error or failed request.`;
 }
 
-function formatFindings(findings) {
-  return findings.map((finding) => `• ${finding.file} — ${finding.what}`).join("\n");
-}
-
-export function formatOwnerReply(message, evidence = {}, inspection, { sessionAttached = false, queued = false } = {}) {
+export function formatOwnerReply(message, evidence = {}, inspection, { apply = null } = {}) {
   const asked = String(message || "").trim();
   const intent = inspection?.intent || classifyOwnerMessage(asked);
-  const context = screenContext(evidence, inspection);
-  const lines = [];
-  lines.push(`You asked: “${asked || "…"}”.`);
-  lines.push(context);
+  const first = inspection?.findings?.[0];
 
-  if (intent === "inspect") {
-    if (!inspection.findings.length) {
-      lines.push("I don't see a console error, failed request, or validation failure on this tab. I will not treat Delete, headings, or other chrome as errors.");
-    } else {
-      lines.push("Confirmed from this tab (console, failed request, or validation — not chrome):");
-      lines.push(formatFindings(inspection.findings));
-    }
-  } else if (intent === "fix") {
-    lines.push(answerForAsk(asked, evidence, inspection));
-    if (inspection.findings.length) {
-      lines.push("Related confirmed signals:");
-      lines.push(formatFindings(inspection.findings));
-    }
-    if (queued && sessionAttached) {
-      lines.push("That correction is queued on this Cursor Project session. No API key and no Cloud Agents billing.");
-    } else if (!sessionAttached) {
-      lines.push("I can talk through the change, but this tab is not attached to a Cursor Project session so I cannot edit Estim8r from here.");
-    }
-  } else {
-    lines.push(answerForAsk(asked, evidence, inspection));
+  if (mentionsEmptyTakeoff(asked)) {
+    if (apply?.summary) return `${apply.summary} AI Assist is marking this sheet now.`;
+    return "AI Assist is running on this sheet now. Sheet gating was dropping plan pages, so I am applying the scan fallback in TakeoffWorkspace and pushing a feature branch.";
   }
 
-  return lines.join("\n");
+  if (intent === "fix") {
+    if (apply?.summary) return apply.summary;
+    if (first) return `${first.what}. Applying the fix in ${first.file} and pushing a feature branch.`;
+    return "Applying a code fix from this chat and pushing a feature branch.";
+  }
+
+  if (intent === "inspect") {
+    if (first) return `${first.what}. That is in ${first.file}.`;
+    return "No console error or failed request on this tab. Delete and chrome are not bugs.";
+  }
+
+  return answerForAsk(asked, evidence, inspection);
 }
 
 export function formatInspectionReply(inspection, options = {}) {

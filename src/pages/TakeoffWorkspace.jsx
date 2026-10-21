@@ -1,15 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import {
-  Cable, Cloud, FileUp, Hand, Image as ImageIcon, MousePointer2,
-  Pencil, Redo2, Route, Ruler, Spline, Square, StickyNote,
-  Trash2, Undo2, Upload, X, ZoomIn, ZoomOut, Crosshair, Gauge, Lightbulb, Save
+  Cable, Cloud, FileUp, Hand, MousePointer2,
+  Pencil, Route, Ruler, Spline, Square, StickyNote,
+  Upload, Crosshair, Gauge, Lightbulb
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
 import {
-  DEFAULT_DROP_FEET, TAKEOFF_TOOLS, TOOL_GROUPS,
+  DEFAULT_DROP_FEET, TAKEOFF_TOOLS,
   toolByKey,
 } from "@/domain/takeoff/catalog";
 import {
@@ -26,15 +25,58 @@ import {
 } from "@/domain/takeoff/junctionHardware";
 import { drawingSymbolsFromDocs, printedScaleCalibration, readDrawingDocuments } from "@/domain/takeoff/drawing-docs";
 import { paletteForTrade, pageKindsFromDocs, symbolsOnDrawingForTrade, tradeById, conduitOptionsForTrade, findConduitOption, TRADES, DEFAULT_CONDUIT_ID } from "@/domain/takeoff/trades";
-import { buildAiMarks } from "@/domain/takeoff/aiTakeoff";
-import { readAiPages } from "@/domain/takeoff/aiPages";
-import { hydratePagesRaster } from "@/domain/takeoff/rasterSymbols";
-import { buildDrawingObjectLayer, hitDrawingObject, materializeDrawingObject } from "@/domain/takeoff/drawingObjectLayer";
+import { buildAiMarks, legendDictionaryFromPages, pagesToScan } from "@/domain/takeoff/aiTakeoff";
+import TakeoffActionsMenu, { takeoffEstimatePath, takeoffMarkupPath } from "@/components/takeoff/TakeoffActionsMenu";
+import { TakeoffMobileCommandBar, TakeoffMobileDock, TakeoffMobileSheet } from "@/components/takeoff/TakeoffMobileChrome";
+import { persistableAiPages, readAiPages } from "@/domain/takeoff/aiPages";
+import { drawingProcessingPlan } from "@/domain/takeoff/drawingUpload";
+import { hydratePagesRaster, pagesNeedingRaster } from "@/domain/takeoff/rasterSymbols";
+import { isScannedOrSparsePage } from "@/domain/takeoff/takeoffQuality";
+import { pickInteractiveSymbolGeometry, matchGeometryToLegend, attachLegendGeometryPrototypes } from "@/domain/takeoff/legendGeometry";
+import { shouldShowSymbolHover } from "@/domain/takeoff/legendHover";
+import { filterMarksByInspect, hoverBoundToLegend } from "@/domain/takeoff/professionalReview";
+import { buildDrawingObjectLayer, enclosingRoom, hitDrawingObject, materializeDrawingObject, printedHighlightGeometry, printedSelectionId } from "@/domain/takeoff/drawingObjectLayer";
+import ProfessionalToolsPanel from "@/components/takeoff/ProfessionalToolsPanel";
+import {
+  COLLAB_CHANNEL_PREFIX,
+  QUANTITY_LINK_CHANNEL,
+  aerialLengthMark,
+  applyRemoteMark,
+  createSigningKey,
+  cropToObject,
+  markFromAssembly,
+  measureMark,
+  quantityWorkbookRows,
+  rememberLiveQuantity,
+  reportLines,
+  revisionReport,
+  signQuantity,
+  spreadsheetMl,
+} from "@/domain/takeoff/professionalTools";
+import { recognizeImage } from "@/domain/takeoff/ocrText";
+import { jsPDF } from "jspdf";
+import {
+  addSlipSheet,
+  addToolChestItem,
+  countInteractiveObjects,
+  interactiveOpenMessage,
+  isPageTakeoffEnabled,
+  mergeStudioPackage,
+  normalizePageTakeoff,
+  pagesIncludedInTakeoff,
+  quantityLinkChecksum,
+  quantityLinkCsv,
+  setPageTakeoff as setPageTakeoffEnabled,
+  studioPackage,
+  visualSearchCounts,
+} from "@/domain/takeoff/interactiveSheet";
 import SheetThumbnailPanel, { readThumbsOpen, writeThumbsOpen } from "@/components/takeoff/SheetThumbnailPanel";
+import { TakeoffCommandBar, TakeoffSelectionBar, TakeoffToolRail } from "@/components/takeoff/TakeoffStudio";
 import DevicePicker from "@/components/takeoff/DevicePicker";
 import TakeoffInspector from "@/components/takeoff/TakeoffInspector";
 import TakeoffSizeControl from "@/components/takeoff/TakeoffSizeControl";
 import AccuracyPopout from "@/components/takeoff/AccuracyPopout";
+import AiSearchManifestPanel from "@/components/takeoff/AiSearchManifestPanel";
 import {
   applyReviewDecision,
   isUncertainDetection,
@@ -58,6 +100,7 @@ import {
   planSheetCoverage,
 } from "@/domain/takeoff/sheetCoverage";
 import { getPdfDocument } from "@/lib/pdf-document";
+import { pdfBackingScale } from "@/domain/takeoff/pdfBackingScale";
 import { readEstimate, syncStoredEstimate, writeEstimate } from "@/domain/estimate/estimateStore";
 import { downloadBlob, getDrawingFile, putDrawingFile } from "@/domain/estimate/projectDocuments";
 import {
@@ -88,7 +131,7 @@ import {
   resolvedLineSize,
   resolvedMarkerSize,
 } from "@/domain/takeoff/sizes";
-import { OVERLAY_FONT_SIZE, layoutOverlayCallouts } from "@/domain/takeoff/overlayLayout";
+import { MOBILE_OVERLAY_FONT_SIZE, OVERLAY_FONT_SIZE, layoutOverlayCallouts } from "@/domain/takeoff/overlayLayout";
 import {
   CIRCUIT_COLOR,
   DEVICE_CHIP_R,
@@ -97,6 +140,8 @@ import {
   MIN_VISIBLE_FILL,
   applyDeviceTypeColors,
   displayDeviceOutline,
+  interiorDeviceOutline,
+  deviceFillEnabled,
   hitTestDeviceFill,
   isCircuitMark,
   isDeviceMark,
@@ -116,12 +161,12 @@ import { conduitCircuitScheduleCsv } from "@/domain/takeoff/markupPages";
 import { conduitWireMakeupCsv } from "@/domain/takeoff/conduitWireMakeup";
 import { reconcilePlanToSchedule } from "@/domain/takeoff/countReconciliation";
 import {
-  isSheetPanDrag,
-  pagePercentFromClient,
-  panAfterZoomAtCursor,
+  TAKEOFF_MAX_ZOOM,
+  TAKEOFF_MIN_ZOOM,
+  pinchMidpoint,
   pointerDistance,
-  sheetPanOffset,
-  sheetPinchZoom,
+  sheetPinchViewport,
+  sheetZoomAboutPoint,
 } from "@/lib/sheetViewport";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -171,6 +216,27 @@ function loadSession(file) {
   }
 }
 
+function normalizeRestoredMarks(savedMarks = []) {
+  return applyDeviceTypeColors((savedMarks || []).map((mark) => {
+    if (mark?.source !== "ai" || !isDeviceMark(mark)) return mark;
+    return {
+      ...mark,
+      markerSize: mark.markerSize || 1.35,
+      markerSizeOverride: mark.markerSizeOverride ?? true,
+      fillOpacity: mark.fillOpacity ?? DEVICE_FILL_OPACITY,
+    };
+  }));
+}
+
+function restoredSessionSheet(saved, fallbackPage) {
+  const marks = Array.isArray(saved?.marks) ? saved.marks : [];
+  const requested = Number(saved?.sheet || fallbackPage);
+  if (requested && marks.some((mark) => (mark.sheet || 1) === requested && (isDeviceMark(mark) || isCircuitMark(mark)))) {
+    return requested;
+  }
+  return marks.find((mark) => isDeviceMark(mark) || isCircuitMark(mark))?.sheet || requested || 1;
+}
+
 
 function rememberActiveDrawing(file, page = 1) {
   try {
@@ -202,22 +268,43 @@ export default function TakeoffWorkspace() {
   const [scheduleEdits, setScheduleEdits] = useState({});
   const [aiBusy, setAiBusy] = useState(false);
   const [drawingObjects, setDrawingObjects] = useState([]);
-  const [tool, setTool] = useState("count");
+  const [tool, setTool] = useState("select");
+  const [pageTakeoff, setPageTakeoff] = useState({});
+  const [slipSheets, setSlipSheets] = useState([]);
+  const [comparePage, setComparePage] = useState("");
+  const [sessionId, setSessionId] = useState("");
+  const [pendingAssembly, setPendingAssembly] = useState(null);
+  const [revisionBaseline, setRevisionBaseline] = useState([]);
+  const collabSender = useRef("");
+  const applyingRemote = useRef(false);
+  const sessionJoinRef = useRef("");
+  if (!collabSender.current) collabSender.current = globalThis.crypto?.randomUUID?.() || `tab-${Date.now()}`;
+  const [batchQueue, setBatchQueue] = useState([]);
+  const [toolChest, setToolChest] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("estim8r-tool-chest") || "[]");
+      return Array.isArray(saved) ? saved : [];
+    } catch {
+      return [];
+    }
+  });
+  const spacePanRef = useRef(false);
   const [category, setCategory] = useState("Receptacles");
   const [symbolId, setSymbolId] = useState("duplex");
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [pageRotation, setPageRotation] = useState(0);
-  const panRef = useRef(pan);
   const zoomRef = useRef(zoom);
+  const panRef = useRef(pan);
   const panLayerRef = useRef(null);
   const panningRef = useRef(false);
-  const pointersRef = useRef(new Map());
-  const pinchRef = useRef(null);
-  panRef.current = pan;
+  const pinchActiveRef = useRef(false);
+  const suppressEditClickRef = useRef(false);
   zoomRef.current = zoom;
+  panRef.current = pan;
   const draftJunctionIdsRef = useRef([]);
   const [marks, setMarks] = useState([]);
+  const marksRef = useRef(marks);
+  marksRef.current = marks;
   const [draftPoints, setDraftPoints] = useState([]);
   const [status, setStatus] = useState("Upload a drawing to begin.");
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
@@ -227,16 +314,28 @@ export default function TakeoffWorkspace() {
   const [selectedId, setSelectedId] = useState(null);
   const [isolationMode, setIsolationMode] = useState(false);
   const [measureLabel, setMeasureLabel] = useState("");
-  const [thumbsOpen, setThumbsOpen] = useState(readThumbsOpen);
+  const [thumbsOpen, setThumbsOpen] = useState(() => (
+    typeof window !== "undefined" && !window.matchMedia("(min-width: 1024px)").matches
+      ? false
+      : readThumbsOpen()
+  ));
   const [savedAt, setSavedAt] = useState("");
   const [symbolQuery, setSymbolQuery] = useState("");
   const [drawingDocs, setDrawingDocs] = useState(null);
   const [hoverPoint, setHoverPoint] = useState(null);
+  const [hoveredDeviceId, setHoveredDeviceId] = useState(null);
+  const [pointerSheet, setPointerSheet] = useState(null);
+  const [hoveredGeometryInfo, setHoveredGeometryInfo] = useState(null);
+  const [inspectType, setInspectType] = useState("");
   const [wideLayout, setWideLayout] = useState(() => (
     typeof window !== "undefined" ? window.matchMedia("(min-width: 1024px)").matches : true
   ));
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState("");
+  const [studioPanel, setStudioPanel] = useState("quantities");
   const [aiPages, setAiPages] = useState([]);
+  const [searchManifest, setSearchManifest] = useState(null);
+  const [emptyNoticeDismissed, setEmptyNoticeDismissed] = useState(false);
   const [confirmedCoverageIds, setConfirmedCoverageIds] = useState([]);
   const [confirmedEmptySheets, setConfirmedEmptySheets] = useState({});
   const [supplyQuote, setSupplyQuote] = useState(null);
@@ -252,29 +351,46 @@ export default function TakeoffWorkspace() {
 
   const isPdf = file?.type === "application/pdf" || file?.name?.toLowerCase().endsWith(".pdf");
   const drawingSymbols = useMemo(() => drawingSymbolsFromDocs(drawingDocs), [drawingDocs]);
+  const legendDictionary = useMemo(() => {
+    const base = legendDictionaryFromPages(
+      aiPages,
+      drawingSymbols,
+      paletteForTrade(trade, drawingSymbols).symbols,
+      trade,
+    );
+    return attachLegendGeometryPrototypes(base, aiPages);
+  }, [drawingSymbols, aiPages, trade]);
   const palette = useMemo(() => paletteForTrade(trade, drawingSymbols), [trade, drawingSymbols]);
   const pageKinds = useMemo(() => pageKindsFromDocs(drawingDocs), [drawingDocs]);
   const drawingTypes = useMemo(
     () => symbolsOnDrawingForTrade(trade, marks, { pageKinds }),
     [trade, marks, pageKinds],
   );
+  const availableDeviceSymbols = useMemo(() => {
+    const merged = new Map();
+    for (const item of [...(palette.symbols || []), ...(palette.fromDrawing || []), ...drawingTypes]) {
+      if (!item?.id || (item.trade && item.trade !== trade)) continue;
+      merged.set(item.id, item);
+    }
+    return [...merged.values()];
+  }, [palette.symbols, palette.fromDrawing, drawingTypes, trade]);
   const categories = useMemo(
-    () => [...new Set(drawingTypes.map((item) => item.category).filter(Boolean))],
-    [drawingTypes],
+    () => [...new Set(availableDeviceSymbols.map((item) => item.takeoffCategory || item.category).filter(Boolean))],
+    [availableDeviceSymbols],
   );
   const symbols = useMemo(
-    () => symbolsOnDrawingForTrade(trade, marks, {
-      pageKinds,
-      category: categories.includes(category) ? category : undefined,
+    () => availableDeviceSymbols.filter((item) => {
+      if (!categories.includes(category)) return true;
+      return (item.takeoffCategory || item.category) === category;
     }),
-    [trade, marks, pageKinds, category, categories],
+    [availableDeviceSymbols, category, categories],
   );
   const conduitChoices = useMemo(() => conduitOptionsForTrade(trade), [trade]);
   const conduitChoice = findConduitOption(conduitId, trade);
   const symbol = symbols.find((item) => item.id === symbolId) || symbols[0];
 
   useEffect(() => {
-    if (categories.length && !categories.includes(category)) setCategory(categories[0]);
+    // Empty category is the explicit "All on drawing" selection, not an invalid category.\n    if (category && categories.length && !categories.includes(category)) setCategory("");
   }, [trade, categories, category]);
 
   useEffect(() => {
@@ -295,8 +411,11 @@ export default function TakeoffWorkspace() {
     () => tradeMarks.filter((mark) => (mark.sheet || 1) === (sheetMeta.page || 1)),
     [tradeMarks, sheetMeta.page],
   );
-  const overlayMarks = useMemo(() => planOverlayMarks(sheetMarks), [sheetMarks]);
-  const visibleOverlayMarks = useMemo(() => isolationMode && selectedId ? overlayMarks.filter((mark) => mark.id === selectedId) : overlayMarks, [overlayMarks, isolationMode, selectedId]);
+  const overlayMarks = useMemo(() => planOverlayMarks(sheetMarks, { interactive: true }), [sheetMarks]);
+  const visibleOverlayMarks = useMemo(() => {
+    const isolated = isolationMode && selectedId ? overlayMarks.filter((mark) => mark.id === selectedId) : overlayMarks;
+    return filterMarksByInspect(isolated, { type: inspectType });
+  }, [overlayMarks, isolationMode, selectedId, inspectType]);
   const typeSwatches = useMemo(() => sheetTypeColorSwatches(overlayMarks), [overlayMarks]);
   const coverageOptions = useMemo(() => ({
     pageKinds,
@@ -345,6 +464,10 @@ export default function TakeoffWorkspace() {
     return out;
   }, [palette.symbols, drawingTypes]);
   const selectedMark = marks.find((mark) => mark.id === selectedId) || null;
+  const printedSelection = drawingObjects.find((item) => printedSelectionId(item) === selectedId) || null;
+  const hoveredPrinted = String(hoveredDeviceId || "").startsWith("object:")
+    ? drawingObjects.find((item) => `object:${item.objectId || item.id}` === hoveredDeviceId) || null
+    : null;
   const selectedReviewItem = selectedMark
     || sheetReview.find((item) => item.id === selectedId)
     || null;
@@ -441,6 +564,7 @@ export default function TakeoffWorkspace() {
     setDrawingError("");
     setStatus(`Importing ${nextFile.name || "drawing"}…`);
     setDraftPoints([]);
+    setTool("select");
     setZoom(1);
     setPan({ x: 0, y: 0 });
     setImageSize({ width: 0, height: 0 });
@@ -451,7 +575,9 @@ export default function TakeoffWorkspace() {
     setAiPages([]);
 
     const saved = loadSession(nextFile);
-    setMarks(Array.isArray(saved?.marks) ? saved.marks : []);
+    const restoredMarks = normalizeRestoredMarks(Array.isArray(saved?.marks) ? saved.marks : []);
+    setMarks(restoredMarks);
+    historyRef.current = { past: [], future: [] };
     setConfirmedCoverageIds(Array.isArray(saved?.confirmedCoverageIds) ? saved.confirmedCoverageIds : []);
     setConfirmedEmptySheets(saved?.confirmedEmptySheets && typeof saved.confirmedEmptySheets === "object" ? saved.confirmedEmptySheets : {});
     setCalibrations(saved?.calibrations || (saved?.calibration ? { [saved?.sheet || 1]: saved.calibration } : {}));
@@ -465,8 +591,13 @@ export default function TakeoffWorkspace() {
     if (saved?.penThickness) setPenThickness(normalizeSavedLineSize(saved.penThickness));
     if (saved?.penSize) setPenSize(normalizeSavedMarkerSize(saved.penSize));
     if (saved?.scheduleEdits) setScheduleEdits(saved.scheduleEdits);
-    if (saved?.sheet) setSheetMeta((current) => ({ ...current, page: saved.sheet }));
+    if (saved?.pageTakeoff) setPageTakeoff(saved.pageTakeoff);
+    if (Array.isArray(saved?.slipSheets)) setSlipSheets(saved.slipSheets);
+    if (saved?.sheet || restoredMarks.length) setSheetMeta((current) => ({ ...current, page: restoredSessionSheet(saved, current.page) }));
     setSupplyQuote(saved?.supplyQuote || null);
+    if (restoredMarks.length) {
+      setStatus(`Restored ${restoredMarks.length} saved takeoff object${restoredMarks.length === 1 ? "" : "s"} for ${nextFile.name || "drawing"}.`);
+    }
 
     try {
       let file = nextFile;
@@ -488,7 +619,10 @@ export default function TakeoffWorkspace() {
       fileUrlRef.current = url;
       setFileUrl(url);
       setFileBytes(bytes);
-      setStatus(`${file.name} imported. Calibrate scale, then take off the sheet.`);
+      const opened = interactiveOpenMessage(file.name, {}, { image: !String(file.type || file.name || "").toLowerCase().includes("pdf") && !String(file.name || "").toLowerCase().endsWith(".pdf") });
+      setStatus(restoredMarks.length
+        ? `${opened} Restored ${restoredMarks.length} saved takeoff object${restoredMarks.length === 1 ? "" : "s"}.`
+        : opened);
     } catch (error) {
       console.error("Drawing import failed", error);
       clearPendingDrawing();
@@ -514,7 +648,10 @@ export default function TakeoffWorkspace() {
         const stored = await getDrawingFile(active.name, active.size);
         if (!cancelled && stored) {
           await chooseFile(stored);
-          if (active.page) setSheetMeta((current) => ({ ...current, page: active.page }));
+          if (active.page) {
+            const saved = loadSession(stored);
+            setSheetMeta((current) => ({ ...current, page: restoredSessionSheet(saved, active.page) }));
+          }
           setStatus(`${stored.name} restored after update.`);
         }
       } catch (error) {
@@ -530,6 +667,48 @@ export default function TakeoffWorkspace() {
   }, [file, sheetMeta.page]);
 
   useEffect(() => {
+    try {
+      localStorage.setItem("estim8r-tool-chest", JSON.stringify(toolChest));
+    } catch {
+      /* private mode can reject storage */
+    }
+  }, [toolChest]);
+
+  useEffect(() => {
+    if (!sessionId) return undefined;
+    const channel = new BroadcastChannel(`${COLLAB_CHANNEL_PREFIX}${sessionId}`);
+    channel.onmessage = (event) => {
+      const data = event?.data;
+      if (!data || data.sender === collabSender.current || data.kind !== "estim8r-collab") return;
+      if (data.op === "request") {
+        if (marksRef.current.length) {
+          channel.postMessage({ kind: "estim8r-collab", op: "replace", marks: marksRef.current, sender: collabSender.current });
+        }
+        return;
+      }
+      applyingRemote.current = true;
+      setMarks((current) => applyRemoteMark(current, data));
+    };
+    channel.postMessage({ kind: "estim8r-collab", op: "request", sender: collabSender.current });
+    return () => channel.close();
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!sessionId) return undefined;
+    if (applyingRemote.current) {
+      applyingRemote.current = false;
+      return undefined;
+    }
+    const joining = sessionJoinRef.current !== sessionId;
+    sessionJoinRef.current = sessionId;
+    if (joining && marks.length === 0) return undefined;
+    const channel = new BroadcastChannel(`${COLLAB_CHANNEL_PREFIX}${sessionId}`);
+    channel.postMessage({ kind: "estim8r-collab", op: "replace", marks, sender: collabSender.current });
+    channel.close();
+    return undefined;
+  }, [marks, sessionId]);
+
+  useEffect(() => {
     const preserveForUpdate = () => {
       if (!file) return;
       saveTakeoff(true);
@@ -537,7 +716,13 @@ export default function TakeoffWorkspace() {
     };
     window.addEventListener("estim8r-before-update", preserveForUpdate);
     return () => window.removeEventListener("estim8r-before-update", preserveForUpdate);
-  }, [file, marks, calibrations, scheduleEdits, sheetMeta.page, supplyQuote, trade, category, symbolId, conduitId, maxHomeruns, penColor, penThickness, penSize, confirmedCoverageIds, confirmedEmptySheets]);
+  }, [file, marks, calibrations, scheduleEdits, sheetMeta.page, supplyQuote, trade, category, symbolId, conduitId, maxHomeruns, penColor, penThickness, penSize, confirmedCoverageIds, confirmedEmptySheets, pageTakeoff, slipSheets]);
+
+  useEffect(() => {
+    const resetErrors = () => setDrawingError("");
+    window.addEventListener("estim8r-reset-errors", resetErrors);
+    return () => window.removeEventListener("estim8r-reset-errors", resetErrors);
+  }, []);
 
   useEffect(() => {
     return subscribeDrawingUpload((payload) => {
@@ -546,6 +731,7 @@ export default function TakeoffWorkspace() {
         setStatus("Drawing import failed.");
         return;
       }
+      if (Array.isArray(payload.queue) && payload.queue.length) setBatchQueue(payload.queue);
       if (payload.file) void applyIncomingDrawing?.(payload.file, payload.bytes);
     });
   }, []);
@@ -578,21 +764,18 @@ export default function TakeoffWorkspace() {
       scheduleEdits,
       sheet: sheetMeta.page,
       pageCount: sheetMeta.pageCount,
+      pageTakeoff,
+      slipSheets,
       supplyQuote,
       confirmedCoverageIds,
       confirmedEmptySheets,
     };
   }
 
-  function persistTakeoff(nextMarks = marks, silent = true) {
+  function saveTakeoff(silent = false) {
     if (!file) return;
-    const quote = persistSupplyQuote(nextMarks);
-    const payload = {
-      ...sessionPayload(),
-      marks: nextMarks,
-      supplyQuote: quote,
-      savedAt: new Date().toISOString(),
-    };
+    const quote = persistSupplyQuote();
+    const payload = { ...sessionPayload(), supplyQuote: quote };
     try {
       localStorage.setItem(storageKey(file), JSON.stringify(payload));
       setSavedAt(payload.savedAt);
@@ -600,23 +783,6 @@ export default function TakeoffWorkspace() {
     } catch {
       setStatus("Could not save takeoff in this browser.");
     }
-  }
-
-  function saveTakeoff(silent = false) {
-    persistTakeoff(marks, silent);
-  }
-
-  function downloadTakeoff() {
-    if (!file) return;
-    const payload = sessionPayload();
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `estim8r-takeoff-${(file.name || "drawing").replace(/\.[^.]+$/, "")}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-    setStatus("Takeoff JSON downloaded.");
   }
 
   async function downloadMarkedDeviceDrawings() {
@@ -783,6 +949,156 @@ export default function TakeoffWorkspace() {
     return () => observer.disconnect();
   }, [file]);
 
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el || !file) return undefined;
+
+    const pointers = new Map();
+    let pinch = null;
+    let raf = 0;
+
+    function clientPoints(list) {
+      return [...list].map((item) => ({ x: item.clientX ?? item.x, y: item.clientY ?? item.y }));
+    }
+
+    function flushViewport() {
+      raf = 0;
+      setZoom(zoomRef.current);
+      setPan(panRef.current);
+    }
+
+    function applyPinch(points) {
+      if (points.length < 2) return;
+      const viewportRect = el.getBoundingClientRect();
+      const currentMid = pinchMidpoint(points[0], points[1]);
+      const currentDistance = pointerDistance(points[0], points[1]);
+      if (!pinch) {
+        pinch = {
+          startZoom: zoomRef.current,
+          startDistance: currentDistance || 1,
+          startPan: { ...panRef.current },
+          startMid: currentMid,
+        };
+        pinchActiveRef.current = true;
+        panningRef.current = false;
+        return;
+      }
+      const next = sheetPinchViewport({
+        startZoom: pinch.startZoom,
+        startDistance: pinch.startDistance,
+        startPan: pinch.startPan,
+        startMid: pinch.startMid,
+        currentDistance,
+        currentMid,
+        viewportRect,
+      });
+      zoomRef.current = next.zoom;
+      panRef.current = next.pan;
+      if (panLayerRef.current) {
+        panLayerRef.current.style.transform = `translate(${next.pan.x}px, ${next.pan.y}px)`;
+      }
+      if (!raf) raf = window.requestAnimationFrame(flushViewport);
+    }
+
+    function endPinch() {
+      pinch = null;
+      pinchActiveRef.current = false;
+      if (raf) {
+        window.cancelAnimationFrame(raf);
+        raf = 0;
+      }
+      setZoom(zoomRef.current);
+      setPan(panRef.current);
+    }
+
+    function onTouchStart(event) {
+      if (event.touches.length >= 2) {
+        event.preventDefault();
+        pinch = null;
+        applyPinch(clientPoints(event.touches));
+      }
+    }
+
+    function onTouchMove(event) {
+      if (event.touches.length >= 2) {
+        event.preventDefault();
+        applyPinch(clientPoints(event.touches));
+      }
+    }
+
+    function onTouchEnd(event) {
+      if (event.touches.length >= 2) {
+        event.preventDefault();
+        pinch = null;
+        applyPinch(clientPoints(event.touches));
+        return;
+      }
+      if (pinch) endPinch();
+    }
+
+    function onPointerDown(event) {
+      if (event.pointerType === "mouse") return;
+      pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (pointers.size >= 2) {
+        event.preventDefault();
+        pinch = null;
+        applyPinch([...pointers.values()]);
+      }
+    }
+
+    function onPointerMove(event) {
+      if (!pointers.has(event.pointerId)) return;
+      pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (pointers.size >= 2) {
+        event.preventDefault();
+        applyPinch([...pointers.values()]);
+      }
+    }
+
+    function onPointerUp(event) {
+      pointers.delete(event.pointerId);
+      if (pointers.size < 2 && pinch) endPinch();
+    }
+
+    function preventNativeGesture(event) {
+      event.preventDefault();
+    }
+
+    el.addEventListener("touchstart", onTouchStart, { passive: false });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd, { passive: false });
+    el.addEventListener("touchcancel", onTouchEnd, { passive: false });
+    el.addEventListener("pointerdown", onPointerDown, { passive: false });
+    el.addEventListener("pointermove", onPointerMove, { passive: false });
+    el.addEventListener("pointerup", onPointerUp);
+    el.addEventListener("pointercancel", onPointerUp);
+    el.addEventListener("gesturestart", preventNativeGesture, { passive: false });
+    el.addEventListener("gesturechange", preventNativeGesture, { passive: false });
+    el.addEventListener("gestureend", preventNativeGesture, { passive: false });
+    document.addEventListener("gesturestart", preventNativeGesture, { passive: false });
+    document.addEventListener("gesturechange", preventNativeGesture, { passive: false });
+    document.addEventListener("gestureend", preventNativeGesture, { passive: false });
+
+    return () => {
+      if (raf) window.cancelAnimationFrame(raf);
+      pinchActiveRef.current = false;
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("touchcancel", onTouchEnd);
+      el.removeEventListener("pointerdown", onPointerDown);
+      el.removeEventListener("pointermove", onPointerMove);
+      el.removeEventListener("pointerup", onPointerUp);
+      el.removeEventListener("pointercancel", onPointerUp);
+      el.removeEventListener("gesturestart", preventNativeGesture);
+      el.removeEventListener("gesturechange", preventNativeGesture);
+      el.removeEventListener("gestureend", preventNativeGesture);
+      document.removeEventListener("gesturestart", preventNativeGesture);
+      document.removeEventListener("gesturechange", preventNativeGesture);
+      document.removeEventListener("gestureend", preventNativeGesture);
+    };
+  }, [file]);
+
 
   function focusMarkedSheet(nextMarks) {
     const first = (nextMarks || []).find((mark) => isDeviceMark(mark) || isCircuitMark(mark));
@@ -892,23 +1208,36 @@ export default function TakeoffWorkspace() {
   function handleDrop(event) {
     event.preventDefault();
     event.stopPropagation();
-    const droppedFile = captureFileList(event.dataTransfer?.files)
+    const dropped = [...(event.dataTransfer?.files || [])].filter((item) => item && !validateDrawingFile(item));
+    const droppedFile = dropped[0]
+      || captureFileList(event.dataTransfer?.files)
       || [...(event.dataTransfer?.items || [])].find((item) => item.kind === "file")?.getAsFile();
     if (!droppedFile) {
       setDrawingError("No drawing selected.");
       setStatus("Drawing import failed.");
       return;
     }
+    setBatchQueue(dropped.slice(1));
     void chooseFile(droppedFile);
   }
 
   function drawingPoint(event) {
     const rect = viewerRef.current?.getBoundingClientRect();
-    return pagePercentFromClient(
-      { x: event.clientX, y: event.clientY },
-      rect,
-      pageRotation,
-    );
+    if (!rect?.width || !rect?.height) return null;
+    return {
+      x: ((event.clientX - rect.left) / rect.width) * 100,
+      y: ((event.clientY - rect.top) / rect.height) * 100,
+    };
+  }
+
+  function commitSheetViewport(nextZoom, nextPan) {
+    zoomRef.current = nextZoom;
+    panRef.current = nextPan;
+    if (panLayerRef.current) {
+      panLayerRef.current.style.transform = `translate(${nextPan.x}px, ${nextPan.y}px)`;
+    }
+    setZoom(nextZoom);
+    setPan(nextPan);
   }
 
   function handleDrawingWheel(event) {
@@ -924,26 +1253,21 @@ export default function TakeoffWorkspace() {
     // position by compensating pan as the centered drawing grows/shrinks.
     const direction = event.deltaY < 0 ? 1 : -1;
     const step = event.ctrlKey ? 0.1 : 0.15;
+    const currentZoom = zoomRef.current;
+    const nextZoom = Math.min(
+      TAKEOFF_MAX_ZOOM,
+      Math.max(TAKEOFF_MIN_ZOOM, Number((currentZoom + direction * step).toFixed(2))),
+    );
+    if (nextZoom === currentZoom) return;
 
-    setZoom((currentZoom) => {
-      const nextZoom = Math.min(4, Math.max(0.25, Number((currentZoom + direction * step).toFixed(2))));
-      if (nextZoom === currentZoom) return currentZoom;
-
-      const cursorFromViewportCenter = {
-        x: event.clientX - (viewport.left + viewport.width / 2),
-        y: event.clientY - (viewport.top + viewport.height / 2),
-      };
-      const nextPan = panAfterZoomAtCursor({
-        pan: panRef.current,
-        zoom: currentZoom,
-        nextZoom,
-        cursorFromViewportCenter,
-      });
-      panRef.current = nextPan;
-      setPan(nextPan);
-
-      return nextZoom;
+    const next = sheetZoomAboutPoint({
+      zoom: currentZoom,
+      nextZoom,
+      pan: panRef.current,
+      focusClient: { x: event.clientX, y: event.clientY },
+      viewportRect: viewport,
     });
+    commitSheetViewport(next.zoom, next.pan);
   }
 
   function currentAspect() {
@@ -998,7 +1322,11 @@ export default function TakeoffWorkspace() {
   }
 
   function updateMark(id, patch) {
-    setMarks((current) => current.map((mark) => (mark.id === id ? { ...mark, ...patch } : mark)));
+    const named = Boolean(patch.circuit || patch.circuitNumber || patch.roomName || patch.symbol);
+    const nextPatch = named ? { ...patch, bidUse: true, prediction: false } : patch;
+    if (nextPatch.roomName) nextPatch.symbolLabel = nextPatch.roomName;
+    const next = marks.map((mark) => (mark.id === id ? { ...mark, ...nextPatch } : mark));
+    commitMarks(next, "Selected takeoff object updated.");
   }
 
   function coverageAfterConfirm(region) {
@@ -1073,7 +1401,7 @@ export default function TakeoffWorkspace() {
     if (!isDeviceMark(current)) return;
     const instanceOnly = isUncertainDetection(current);
     const count = instanceOnly ? 1 : typeInstanceCount(marks, current);
-    setMarks((currentMarks) => applyReviewDecision(currentMarks, current, status));
+    commitMarks(applyReviewDecision(marks, current, status), "Device review decision updated.");
     setStatus(instanceOnly
       ? (status === "accepted" ? "Uncertain count accepted." : "Uncertain count rejected. The marker stays on the sheet.")
       : (status === "accepted"
@@ -1092,18 +1420,20 @@ export default function TakeoffWorkspace() {
 
   function changeReviewType(nextSymbol) {
     if (!selectedMark || !nextSymbol) return;
-    setMarks((current) => changeReviewDeviceType(current, selectedMark, nextSymbol));
-    setStatus(`Changed to ${nextSymbol.abbr || nextSymbol.label}. This correction can seed a project prototype.`);
+    commitMarks(
+      changeReviewDeviceType(marks, selectedMark, nextSymbol),
+      `Changed to ${nextSymbol.abbr || nextSymbol.label}. This correction can seed a project prototype.`,
+    );
   }
 
   function moveSelectedReview(point) {
     if (!selectedMark || !point) return;
-    setMarks((current) => moveReviewMark(current, selectedMark, point));
+    commitMarks(moveReviewMark(marks, selectedMark, point), "Device moved.");
   }
 
   function resizeSelectedReview(bounds) {
     if (!selectedMark) return;
-    setMarks((current) => resizeReviewBounds(current, selectedMark, bounds));
+    commitMarks(resizeReviewBounds(marks, selectedMark, bounds), "Device highlight resized.");
   }
 
   function addMissedDevice() {
@@ -1162,44 +1492,78 @@ export default function TakeoffWorkspace() {
     let cancelled = false;
     const objectize = async () => {
       try {
-        const pages = await readAiPages(fileBytes);
+        const pages = await readAiPages(fileBytes, { includeRaster: false });
         if (cancelled) return;
-        await hydratePagesRaster(pages);
-        setAiPages(pages);
-        const detected = buildAiMarks({
-          pages,
-          trade: "electrical",
-          symbols: paletteForTrade("electrical", drawingSymbolsFromDocs(drawingDocs)).symbols,
-          drawingSymbols: drawingSymbolsFromDocs(drawingDocs),
-          maxHomeruns,
-          conduit: findConduitOption(conduitId, "electrical"),
-          color: penColor,
-        });
-        const detectedDevices = (detected.marks || []).filter((mark) => isDeviceMark(mark));
-        const objects = buildDrawingObjectLayer({ pages, detectedMarks: detectedDevices, trade: "electrical" });
-        setDrawingObjects(objects);
+        const persistable = persistableAiPages(pages);
+        setAiPages(persistable);
+        const layer = buildDrawingObjectLayer({ pages: persistable, detectedMarks: [], trade: "electrical" });
+        setDrawingObjects(layer);
+        const counts = countInteractiveObjects(layer);
+        setStatus(interactiveOpenMessage(file?.name, counts));
+        setPageTakeoff((current) => normalizePageTakeoff(current, pages.length || 1));
       } catch (error) {
         if (!cancelled) console.error("Drawing object layer failed", error);
       }
     };
     void objectize();
     return () => { cancelled = true; };
-  }, [fileBytes, isPdf, drawingDocs, maxHomeruns, conduitId, penColor]);
+  }, [fileBytes, isPdf]);
 
-  async function runAiTakeoff({ silent = false } = {}) {
+  useEffect(() => {
+    if (!isPdf || !aiPages.length) return;
+    setDrawingObjects(buildDrawingObjectLayer({
+      pages: aiPages,
+      detectedMarks: marks.filter(isDeviceMark),
+      trade,
+    }));
+  }, [aiPages, isPdf, marks, trade]);
+
+  async function runAiTakeoff({ silent = false, onlyPage = null } = {}) {
     if (!isPdf || !fileBytes) {
-      if (!silent) setStatus("AI assist needs a PDF with a text layer. Image drawings stay manual for the selected trade.");
+      const message = "AI assist needs a PDF with a text layer. Image drawings stay manual for the selected trade.";
+      if (!silent) {
+        setDrawingError(message);
+        setStatus(message);
+      }
       return marks;
     }
     setAiBusy(true);
+    setEmptyNoticeDismissed(false);
+    setDrawingError("");
     const tradeLabel = tradeById(trade).label;
-    if (!silent) setStatus(`AI assist is counting and marking ${tradeLabel} on the drawings…`);
+    if (!silent) setStatus(`AI assist is reading ${tradeLabel} sheets…`);
     try {
-      const pages = await readAiPages(fileBytes);
-      await hydratePagesRaster(pages);
-      setAiPages(pages);
+      const pages = await readAiPages(fileBytes, {
+        includeRaster: false,
+        onProgress: (current, total) => {
+          if (!silent) setStatus(`AI assist is reading sheet ${current} of ${total}…`);
+        },
+      });
+      const processing = drawingProcessingPlan({ type: "application/pdf", size: fileBytes.byteLength }, {
+        byteLength: fileBytes.byteLength,
+      });
+      if (processing.scanned || processing.largePlan) {
+        for (const page of pages) {
+          if (isScannedOrSparsePage(page)) page.forceRaster = true;
+        }
+      }
+      // Raster only the sparse electrical scan pages. Full-set raster at CAD
+      // scale OOM'd / jetsam'd the tab while AI takeoff was running.
+      const scanDictionary = legendDictionaryFromPages(pages, palette.fromDrawing, palette.symbols, trade);
+      const pagesForTakeoff = pages.map((page) => {
+        const enabled = onlyPage == null
+          ? isPageTakeoffEnabled(pageTakeoff, page.page)
+          : Number(page.page) === Number(onlyPage) || page.kind === "legend";
+        return enabled ? page : { ...page, takeoffDisabled: true };
+      });
+      const scanPages = pagesIncludedInTakeoff(pagesToScan(pagesForTakeoff, trade, scanDictionary));
+      await hydratePagesRaster(pagesNeedingRaster(scanPages));
+      if (!silent) setStatus(`AI assist is marking ${tradeLabel} on the drawings…`);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const persistable = persistableAiPages(pages);
+      setAiPages(persistable);
       const planned = buildAiMarks({
-        pages,
+        pages: pagesForTakeoff,
         trade,
         symbols: palette.symbols,
         drawingSymbols: palette.fromDrawing,
@@ -1208,42 +1572,102 @@ export default function TakeoffWorkspace() {
         color: penColor,
         projectPrototypes: projectPrototypesFromCorrections(marks),
       });
+      setSearchManifest(planned.searchManifest || null);
+      // Distinguish a failed/empty scan from a genuine zero-symbol result.
+      // This is especially important on mobile where the PDF may render while
+      // text and vector extraction produce no usable symbol candidates.
+      const scannedPages = pagesIncludedInTakeoff(pagesToScan(pagesForTakeoff, trade, scanDictionary));
+      const scanDiagnostics = {
+        totalPages: pages.length,
+        scannedPages: scannedPages.length,
+        textTokens: scannedPages.reduce((sum, page) => sum + (page.tokens?.length || 0), 0),
+        vectorPaths: scannedPages.reduce((sum, page) => sum + (page.paths?.length || 0), 0),
+        rasterCandidates: scannedPages.reduce((sum, page) => sum + (page.rasterPaths?.length || 0), 0),
+        legendEntries: scanDictionary?.entries?.length || 0,
+      };
       const colored = applyDeviceTypeColors(
         (planned.marks || []).map((mark) => ({
           ...mark,
           source: mark.source || "ai",
           trade: mark.trade || trade,
+          sheet: mark.sheet || mark.page,
           markerSize: mark.markerSize || Math.max(penSize, 1.35),
+          markerSizeOverride: mark.markerSizeOverride ?? true,
           reviewStatus: mark.reviewStatus || "pending",
         })),
       );
       let nextMarks = colored;
       setMarks((current) => {
         nextMarks = applyDeviceTypeColors([
-          ...current.filter((mark) => !(mark.source === "ai" && mark.trade === trade)),
+          ...current.filter((mark) => !(mark.source === "ai" && mark.trade === trade && (onlyPage == null || Number(mark.sheet) === Number(onlyPage)))),
           ...colored,
         ]);
         return nextMarks;
       });
-      focusMarkedSheet(nextMarks);
+      setDrawingObjects(buildDrawingObjectLayer({
+        pages: persistable,
+        detectedMarks: nextMarks.filter(isDeviceMark),
+        trade,
+      }));
+      if (onlyPage == null) focusMarkedSheet(nextMarks);
       const quote = persistSupplyQuote(nextMarks);
       const devices = nextMarks.filter(isDeviceMark).length;
       const conduits = nextMarks.filter((mark) => mark.tool === "conduit" || mark.type === "homerun").length;
       if (!silent) {
+        if (planned.deviceCount === 0) {
+          const d = scanDiagnostics;
+          const reason = d.scannedPages === 0
+            ? "No eligible plan sheets were recognized."
+            : d.vectorPaths === 0 && d.rasterCandidates === 0
+              ? "No usable symbol geometry was extracted."
+              : d.legendEntries === 0
+                ? "No usable legend entries were recognized."
+                : "Symbol matching returned zero counted devices.";
+          setStatus(`AI found 0 devices. ${reason} Diagnostic: ${d.scannedPages}/${d.totalPages} sheets scanned; ${d.textTokens} text tokens; ${d.vectorPaths} vector paths; ${d.rasterCandidates} raster candidates; ${d.legendEntries} legend entries. Please share this diagnostic when reporting the failure.`);
+        } else {
         setStatus(
           `${planned.summary || `AI marked ${devices} devices and ${conduits} conduit runs.`} `
+          + `${planned.searchManifest?.totalSymbols ? `Searched ${planned.searchManifest.totalSymbols} legend symbol targets across ${planned.searchManifest.sheetCount} applicable sheet${planned.searchManifest.sheetCount === 1 ? "" : "s"}. ` : ""}`
           + `${planned.reconciliationNote || ""} `
           + `Verify the colored marks on the sheet.`
           + (quote.rows.length ? ` Supply quote ready (${quote.totals.quantity} plan devices).` : ""),
         );
+        }
       }
       return nextMarks;
     } catch (error) {
-      if (!silent) setStatus(error?.message || "AI takeoff could not read this drawing.");
+      const message = error?.message || "AI takeoff could not read this drawing.";
+      if (!silent) {
+        setDrawingError(message);
+        setStatus(message);
+      }
       return marks;
     } finally {
       setAiBusy(false);
     }
+  }
+
+  const runAiTakeoffRef = useRef(runAiTakeoff);
+  runAiTakeoffRef.current = runAiTakeoff;
+  useEffect(() => {
+    const onRun = () => {
+      setMode("ai");
+      void runAiTakeoffRef.current();
+    };
+    window.addEventListener("estim8r-owner-run-ai-takeoff", onRun);
+    return () => window.removeEventListener("estim8r-owner-run-ai-takeoff", onRun);
+  }, []);
+
+  function interactiveGeometryAt(point) {
+    const page = aiPages.find((item) => item.page === sheetMeta.page);
+    if (!page || !point) return null;
+    const geometry = pickInteractiveSymbolGeometry(page, point, { radius: 1.35 });
+    if (!geometry) return null;
+    const match = matchGeometryToLegend(geometry, legendDictionary, {
+      planType: page.planType || "",
+      nearby: (page.paths || []).filter((path) => Math.hypot((path.cx || 0) - geometry.cx, (path.cy || 0) - geometry.cy) <= 0.8),
+    });
+    return { geometry, match };
   }
 
   function onDrawingClick(event) {
@@ -1251,30 +1675,51 @@ export default function TakeoffWorkspace() {
     if (!file || tool === "pan") return;
     const point = drawingPoint(event);
     if (!point) return;
+    if (pendingAssembly) {
+      const placed = markFromAssembly(pendingAssembly, point, sheetMeta.page);
+      if (placed) {
+        commitMarks([...marks, placed], `${placed.symbolLabel} assembly placed. Its components stay on the estimate.`);
+        setSelectedId(placed.id);
+      }
+      setPendingAssembly(null);
+      return;
+    }
     const sheetAspectRatio = currentAspect();
 
     if (tool === "select") {
-      let hit = selectMarkAtPoint(overlayMarks, point, {
+      const hit = selectMarkAtPoint(overlayMarks, point, {
         aspect: sheetAspectRatio,
-        markerSize: penSize,
-        hitRoute: (mark, at, aspect) => hitTestMark(sizedMark(mark), at, aspect, markHitThreshold(mark)),
+        markerSize: (mark) => resolvedMarkerSize(mark, penSize),
+        hitRoute: (mark, at, aspect) => hitTestMark(sizedMark(mark), at, aspect, markHitThreshold(mark, 0.7)),
       });
-      if (!hit) {
-        const drawingObject = hitDrawingObject(drawingObjects, point, sheetMeta.page);
-        if (drawingObject) {
-          const materialized = materializeDrawingObject(drawingObject, marks);
-          hit = materialized?.mark || null;
-          if (hit && !materialized.existing) {
-            const nextMarks = applyDeviceTypeColors([...marks, hit]);
-            setMarks(nextMarks);
-            persistTakeoff(nextMarks);
-          }
-        }
+      if (hit) {
+        setSelectedId(hit.id);
+        setReviewOpen(Boolean(isDeviceMark(hit) && needsAccuracyReview(hit, marks, sheetMeta.page)));
+        setStatus(`Selected ${hit.symbolLabel || hit.typeCode || hit.type}.`);
+        return;
       }
-      setSelectedId(hit?.id || null);
-      if (!hit) setIsolationMode(false);
-      setReviewOpen(Boolean(hit && isDeviceMark(hit) && needsAccuracyReview(hit, marks, sheetMeta.page)));
-      setStatus(hit ? `Selected ${hit.symbolLabel || hit.typeCode || hit.type}. Edit it in the inspector.` : "No selectable electrical device found here.");
+      const drawingObject = hitDrawingObject(drawingObjects, point, sheetMeta.page);
+      if (drawingObject) {
+        if (drawingObject.objectKind === "recognized-device" && drawingObject.sourceMarkId) {
+          const sourceMark = overlayMarks.find((mark) => mark.id === drawingObject.sourceMarkId)
+            || marks.find((mark) => mark.id === drawingObject.sourceMarkId);
+          setSelectedId(drawingObject.sourceMarkId);
+          setIsolationMode(false);
+          setReviewOpen(Boolean(sourceMark && isDeviceMark(sourceMark) && needsAccuracyReview(sourceMark, marks, sheetMeta.page)));
+          setStatus(`Selected ${sourceMark?.symbolLabel || sourceMark?.typeCode || "detected device"}.`);
+          return;
+        }
+        const name = drawingObject.objectKind === "room" ? "room" : drawingObject.objectKind === "circuit" ? "line" : "symbol";
+        setSelectedId(printedSelectionId(drawingObject));
+        setIsolationMode(false);
+        setReviewOpen(false);
+        setStatus(`Highlighted the printed ${name} under the pointer. Nothing was added.`);
+        return;
+      }
+      setSelectedId(null);
+      setIsolationMode(false);
+      setReviewOpen(false);
+      setStatus("Nothing on the print is under the pointer.");
       return;
     }
 
@@ -1311,11 +1756,44 @@ export default function TakeoffWorkspace() {
     }
 
     if (tool === "count" || tool === "drop") {
+      const picked = interactiveGeometryAt(point);
+      const drawingObject = hitDrawingObject(drawingObjects, point, sheetMeta.page);
+      const objectGeometry = drawingObject?.objectKind === "unclassified-vector" || drawingObject?.objectKind === "recognized-device"
+        ? { cx: drawingObject.x, cy: drawingObject.y, outline: drawingObject.outline, source: drawingObject.outline?.source || "vector" }
+        : null;
+      const candidates = [picked?.geometry, objectGeometry].filter((item) => item && Number.isFinite(item.cx) && Number.isFinite(item.cy));
+      candidates.sort((a, b) => Math.hypot(a.cx - point.x, a.cy - point.y) - Math.hypot(b.cx - point.x, b.cy - point.y));
+      const geometry = candidates[0] || null;
+      if (!geometry) {
+        setStatus("No printed symbol geometry detected at that point. Zoom in and click directly inside the symbol.");
+        return;
+      }
+      const matched = picked?.match?.entry?.symbol;
+      const selectedSymbol = symbol || matched;
+      const body = {
+        x: geometry.cx,
+        y: geometry.cy,
+        symbolBodyLocation: { x: geometry.cx, y: geometry.cy },
+        outline: geometry.outline,
+        outlineSource: geometry.outline?.source || geometry.source || "vector",
+        fillEnabled: true,
+        fillMode: "inside",
+        fillOpacity: 0.34,
+      };
       addMark(
-        { type: tool === "drop" ? "drop" : "count", ...point, feet: tool === "drop" ? DEFAULT_DROP_FEET : undefined },
+        {
+          type: tool === "drop" ? "drop" : "count",
+          ...body,
+          symbol: selectedSymbol?.id,
+          symbolLabel: selectedSymbol?.label,
+          abbr: selectedSymbol?.abbr,
+          typeCode: selectedSymbol?.abbr || matched?.abbr,
+          category: selectedSymbol?.takeoffCategory || selectedSymbol?.category || category,
+          feet: tool === "drop" ? DEFAULT_DROP_FEET : undefined,
+        },
         tool === "drop"
-          ? `${symbol?.label || category} drop counted${calibration ? ` (${DEFAULT_DROP_FEET} LF typical)` : ""}.`
-          : `${symbol?.label || category} counted.`,
+          ? `${selectedSymbol?.label || category} drop counted and snapped to printed symbol geometry.`
+          : `${selectedSymbol?.label || category} counted and filled inside the printed symbol.`,
       );
       return;
     }
@@ -1382,6 +1860,22 @@ export default function TakeoffWorkspace() {
       return;
     }
 
+    if (tool === "area" && draftPoints.length === 0) {
+      const room = enclosingRoom(drawingObjects, point, sheetMeta.page);
+      if (room) {
+        const materialized = materializeDrawingObject(room, marks);
+        const hit = materialized?.mark || null;
+        if (hit && !materialized.existing) {
+          commitMarks([...marks, hit], "Room boundary filled from the printed outline. Name the room before using its area in the bid.");
+          setSelectedId(hit.id);
+        } else if (hit) {
+          setSelectedId(hit.id);
+          setStatus("Selected the room. Edit its name in the inspector.");
+        }
+        return;
+      }
+    }
+
     if (["polyline", "area", "circuit"].includes(tool)) {
       const next = [...draftPoints, point];
       setDraftPoints(next);
@@ -1395,8 +1889,15 @@ export default function TakeoffWorkspace() {
     const sheetAspectRatio = currentAspect();
     if (tool === "area") {
       if (draftPoints.length < 3) return;
-      const sf = rollupTakeoff([{ type: "area", points: draftPoints, category }], calibration, sheetAspectRatio).rows[0]?.sf;
-      addMark({ type: "area", points: draftPoints }, calibration ? `Area ${formatArea(sf)}.` : "Area added. Calibrate scale to read SF.");
+      const measured = measureMark({ type: "area", points: draftPoints, heightFeet: 0 }, calibration, sheetAspectRatio);
+      addMark({
+        type: "area",
+        points: draftPoints,
+        areaSf: measured.areaSf,
+        perimeterLf: measured.perimeterLf,
+      }, measured.areaSf == null
+        ? "Area added. Calibrate scale to read SF and perimeter."
+        : `Area ${formatArea(measured.areaSf)}. Perimeter ${measured.perimeterLf == null ? "—" : formatFeet(measured.perimeterLf)}.`);
     } else if (tool === "conduit") {
       finishConduitRun(draftPoints);
     } else {
@@ -1483,6 +1984,10 @@ export default function TakeoffWorkspace() {
     if (!previous) return;
     historyRef.current.future.push(marks);
     setMarks(previous);
+    if (selectedId && !previous.some((mark) => mark.id === selectedId)) {
+      setSelectedId(null);
+      setIsolationMode(false);
+    }
     setStatus("Undid last takeoff change.");
   }
 
@@ -1491,6 +1996,10 @@ export default function TakeoffWorkspace() {
     if (!next) return;
     historyRef.current.past.push(marks);
     setMarks(next);
+    if (selectedId && !next.some((mark) => mark.id === selectedId)) {
+      setSelectedId(null);
+      setIsolationMode(false);
+    }
     setStatus("Redid last takeoff change.");
   }
 
@@ -1502,8 +2011,37 @@ export default function TakeoffWorkspace() {
 
   function deleteSelected() {
     if (!selectedId) return;
+    if (printedSelection) {
+      setSelectedId(null);
+      setStatus("Cleared the printed highlight. Nothing was removed from the drawing.");
+      return;
+    }
     commitMarks(marks.filter((mark) => mark.id !== selectedId), "Mark deleted.");
     setSelectedId(null);
+  }
+
+  function countPrintedSelection() {
+    if (!printedSelection) return;
+    const materialized = materializeDrawingObject(printedSelection, marks);
+    if (!materialized?.mark) return;
+    if (!materialized.existing) {
+      const kind = printedSelection.objectKind;
+      const counted = {
+        ...materialized.mark,
+        fillEnabled: false,
+        bidUse: true,
+        prediction: false,
+        symbolLabel: kind === "room" ? "Printed room" : kind === "circuit" ? "Printed line" : (materialized.mark.symbolLabel || "Printed symbol"),
+        roomName: kind === "room" ? "Printed room" : materialized.mark.roomName,
+      };
+      const nextMarks = applyDeviceTypeColors([...marks, counted]);
+      commitMarks(nextMarks, "Added the printed item to the counted items. The drawing itself was not changed.");
+      persistSupplyQuote(nextMarks);
+      setSelectedId(counted.id);
+    } else {
+      setSelectedId(materialized.mark.id);
+    }
+    setStudioPanel("quantities");
   }
 
   useEffect(() => {
@@ -1533,92 +2071,125 @@ export default function TakeoffWorkspace() {
         event.preventDefault();
         finishPath(event);
       }
+      if (event.key === " " && !["INPUT", "TEXTAREA"].includes(event.target.tagName)) {
+        event.preventDefault();
+        spacePanRef.current = true;
+      }
+    };
+    const onKeyUp = (event) => {
+      if (event.key === " ") spacePanRef.current = false;
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKeyUp);
+    };
   });
 
   function onPanPointerDown(event) {
-    if (event.button > 0) return;
-    const target = event.currentTarget;
+    const panGesture = tool === "pan" || event.button === 1 || spacePanRef.current;
+    if (!panGesture || event.button > 1 || pinchActiveRef.current) return;
+    if (tool !== "pan") suppressEditClickRef.current = true;
+    event.preventDefault();
+    event.stopPropagation();
     const pointerId = event.pointerId;
-    const canPan = tool === "pan";
-    pointersRef.current.set(pointerId, { x: event.clientX, y: event.clientY });
-    if (pointersRef.current.size >= 2) {
-      const points = [...pointersRef.current.values()];
-      pinchRef.current = {
-        distance: pointerDistance(points[0], points[1]) || 1,
-        zoom: zoomRef.current,
-      };
-      event.preventDefault();
-      event.stopPropagation();
-    } else if (!canPan) {
-      // Single-finger non-pan tools keep click/draw handlers; drop the tracked pointer.
-      pointersRef.current.delete(pointerId);
-      return;
-    } else {
-      event.preventDefault();
-      event.stopPropagation();
-    }
-
-    const origin = { x: event.clientX, y: event.clientY };
-    const start = { ...panRef.current };
-    let dragged = false;
-    let pinched = pointersRef.current.size >= 2;
-
+    const originX = event.clientX;
+    const originY = event.clientY;
+    const startX = panRef.current.x;
+    const startY = panRef.current.y;
+    const target = event.currentTarget;
+    panningRef.current = true;
     const move = (moveEvent) => {
-      if (pointersRef.current.has(moveEvent.pointerId)) {
-        pointersRef.current.set(moveEvent.pointerId, { x: moveEvent.clientX, y: moveEvent.clientY });
-      }
-      if (pointersRef.current.size >= 2) {
-        pinched = true;
-        panningRef.current = true;
-        const points = [...pointersRef.current.values()];
-        const startPinch = pinchRef.current;
-        if (startPinch) {
-          setZoom(sheetPinchZoom(startPinch.zoom, startPinch.distance, pointerDistance(points[0], points[1])));
-        }
-        return;
-      }
-      if (!canPan || pinched || moveEvent.pointerId !== pointerId) return;
-      const current = { x: moveEvent.clientX, y: moveEvent.clientY };
-      if (!dragged && !isSheetPanDrag(origin, current)) return;
-      dragged = true;
-      panningRef.current = true;
-      const next = sheetPanOffset(start, origin, current);
+      if (pinchActiveRef.current || moveEvent.pointerId !== pointerId) return;
+      const next = {
+        x: startX + (moveEvent.clientX - originX),
+        y: startY + (moveEvent.clientY - originY),
+      };
       panRef.current = next;
       // Update the transform directly so pan does not re-render the PDF each frame.
       if (panLayerRef.current) {
         panLayerRef.current.style.transform = `translate(${next.x}px, ${next.y}px)`;
       }
     };
-
     const up = (upEvent) => {
-      pointersRef.current.delete(upEvent.pointerId);
-      if (pointersRef.current.size < 2) pinchRef.current = null;
       if (upEvent.pointerId !== pointerId) return;
       panningRef.current = false;
-      if (dragged || pinched) setPan(panRef.current);
+      setPan(panRef.current);
+      try { target.releasePointerCapture?.(pointerId); } catch { /* already released */ }
       target.removeEventListener("pointermove", move);
       target.removeEventListener("pointerup", up);
       target.removeEventListener("pointercancel", up);
     };
-
     target.addEventListener("pointermove", move, { passive: true });
     target.addEventListener("pointerup", up);
     target.addEventListener("pointercancel", up);
+    // Do not capture touch pointers: Safari/iOS then never delivers the second
+    // finger, so pinch/spread would be stolen by a one-finger pan.
+    if (event.pointerType !== "touch") {
+      try { target.setPointerCapture?.(pointerId); } catch { /* already released */ }
+    }
   }
 
   function onViewerPointerDown(event) {
     if (tool === "pan" || (tool !== "select" || !selectedId)) return;
     const point = drawingPoint(event);
+    if (!point) return;
     if (tool === "select" && selectedId) {
       const mark = marks.find((item) => item.id === selectedId);
       if (!mark) return;
       const canDrag = isDeviceMark(mark)
         ? hitTestDeviceFill(mark, point, penSize)
         : hitTestMark(sizedMark(mark), point, currentAspect(), markHitThreshold(mark, 3.2));
+      // The southeast resize handle is intentionally larger than its visual dot
+      // so it can be grabbed with a finger without moving the device instead.
+      const bodyBounds = mark.symbolBodyBounds;
+      const width = Number(bodyBounds?.w || mark.outline?.w || 0.7);
+      const height = Number(bodyBounds?.h || mark.outline?.h || 0.7);
+      const handleX = (Number(mark.x) || 0) + width / 2;
+      const handleY = (Number(mark.y) || 0) + height / 2;
+      const resizeHandle = isDeviceMark(mark)
+        && Math.abs(point.x - handleX) < 0.35
+        && Math.abs(point.y - handleY) < 0.35;
+      if (resizeHandle) {
+        event.preventDefault();
+        const beforeResize = marks;
+        let changed = false;
+        suppressEditClickRef.current = false;
+        const pointerId = event.pointerId;
+        const resize = (moveEvent) => {
+          if (moveEvent.pointerId !== pointerId) return;
+          const next = drawingPoint(moveEvent);
+          if (!next) return;
+          const w = Math.max(0.2, Math.min(2.4, 2 * (next.x - (Number(mark.x) || 0))));
+          const h = Math.max(0.2, Math.min(2.4, 2 * (next.y - (Number(mark.y) || 0))));
+          if (!changed && Math.abs(w - width) < 0.01 && Math.abs(h - height) < 0.01) return;
+          if (!changed) {
+            suppressEditClickRef.current = true;
+            historyRef.current.past.push(beforeResize);
+            historyRef.current.future = [];
+            if (historyRef.current.past.length > 80) historyRef.current.past.shift();
+            changed = true;
+          }
+          setMarks((current) => resizeReviewBounds(current, mark, { w, h }));
+        };
+        const finish = (upEvent) => {
+          if (upEvent.pointerId !== pointerId) return;
+          window.removeEventListener("pointermove", resize);
+          window.removeEventListener("pointerup", finish);
+          window.removeEventListener("pointercancel", finish);
+          if (upEvent.type === "pointercancel") suppressEditClickRef.current = false;
+          if (changed) saveTakeoff(true);
+        };
+        window.addEventListener("pointermove", resize);
+        window.addEventListener("pointerup", finish);
+        window.addEventListener("pointercancel", finish);
+        return;
+      }
       if (!canDrag) return;
+      event.preventDefault();
+      let changed = false;
+      suppressEditClickRef.current = false;
       const start = point;
       const origin = mark.points ? mark.points.map((item) => ({ ...item })) : { x: mark.x, y: mark.y };
       const isEditableConduit = mark.tool === "conduit" && Array.isArray(origin) && origin.length >= 2;
@@ -1633,11 +2204,21 @@ export default function TakeoffWorkspace() {
           endpointIndex = firstDistance <= lastDistance ? 0 : origin.length - 1;
         }
       }
+      const pointerId = event.pointerId;
       const move = (moveEvent) => {
+        if (moveEvent.pointerId !== pointerId) return;
         const now = drawingPoint(moveEvent);
         if (!now) return;
         const dx = now.x - start.x;
         const dy = now.y - start.y;
+        if (!changed && Math.hypot(dx, dy) < 0.05) return;
+        if (!changed) {
+          suppressEditClickRef.current = true;
+          historyRef.current.past.push(marks);
+          historyRef.current.future = [];
+          if (historyRef.current.past.length > 80) historyRef.current.past.shift();
+          changed = true;
+        }
         setMarks((current) => current.map((item) => {
           if (item.id !== selectedId) return item;
           if (item.points) {
@@ -1652,15 +2233,23 @@ export default function TakeoffWorkspace() {
             }
             return { ...item, points: origin.map((pt) => ({ x: pt.x + dx, y: pt.y + dy })), lengthEdited: false };
           }
+          if (isDeviceMark(item)) {
+            return moveReviewMark([item], item, { x: origin.x + dx, y: origin.y + dy })[0];
+          }
           return { ...item, x: origin.x + dx, y: origin.y + dy };
         }));
       };
-      const up = () => {
+      const up = (upEvent) => {
+        if (upEvent.pointerId !== pointerId) return;
         window.removeEventListener("pointermove", move);
         window.removeEventListener("pointerup", up);
+        window.removeEventListener("pointercancel", up);
+        if (upEvent.type === "pointercancel") suppressEditClickRef.current = false;
+        if (changed) saveTakeoff(true);
       };
       window.addEventListener("pointermove", move);
       window.addEventListener("pointerup", up);
+      window.addEventListener("pointercancel", up);
     }
   }
 
@@ -1722,11 +2311,205 @@ export default function TakeoffWorkspace() {
     setTool("select");
   }
 
+  function publishLiveQuantities() {
+    const csv = quantityLinkCsv(marks, { slips: slipSheets });
+    const payload = { kind: "estim8r-quantity", csv, updatedAt: new Date().toISOString() };
+    rememberLiveQuantity(payload);
+    const channel = new BroadcastChannel(QUANTITY_LINK_CHANNEL);
+    channel.postMessage(payload);
+    channel.close();
+    window.open("/quantity-link", "estim8r-quantity-link");
+    setStatus("Live quantities published. The quantity window reads this publish when it opens.");
+  }
+
+  async function signQuantityFile() {
+    const csv = quantityLinkCsv(marks, { slips: slipSheets });
+    const stored = localStorage.getItem("estim8r-signing-jwk");
+    let privateKey;
+    let publicJwk;
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      publicJwk = parsed.publicJwk;
+      privateKey = await crypto.subtle.importKey("jwk", parsed.privateJwk, { name: "ECDSA", namedCurve: "P-256" }, true, ["sign"]);
+    } else {
+      const pair = await createSigningKey();
+      publicJwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+      const privateJwk = await crypto.subtle.exportKey("jwk", pair.privateKey);
+      localStorage.setItem("estim8r-signing-jwk", JSON.stringify({ publicJwk, privateJwk }));
+      privateKey = pair.privateKey;
+    }
+    const signature = await signQuantity(privateKey, csv);
+    downloadBlob(new Blob([JSON.stringify({
+      algorithm: "ECDSA-P256-SHA256",
+      signature,
+      publicJwk,
+      purpose: "Device signature for this quantity file. Verification uses the included public key.",
+    }, null, 2)], { type: "application/json" }), `${(file?.name || "takeoff").replace(/\.[^.]+$/, "")}-quantity-signature.json`);
+    setStatus("Quantity file signed with this device key.");
+  }
+
+  function downloadWorkbook() {
+    const xml = spreadsheetMl("Takeoff", quantityWorkbookRows(marks, calibration, currentAspect()));
+    downloadBlob(new Blob([xml], { type: "application/vnd.ms-excel" }), `${(file?.name || "takeoff").replace(/\.[^.]+$/, "")}-quantity-link.xls`);
+    setStatus("Excel workbook downloaded.");
+  }
+
+  function downloadMaterialsReport() {
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text("Bill of materials", 14, 18);
+    doc.setFontSize(10);
+    let y = 30;
+    const lines = reportLines(marks);
+    if (!lines.length) {
+      doc.text("No bid quantities yet.", 14, y);
+    }
+    for (const row of lines) {
+      const parts = [row.category, row.name, row.count ? `${row.count} EA` : "", row.lengthLf ? `${row.lengthLf.toFixed(1)} LF` : "", row.areaSf ? `${row.areaSf.toFixed(1)} SF` : ""].filter(Boolean);
+      doc.text(parts.join("  ·  "), 14, y);
+      y += 7;
+      if (y > 280) {
+        doc.addPage();
+        y = 20;
+      }
+    }
+    downloadBlob(doc.output("blob"), `${(file?.name || "takeoff").replace(/\.[^.]+$/, "")}-bill-of-materials.pdf`);
+    setStatus("Bill of materials downloaded.");
+  }
+
+  async function readScannedText() {
+    const canvas = document.querySelector("[data-testid='takeoff-sheet-viewport'] canvas");
+    if (!canvas) {
+      setStatus("Open a drawing page before reading scanned text.");
+      return;
+    }
+    setStatus("Reading text on this sheet…");
+    try {
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+      const { createWorker } = await import("tesseract.js");
+      const result = await recognizeImage(blob, createWorker);
+      setStatus(result.ok && result.text ? `Scanned text: ${result.text.slice(0, 240)}` : (result.error || "No text was read on this sheet."));
+    } catch (error) {
+      setDrawingError(error?.message || "Scanned text could not be read.");
+    }
+  }
+
+  function cropToSelection() {
+    const object = selectedMark || drawingObjects.find((item) => item.id === selectedId);
+    const frame = cropToObject({
+      object,
+      viewWidth: viewportSize.width,
+      viewHeight: viewportSize.height,
+      sheetWidth: imageSize.width || viewportSize.width || 1,
+      sheetHeight: imageSize.height || viewportSize.height || 1,
+    });
+    if (!frame) {
+      setStatus("Select a symbol, line, or room to crop to it.");
+      return;
+    }
+    setZoom(frame.zoom);
+    setPan(frame.pan);
+    setStatus("Cropped to the selection.");
+  }
+
+  function saveRevisionSnapshot() {
+    setRevisionBaseline(marks.map((mark) => ({ ...mark })));
+    setStatus(`Revision snapshot saved with ${marks.length} takeoff object${marks.length === 1 ? "" : "s"}.`);
+  }
+
+  function compareRevision() {
+    const report = revisionReport(revisionBaseline, marks);
+    setStatus(`Revision compared with the snapshot: ${report.added} added, ${report.removed} removed, ${report.unchanged} unchanged.`);
+  }
+
+  function applyFormulaResult(value, waste) {
+    if (!selectedMark) return;
+    updateMark(selectedMark.id, { formulaResult: value, wastePercent: waste });
+  }
+
+  function placeAerialLength(start, end) {
+    const mark = aerialLengthMark(start, end, sheetMeta.page);
+    if (!mark) {
+      setStatus("Aerial length needs two map points.");
+      return;
+    }
+    commitMarks([...marks, mark], `Aerial length ${Number(mark.storedFeet).toFixed(1)} ft saved on sheet ${sheetMeta.page}.`);
+    setSelectedId(mark.id);
+  }
+
+  function downloadQuantityLink() {
+    const csv = quantityLinkCsv(marks, { slips: slipSheets });
+    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), `${(file?.name || "takeoff").replace(/\.[^.]+$/, "")}-quantity-link.csv`);
+    setStatus("Quantity link CSV downloaded. Open it in Excel. Pages marked bid use no are predictions until you name them.");
+  }
+
+  async function downloadQuantityChecksum() {
+    const csv = quantityLinkCsv(marks, { slips: slipSheets });
+    try {
+      const checksum = await quantityLinkChecksum(csv);
+      downloadBlob(new Blob([JSON.stringify({ ...checksum, fileName: file?.name || "" }, null, 2)], { type: "application/json" }), `${(file?.name || "takeoff").replace(/\.[^.]+$/, "")}-quantity-link.integrity.json`);
+      setStatus("Quantity link checksum saved. This SHA-256 digest checks the CSV. It is not a certificate-backed digital signature.");
+    } catch (error) {
+      setDrawingError(error?.message || "Could not checksum the quantity link.");
+    }
+  }
+
+  function downloadStudioSession() {
+    const payload = studioPackage({ fileName: file?.name, marks, pageTakeoff, slips: slipSheets, toolChest });
+    downloadBlob(new Blob([JSON.stringify(payload)], { type: "application/json" }), `${(file?.name || "takeoff").replace(/\.[^.]+$/, "")}-studio-session.json`);
+    setStatus("Takeoff session file downloaded. Another estimator can import it. This is a shared file, not a live multi-user session.");
+  }
+
+  async function importStudioSession(event) {
+    const picked = event.target.files?.[0];
+    event.target.value = "";
+    if (!picked) return;
+    try {
+      const incoming = JSON.parse(await picked.text());
+      const next = mergeStudioPackage(marks, incoming);
+      if (next === marks) {
+        setDrawingError("That file is not an Estim8r takeoff session.");
+        return;
+      }
+      commitMarks(next, "Imported takeoff session.");
+      if (incoming.pageTakeoff) setPageTakeoff(incoming.pageTakeoff);
+      if (Array.isArray(incoming.slips)) setSlipSheets(incoming.slips);
+      if (Array.isArray(incoming.toolChest) && incoming.toolChest.length) {
+        setToolChest((current) => incoming.toolChest.reduce((chest, item) => addToolChestItem(chest, item), current));
+      }
+    } catch (error) {
+      setDrawingError(error?.message || "Could not read the takeoff session file.");
+    }
+  }
+
+  function insertSlipSheet() {
+    const title = window.prompt("Slip sheet title", "Revision");
+    if (!title) return;
+    setSlipSheets((current) => addSlipSheet(current, sheetMeta.page, title));
+    setStatus(`Slip sheet “${title}” is saved after sheet ${sheetMeta.page}. It travels with the quantity link and the shared session file.`);
+  }
+
+  function countSelectedSymbol() {
+    const rows = visualSearchCounts(marks, selectedMark);
+    if (!rows.length) {
+      setStatus("No accepted matches for this symbol yet. Classify it before counting it across pages.");
+      return;
+    }
+    const total = rows.reduce((sum, row) => sum + row.count, 0);
+    setStatus(`${selectedMark?.typeCode || selectedMark?.symbolLabel || "Symbol"}: ${total} on ${rows.map((row) => `sheet ${row.sheet} (${row.count})`).join(", ")}.`);
+  }
+
+  function openNextBatchDrawing() {
+    const [next, ...rest] = batchQueue;
+    setBatchQueue(rest);
+    if (next) void chooseFile(next);
+  }
+
   async function copyQuantities() {
     const csv = quantitiesToCsv(editedRollup, runs);
     try {
       await navigator.clipboard.writeText(csv);
-      setStatus("Quantity schedule copied as CSV.");
+      setStatus("Counted items copied.");
     } catch {
       window.prompt("Copy quantity CSV", csv);
     }
@@ -1734,194 +2517,107 @@ export default function TakeoffWorkspace() {
 
   if (!file) {
     return (
-      <div className="mx-auto max-w-5xl space-y-4 p-4">
-        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-orange-500">Estim8r Takeoff</p>
-          <h1 className="mt-1 text-2xl font-black text-foreground">Electrical takeoff workspace</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Calibrated counts, conduit LF, circuit traces, areas, and a quantity schedule on the live drawing. Upload a PDF or image to start.</p>
-        </section>
-        <section className="relative rounded-2xl border border-border bg-card p-4 shadow-sm">
-          <div
-            onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
-            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; }}
-            onDrop={handleDrop}
+      <div className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center p-6">
+        <div
+          onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; }}
+          onDrop={handleDrop}
+          className="rounded-lg border border-border bg-card p-6"
+        >
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">Takeoff</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Open a PDF or image. The sheet is ready to pan, zoom, and mark as soon as it loads.</p>
+          <label
+            htmlFor={DRAWING_INPUT_ID}
+            className="mt-5 flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 px-6 py-8 text-center"
           >
-            <label
-              htmlFor={DRAWING_INPUT_ID}
-              className="flex min-h-52 w-full cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-blue-300 bg-blue-50/50 p-8 text-center dark:border-orange-500/30 dark:bg-orange-500/5"
-            >
-              <FileUp className="mb-3 h-10 w-10 text-blue-600 dark:text-orange-500" />
-              <span className="text-lg font-bold text-foreground">Upload electrical drawings</span>
-              <span className="mt-1 text-sm text-muted-foreground">PDF, PNG, JPG, JPEG, or WEBP — full sheet fits the window</span>
-              <span className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-bold text-white dark:bg-orange-500">
-                <Upload className="h-4 w-4" /> Choose drawing
-              </span>
-            </label>
-          </div>
-          <div className="mt-2 text-xs text-muted-foreground">{status}</div>
-          {loadingDrawing && <div className="mt-2 text-sm font-semibold text-foreground">Reading drawing…</div>}
-          {drawingError && <div role="alert" className="mt-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{drawingError}</div>}
-        </section>
+            <FileUp className="mb-2 h-8 w-8 text-muted-foreground" />
+            <span className="text-sm font-semibold text-foreground">Drop a drawing here</span>
+            <span className="mt-1 text-xs text-muted-foreground">PDF, PNG, JPG, JPEG, or WEBP</span>
+            <span className="mt-4 inline-flex h-9 items-center gap-2 rounded-md bg-foreground px-3 text-sm font-semibold text-background">
+              <Upload className="h-4 w-4" /> Choose drawing
+            </span>
+          </label>
+          {status ? <div className="mt-3 text-sm text-muted-foreground">{status}</div> : null}
+          {loadingDrawing && <div className="mt-2 text-sm font-medium text-foreground">Reading drawing…</div>}
+          {drawingError && <div role="alert" className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{drawingError}</div>}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="relative flex h-full min-h-0 flex-1 flex-col bg-background">
-      <div
-        onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
-        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; }}
-        onDrop={handleDrop}
-        className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-2"
-      >
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-blue-50 text-blue-600 dark:bg-orange-500/10 dark:text-orange-500"><ImageIcon className="h-5 w-5" /></div>
-          <div className="min-w-0">
-            <div className="truncate font-bold text-foreground">{file.name}</div>
-            <div className="text-xs text-muted-foreground">
-              {isPdf ? `PDF • ${sheetMeta.pageCount} sheet${sheetMeta.pageCount === 1 ? "" : "s"}` : "Drawing image"}
-              {calibration ? ` • ${calibration.scaleLabel ? `scale ${calibration.scaleLabel}` : `calibrated ${calibration.feet} ft`}` : " • scale not set"}
-              {zoom === 1 ? " • fitted to window" : ` • ${Math.round(zoom * 100)}%`}
-              {savedAt ? ` • saved ${new Date(savedAt).toLocaleTimeString()}` : " • not saved yet"}
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {[["manual", "Manual"], ["hybrid", "Hybrid"]].map(([value, label]) => (
-            <button key={value} type="button" onClick={() => setMode(value)} className={cn("rounded-lg border px-3 py-1.5 text-xs font-semibold", mode === value ? "border-blue-600 bg-blue-600 text-white dark:border-orange-500 dark:bg-orange-500" : "border-border bg-background")}>{label}</button>
-          ))}
-          <button
-            type="button"
-            disabled={aiBusy}
-            title="AI assist reads the PDF text/schedule layer for the selected trade, places colored count marks and homerun conduit on the sheets, and leaves them on the drawing so you can verify every count."
-            onClick={() => { setMode("ai"); void runAiTakeoff(); }}
-            className={cn("rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:cursor-wait disabled:opacity-60", mode === "ai" ? "border-blue-600 bg-blue-600 text-white dark:border-orange-500 dark:bg-orange-500" : "border-border bg-background")}
-          >
-            {aiBusy ? "AI working…" : "AI assist"}
-          </button>
-          <button type="button" onClick={() => saveTakeoff()} className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 dark:bg-orange-500">
-            <Save className="h-4 w-4" /> Save
-          </button>
-          <button
-            type="button"
-            title="True Takeoff marks the drawings (runs AI assist if nothing is counted yet), then builds the bid-lock electrical estimate from those verified marks."
-            onClick={() => { void buildAndSaveTrueElectricalEstimate(); }}
-            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-emerald-700"
-          >
-            True Takeoff
-          </button>
-          <button type="button" onClick={() => { void buildAndSaveTrueElectricalEstimate({ download: true }); }} className="rounded-lg border border-emerald-600 px-3 py-1.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300">Takeoff CSV</button>
-          <Link to={file ? `/estimates/new?file=${encodeURIComponent(file.name)}&size=${file.size}` : "/estimates/new"} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Estimate</Link>
-          <Link to={file ? `/markup?file=${encodeURIComponent(file.name)}&size=${file.size}` : "/markup"} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Markup pages</Link>
-          <button type="button" onClick={downloadQuoteExcel} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Quote Excel</button>
-          <button type="button" onClick={downloadQuotePdf} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Quote PDF</button>
-          <button type="button" onClick={downloadTakeoff} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Export JSON</button>
-          <button type="button" onClick={() => void downloadMarkedDeviceDrawings()} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Counted Drawings PDF</button>
-          <button type="button" onClick={() => void downloadConduitRouteDrawings()} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Conduit Routes PDF</button>
-          <button type="button" onClick={downloadConduitCircuitSchedule} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Conduit Schedule PDF</button>
-          <button type="button" onClick={downloadConduitCircuitCsv} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Conduit Schedule CSV</button>
-          <button type="button" onClick={downloadWireMakeupPdf} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Wire Makeup PDF</button>
-          <button type="button" onClick={downloadWireMakeupCsv} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Wire Makeup CSV</button>
-          <label htmlFor={DRAWING_INPUT_ID} className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted">Replace</label>
-          <button type="button" onClick={closeDrawing} className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-sm font-semibold hover:bg-muted"><X className="h-4 w-4" /> Close</button>
-        </div>
-      </div>
-      {drawingError && <div className="border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{drawingError}</div>}
+    <div
+      className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background"
+      onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); }}
+      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; }}
+      onDrop={handleDrop}
+    >
+      <TakeoffCommandBar
+        fileName={file.name}
+        detail={[
+          isPdf ? `${sheetMeta.pageCount} sheet${sheetMeta.pageCount === 1 ? "" : "s"}` : "Image",
+          calibration ? (calibration.scaleLabel ? `scale ${calibration.scaleLabel}` : `${calibration.feet} ft`) : "scale not set",
+          aiBusy ? "AI working" : mode === "ai" ? "AI ready" : savedAt ? `saved ${new Date(savedAt).toLocaleTimeString()}` : "not saved",
+        ].join(" · ")}
+        page={sheetMeta.page}
+        pageCount={sheetMeta.pageCount}
+        zoom={zoom}
+        aiBusy={aiBusy}
+        isPdf={isPdf}
+        pageTakeoffEnabled={isPageTakeoffEnabled(pageTakeoff, sheetMeta.page)}
+        pendingReview={accuracyTotals.pending}
+        onPrev={() => selectSheet(sheetMeta.page - 1)}
+        onNext={() => selectSheet(sheetMeta.page + 1)}
+        onZoomOut={() => setZoom((z) => Math.max(TAKEOFF_MIN_ZOOM, Number((z - 0.25).toFixed(2))))}
+        onZoomIn={() => setZoom((z) => Math.min(TAKEOFF_MAX_ZOOM, Number((z + 0.25).toFixed(2))))}
+        onFit={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}
+        onUndo={undo}
+        onRedo={redo}
+        onAi={() => { setMode("ai"); void runAiTakeoff({ onlyPage: sheetMeta.page }); }}
+        onPageTakeoff={(enabled) => {
+          setPageTakeoff((current) => setPageTakeoffEnabled(current, sheetMeta.page, enabled));
+          setStatus(enabled ? `Takeoff will include sheet ${sheetMeta.page}.` : `Takeoff will skip sheet ${sheetMeta.page}.`);
+        }}
+        onReview={openAccuracyReview}
+        actions={(
+          <TakeoffActionsMenu
+            aiBusy={aiBusy}
+            label="Actions"
+            onAiAssist={() => { setMode("ai"); void runAiTakeoff(); }}
+            onSave={() => saveTakeoff()}
+            onTrueTakeoff={() => { void buildAndSaveTrueElectricalEstimate(); }}
+            onTakeoffCsv={() => { void buildAndSaveTrueElectricalEstimate({ download: true }); }}
+            onEstimatePath={takeoffEstimatePath(file)}
+            onMarkupPath={takeoffMarkupPath(file)}
+            onCountedDrawings={() => { void downloadMarkedDeviceDrawings(); }}
+            onConduitRoutes={() => { void downloadConduitRouteDrawings(); }}
+            onConduitSchedulePdf={downloadConduitCircuitSchedule}
+            onConduitScheduleCsv={downloadConduitCircuitCsv}
+            onWireMakeupPdf={downloadWireMakeupPdf}
+            onWireMakeupCsv={downloadWireMakeupCsv}
+            onQuoteExcel={downloadQuoteExcel}
+            onQuotePdf={downloadQuotePdf}
+            onReplaceId={DRAWING_INPUT_ID}
+            onClose={closeDrawing}
+            onClear={clearAll}
+          />
+        )}
+      />
+      {drawingError && <div role="alert" className="shrink-0 border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{drawingError}</div>}
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)_300px]">
-        <aside className="hidden min-h-0 overflow-auto border-r border-border bg-card p-3 lg:block">
-          {TOOL_GROUPS.map((group) => (
-            <div key={group.key} className="mb-3">
-              <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{group.label}</div>
-              <div className="grid grid-cols-2 gap-1.5">
-                {TAKEOFF_TOOLS.filter((item) => item.group === group.key).map((item) => {
-                  const Icon = TOOL_ICONS[item.key] || Pencil;
-                  return (
-                    <button key={item.key} type="button" onClick={() => { setTool(item.key); setDraftPoints([]); draftJunctionIdsRef.current = []; setMeasureLabel(""); }}
-                      className={cn("flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-left text-[11px] font-semibold",
-                        tool === item.key ? "border-blue-600 bg-blue-50 text-blue-700 dark:border-orange-500 dark:bg-orange-500/10 dark:text-orange-300" : "border-border bg-background hover:bg-muted")}>
-                      <Icon className="h-3.5 w-3.5 shrink-0" />{item.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-          <div className="border-t border-border pt-3 space-y-2">
-            <label className="block text-xs font-bold text-muted-foreground">Conduit size
-              <select value={conduitChoice.id} onChange={(event) => setConduitId(event.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-2 py-2 text-sm font-semibold text-foreground">
-                {conduitChoices.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-              </select>
-            </label>
-            <button
-              type="button"
-              disabled={tool !== "conduit" || !draftPoints.length}
-              onClick={placeJunctionOnDraft}
-              className="w-full rounded-lg border border-amber-700 bg-amber-50 px-2 py-2 text-xs font-bold text-amber-900 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-amber-500/10 dark:text-amber-200"
-              title='While drawing conduit, place a 4" square metal junction box at the last corner (or press J)'
-            >
-              Add 4&quot; square JB
-            </button>
-            <div className="rounded-lg border border-border bg-background px-2 py-2 text-[11px] text-muted-foreground">
-              <div className="flex justify-between"><span>Junction boxes</span><strong className="text-foreground">{hardwareTotals.junctionBoxes}</strong></div>
-              <div className="mt-1 flex justify-between"><span>EMT connectors</span><strong className="text-foreground">{hardwareTotals.emtConnectors}</strong></div>
-            </div>
-            <div className="space-y-1">
-              <div className="text-xs font-bold text-muted-foreground">Type colors</div>
-              {typeSwatches.length ? (
-                <div className="flex flex-wrap gap-1">
-                  {typeSwatches.map((item) => (
-                    <span key={item.key} className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-1.5 py-0.5 text-[10px] font-semibold text-foreground">
-                      <span className="h-3 w-3 rounded-sm border border-black/20" style={{ backgroundColor: item.color }} aria-hidden />
-                      {item.key.toUpperCase()}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-[11px] text-muted-foreground">No device fills on this sheet yet.</p>
-              )}
-              <label className="text-xs font-bold text-muted-foreground">Pen
-                <span className="mt-1 flex items-center gap-2">
-                  <span className="h-8 w-8 shrink-0 rounded-md border border-border" style={{ backgroundColor: penColor }} aria-hidden />
-                  <input type="color" value={penColor} onChange={(event) => setPenColor(event.target.value)} className="h-8 w-full" />
-                </span>
-              </label>
-            </div>
-            <TakeoffSizeControl
-              markerSize={penSize}
-              lineSize={penThickness}
-              onMarkerSize={setPenSize}
-              onLineSize={setPenThickness}
-            />
-            <label className="block text-xs font-bold text-muted-foreground">Homeruns per conduit
-              <input type="number" min="1" max="12" value={maxHomeruns} onChange={(event) => setMaxHomeruns(Math.max(1, Number(event.target.value) || 1))} className="mt-1 w-full rounded-lg border border-input bg-background px-2 py-1 text-sm" />
-            </label>
-            <p className="text-[11px] leading-4 text-muted-foreground">Default is 3. AI will not put more homeruns in one conduit unless you raise this.</p>
-            <p className="text-[11px] leading-4 text-muted-foreground"><strong className="text-foreground">AI assist</strong> counts the selected trade and draws colored marks on the sheets. <strong className="text-foreground">True Takeoff</strong> marks the drawings (runs AI if empty) then builds the bid-lock estimate.</p>
-            <DevicePicker
-              trades={TRADES}
-              trade={trade}
-              onTrade={setTrade}
-              marks={marks}
-              pageKinds={pageKinds}
-              category={category}
-              onCategory={(value) => { setCategory(value); setSymbolQuery(""); }}
-              symbolId={symbolId}
-              onSymbol={setSymbolId}
-              query={symbolQuery}
-              onQuery={setSymbolQuery}
-            />
-          </div>
-          <div className="mt-3 rounded-lg bg-muted p-3 text-xs leading-5 text-muted-foreground">
-            <strong className="block text-foreground">{activeTool.label}</strong>{activeTool.help}
-            {measureLabel && <div className="mt-2 font-bold text-foreground">{measureLabel}</div>}
-            {(mode === "ai" || mode === "hybrid") && (
-              <div className="mt-2 text-foreground">{aiBusy ? `Taking off ${tradeById(trade).label}…` : `AI takeoff runs for ${tradeById(trade).label} only. Other trades stay out until you select them.`}</div>
-            )}
-          </div>
-        </aside>
+      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] lg:grid-cols-[5.5rem_minmax(0,1fr)_22rem] lg:grid-rows-1">
+        <TakeoffToolRail
+          tool={tool}
+          onTool={(key) => {
+            setTool(key);
+            setDraftPoints([]);
+            draftJunctionIdsRef.current = [];
+            setMeasureLabel("");
+            if (["count", "drop", "conduit", "homerun"].includes(key)) setStudioPanel("symbol");
+          }}
+        />
 
-        <section className="flex min-h-0 min-w-0 flex-col bg-card lg:flex-row">
+        <section className="grid min-h-0 min-w-0 grid-rows-[minmax(20rem,1fr)] overflow-hidden bg-card lg:flex lg:grid-rows-none lg:flex-row">
           <SheetThumbnailPanel
             layout={wideLayout ? "side" : "strip"}
             fileBytes={fileBytes}
@@ -1935,71 +2631,45 @@ export default function TakeoffWorkspace() {
             onToggle={toggleThumbs}
             onSelectPage={selectSheet}
           />
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="flex shrink-0 gap-1 overflow-auto border-b border-border p-1 lg:hidden">
-            {TAKEOFF_TOOLS.map((item) => {
-              const Icon = TOOL_ICONS[item.key] || Pencil;
-              return <button key={item.key} type="button" onClick={() => { setTool(item.key); setDraftPoints([]); }} className={cn("inline-flex shrink-0 items-center gap-1 rounded-lg border px-2 py-1 text-xs font-semibold", tool === item.key ? "border-blue-600 bg-blue-50 text-blue-700" : "border-border")}>
-                <Icon className="h-3.5 w-3.5" />{item.label}
-              </button>;
-            })}
-          </div>
-          <div className="shrink-0 border-b border-border px-2 py-2 lg:hidden">
-            <DevicePicker
-              compact
-              trades={TRADES}
-              trade={trade}
-              onTrade={setTrade}
-              marks={marks}
-              pageKinds={pageKinds}
-              category={category}
-              onCategory={(value) => { setCategory(value); setSymbolQuery(""); }}
-              symbolId={symbolId}
-              onSymbol={setSymbolId}
-              query={symbolQuery}
-              onQuery={setSymbolQuery}
-            />
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-2 py-1.5">
-            <div className="flex flex-wrap items-center gap-1">
-              <div className="lg:hidden">
-                <TakeoffSizeControl
-                  compact
-                  markerSize={penSize}
-                  lineSize={penThickness}
-                  onMarkerSize={setPenSize}
-                  onLineSize={setPenThickness}
-                />
-              </div>
-              <button type="button" onClick={undo} className="rounded-lg p-2 hover:bg-muted" title="Undo"><Undo2 className="h-4 w-4" /></button>
-              <button type="button" onClick={redo} className="rounded-lg p-2 hover:bg-muted" title="Redo"><Redo2 className="h-4 w-4" /></button>
-              <button type="button" onClick={() => setZoom((z) => Math.max(0.25, Number((z - 0.25).toFixed(2))))} className="rounded-lg p-2 hover:bg-muted" title="Zoom out"><ZoomOut className="h-4 w-4" /></button>
-              <span className="min-w-12 text-center text-xs font-semibold">{Math.round(zoom * 100)}%</span>
-              <button type="button" onClick={() => setZoom((z) => Math.min(4, Number((z + 0.25).toFixed(2))))} className="rounded-lg p-2 hover:bg-muted" title="Zoom in"><ZoomIn className="h-4 w-4" /></button>
-              <button type="button" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} className="rounded-lg border border-border px-2 py-1 text-xs font-semibold hover:bg-muted">Fit sheet</button>
-              {sheetMeta.pageCount > 1 && (
-                <div className="ml-2 flex items-center gap-1 rounded-lg border border-border bg-background px-1.5 py-0.5">
-                  <button type="button" disabled={sheetMeta.page <= 1} onClick={() => selectSheet(sheetMeta.page - 1)} className="rounded border border-border px-2 py-1 text-xs font-semibold disabled:opacity-40">Previous</button>
-                  <strong className="min-w-24 px-1 text-center text-xs">Sheet {sheetMeta.page} of {sheetMeta.pageCount}</strong>
-                  <button type="button" disabled={sheetMeta.page >= sheetMeta.pageCount} onClick={() => selectSheet(sheetMeta.page + 1)} className="rounded border border-border px-2 py-1 text-xs font-semibold disabled:opacity-40">Next</button>
-                </div>
-              )}
-              {selectedId && <button type="button" onClick={deleteSelected} className="rounded-lg px-2 py-1 text-xs font-semibold text-destructive hover:bg-destructive/10">Delete</button>}
-              <button type="button" onClick={openAccuracyReview} className="rounded-lg border border-border px-2 py-1 text-xs font-semibold hover:bg-muted">
-                Review{accuracyTotals.pending ? ` ${accuracyTotals.pending}` : ""}
-              </button>
-            </div>
-            <div className="flex items-center gap-1">
-              <button type="button" onClick={clearAll} className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" />Clear</button>
-            </div>
-          </div>
+          <div className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(20rem,1fr)_auto] overflow-hidden lg:flex lg:flex-1 lg:grid-rows-none lg:flex-col">
+          <TakeoffMobileCommandBar
+            aiBusy={aiBusy}
+            zoom={zoom}
+            pagesOpen={mobilePanel === "pages"}
+            estimatePath={takeoffEstimatePath(file)}
+            onAiAssist={() => { setMode("ai"); void runAiTakeoff(); }}
+            onTogglePages={() => setMobilePanel((value) => (value === "pages" ? "" : "pages"))}
+            onZoomOut={() => setZoom((z) => Math.max(TAKEOFF_MIN_ZOOM, Number((z - 0.25).toFixed(2))))}
+            onZoomIn={() => setZoom((z) => Math.min(TAKEOFF_MAX_ZOOM, Number((z + 0.25).toFixed(2))))}
+            onFit={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}
+          />
           <div
             ref={viewportRef}
             onPointerDown={onPanPointerDown}
             onWheel={handleDrawingWheel}
-            className={cn("min-h-0 min-w-0 flex-1 overflow-hidden bg-neutral-400/40 dark:bg-neutral-950", tool === "pan" && "cursor-grab touch-none")}
+            data-testid="takeoff-sheet-viewport"
+            className={cn(
+              "takeoff-sheet-viewport relative min-h-[20rem] min-w-0 overflow-hidden bg-muted/50 dark:bg-neutral-950 lg:min-h-0 lg:flex-1",
+              tool === "pan" && "cursor-grab",
+            )}
+            style={{ touchAction: "none" }}
           >
-            <div className="flex h-full w-full items-center justify-center p-2">
+            <TakeoffSelectionBar
+              selected={selectedId ? selectedMark : null}
+              isDevice={Boolean(selectedMark && isDeviceMark(selectedMark) && tool === "select")}
+              onColor={(color) => updateMark(selectedMark.id, { color, correction: "color" })}
+              onShrink={() => resizeSelectedReview({
+                w: (selectedMark.symbolBodyBounds?.w || selectedMark.outline?.w || 0.7) * 0.8,
+                h: (selectedMark.symbolBodyBounds?.h || selectedMark.outline?.h || 0.7) * 0.8,
+              })}
+              onEnlarge={() => resizeSelectedReview({
+                w: (selectedMark.symbolBodyBounds?.w || selectedMark.outline?.w || 0.7) * 1.25,
+                h: (selectedMark.symbolBodyBounds?.h || selectedMark.outline?.h || 0.7) * 1.25,
+              })}
+              onCountPages={countSelectedSymbol}
+              onDelete={deleteSelected}
+            />
+            <div className={cn("flex h-full w-full items-center justify-center p-2", comparePage && "items-stretch gap-2")}>
               <div
                 ref={(node) => {
                   viewerRef.current = node;
@@ -2007,26 +2677,42 @@ export default function TakeoffWorkspace() {
                 }}
                 onClick={(event) => {
                   if (panningRef.current) return;
+                  if (suppressEditClickRef.current) {
+                    suppressEditClickRef.current = false;
+                    return;
+                  }
                   onDrawingClick(event);
                 }}
                 onDoubleClick={finishPath}
                 onContextMenu={onViewerContextMenu}
                 onPointerDown={onViewerPointerDown}
-                style={{ transform: `translate(${pan.x}px, ${pan.y}px)`, willChange: tool === "pan" ? "transform" : "auto" }}
                 onPointerMove={(event) => {
-                  if (panningRef.current) return;
-                  if (!["conduit", "polyline", "linear", "measure", "homerun"].includes(tool)) return;
+                  if (panningRef.current || aiBusy) return;
                   const point = drawingPoint(event);
                   if (!point) return;
-                  // Throttle hover updates while drafting conduit to keep pan/draw smooth.
+                  setPointerSheet((current) => (current && Math.hypot(current.x - point.x, current.y - point.y) < 0.2 ? current : point));
+                  const hovered = selectMarkAtPoint(overlayMarks, point, { markerSize: (mark) => resolvedMarkerSize(mark, penSize) });
+                  if (hovered && isDeviceMark(hovered)) {
+                    setHoveredGeometryInfo(null);
+                    setHoveredDeviceId(hovered.id);
+                  } else {
+                    // Pointer movement must stay cheap. Do not run the full legend
+                    // geometry matcher on every mouse event; that caused Chrome's
+                    // "Page unresponsive" dialog on large electrical PDFs.
+                    const object = hitDrawingObject(drawingObjects, point, sheetMeta.page);
+                    setHoveredGeometryInfo(null);
+                    setHoveredDeviceId(object ? `object:${object.objectId || object.id}` : null);
+                  }
+                  if (!["conduit", "polyline", "linear", "measure", "homerun"].includes(tool)) return;
                   if (tool === "conduit") {
                     const prev = hoverPoint;
                     if (prev && Math.hypot(prev.x - point.x, prev.y - point.y) < 0.35) return;
                   }
                   setHoverPoint(point);
                 }}
-                onPointerLeave={() => setHoverPoint(null)}
+                onPointerLeave={() => { setHoverPoint(null); setPointerSheet(null); setHoveredDeviceId(null); setHoveredGeometryInfo(null); }}
                 className={cn("relative bg-white shadow-xl", tool === "pan" ? "cursor-grab" : tool === "select" ? "cursor-default" : "cursor-crosshair")}
+                style={{ transform: `translate(${pan.x}px, ${pan.y}px)`, willChange: tool === "pan" ? "transform" : "auto", touchAction: "none" }}
               >
                 {isPdf ? (
                   fileBytes ? (
@@ -2036,13 +2722,12 @@ export default function TakeoffWorkspace() {
                       zoom={zoom}
                       pageNumber={sheetMeta.page}
                       onPageNumber={(page) => setSheetMeta((current) => (current.page === page ? current : { ...current, page }))}
-                      viewportWidth={viewportSize.width}
+                      viewportWidth={comparePage ? Math.max(160, Math.floor(viewportSize.width / 2)) : viewportSize.width}
                       viewportHeight={viewportSize.height}
                       onPageInfo={(info) => {
                         setSheetMeta((current) => (
                           current.page === info.page && current.pageCount === info.pageCount ? current : info
                         ));
-                        if (Number.isFinite(info?.rotate)) setPageRotation(Number(info.rotate) || 0);
                         setDrawingError("");
                       }}
                     />
@@ -2092,28 +2777,281 @@ export default function TakeoffWorkspace() {
                   tool={tool}
                   markerSize={penSize}
                   lineSize={penThickness}
+                  fontSize={OVERLAY_FONT_SIZE}
+                  showConduitLabels={wideLayout}
                   lengthFor={(mark) => markLengthFeet(mark, calibration, aspect)}
+                  printedHighlight={printedHighlightGeometry(printedSelection)}
+                  hoverHighlight={printedHighlightGeometry(hoveredPrinted && printedSelectionId(hoveredPrinted) !== selectedId ? hoveredPrinted : null)}
                 />
-                {file && !aiBusy && visibleOverlayMarks.length === 0 && (
-                  <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center p-4">
-                    <div className="max-w-sm rounded-xl border border-border bg-background/95 px-4 py-3 text-center shadow-lg">
-                      <p className="text-sm font-semibold text-foreground">No takeoff marks on this sheet</p>
-                      <p className="mt-1 text-xs leading-4 text-muted-foreground">
-                        {marks.length
-                          ? "This sheet has no counted devices or visible overlays. Open a plan sheet or run AI Assist again."
-                          : "Run AI Assist to count the selected trade and paint a type-colored fill on each symbol, or place a count yourself."}
-                      </p>
+                {(() => {
+                  const rawSymbol = hoveredGeometryInfo?.match?.entry?.symbol || null;
+                  const rawGeometry = hoveredGeometryInfo?.geometry || null;
+                  const hovered = visibleOverlayMarks.find((mark) => mark.id === hoveredDeviceId && isDeviceMark(mark))
+                    || (String(hoveredDeviceId || "").startsWith("object:")
+                      ? drawingObjects.find((item) => `object:${item.objectId || item.id}` === hoveredDeviceId)
+                      : null)
+                    || (rawGeometry ? {
+                      x: rawGeometry.cx, y: rawGeometry.cy,
+                      symbol: rawSymbol?.id,
+                      symbolLabel: rawSymbol?.label || "Unclassified device",
+                      abbr: rawSymbol?.abbr || hoveredGeometryInfo?.match?.entry?.code || "?",
+                      typeCode: rawSymbol?.abbr || hoveredGeometryInfo?.match?.entry?.code || "UNKNOWN",
+                      category: rawSymbol?.takeoffCategory || rawSymbol?.category || "Unclassified",
+                      requiresClassification: !rawSymbol,
+                    } : null);
+                  if (hovered?.objectKind === "circuit" || hovered?.objectKind === "room") {
+                    const x = Math.min(78, Math.max(2, Number(pointerSheet?.x ?? hovered.x) || 0));
+                    const y = Math.min(78, Math.max(2, Number(pointerSheet?.y ?? hovered.y) || 0));
+                    const title = hovered.objectKind === "room" ? "Room" : "Line";
+                    const detail = hovered.objectKind === "room"
+                      ? "Click to select this room, then name it before the area is used in the bid."
+                      : "Click to select this line, then assign a circuit before the length is used in the bid.";
+                    return (
+                      <div
+                        className="pointer-events-none absolute z-50 max-w-56 rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground shadow-md"
+                        style={{ left: `${x}%`, top: `${y}%`, transform: "translate(10px, 10px)" }}
+                      >
+                        <div className="font-semibold leading-tight">{title}</div>
+                        <div className="mt-0.5 text-muted-foreground">{detail}</div>
+                      </div>
+                    );
+                  }
+                  if (!hovered || !shouldShowSymbolHover(hovered)) return null;
+                  const hoverBound = hoverBoundToLegend(hovered, drawingSymbols, {
+                    planType: aiPages.find((item) => item.page === sheetMeta.page)?.planType || "",
+                  });
+                  const hoverLegend = hoverBound.hover;
+                  const x = Math.min(78, Math.max(2, Number(pointerSheet?.x ?? hovered.x) || 0));
+                  const y = Math.min(78, Math.max(2, Number(pointerSheet?.y ?? hovered.y) || 0));
+                  return (
+                    <div
+                      className="pointer-events-none absolute z-50 max-w-56 rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground shadow-md"
+                      style={{ left: `${x}%`, top: `${y}%`, transform: "translate(10px, 10px)" }}
+                    >
+                      <div className="font-semibold leading-tight">{hoverLegend.code || "Symbol"} · {hoverLegend.label}</div>
+                      <div className="text-muted-foreground">{hoverLegend.category}</div>
+                      {!hoverLegend.verified || hovered.requiresClassification ? <div className="mt-1 text-amber-800 dark:text-amber-300">Review before bid use.</div> : null}
+                      {hoverLegend.source ? <div className="mt-1">Legend: {hoverLegend.source}</div> : null}
+                      {hoverLegend.page ? <div>Sheet {hoverLegend.page}</div> : null}
+                    </div>
+                  );
+                })()}
+                {file && searchManifest && !aiBusy && visibleOverlayMarks.length === 0 && !emptyNoticeDismissed && (
+                  <div className="absolute bottom-3 right-3 z-20 max-w-xs rounded-md border border-border bg-card px-3 py-2 shadow-sm">
+                    <div className="flex items-start gap-2">
+                      <p className="min-w-0 text-xs text-muted-foreground">No marks on this sheet.</p>
+                      <button
+                        type="button"
+                        aria-label="Close no takeoff marks notice"
+                        onClick={() => setEmptyNoticeDismissed(true)}
+                        className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      >
+                        ×
+                      </button>
                     </div>
                   </div>
                 )}
               </div>
+              {comparePage && isPdf && fileBytes ? (
+                <div data-testid="compare-sheet" className="flex min-w-0 flex-1 items-center justify-center overflow-hidden border-l border-border bg-neutral-200/50">
+                  <PdfDrawing
+                    fileBytes={fileBytes}
+                    fileName={file.name}
+                    zoom={1}
+                    pageNumber={Number(comparePage)}
+                    viewportWidth={Math.max(160, Math.floor((viewportSize.width || 640) / 2))}
+                    viewportHeight={viewportSize.height || 480}
+                  />
+                </div>
+              ) : null}
             </div>
           </div>
-          <div className="shrink-0 border-t border-border bg-background px-3 py-1.5 text-xs text-muted-foreground">{status}</div>
+          <div className="hidden lg:block">
+            <AiSearchManifestPanel manifest={searchManifest} trade={trade} />
+            <div className="flex shrink-0 items-center gap-2 border-t border-border bg-card px-3 py-1.5 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">{activeTool.label}</span>
+              <span className="truncate">{measureLabel || status}</span>
+            </div>
+          </div>
+          <TakeoffMobileDock
+            tool={tool}
+            activeToolLabel={activeTool.label}
+            status={status}
+            toolsOpen={mobilePanel === "tools"}
+            devicesOpen={mobilePanel === "devices"}
+            countsOpen={mobilePanel === "counts"}
+            onPan={() => { setTool("pan"); setDraftPoints([]); setMobilePanel(""); }}
+            onToggleTools={() => setMobilePanel((value) => (value === "tools" ? "" : "tools"))}
+            onToggleDevices={() => setMobilePanel((value) => (value === "devices" ? "" : "devices"))}
+            onToggleCounts={() => setMobilePanel((value) => (value === "counts" ? "" : "counts"))}
+            moreMenu={(
+              <TakeoffActionsMenu
+                aiBusy={aiBusy}
+                label="More"
+                onAiAssist={() => { setMode("ai"); void runAiTakeoff(); }}
+                onSave={() => saveTakeoff()}
+                onTrueTakeoff={() => { void buildAndSaveTrueElectricalEstimate(); }}
+                onTakeoffCsv={() => { void buildAndSaveTrueElectricalEstimate({ download: true }); }}
+                onEstimatePath={takeoffEstimatePath(file)}
+                onMarkupPath={takeoffMarkupPath(file)}
+                onCountedDrawings={() => { void downloadMarkedDeviceDrawings(); }}
+                onConduitRoutes={() => { void downloadConduitRouteDrawings(); }}
+                onConduitSchedulePdf={downloadConduitCircuitSchedule}
+                onConduitScheduleCsv={downloadConduitCircuitCsv}
+                onWireMakeupPdf={downloadWireMakeupPdf}
+                onWireMakeupCsv={downloadWireMakeupCsv}
+                onQuoteExcel={downloadQuoteExcel}
+                onQuotePdf={downloadQuotePdf}
+                onReplaceId={DRAWING_INPUT_ID}
+                onClose={closeDrawing}
+                onClear={clearAll}
+                className="h-11 w-full text-sm"
+              />
+            )}
+          />
           </div>
         </section>
 
+        <aside className="hidden min-h-0 flex-col border-l border-border bg-card lg:flex">
+          <div className="flex shrink-0 border-b border-border" role="tablist" aria-label="Takeoff panel">
+            {[["quantities", "Quantities"], ["symbol", "Symbol"], ["output", "Output"]].map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={studioPanel === id}
+                onClick={() => setStudioPanel(id)}
+                className={cn("h-9 flex-1 text-xs font-semibold", studioPanel === id ? "border-b-2 border-foreground text-foreground" : "text-muted-foreground hover:text-foreground")}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {studioPanel === "symbol" ? (
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+              <DevicePicker
+                availableSymbols={availableDeviceSymbols}
+                trades={TRADES}
+                trade={trade}
+                onTrade={setTrade}
+                marks={marks}
+                pageKinds={pageKinds}
+                category={category}
+                onCategory={(value) => { setCategory(value); setSymbolQuery(""); }}
+                symbolId={symbolId}
+                onSymbol={setSymbolId}
+                query={symbolQuery}
+                onQuery={setSymbolQuery}
+                onManualMark={() => { setTool("count"); setStatus("Choose a legend symbol, then click the missed printed symbol."); }}
+              />
+              <TakeoffSizeControl markerSize={penSize} lineSize={penThickness} onMarkerSize={setPenSize} onLineSize={setPenThickness} />
+              <label className="block text-xs font-semibold text-muted-foreground">Pen
+                <span className="mt-1 flex items-center gap-2">
+                  <span className="h-7 w-7 shrink-0 rounded-md border border-border" style={{ backgroundColor: penColor }} aria-hidden />
+                  <input type="color" value={penColor} onChange={(event) => setPenColor(event.target.value)} className="h-8 w-full" aria-label="Pen color" />
+                </span>
+              </label>
+              <label className="block text-xs font-semibold text-muted-foreground">Conduit size
+                <select value={conduitChoice.id} onChange={(event) => setConduitId(event.target.value)} className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm">
+                  {conduitChoices.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                </select>
+              </label>
+              {(tool === "conduit" || hardwareTotals.junctionBoxes > 0) && (
+                <div className="space-y-2">
+                  <button type="button" disabled={tool !== "conduit" || !draftPoints.length} onClick={placeJunctionOnDraft} className="w-full rounded-md border border-border px-2 py-1.5 text-left text-xs font-semibold hover:bg-muted disabled:opacity-40">Add 4&quot; square JB</button>
+                  <div className="flex justify-between text-xs text-muted-foreground"><span>Junction boxes</span><span className="font-medium text-foreground">{hardwareTotals.junctionBoxes}</span></div>
+                  <div className="flex justify-between text-xs text-muted-foreground"><span>EMT connectors</span><span className="font-medium text-foreground">{hardwareTotals.emtConnectors}</span></div>
+                </div>
+              )}
+              <label className="block text-xs font-semibold text-muted-foreground">Homeruns per conduit
+                <input type="number" min="1" max="12" value={maxHomeruns} onChange={(event) => setMaxHomeruns(Math.max(1, Number(event.target.value) || 1))} className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm" />
+              </label>
+              {typeSwatches.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {typeSwatches.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => setInspectType((current) => current === item.key.toUpperCase() ? "" : item.key.toUpperCase())}
+                      className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-semibold", inspectType === item.key.toUpperCase() ? "border-foreground bg-muted" : "border-border")}
+                    >
+                      <span className="h-3 w-3 rounded-sm border border-black/20" style={{ backgroundColor: item.color }} aria-hidden />
+                      {item.key.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="space-y-1">
+                <button type="button" className="w-full rounded-md border border-border px-2 py-1.5 text-left text-xs font-semibold hover:bg-muted" onClick={() => {
+                  const name = window.prompt("Name this tool", activeTool.label);
+                  if (!name) return;
+                  setToolChest((current) => addToolChestItem(current, { name, tool, color: penColor, symbolId, category, lineSize: penThickness, markerSize: penSize }));
+                }}>Save current tool</button>
+                {toolChest.map((item) => (
+                  <button key={item.id} type="button" className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-medium hover:bg-muted" onClick={() => {
+                    setTool(item.tool || "select");
+                    if (item.color) setPenColor(item.color);
+                    if (item.symbolId) setSymbolId(item.symbolId);
+                    if (item.category) setCategory(item.category);
+                    if (item.lineSize) setPenThickness(item.lineSize);
+                    if (item.markerSize) setPenSize(item.markerSize);
+                    setStatus(`${item.name} is the active tool.`);
+                  }}>
+                    <span className="h-3 w-3 rounded-sm border border-black/20" style={{ backgroundColor: item.color || "#334155" }} />
+                    {item.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {studioPanel === "output" ? (
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
+              <button type="button" onClick={downloadQuantityLink} className="w-full rounded-md px-2 py-1.5 text-left text-xs font-medium hover:bg-muted">Quantity link CSV</button>
+              <button type="button" onClick={() => { void downloadQuantityChecksum(); }} className="w-full rounded-md px-2 py-1.5 text-left text-xs font-medium hover:bg-muted">Quantity link checksum</button>
+              <button type="button" onClick={downloadStudioSession} className="w-full rounded-md px-2 py-1.5 text-left text-xs font-medium hover:bg-muted">Share takeoff session</button>
+              <label className="block cursor-pointer rounded-md px-2 py-1.5 text-xs font-medium hover:bg-muted">
+                Import takeoff session
+                <input type="file" accept="application/json,.json" className="sr-only" onChange={(event) => { void importStudioSession(event); }} />
+              </label>
+              <button type="button" onClick={insertSlipSheet} className="w-full rounded-md px-2 py-1.5 text-left text-xs font-medium hover:bg-muted">Slip sheet after this page</button>
+              {batchQueue.length > 0 && (
+                <button type="button" onClick={openNextBatchDrawing} className="w-full rounded-md px-2 py-1.5 text-left text-xs font-semibold hover:bg-muted">Next drawing ({batchQueue.length} waiting)</button>
+              )}
+              <ProfessionalToolsPanel
+                selected={selectedMark}
+                marks={marks}
+                drawingObjects={drawingObjects}
+                page={sheetMeta.page}
+                pageCount={sheetMeta.pageCount}
+                slips={slipSheets}
+                calibration={calibration}
+                aspect={currentAspect()}
+                comparePage={comparePage}
+                sessionId={sessionId}
+                onStatus={setStatus}
+                onTool={(next) => { setTool(next); setDraftPoints([]); }}
+                onPlaceAssembly={(assembly) => {
+                  setPendingAssembly(assembly);
+                  setStatus(`${assembly.name} will be placed on the next sheet click.`);
+                }}
+                onCrop={cropToSelection}
+                onCompare={setComparePage}
+                onSnapshot={saveRevisionSnapshot}
+                onRevision={compareRevision}
+                onWorkbook={downloadWorkbook}
+                onSign={() => { void signQuantityFile(); }}
+                onLiveLink={publishLiveQuantities}
+                onSession={setSessionId}
+                onOcr={() => { void readScannedText(); }}
+                onReport={downloadMaterialsReport}
+                onAerialLength={placeAerialLength}
+                onFormula={applyFormulaResult}
+              />
+            </div>
+          ) : null}
+          {studioPanel === "quantities" ? (
         <TakeoffInspector
+          className="min-h-0 flex-1 overflow-y-auto bg-card p-3"
           rollup={rollup}
           totals={editedRollup.totals}
           runs={runs}
@@ -2122,6 +3060,8 @@ export default function TakeoffWorkspace() {
           marks={tradeMarks}
           pageKinds={pageKinds}
           selected={selectedMark}
+          printed={printedSelection}
+          onCountPrinted={countPrintedSelection}
           conduitOptions={conduitChoices}
           scheduleEdits={scheduleEdits}
           onSelectRun={(id) => { setSelectedId(id); setTool("select"); }}
@@ -2143,7 +3083,145 @@ export default function TakeoffWorkspace() {
           reviewSummary={accuracyTotals}
           coverageNote={sheetCoverage ? describeSheetCoverage(sheetCoverage) : undefined}
         />
+          ) : null}
+        </aside>
       </div>
+      <TakeoffMobileSheet
+        open={mobilePanel === "pages"}
+        onOpenChange={(open) => setMobilePanel(open ? "pages" : "")}
+        title="Sheets"
+        description={`${sheetMeta.pageCount} sheet${sheetMeta.pageCount === 1 ? "" : "s"} in this drawing. Pinch and one-finger pan stay on the canvas.`}
+      >
+        <SheetThumbnailPanel
+          layout="sheet"
+          fileBytes={fileBytes}
+          fileUrl={fileUrl}
+          isPdf={isPdf}
+          fileName={file.name}
+          page={sheetMeta.page}
+          pageCount={sheetMeta.pageCount}
+          marks={marks}
+          open
+          onToggle={() => setMobilePanel("")}
+          onSelectPage={(page) => { selectSheet(page); setMobilePanel(""); }}
+        />
+      </TakeoffMobileSheet>
+      <TakeoffMobileSheet
+        open={mobilePanel === "tools"}
+        onOpenChange={(open) => setMobilePanel(open ? "tools" : "")}
+        title="Takeoff tools"
+        description={activeTool.help}
+      >
+        <div className="grid grid-cols-2 gap-2">
+          {TAKEOFF_TOOLS.map((item) => {
+            const Icon = TOOL_ICONS[item.key] || Pencil;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => { setTool(item.key); setDraftPoints([]); setMobilePanel(""); }}
+                className={cn(
+                  "flex min-h-[44px] items-center gap-2 rounded-xl border px-3 py-2 text-left text-base font-bold",
+                  tool === item.key ? "border-foreground bg-foreground text-background" : "border-border bg-background",
+                )}
+              >
+                <Icon className="h-5 w-5 shrink-0" /><span className="truncate">{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-4 rounded-xl border border-border bg-muted/40 p-3">
+          <TakeoffSizeControl
+            markerSize={penSize}
+            lineSize={penThickness}
+            onMarkerSize={setPenSize}
+            onLineSize={setPenThickness}
+          />
+        </div>
+        {typeSwatches.length ? (
+          <div className="mt-4">
+            <div className="mb-2 text-base font-bold">Type colors</div>
+            <div className="flex flex-wrap gap-2">
+              {typeSwatches.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setInspectType((current) => current === item.key.toUpperCase() ? "" : item.key.toUpperCase())}
+                  className={inspectType === item.key.toUpperCase()
+                    ? "inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-foreground bg-foreground px-3 text-base font-semibold text-background"
+                    : "inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-border bg-background px-3 text-base font-bold"}
+                >
+                  <span className="h-5 w-5 rounded-sm border border-black/20" style={{ backgroundColor: item.color }} aria-hidden />
+                  {item.key.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </TakeoffMobileSheet>
+      <TakeoffMobileSheet
+        open={mobilePanel === "devices"}
+        onOpenChange={(open) => setMobilePanel(open ? "devices" : "")}
+        title="Devices"
+        description="Pick a legend symbol, then mark a missed printed symbol."
+      >
+        <DevicePicker
+          compact
+          availableSymbols={availableDeviceSymbols}
+          trades={TRADES}
+          trade={trade}
+          onTrade={setTrade}
+          marks={marks}
+          pageKinds={pageKinds}
+          category={category}
+          onCategory={(value) => { setCategory(value); setSymbolQuery(""); }}
+          symbolId={symbolId}
+          onSymbol={setSymbolId}
+          query={symbolQuery}
+          onQuery={setSymbolQuery}
+          onManualMark={() => { setTool("count"); setMobilePanel(""); setStatus("Choose a legend symbol, then tap the missed printed symbol."); }}
+        />
+      </TakeoffMobileSheet>
+      <TakeoffMobileSheet
+        open={mobilePanel === "counts"}
+        onOpenChange={(open) => setMobilePanel(open ? "counts" : "")}
+        title="Counted items"
+        description="Items you counted, conduit you traced, and legend sheets."
+      >
+        <TakeoffInspector
+          embedded
+          rollup={rollup}
+          totals={editedRollup.totals}
+          runs={runs}
+          drawingDocs={drawingDocs}
+          trade={trade}
+          marks={tradeMarks}
+          pageKinds={pageKinds}
+          selected={selectedMark}
+          printed={printedSelection}
+          onCountPrinted={countPrintedSelection}
+          conduitOptions={conduitChoices}
+          scheduleEdits={scheduleEdits}
+          onSelectRun={(id) => { setSelectedId(id); setTool("select"); setMobilePanel(""); }}
+          onUpdateMark={updateMark}
+          isolationMode={isolationMode}
+          onIsolationMode={setIsolationMode}
+          onEditRow={editScheduleRow}
+          onRenameRow={renameScheduleRow}
+          onSelectSheet={(page) => { selectSheet(page); setMobilePanel(""); }}
+          onCopy={copyQuantities}
+          onDownloadQuoteExcel={downloadQuoteExcel}
+          onDownloadQuotePdf={downloadQuotePdf}
+          globalMarkerSize={penSize}
+          globalLineSize={penThickness}
+          trueAnalysis={trueAnalysis}
+          trueTakeoffResult={trueTakeoffResult}
+          onBuildTrueTakeoff={() => buildAndSaveTrueElectricalEstimate()}
+          reconciliation={reconciliation}
+          reviewSummary={accuracyTotals}
+          coverageNote={sheetCoverage ? describeSheetCoverage(sheetCoverage) : undefined}
+        />
+      </TakeoffMobileSheet>
       <AccuracyPopout
         open={reviewOpen && Boolean(selectedReviewItem && (isDeviceMark(selectedReviewItem) || selectedReviewItem.type === "coverage"))}
         onOpenChange={setReviewOpen}
@@ -2188,16 +3266,16 @@ function conduitPolylines(mark) {
   });
 }
 
-function OverlayLabel({ label, fill }) {
+function OverlayLabel({ label, fill, fontSize = OVERLAY_FONT_SIZE }) {
   return (
     <text
       x={label.x}
       y={label.y}
-      fontSize={OVERLAY_FONT_SIZE}
-      fontWeight="600"
+      fontSize={fontSize}
+      fontWeight="800"
       fill={fill}
       stroke="#ffffff"
-      strokeWidth="0.22"
+      strokeWidth={fontSize > 2 ? 0.45 : 0.28}
       paintOrder="stroke"
     >
       {label.text}
@@ -2206,14 +3284,17 @@ function OverlayLabel({ label, fill }) {
 }
 
 function DeviceFill({ mark, selected, markerSize, focus = false }) {
-  const outline = displayDeviceOutline(mark, markerSize, { selected });
+  const measured = displayDeviceOutline(mark, markerSize, { selected });
+  if (!measured || !deviceFillEnabled(mark)) return null;
+  const outline = interiorDeviceOutline(measured, Number(mark.fillInset) || 0.86);
   if (!outline) return null;
   const color = readableFillColor(mark.color || "#1e3a8a");
-  const opacity = focus ? 0.34 : (mark.fillOpacity ?? DEVICE_FILL_OPACITY);
-  // A crisp hairline plus a light fill keeps the detected body visible while
-  // leaving its printed symbol and nearby plan notes readable.
+  const opacity = focus ? 0.5 : Math.max(Number(mark.fillOpacity ?? DEVICE_FILL_OPACITY), mark.source === "ai" ? 0.46 : DEVICE_FILL_OPACITY);
+  // PlanSwift-style marking: paint only inside the detected symbol body.
+  // The original black PDF symbol remains visible on top visually because
+  // the measured fill is inset before we draw the colored perimeter.
   const stroke = selected || focus ? "#ea580c" : color;
-  const strokeWidth = selected || focus ? DEVICE_FILL_STROKE_PX + 0.55 : DEVICE_FILL_STROKE_PX;
+  const strokeWidth = selected || focus ? DEVICE_FILL_STROKE_PX + 0.35 : (mark.source === "ai" ? 1.15 : 0.75);
   if (outline.kind === "composite" && outline.parts?.length) {
     return (
       <g>
@@ -2276,7 +3357,19 @@ function DeviceFill({ mark, selected, markerSize, focus = false }) {
   );
 }
 
-function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, lengthFor, markerSize = DEFAULT_MARKER_SIZE, lineSize = DEFAULT_LINE_SIZE }) {
+function GeometryStroke({ geometry, stroke, width }) {
+  if (!geometry) return null;
+  if (geometry.kind === "circle") {
+    return <circle cx={geometry.cx} cy={geometry.cy} r={geometry.r} fill="none" stroke={stroke} strokeWidth={width} vectorEffect="non-scaling-stroke" />;
+  }
+  const points = geometry.points.map((point) => `${point.x},${point.y}`).join(" ");
+  if (geometry.points.length >= 3) {
+    return <polygon points={points} fill="none" stroke={stroke} strokeWidth={width} vectorEffect="non-scaling-stroke" />;
+  }
+  return <polyline points={points} fill="none" stroke={stroke} strokeWidth={width} vectorEffect="non-scaling-stroke" />;
+}
+
+function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, lengthFor, markerSize = DEFAULT_MARKER_SIZE, lineSize = DEFAULT_LINE_SIZE, fontSize = OVERLAY_FONT_SIZE, showConduitLabels = true, printedHighlight = null, hoverHighlight = null }) {
   const otherRoutes = marks.filter((m) => m.points?.length && !isCircuitMark(m));
   const devices = marks.filter((m) => isDeviceMark(m));
   const circuits = marks.filter((m) => isCircuitMark(m) && m.points?.length);
@@ -2284,6 +3377,7 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
     conduits: circuits.filter((m) => m.tool === "conduit"),
     devices,
     selectedId,
+    fontSize,
     lengthTextFor: (mark) => {
       const feet = lengthFor?.(mark);
       return feet == null ? "" : formatFeet(feet);
@@ -2298,7 +3392,8 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
         const color = mark.color || (mark.type === "cloud" ? "#dc2626" : "#2563eb");
         const width = resolvedLineSize(mark, lineSize);
         if (mark.type === "area" || mark.type === "cloud") {
-          return <polygon key={mark.id} points={points} fill={mark.type === "cloud" ? "none" : "rgba(37,99,235,0.12)"} stroke={color} strokeWidth={width} strokeDasharray={mark.type === "cloud" ? "1.2 0.8" : undefined} vectorEffect="non-scaling-stroke" />;
+          const onPrint = mark.source === "interactive-geometry" || mark.objectKind === "room";
+          return <polygon key={mark.id} points={points} fill={mark.type === "cloud" || onPrint ? "none" : "rgba(37,99,235,0.12)"} stroke={selected ? "#ea580c" : color} strokeWidth={selected ? width + 0.6 : width} strokeDasharray={mark.type === "cloud" ? "1.2 0.8" : undefined} vectorEffect="non-scaling-stroke" />;
         }
         return (
           <g key={mark.id}>
@@ -2351,7 +3446,7 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
       })}
       {draftPoints.length > 1 && <polyline points={draftPoints.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#f97316" strokeWidth=".45" strokeDasharray="1 1" vectorEffect="non-scaling-stroke" />}
       {draftEnd && draftFeet != null && (
-        <text x={draftEnd.x} y={Math.max(2, draftEnd.y - 1.2)} fontSize={OVERLAY_FONT_SIZE} fontWeight="600" fill="#ea580c" stroke="#ffffff" strokeWidth="0.22" paintOrder="stroke">{formatFeet(draftFeet)}</text>
+        <text x={draftEnd.x} y={Math.max(2, draftEnd.y - 1.2)} fontSize={fontSize} fontWeight="800" fill="#ea580c" stroke="#ffffff" strokeWidth={fontSize > 2 ? 0.45 : 0.28} paintOrder="stroke">{formatFeet(draftFeet)}</text>
       )}
       {devices.filter((mark) => mark.id !== selectedId).map((mark) => {
         const size = resolvedMarkerSize(mark, markerSize);
@@ -2399,30 +3494,19 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
           </g>
         );
       })}
-      {callouts.conduitLabels.map((label) => (
-        <OverlayLabel key={`conduit-${label.id}`} label={label} fill={label.selected ? "#334155" : "#475569"} />
+      <GeometryStroke geometry={hoverHighlight} stroke="#0f172a" width="1.6" />
+      <GeometryStroke geometry={printedHighlight} stroke="#ea580c" width="2.2" />
+      {callouts.conduitLabels.filter((label) => showConduitLabels || label.selected).map((label) => (
+        <OverlayLabel key={`conduit-${label.id}`} label={label} fontSize={fontSize} fill={label.selected ? "#0f172a" : "#1e293b"} />
       ))}
       {marks.filter((m) => m.type === "note").map((mark) => (
-        <text key={mark.id} x={mark.x} y={mark.y} fontSize={OVERLAY_FONT_SIZE} fontWeight="600" fill={mark.color || (mark.id === selectedId ? "#ea580c" : "#dc2626")}>{mark.text}</text>
+        <text key={mark.id} x={mark.x} y={mark.y} fontSize={fontSize} fontWeight="800" fill={mark.color || (mark.id === selectedId ? "#ea580c" : "#dc2626")}>{mark.text}</text>
       ))}
-      {tool === "scale" && <text x="2" y="6" fontSize={OVERLAY_FONT_SIZE} fontWeight="600" fill="#b45309">Click a known dimension</text>}
+      {tool === "scale" && <text x="2" y="6" fontSize={fontSize} fontWeight="800" fill="#b45309">Click a known dimension</text>}
     </svg>
   );
 }
 
-/**
- * @param {{
- *   fileBytes: any,
- *   fileName?: any,
- *   zoom: any,
- *   pageNumber: any,
- *   onPageNumber: any,
- *   viewportWidth: any,
- *   viewportHeight: any,
- *   onPageInfo: any,
- *   selectedMark?: any,
- * }} props
- */
 function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber, viewportWidth, viewportHeight, onPageInfo, selectedMark }) {
   const canvasRef = useRef(null);
   const focusCanvasRef = useRef(null);
@@ -2464,35 +3548,33 @@ function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber, viewp
         }
         const page = await pdf.getPage(safePage);
         if (cancelled) return;
-        // Render in the PDF's native page.rotate so displayed pixels match page-percent marks.
-        const base = page.getViewport({ scale: 1, rotation: page.rotate || 0 });
+        const base = page.getViewport({ scale: 1 });
         const fitted = fitSheetSize(base.width, base.height, viewportWidth, viewportHeight, zoom);
         if (!fitted.width || !fitted.height) return;
         setDisplaySize(fitted);
-        const outputScale = Math.min(2, window.devicePixelRatio || 1);
-        const viewport = page.getViewport({
-          scale: (fitted.width / base.width) * outputScale,
-          rotation: page.rotate || 0,
-        });
+
+        // Keep 8x visual zoom without allocating an 8x full-resolution canvas.
+        // Large electrical sheets can otherwise create 100M+ pixel canvases and
+        // crash the browser when zooming. Cap the backing store while keeping
+        // the CSS display size/pan geometry unchanged.
+        const outputScale = pdfBackingScale(
+          fitted.width,
+          fitted.height,
+          window.devicePixelRatio || 1,
+          Boolean(window.matchMedia?.("(pointer: coarse)")?.matches),
+        );
+        const viewport = page.getViewport({ scale: (fitted.width / base.width) * outputScale });
         const canvas = canvasRef.current;
         const context = canvas.getContext("2d", { alpha: false });
-        canvas.width = Math.floor(viewport.width);
-        canvas.height = Math.floor(viewport.height);
+        if (!context) throw new Error("Unable to allocate a drawing canvas.");
+        canvas.width = Math.max(1, Math.floor(viewport.width));
+        canvas.height = Math.max(1, Math.floor(viewport.height));
         canvas.style.width = `${fitted.width}px`;
         canvas.style.height = `${fitted.height}px`;
         context.setTransform(1, 0, 0, 1, 0, 0);
         renderTask = page.render({ canvasContext: context, viewport });
         await renderTask.promise;
-        if (!cancelled) {
-          onPageInfoRef.current?.({
-            page: safePage,
-            pageCount: pdf.numPages,
-            // Displayed canvas already includes page.rotate; extra UI rotation stays 0
-            // until an independent rotation GT fixture exists for remapping marks.
-            rotate: 0,
-            pdfRotate: page.rotate || 0,
-          });
-        }
+        if (!cancelled) onPageInfoRef.current?.({ page: safePage, pageCount: pdf.numPages });
       } catch (err) {
         if (!cancelled && err?.name !== "RenderingCancelledException") {
           console.error("PDF render failed", err);
@@ -2503,9 +3585,12 @@ function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber, viewp
       }
     }
 
-    renderPdf();
+    const renderTimer = window.setTimeout(() => {
+      void renderPdf();
+    }, 90);
     return () => {
       cancelled = true;
+      window.clearTimeout(renderTimer);
       try { renderTask?.cancel(); } catch { /* ignore */ }
     };
   }, [fileBytes, pageNumber, zoom, viewportWidth, viewportHeight]);
@@ -2536,7 +3621,7 @@ function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber, viewp
       {rendering && <div className="absolute inset-x-0 top-2 z-10 mx-auto w-fit rounded-lg bg-background/90 px-3 py-2 text-xs font-semibold shadow">Rendering {fileName}…</div>}
       {error && <div className="absolute inset-x-4 top-16 z-10 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">{error}</div>}
       <canvas ref={canvasRef} className="block bg-white" />
-      {selectedMark && (selectedMark.sheet || 1) === pageNumber ? <div className="pointer-events-none absolute z-30" style={{ left: `${selectedMark.x}%`, top: `${selectedMark.y}%`, transform: "translate(-50%, -50%)" }}><div className="relative rounded-xl border-4 border-orange-600 bg-white/80 p-1 shadow-2xl backdrop-blur-[1px]"><canvas ref={focusCanvasRef} className="block h-28 w-28 bg-white" style={{ imageRendering: "auto" }} /><div className="absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-orange-600 px-2 py-1 text-[10px] font-black text-white shadow">SELECTED DEVICE</div></div></div> : null}
+      {selectedMark && (selectedMark.sheet || 1) === pageNumber ? <div className="pointer-events-none absolute z-30" style={{ left: `${selectedMark.x}%`, top: `${selectedMark.y}%`, transform: "translate(-50%, -50%)" }}><div className="rounded-md border-2 border-foreground bg-card p-0.5 shadow-md"><canvas ref={focusCanvasRef} className="block h-16 w-16 bg-white" style={{ imageRendering: "auto" }} /></div></div> : null}
     </div>
   );
 }

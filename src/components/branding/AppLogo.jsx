@@ -6,7 +6,7 @@ export default function AppLogo({ className, alt = "Estim8r logo" }) {
     <img
       src="/logo.png"
       alt={alt}
-      className={cn("object-cover shadow-md shadow-blue-950/20", className)}
+      className={cn("object-cover", className)}
       loading="eager"
     />
   );

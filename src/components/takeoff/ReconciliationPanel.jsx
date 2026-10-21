@@ -19,8 +19,8 @@ export default function ReconciliationPanel({ reconciliation, compact = false })
   return (
     <div className="space-y-2" data-testid="reconciliation-panel">
       <p className="text-sm text-muted-foreground">{describeReconciliation(reconciliation)}</p>
-      <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full min-w-[20rem] text-left text-xs">
+      <div className="max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-border" role="region" aria-label="Plan versus schedule quantities" tabIndex={0}>
+        <table className="w-full min-w-[26rem] table-auto text-left text-xs">
           <thead className="bg-muted/60 text-[11px] uppercase tracking-wide text-muted-foreground">
             <tr>
               <th className="px-2 py-1.5 font-bold">Type</th>
@@ -32,10 +32,10 @@ export default function ReconciliationPanel({ reconciliation, compact = false })
           <tbody>
             {reconciliation.rows.map((row) => (
               <tr key={row.type} className="border-t border-border">
-                <td className="px-2 py-1.5 font-semibold">{row.type}</td>
+                <td className="min-w-0 break-words px-2 py-1.5 font-semibold">{row.type}</td>
                 <td className="px-2 py-1.5">{row.planCount}</td>
                 <td className="px-2 py-1.5">{row.scheduleQty == null ? "—" : row.scheduleQty}</td>
-                <td className={`px-2 py-1.5 ${row.status === "short" || row.status === "over" ? "text-amber-800 dark:text-amber-200" : "text-muted-foreground"}`}>
+                <td className={`min-w-[8rem] whitespace-normal break-words px-2 py-1.5 ${row.status === "short" || row.status === "over" ? "text-amber-800 dark:text-amber-200" : "text-muted-foreground"}`}>
                   {STATUS_COPY[row.status] || row.status}
                 </td>
               </tr>
@@ -43,7 +43,7 @@ export default function ReconciliationPanel({ reconciliation, compact = false })
           </tbody>
         </table>
       </div>
-      {!compact ? (
+      <p className="text-[11px] text-muted-foreground">Scroll horizontally within the table to see all columns on narrow screens.</p>\n      {!compact ? (
         <p className="text-[11px] text-muted-foreground">
           Persisted takeoff is {reconciliation.persistedCount} plan device{reconciliation.persistedCount === 1 ? "" : "s"}.
           Legend totals are a review check only.

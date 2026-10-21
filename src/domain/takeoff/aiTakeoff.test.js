@@ -25,6 +25,14 @@ assert(!electrical.symbols.some((item) => item.category === "Plumbing"), "electr
 assert(fire.symbols.every((item) => item.category === "Fire Alarm"), "fire alarm palette is only fire alarm");
 assert(matchTradeSymbol("FACP", electrical.symbols) == null, "fire alarm panel is not an electrical match");
 assert(matchTradeSymbol("GFI", electrical.symbols)?.id === "gfci", "gfci matches electrical");
+assert(matchTradeSymbol("F2", electrical.symbols, [{
+  code: "F2",
+  symbol: { id: "f2-fan", label: "Type F2 8' BAY CEILING FAN", category: "Lighting", takeoffCategory: "Lighting" },
+}], { planType: "power" }) == null, "F2 ceiling fan is not identified on a power plan");
+assert(matchTradeSymbol("F2", electrical.symbols, [{
+  code: "F2",
+  symbol: { id: "f2-fan", label: "Type F2 8' BAY CEILING FAN", category: "Lighting", takeoffCategory: "Lighting" },
+}], { planType: "lighting" })?.id === "f2-fan", "F2 ceiling fan still identifies on a lighting plan");
 assert(matchTradeSymbol("1x4", electrical.symbols)?.id === "1x4", "1x4 fixture matches");
 assert(matchTradeSymbol("TRANSFORMER", electrical.symbols)?.id === "transformer", "transformer label matches");
 assert(matchTradeSymbol("PAD-MOUNT TRANSFORMER", electrical.symbols)?.id === "pad-tx", "pad-mount transformer matches");

@@ -1,20 +1,12 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from '@/App.jsx'
+import { restoreRefreshRoute } from '@/lib/appRefresh'
 import { startUpdateChecks } from '@/lib/update-check'
 import '@/index.css'
 
 startUpdateChecks()
-
-try {
-  const redirect = window.sessionStorage.getItem('estim8r_redirect');
-  if (redirect && window.location.pathname === '/') {
-    window.sessionStorage.removeItem('estim8r_redirect');
-    window.history.replaceState(null, '', redirect);
-  }
-} catch {
-  // Ignore storage failures and continue with the normal app route.
-}
+restoreRefreshRoute()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <App />

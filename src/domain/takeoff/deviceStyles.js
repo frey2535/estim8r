@@ -1,22 +1,24 @@
 import { isReviewOnlyMark } from "./detectionRecord.js";
+import { symbolBodyOutline } from "./legendGeometry.js";
 import { isCanDeviceText } from "./symbolDetection.js";
 import { pointHitsOutline, scaleOutline } from "./vectorSymbols.js";
 
 // Detection color should identify a symbol, not replace the printed symbol
 // with a solid block that hides the drawing underneath.
-export const DEVICE_FILL_OPACITY = 0.2;
+export const DEVICE_FILL_OPACITY = 0.34;
+export const DEVICE_INTERIOR_INSET = 0.86;
 export const MIN_VISIBLE_FILL = 0.28;
 export const MAX_POINT_FILL = 0.55;
 export const MAX_FIXTURE_FILL = 1.65;
-// Vector 2x4 bodies are often drawn ~2.0–2.3 across (see isPlausibleSymbolForHint
-// rect). That exceeds the Beam paint cap but is still a fixture, not a room.
-export const MAX_FIXTURE_EXTRACT = 2.5;
 export const MAX_GENERIC_FILL = 0.95;
 export const DEVICE_CHIP_R = 0.16;
 export const DEVICE_FILL_STROKE_PX = 1.25;
 export const MAX_DISPLAY_POINT_FILL = 0.42;
 export const MAX_DISPLAY_FIXTURE_FILL = 0.9;
 export const MAX_DISPLAY_GENERIC_FILL = 0.62;
+export const MIN_TRUSTED_AI_BODY = 0.06;
+export const MAX_TRUSTED_AI_BODY = 2.45;
+export const MAX_TRUSTED_FIXTURE_BODY = 3.8;
 export const CIRCUIT_COLOR = "#64748b";
 export const SELECTED_OUTLINE_SCALE = 1;
 
@@ -74,10 +76,15 @@ export function marksForTrade(marks, trade) {
 
 export function planOverlayMarks(marks, options = {}) {
   // Review/unknown AI candidates belong in the review queue, never painted on
-  // the normal bid drawing.
-  const list = (marks || []).filter((mark) => !isReviewOnlyMark(mark));
+  // the normal bid drawing. The live interactive sheet still needs pending and
+  // accepted review candidates so users can see, select, and correct them.
+  const source = marks || [];
+  const list = options.interactive
+    ? source.filter((mark) => mark?.reviewStatus !== "rejected")
+    : source.filter((mark) => !isReviewOnlyMark(mark) && mark?.requiresReview !== true);
   if (options.devicesOnly) return list.filter((mark) => !isCircuitMark(mark));
   if (options.circuitsOnly) return list.filter((mark) => isCircuitMark(mark) || mark?.type === "note");
+  if (options.interactive) return list;
   // Device-count sheets stay devices-only. Conduit belongs on conduit/circuit pages
   // or on a takeoff sheet that has no counted devices.
   if (list.some(isDeviceMark)) return list.filter((mark) => !isCircuitMark(mark));
@@ -224,14 +231,6 @@ export function maxFillExtent(mark) {
   return MAX_GENERIC_FILL;
 }
 
-/** Upper bound for trusted AI geometry that may still be clamped to the paint cap. */
-export function maxExtractExtent(mark) {
-  if (isFixtureDevice(mark)) return MAX_FIXTURE_EXTRACT;
-  // Point bodies (recessed cans ~0.6–1.1) sit between MAX_POINT_FILL and the
-  // fixture paint cap. Room-sized outlines stay above this and remain rejected.
-  return MAX_FIXTURE_FILL;
-}
-
 export function isUsablePaintOutline(outline, origin, maxExtent = MAX_GENERIC_FILL) {
   if (!outline) return false;
   if (outline.kind === "path" && (outline.points || []).length < 3) return false;
@@ -246,14 +245,53 @@ export function isUsablePaintOutline(outline, origin, maxExtent = MAX_GENERIC_FI
   return true;
 }
 
+export function trustedAiBodyMax(mark) {
+  if (isFixtureDevice(mark)) return MAX_TRUSTED_FIXTURE_BODY;
+  if (isPointDevice(mark)) return MAX_TRUSTED_AI_BODY;
+  return 2.8;
+}
+
+export function isTrustedAiBodyOutline(outline, origin, mark) {
+  if (!outline) return false;
+  if (outline.kind === "path" && (outline.points || []).length < 3) return false;
+  if (outline.kind === "composite" && !(outline.parts || []).length) return false;
+  const extent = outlineExtent(outline);
+  if (extent < MIN_TRUSTED_AI_BODY || extent > trustedAiBodyMax(mark)) return false;
+  const center = outlineCenter(outline, origin);
+  if (!isOnSheet(center.x, center.y)) return false;
+  if (origin && Number.isFinite(origin.x) && Number.isFinite(origin.y)) {
+    if (Math.hypot(center.x - origin.x, center.y - origin.y) > 0.95) return false;
+  }
+  return true;
+}
+
+function coreDeviceOutline(outline, origin, mark) {
+  if (!outline || outline.kind !== "composite" || !(outline.parts || []).length) return null;
+  const ranked = [...outline.parts]
+    .map((part) => ({ part, extent: outlineExtent(part) }))
+    .filter((item) => item.extent >= 0.12 && item.extent <= trustedAiBodyMax(mark))
+    .sort((a, b) => b.extent - a.extent);
+  const best = ranked[0]?.part;
+  if (!best) return null;
+  const cx = Number(best.cx ?? outline.cx ?? origin?.x);
+  const cy = Number(best.cy ?? outline.cy ?? origin?.y);
+  return {
+    ...best,
+    cx,
+    cy,
+    source: best.source || outline.source || "vector",
+  };
+}
+
 function genericDeviceOutline(mark, markerSize = 0.55) {
   const scale = Math.min(1.15, Math.max(0.7, Number(markerSize) || 0.55) / 0.55);
   const blob = deviceFillBlob(mark);
+  const aiPointRadius = mark?.source === "ai" ? 0.46 * scale : DEVICE_CHIP_R * scale;
   if (isCanDeviceText(blob) || /downlight|pendant|high bay|low bay|occup|sensor|switch|\bos\b/.test(blob)) {
-    return { kind: "circle", r: DEVICE_CHIP_R * scale };
+    return { kind: "circle", r: aiPointRadius };
   }
   if (/recept|gfci|gfi|duplex|outlet|\br\b|quad/.test(blob)) {
-    return { kind: "circle", r: 0.18 * scale };
+    return { kind: "circle", r: mark?.source === "ai" ? 0.46 * scale : 0.18 * scale };
   }
   const size = blob.match(/(\d)\s*[x×]\s*(\d)/);
   if (size) {
@@ -270,36 +308,60 @@ function genericDeviceOutline(mark, markerSize = 0.55) {
   return { kind: "circle", r: DEVICE_CHIP_R * scale };
 }
 
+function paintTokensForMark(mark) {
+  const tag = mark?.circuitTagLocation;
+  if (!tag || !Number.isFinite(Number(tag.x)) || !Number.isFinite(Number(tag.y))) return [];
+  const body = mark?.symbolBodyLocation;
+  if (body && Math.hypot(Number(body.x) - Number(tag.x), Number(body.y) - Number(tag.y)) <= 0.2) return [];
+  return [{ text: String(tag.text || "5"), x: Number(tag.x), y: Number(tag.y) }];
+}
+
+function outlineOnPrintedTag(outline, mark) {
+  const tokens = paintTokensForMark(mark);
+  if (!tokens.length) return false;
+  const center = outlineCenter(outline, { x: mark?.x, y: mark?.y });
+  return tokens.some((token) => (
+    Math.hypot(center.x - token.x, center.y - token.y) <= 0.22
+    && outlineExtent(outline) <= 0.42
+  ));
+}
+
 export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
+  const cleaned = mark?.outline
+    ? symbolBodyOutline({ ...mark.outline, outline: mark.outline, cx: mark.outline.cx ?? mark.x, cy: mark.outline.cy ?? mark.y }, paintTokensForMark(mark))
+    : null;
   const origin = {
-    x: Number(mark?.symbolBodyLocation?.x ?? mark?.x) || 0,
-    y: Number(mark?.symbolBodyLocation?.y ?? mark?.y) || 0,
+    x: Number(cleaned?.cx ?? mark?.symbolBodyLocation?.x ?? mark?.x) || 0,
+    y: Number(cleaned?.cy ?? mark?.symbolBodyLocation?.y ?? mark?.y) || 0,
   };
   const maxExtent = maxFillExtent(mark);
-  const source = String(mark?.outline?.source || mark?.outlineSource || "").toLowerCase();
+  const source = String(cleaned?.source || mark?.outline?.source || mark?.outlineSource || "").toLowerCase();
   const trustedAiSource = source === "vector" || source === "raster" || source === "mixed";
-  const usable = mark?.outline && isUsablePaintOutline(mark.outline, origin, maxExtent);
+  const usable = cleaned && isUsablePaintOutline(cleaned, origin, maxExtent) && !outlineOnPrintedTag(cleaned, mark);
 
   if (mark?.source === "ai") {
-    // AI is never allowed to invent a visual marker. It may paint only the
-    // measured symbol body returned by vector/raster analysis.
-    if (!trustedAiSource || !mark?.outline) return null;
-    if (usable) return scaleOutline(mark.outline, 1, origin);
-    // Trusted vector/raster bodies are often larger than the Beam paint cap
-    // (cans ~0.6–1.1 vs MAX_POINT_FILL; 2x4 troffers ~2.1 vs MAX_FIXTURE_FILL).
-    // Keep the measured perimeter shape and clamp to the paint cap instead of
-    // returning null. Room-sized outlines exceed maxExtractExtent and stay out.
-    if (isUsablePaintOutline(mark.outline, origin, maxExtractExtent(mark))) {
-      const extent = outlineExtent(mark.outline);
-      if (extent > maxExtent) {
-        return scaleOutline(mark.outline, maxExtent / extent, origin);
-      }
+    // Paint the measured symbol body. Slightly oversize or tiny CAD glyphs are
+    // still the device — displayDeviceOutline scales them into the visible cap.
+    // Room-sized junk, text-only boxes, and circuit-number glyphs stay unpainted.
+    if (!trustedAiSource) {
+      // For point devices (like OS), always show a generic chip even without trusted geometry
+      return mark?.requiresReview === true || isPointDevice(mark) ? genericDeviceOutline(mark, markerSize) : null;
+    }
+    const core = isTrustedAiBodyOutline(cleaned, origin, mark)
+      ? cleaned
+      : coreDeviceOutline(cleaned, origin, mark);
+    if (core && !outlineOnPrintedTag(core, mark) && isTrustedAiBodyOutline(core, origin, mark)) {
+      const extent = outlineExtent(core);
+      return extent > maxExtent ? scaleOutline(core, maxExtent / extent, origin) : scaleOutline(core, 1, origin);
+    }
+    if ((!cleaned || outlineExtent(cleaned) < MIN_TRUSTED_AI_BODY) && mark.symbolBodyLocation && !outlineOnPrintedTag(cleaned, mark)) {
+      return genericDeviceOutline(mark, markerSize);
     }
     return null;
   }
 
   if (usable) {
-    const painted = scaleOutline(mark.outline, 1, origin);
+    const painted = scaleOutline(cleaned, 1, origin);
     const extent = outlineExtent(painted);
     if (isPointDevice(mark) && extent > 0 && extent < MIN_VISIBLE_FILL) {
       return scaleOutline(painted, MIN_VISIBLE_FILL / extent, origin);
@@ -314,19 +376,14 @@ export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
 export function displayDeviceOutline(mark, markerSize = 0.55, options = {}) {
   const outline = deviceOutline(mark, markerSize, options);
   if (!outline) {
-    // A classified, bid-counted AI device may have a reliable body location
-    // even when PDF extraction cannot recover its exact vector perimeter.
-    // Paint a compact locator at that body instead of silently showing no
-    // mark at all. UNKNOWN/review candidates remain excluded from the plan.
-    const x = Number(mark?.symbolBodyLocation?.x ?? mark?.x);
-    const y = Number(mark?.symbolBodyLocation?.y ?? mark?.y);
-    if (mark?.source !== "ai" || isReviewOnlyMark(mark) || !isDeviceMark(mark)
-      || !Number.isFinite(x) || !Number.isFinite(y)) return null;
-    return { kind: "circle", cx: x, cy: y, r: DEVICE_CHIP_R, source: "location-fallback" };
+    // Never paint an invented dot for an AI detection. If the actual printed
+    // symbol body cannot be recovered, keep the item for review instead of
+    // coloring a nearby type/circuit number.
+    return null;
   }
   const displayMax = isFixtureDevice(mark)
     ? MAX_DISPLAY_FIXTURE_FILL
-    : isPointDevice(mark) ? MAX_DISPLAY_POINT_FILL : MAX_DISPLAY_GENERIC_FILL;
+    : isPointDevice(mark) ? (mark?.source === "ai" ? 1.05 : MAX_DISPLAY_POINT_FILL) : MAX_DISPLAY_GENERIC_FILL;
   const extent = outlineExtent(outline);
   const origin = {
     x: Number(mark?.symbolBodyLocation?.x ?? mark?.x) || 0,
@@ -338,22 +395,55 @@ export function displayDeviceOutline(mark, markerSize = 0.55, options = {}) {
   return scaleOutline(outline, displayMax / extent, origin);
 }
 
+function pointerDistance(mark, point) {
+  const x = Number(mark?.symbolBodyLocation?.x ?? mark?.x) || 0;
+  const y = Number(mark?.symbolBodyLocation?.y ?? mark?.y) || 0;
+  return Math.hypot((point?.x || 0) - x, (point?.y || 0) - y);
+}
+
+function routePointerDistance(mark, point) {
+  const points = mark?.points || [];
+  if (points.length < 2) return pointerDistance(mark, point);
+  let best = Infinity;
+  for (let index = 1; index < points.length; index += 1) {
+    const a = points[index - 1];
+    const b = points[index];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len2 = dx * dx + dy * dy;
+    const t = len2 ? Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / len2)) : 0;
+    best = Math.min(best, Math.hypot(point.x - (a.x + t * dx), point.y - (a.y + t * dy)));
+  }
+  return best;
+}
+
 export function hitTestDeviceFill(mark, point, markerSize = 0.55) {
   if (!mark || !point) return false;
-  const outline = deviceOutline(mark, markerSize);
+  const outline = displayDeviceOutline(mark, markerSize);
   if (!outline) return false;
-  return pointHitsOutline(outline, { x: mark.x, y: mark.y }, point, 0.55);
+  const tolerance = mark?.source === "ai"
+    ? Math.max(0.45, (Number(markerSize) || 0.55) * 0.7)
+    : 0.28;
+  return pointHitsOutline(outline, { x: mark.symbolBodyLocation?.x ?? mark.x, y: mark.symbolBodyLocation?.y ?? mark.y }, point, tolerance);
 }
 
 export function selectMarkAtPoint(marks, point, options = {}) {
   const aspect = options.aspect || 1;
-  const markerSize = options.markerSize || 0.55;
+  const markerSizeFor = typeof options.markerSize === "function"
+    ? options.markerSize
+    : () => (options.markerSize || 0.55);
   const hitRoute = options.hitRoute;
   const list = marks || [];
-  const device = [...list].reverse().find((mark) => isDeviceMark(mark) && hitTestDeviceFill(mark, point, markerSize));
-  if (device) return device;
+  const devices = list.filter((mark) => isDeviceMark(mark) && hitTestDeviceFill(mark, point, markerSizeFor(mark)));
+  if (devices.length) {
+    devices.sort((a, b) => pointerDistance(a, point) - pointerDistance(b, point));
+    return devices[0];
+  }
   if (!hitRoute) return null;
-  return [...list].reverse().find((mark) => !isDeviceMark(mark) && hitRoute(mark, point, aspect));
+  const routes = list.filter((mark) => !isDeviceMark(mark) && hitRoute(mark, point, aspect));
+  if (!routes.length) return null;
+  routes.sort((a, b) => routePointerDistance(a, point) - routePointerDistance(b, point));
+  return routes[0];
 }
 
 export function shortenCircuitPath(points, pad = 0.55) {
@@ -368,4 +458,61 @@ export function shortenCircuitPath(points, pad = 0.55) {
     const pull = Math.min(pad, len * 0.35);
     return { x: point.x + (dx / len) * pull, y: point.y + (dy / len) * pull };
   });
+}
+
+
+export function interiorDeviceOutline(outline, factor = DEVICE_INTERIOR_INSET) {
+  if (!outline) return null;
+  const f = Math.max(0.45, Math.min(1, Number(factor) || DEVICE_INTERIOR_INSET));
+  if (outline.kind === "composite" && outline.parts?.length) {
+    const areas = outline.parts.map((part) => {
+      const w = Number(part.w) || (Number(part.r) || 0) * 2;
+      const h = Number(part.h) || (Number(part.r) || 0) * 2;
+      return Math.max(0, w * h);
+    });
+    const maxArea = Math.max(...areas, 0);
+    const bodyParts = outline.parts.filter((part, index) => {
+      if (!maxArea) return true;
+      const area = areas[index];
+      const w = Number(part.w) || (Number(part.r) || 0) * 2;
+      const h = Number(part.h) || (Number(part.r) || 0) * 2;
+      const aspect = Math.max(w, h) / Math.max(0.001, Math.min(w, h));
+      // Keep the enclosing body and other substantial regions, but do not
+      // paint thin internal slashes/hatches/cross-lines over the black symbol.
+      return area >= maxArea * 0.42 && aspect <= 4.2;
+    });
+    return {
+      ...outline,
+      parts: (bodyParts.length ? bodyParts : [outline.parts[areas.indexOf(maxArea)]])
+        .map((part) => interiorDeviceOutline(part, f))
+        .filter(Boolean),
+    };
+  }
+  if (outline.kind === "circle") {
+    return { ...outline, r: Math.max(0.02, (Number(outline.r) || Math.max(Number(outline.w) || 0, Number(outline.h) || 0) / 2) * f) };
+  }
+  if (outline.kind === "path" && outline.points?.length >= 3) {
+    const cx = Number.isFinite(outline.cx)
+      ? outline.cx
+      : outline.points.reduce((sum, point) => sum + (Number(point.x) || 0), 0) / outline.points.length;
+    const cy = Number.isFinite(outline.cy)
+      ? outline.cy
+      : outline.points.reduce((sum, point) => sum + (Number(point.y) || 0), 0) / outline.points.length;
+    return {
+      ...outline,
+      points: outline.points.map((point) => ({
+        x: cx + ((Number(point.x) || 0) - cx) * f,
+        y: cy + ((Number(point.y) || 0) - cy) * f,
+      })),
+    };
+  }
+  return {
+    ...outline,
+    w: Math.max(0.02, (Number(outline.w) || 0) * f),
+    h: Math.max(0.02, (Number(outline.h) || 0) * f),
+  };
+}
+
+export function deviceFillEnabled(mark) {
+  return mark?.fillEnabled !== false && mark?.fillMode !== "off";
 }

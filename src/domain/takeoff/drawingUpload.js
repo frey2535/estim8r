@@ -1,3 +1,5 @@
+export { drawingProcessingPlan, LARGE_PLAN_BYTES } from "./takeoffQuality.js";
+
 export const DRAWING_INPUT_ID = "estim8r-drawing-file-input";
 export const DRAWING_ACCEPT = [
   "application/pdf",
@@ -140,16 +142,28 @@ export function subscribeDrawingUpload(listener) {
   };
 }
 
+export function listDrawingFiles(fileList) {
+  const files = [];
+  if (!fileList || typeof fileList.length !== "number") return files;
+  for (let i = 0; i < fileList.length; i += 1) {
+    const file = fileList[i];
+    if (file && !validateDrawingFile(file)) files.push(file);
+  }
+  return files;
+}
+
 export async function ingestDrawingFiles(fileList) {
-  const picked = captureFileList(fileList);
+  const files = listDrawingFiles(fileList);
+  const picked = files[0] || captureFileList(fileList);
   if (!picked) {
-    return { file: null, bytes: null, error: "" };
+    return { file: null, bytes: null, error: "", queue: [] };
   }
   const snap = await snapshotDrawingFile(picked);
+  const queue = files.filter((file) => file !== picked);
   rememberPendingDrawing(snap);
   pendingError = "";
-  notify({ file: snap.file, bytes: snap.bytes, error: "" });
-  return snap;
+  notify({ file: snap.file, bytes: snap.bytes, error: "", queue });
+  return { ...snap, queue };
 }
 
 export async function handleNativeDrawingChange(event) {

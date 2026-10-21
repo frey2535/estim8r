@@ -1,19 +1,19 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { DragDropContext, Draggable, Droppable } from "@hello-pangea/dnd";
 import { Plus } from "lucide-react";
-import { compositeWage, defaultCrew } from "@/domain/labor/employeeClasses";
-import { openEstimateSession, readEstimate, writeEstimate, writeWageBook } from "@/domain/estimate/estimateStore";
+import { compositeWage, defaultCrew, SHOP_HOURLY_RATE } from "@/domain/labor/employeeClasses";
+import { clearLiveEstimateDraft, consumeRestoreJobRoute, openEstimateSession, persistShopWageBook, readActiveEstimate, readEstimate, readLiveEstimateDraft, readShopWageBook, writeEstimate, writeLiveEstimateDraft } from "@/domain/estimate/estimateStore";
 import { estimateFileNameForSave, estimateGrandTotal, isDrawingFileName } from "@/domain/estimate/projectDocuments";
 import SaveProjectDocuments from "@/components/estimate/SaveProjectDocuments";
 import EstimatePdfActions from "@/components/estimate/EstimatePdfActions";
 import EstimatePdfDesigner, { DEFAULT_PDF_DESIGN, normalizePdfDesign } from "@/components/estimate/EstimatePdfDesigner";
-import { listCompanyLaborUnits, listCustomLabor, listLaborLibrary, listNamedCrews, saveLaborRates, saveNamedCrew } from "@/api/laborRepository";
+import { listCompanyLaborUnits, listCustomLabor, listLaborLibrary, listLaborRates, listNamedCrews, saveLaborRates, saveNamedCrew } from "@/api/laborRepository";
 import { defaultProductivityFactors, setFactorMultiplier } from "@/domain/labor/productivity";
 import { applySelectionToLine, buildLaborSourceOptions, makeLaborSelection } from "@/domain/labor/selection";
 import { findCustomLabor } from "@/domain/labor/customLabor";
 import { crewFromNamed, namedFromCrew } from "@/domain/labor/crews";
-import { defaultLaborRates } from "@/domain/labor/rates";
+import { applyRatesToCrew, defaultLaborRates, ratesToWageBook, resolveShopRates } from "@/domain/labor/rates";
 import ProductivityFactorEditor from "@/components/labor/ProductivityFactorEditor";
 import NamedCrewPicker from "@/components/labor/NamedCrewPicker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -91,8 +91,8 @@ export default function EstimateBuilder() {
   const openFile = params.get("file") || "";
   const openSize = Number(params.get("size") || 0);
   const [header, setHeader] = useState(emptyHeader);
-  const [crew, setCrew] = useState(() => defaultCrew());
-  const [lines, setLines] = useState(() => [blankLine(68)]);
+  const [crew, setCrew] = useState(() => defaultCrew(readShopWageBook()));
+  const [lines, setLines] = useState(() => [blankLine(compositeWage(defaultCrew(readShopWageBook())).rate || SHOP_HOURLY_RATE)]);
   const [contingency, setContingency] = useState(0);
   const [materialMarkup, setMaterialMarkup] = useState(0);
   const [overhead, setOverhead] = useState(10);
@@ -121,9 +121,20 @@ export default function EstimateBuilder() {
   const wage = compositeWage(crew);
 
   useEffect(() => {
-    const stored = openEstimateSession({ fileName: openFile, fileSize: openSize });
+    const restoreAfterRefresh = consumeRestoreJobRoute().startsWith("/estimates/new");
+    const live = readLiveEstimateDraft();
+    let stored = null;
+    if (openFile) {
+      stored = openEstimateSession({ fileName: openFile, fileSize: openSize });
+    } else if (restoreAfterRefresh) {
+      stored = live || readActiveEstimate();
+    } else {
+      openEstimateSession({});
+    }
+    if (live) clearLiveEstimateDraft();
+    const shop = readShopWageBook();
     if (stored) {
-      const nextCrew = stored.crew?.length ? stored.crew : defaultCrew();
+      const nextCrew = applyRatesToCrew(stored.crew?.length ? stored.crew : defaultCrew(shop), defaultLaborRates(shop));
       setHeader({ ...emptyHeader, ...stored.header });
       setCrew(nextCrew);
       setLines(stored.lines?.length
@@ -150,7 +161,7 @@ export default function EstimateBuilder() {
       setSupplierPriceBooks(stored.supplierPriceBooks || []);
       setPdfDesign(normalizePdfDesign(stored.pdfDesign));
     } else {
-      const nextCrew = defaultCrew();
+      const nextCrew = defaultCrew(shop);
       setHeader({ ...emptyHeader });
       setCrew(nextCrew);
       setLines([blankLine(compositeWage(nextCrew).rate)]);
@@ -180,6 +191,15 @@ export default function EstimateBuilder() {
     listCompanyLaborUnits().then(setCompanyUnits).catch(() => setCompanyUnits([]));
     listCustomLabor().then(setCustomUnits).catch(() => setCustomUnits([]));
     listNamedCrews().then(setNamedCrews).catch(() => setNamedCrews([]));
+    listLaborRates(readShopWageBook()).then((rates) => {
+      const shop = ratesToWageBook(resolveShopRates(rates));
+      setCrew((current) => {
+        const next = applyRatesToCrew(current, defaultLaborRates(shop));
+        const rate = compositeWage(next).rate;
+        setLines((lines) => lines.map((line) => (line.laborRateEdited ? line : { ...line, laborRate: rate })));
+        return next;
+      });
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -203,7 +223,6 @@ export default function EstimateBuilder() {
 
   useEffect(() => {
     if (!ready) return;
-    writeWageBook(crew);
     if (!storageFileName) return;
     writeEstimate({
       version: 1,
@@ -235,6 +254,10 @@ export default function EstimateBuilder() {
     });
   }, [ready, header, crew, lines, contingency, materialMarkup, overhead, profit, bondInsurance, itemized, includeTotalsCard, visibleTotals, meta, factors, namedCrewId, trueTakeoff, completenessChecklist, assemblies, installationConditions, supplierPriceBooks, pdfDesign, storageFileName, storedEstimateId, storedBuildrProjectId, storedBuildrInvoiceId]);
 
+  const draftRef = useRef(null);
+  const storageFileNameRef = useRef(storageFileName);
+  storageFileNameRef.current = storageFileName;
+
   const draft = useMemo(() => ({
     version: 1,
     id: storedEstimate?.id,
@@ -263,6 +286,19 @@ export default function EstimateBuilder() {
     supplierPriceBooks,
     pdfDesign,
   }), [header, crew, factors, namedCrewId, contingency, materialMarkup, overhead, profit, bondInsurance, lines, itemized, includeTotalsCard, visibleTotals, meta, trueTakeoff, completenessChecklist, assemblies, installationConditions, supplierPriceBooks, pdfDesign, storageFileName, storedEstimateId, storedBuildrProjectId, storedBuildrInvoiceId]);
+
+  draftRef.current = draft;
+
+  useEffect(() => {
+    const preserve = () => {
+      const current = draftRef.current;
+      if (!current) return;
+      writeLiveEstimateDraft(current);
+      if (storageFileNameRef.current) writeEstimate(current);
+    };
+    window.addEventListener("estim8r-before-update", preserve);
+    return () => window.removeEventListener("estim8r-before-update", preserve);
+  }, []);
 
   const supplyQuote = useMemo(() => buildEstimateSupplyQuote({
     lines,
@@ -306,6 +342,7 @@ export default function EstimateBuilder() {
     const rate = compositeWage(next).rate;
     setCrew(next);
     setLines((current) => current.map((line) => (line.laborRateEdited ? line : { ...line, laborRate: rate })));
+    persistShopWageBook(next);
     saveLaborRates(defaultLaborRates(Object.fromEntries(next.map((row) => [row.id, row.wage]))));
   }
 
@@ -468,38 +505,41 @@ export default function EstimateBuilder() {
 
   return (
     <div className="w-full min-w-0 space-y-5 py-2">
-      <div className="flex flex-wrap items-start gap-4">
-        <div className="w-full max-w-xs space-y-2 rounded-2xl border border-border bg-card p-3 shadow-sm">
-          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Company logo</p>
-          <CompanyLogo branding={branding} design={pdfDesign} />
-          <LogoStretchControls
-            stretchX={branding.logoStretchX}
-            stretchY={branding.logoStretchY}
-            onChange={patchBrandingStretch}
-          />
-        </div>
+      <div className="flex flex-col items-stretch gap-4 lg:flex-row lg:flex-wrap lg:items-start">
         <div className="min-w-0 flex-1">
-        <p className="text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-orange-500">Estimate Builder</p>
+        <p className="text-sm font-bold uppercase tracking-widest text-blue-600 dark:text-orange-500">Estimate Builder</p>
         <h1 className="text-3xl font-black">{pdfDesign.documentTitle || "Electrical"}</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base text-foreground/80">
           Add items, quantities, labor, and markup here. Drawings and takeoff are optional and do not have to be started to save.
           {isDrawingFileName(meta.fileName) ? ` Drawing: ${meta.fileName}.` : ""}
         </p>
-        <Link to="/takeoff" className="mt-2 inline-block text-sm font-semibold text-blue-600 dark:text-orange-500">Back to takeoff</Link>
+        <Link to="/takeoff" className="mt-2 inline-flex min-h-[44px] items-center text-base font-bold text-blue-700 dark:text-orange-400">Back to takeoff</Link>
         <div className="mt-3">
           {ready && <SaveProjectDocuments estimate={draft} onProjectName={(name) => setHeaderField("projectName", name)} />}
         </div>
         </div>
+        <details className="group w-full rounded-2xl border border-border bg-card p-3 shadow-sm lg:max-w-xs">
+          <summary className="min-h-[44px] cursor-pointer list-none text-base font-bold lg:hidden">Company logo</summary>
+          <p className="hidden text-sm font-bold lg:block">Company logo</p>
+          <div className="mt-3 hidden space-y-2 group-open:block lg:block">
+            <CompanyLogo branding={branding} design={pdfDesign} />
+            <LogoStretchControls
+              stretchX={branding.logoStretchX}
+              stretchY={branding.logoStretchY}
+              onChange={patchBrandingStretch}
+            />
+          </div>
+        </details>
       </div>
 
       <Tabs defaultValue="estimate" className="w-full min-w-0">
         <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto bg-muted/70 p-1">
-          <TabsTrigger value="estimate" className="px-4 py-2">Estimate</TabsTrigger>
-          <TabsTrigger value="labor-markup" className="px-4 py-2">Labor &amp; markup</TabsTrigger>
-          <TabsTrigger value="assemblies" className="px-4 py-2">Assemblies</TabsTrigger>
-          <TabsTrigger value="supplier-prices" className="px-4 py-2">Supplier Prices</TabsTrigger>
-          <TabsTrigger value="pdf-designer" className="px-4 py-2">PDF Designer</TabsTrigger>
-          {draft.trueTakeoff?.analysis ? <TabsTrigger value="audit" className="px-4 py-2">Takeoff Audit</TabsTrigger> : null}
+          <TabsTrigger value="estimate" className="min-h-[44px] px-4 text-base">Estimate</TabsTrigger>
+          <TabsTrigger value="labor-markup" className="min-h-[44px] px-4 text-base">Labor</TabsTrigger>
+          <TabsTrigger value="assemblies" className="min-h-[44px] px-4 text-base">Assemblies</TabsTrigger>
+          <TabsTrigger value="supplier-prices" className="min-h-[44px] px-4 text-base">Prices</TabsTrigger>
+          <TabsTrigger value="pdf-designer" className="min-h-[44px] px-4 text-base">PDF</TabsTrigger>
+          {draft.trueTakeoff?.analysis ? <TabsTrigger value="audit" className="min-h-[44px] px-4 text-base">Audit</TabsTrigger> : null}
         </TabsList>
 
         <TabsContent value="estimate" className="mt-4 space-y-5">
@@ -507,9 +547,9 @@ export default function EstimateBuilder() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="font-bold">Existing estimate labor</h2>
-            <p className="text-xs text-muted-foreground">Keep every estimate line and quantity, but re-apply the current labor library to matched lines. Manual labor overrides are preserved.</p>
+            <p className="text-base text-foreground/80">Keep every estimate line and quantity, but re-apply the current labor library to matched lines. Manual labor overrides are preserved.</p>
           </div>
-          <button type="button" onClick={refreshEstimateLabor} disabled={!library.length} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Apply updated labor</button>
+          <button type="button" onClick={refreshEstimateLabor} disabled={!library.length} className="min-h-[44px] rounded-lg bg-blue-600 px-4 py-2 text-base font-bold text-white disabled:opacity-50">Apply updated labor</button>
         </div>
         {laborRefreshReport ? <p className="mt-2 text-xs font-semibold">{laborRefreshReport.updated} lines updated · {laborRefreshReport.preservedOverrides} manual overrides preserved · {laborRefreshReport.unmatched} unmatched lines left unchanged.</p> : null}
       </section>
@@ -538,24 +578,24 @@ export default function EstimateBuilder() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
           <div className="min-w-0">
             <h2 className="text-lg font-bold">Estimate Lines</h2>
-            <p className="text-xs text-muted-foreground">Choose Type and Category first. Labor item, MH/unit, and Hours follow the picked row. Conduit qty is stick count (× 10') unless the unit is LF. The supply-house sheet updates as you type.</p>
+            <p className="text-base text-foreground/80">Choose Type and Category first. Labor item, MH/unit, and Hours follow the picked row. Conduit qty is stick count (× 10') unless the unit is LF. The supply-house sheet updates as you type.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold">
+            <label className="flex min-h-[44px] items-center gap-2 rounded-lg border border-border px-3 text-base font-semibold">
               <input type="checkbox" checked={itemized} onChange={(e) => setItemized(e.target.checked)} />
               Itemized estimate
             </label>
             {itemized ? (
               <>
-                <button type="button" onClick={() => setLines((current) => setAllLinesIncluded(current, true))} className="rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-muted">
+                <button type="button" onClick={() => setLines((current) => setAllLinesIncluded(current, true))} className="min-h-[44px] rounded-lg border border-border px-3 text-base font-semibold hover:bg-muted">
                   Check all
                 </button>
-                <button type="button" onClick={() => setLines((current) => setAllLinesIncluded(current, false))} className="rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-muted">
+                <button type="button" onClick={() => setLines((current) => setAllLinesIncluded(current, false))} className="min-h-[44px] rounded-lg border border-border px-3 text-base font-semibold hover:bg-muted">
                   Uncheck all
                 </button>
               </>
             ) : null}
-            <button type="button" data-testid="add-estimate-line" onClick={() => setLines((current) => [...current, blankLine(wage.rate)])} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white dark:bg-orange-500">
+            <button type="button" data-testid="add-estimate-line" onClick={() => setLines((current) => [...current, blankLine(wage.rate)])} className="flex min-h-[44px] items-center gap-2 rounded-lg bg-blue-600 px-4 text-base font-bold text-white dark:bg-orange-500">
               <Plus className="h-4 w-4" />Add line
             </button>
           </div>
@@ -716,7 +756,7 @@ export default function EstimateBuilder() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-lg font-bold">Employee class &amp; wage</h2>
-            <p className="text-xs text-muted-foreground">Select one or more classes. Default is Journeyman at the Journeyman wage. Wages are dollars per man-hour. These values stay off the estimate and the PDF.</p>
+            <p className="text-xs text-muted-foreground">Select one or more classes. Default is Journeyman at the shop rate ($95/MH until you change it). A changed wage stays saved until you edit it again. These values stay off the estimate and the PDF.</p>
           </div>
           <p className="text-sm font-bold">Crew rate ${wage.rate.toFixed(2)}/MH · {wage.label}</p>
         </div>
@@ -724,7 +764,47 @@ export default function EstimateBuilder() {
           <NamedCrewPicker crews={namedCrews} selectedId={namedCrewId} onLoad={loadCrew} onSave={saveCrew} />
         </div>
         <div className="mt-4">
-          <table className="w-full table-auto text-sm">
+          <div className="space-y-3 lg:hidden">
+            {crew.map((row) => (
+              <div key={row.id} className="rounded-xl border border-border bg-background p-3">
+                <label className="flex min-h-[44px] items-center gap-3 text-base font-bold">
+                  <input type="checkbox" className="h-5 w-5" checked={row.selected} onChange={() => toggleClass(row.id)} aria-label={`Select ${row.label}`} />
+                  {row.label}{row.id === "journeyman" ? " (default)" : ""}
+                </label>
+                <div className="mt-2 grid grid-cols-2 gap-3">
+                  <label className="min-w-0">
+                    <span className="mb-1 block text-sm font-bold">Hourly wage $/MH</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={row.wage}
+                      aria-label={`${row.label} wage`}
+                      onChange={(e) => applyCrew(crew.map((item) => item.id === row.id ? { ...item, wage: e.target.value } : item))}
+                      className="w-full min-h-[44px] rounded-md border border-input bg-background px-3 text-base"
+                    />
+                  </label>
+                  <label className="min-w-0">
+                    <span className="mb-1 block text-sm font-bold">Headcount</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={row.headcount}
+                      aria-label={`${row.label} headcount`}
+                      onChange={(e) => applyCrew(crew.map((item) => {
+                        if (item.id !== row.id) return item;
+                        const headcount = e.target.value;
+                        return { ...item, headcount, selected: Number(headcount) > 0 };
+                      }))}
+                      className="w-full min-h-[44px] rounded-md border border-input bg-background px-3 text-base"
+                    />
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+          <table className="hidden w-full table-auto text-sm lg:table">
             <thead className="text-left text-xs uppercase text-muted-foreground">
               <tr>
                 <th className="p-2">Use</th>
@@ -1045,11 +1125,11 @@ export default function EstimateBuilder() {
 function Field({ label, value, set, type = "text", children, className = "", required = false, hint = "" }) {
   return (
     <label className={`min-w-0 ${className}`}>
-      <span className="mb-1 block text-xs font-bold text-muted-foreground">
+      <span className="mb-1 block text-sm font-bold text-foreground">
         {label}
         {required ? <span className="ml-1 font-semibold text-blue-600 dark:text-orange-500">{hint || "Required"}</span> : null}
       </span>
-      {children || <input type={type} value={value} onChange={(e) => set(e.target.value)} required={required} className="w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2.5" />}
+      {children || <input type={type} value={value} onChange={(e) => set(e.target.value)} required={required} className="w-full min-h-[44px] min-w-0 rounded-lg border border-input bg-background px-3 py-2.5 text-base" />}
     </label>
   );
 }

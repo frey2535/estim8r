@@ -1,4 +1,5 @@
 import { geometrySimilarity } from "./legendGeometry.js";
+import { isScannedOrSparsePage, legendGraphicMatch, rasterCandidateSurvivesNoise } from "./takeoffQuality.js";
 
 function boundsToCandidate(minX, minY, maxX, maxY, width, height) {
   const wPx = maxX - minX + 1;
@@ -10,15 +11,33 @@ function boundsToCandidate(minX, minY, maxX, maxY, width, height) {
   return { cx, cy, w, h, kind: "rect", source: "raster", outline: { kind: "rect", source: "raster", w, h, points: [] } };
 }
 
+export function rasterExtractScale(width, height, options = {}) {
+  const w = Math.max(1, Number(width) || 1);
+  const h = Math.max(1, Number(height) || 1);
+  const coarse = options.coarsePointer === true
+    || (typeof window !== "undefined" && Boolean(window.matchMedia?.("(pointer: coarse)")?.matches));
+  const budget = coarse ? 2_200_000 : 4_500_000;
+  const requested = Number(options.scale) > 0 ? Number(options.scale) : 1.35;
+  return Math.min(requested, Math.sqrt(budget / (w * h)));
+}
+
 export async function extractRasterSymbolCandidates(page, options = {}) {
   if (typeof document === "undefined") return [];
-  const scale = Number(options.scale) || 1.35;
+  const base = page.getViewport({ scale: 1 });
+  const scale = rasterExtractScale(base.width, base.height, options);
   const viewport = page.getViewport({ scale });
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(viewport.width));
   canvas.height = Math.max(1, Math.round(viewport.height));
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  await page.render({ canvasContext: ctx, viewport }).promise;
+  if (!ctx) return [];
+  try {
+    await page.render({ canvasContext: ctx, viewport }).promise;
+  } catch {
+    canvas.width = 1;
+    canvas.height = 1;
+    return [];
+  }
   const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const step = 2;
   const gw = Math.ceil(width / step);
@@ -54,6 +73,8 @@ export async function extractRasterSymbolCandidates(page, options = {}) {
     if(count<3 || long<0.16 || long>3.4 || short<0.06 || long/Math.max(short,0.01)>8) continue;
     out.push(boundsToCandidate(minX*step,minY*step,Math.min(width-1,(maxX+1)*step),Math.min(height-1,(maxY+1)*step),width,height));
   }
+  canvas.width = 1;
+  canvas.height = 1;
   return out;
 }
 
@@ -80,8 +101,36 @@ export async function hydrateRasterPaths(page, options = {}) {
   return extracted;
 }
 
+const SPARSE_VECTOR_LIMIT = 80;
+
+export function pagesNeedingRaster(pages, options = {}) {
+  const coarse = options.coarsePointer === true
+    || (typeof window !== "undefined" && Boolean(window.matchMedia?.("(pointer: coarse)")?.matches));
+  const maxPages = Number(options.maxPages) > 0
+    ? Number(options.maxPages)
+    : (coarse ? 6 : 10);
+  const sparseLimit = Number(options.sparseVectorLimit) > 0
+    ? Number(options.sparseVectorLimit)
+    : SPARSE_VECTOR_LIMIT;
+  return (pages || [])
+    .filter((page) => {
+      if (!page) return false;
+      if ((page.rasterPaths || []).length || (page.rasterCandidates || []).length) return false;
+      return (page.paths || []).length < sparseLimit || isScannedOrSparsePage(page);
+    })
+    .slice()
+    .sort((a, b) => (a.paths?.length || 0) - (b.paths?.length || 0))
+    .slice(0, maxPages);
+}
+
 export async function hydratePagesRaster(pages, options = {}) {
-  for (const page of pages || []) await hydrateRasterPaths(page, options);
+  const yieldToUi = typeof options.yieldToUi === "function"
+    ? options.yieldToUi
+    : () => new Promise((resolve) => setTimeout(resolve, 0));
+  for (const page of pages || []) {
+    try { await hydrateRasterPaths(page, options); } catch { /* keep the rest of the set alive */ }
+    await yieldToUi();
+  }
   return pages;
 }
 
@@ -91,12 +140,13 @@ export function matchRasterToLegend(candidates, dictionary, options = {}) {
   if (!entries.length) return [];
   const hits = [];
   for (const candidate of candidates || []) {
+    if (!rasterCandidateSurvivesNoise(candidate)) continue;
     let best = null;
     let bestScore = 0;
     let runner = 0;
     for (const entry of entries) {
       const protos = entry.prototypes?.length ? entry.prototypes : [entry.prototype];
-      const score = Math.max(...protos.map((proto) => geometrySimilarity(candidate, proto) || 0));
+      const score = Math.max(...protos.map((proto) => legendGraphicMatch(candidate, proto) || geometrySimilarity(candidate, proto) || 0));
       if (score > bestScore) {
         runner = bestScore;
         bestScore = score;

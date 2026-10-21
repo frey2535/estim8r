@@ -22,6 +22,144 @@ function unionBounds(parts=[]) {
   if(!Number.isFinite(minX)) return null;
   return {minX,minY,maxX,maxY,w:maxX-minX,h:maxY-minY,cx:(minX+maxX)/2,cy:(minY+maxY)/2};
 }
+
+function shortPrintedLabel(text) {
+  const value = String(text || "").trim();
+  if (!value || value.length > 10) return false;
+  if (/^(?:LN|LP|PP|RP|H|L|EM)\d{1,2}$|^P\d{2}$/i.test(value)) return true;
+  // Bare circuit / keynote numbers sitting beside a symbol. Type words such as
+  // WP, GFI, SPR, or G are the device identity and must not steal the fill.
+  return /^\d{1,3}[A-Z]?$/.test(value);
+}
+
+function partLong(part) {
+  return Math.max(Number(part?.w) || 0, Number(part?.h) || 0, (Number(part?.r) || 0) * 2);
+}
+
+function isLabelSizedGlyph(part) {
+  const long = partLong(part);
+  return long > 0 && long <= 0.42;
+}
+
+function partNearPrintedLabel(part, tokens = []) {
+  if (!isLabelSizedGlyph(part)) return false;
+  const px = Number(part?.cx) || 0;
+  const py = Number(part?.cy) || 0;
+  const long = partLong(part);
+  return (tokens || []).some((token) => {
+    if (!shortPrintedLabel(token?.text)) return false;
+    const dist = Math.hypot((Number(token.x) || 0) - px, (Number(token.y) || 0) - py);
+    // Only the compact number/type glyph itself is a label. A full symbol body
+    // may contain a letter such as G or 11 and must still receive the fill.
+    return dist <= Math.max(0.16, Math.min(0.34, long * 1.15));
+  });
+}
+
+function outlineFromPath(path) {
+  if (!path) return null;
+  return path.outline ? {
+    ...path.outline,
+    cx: path.outline.cx ?? path.cx,
+    cy: path.outline.cy ?? path.cy,
+    w: path.outline.w ?? path.w,
+    h: path.outline.h ?? path.h,
+    r: path.outline.r ?? path.r,
+    source: path.outline.source || path.source || "vector",
+  } : {
+    kind: path.kind || "rect",
+    source: path.source || "vector",
+    cx: path.cx,
+    cy: path.cy,
+    w: path.w,
+    h: path.h,
+    r: path.r,
+    points: path.points || [],
+  };
+}
+
+function nearbySymbolBody(origin, paths = [], tokens = []) {
+  const x = Number(origin?.x ?? origin?.cx) || 0;
+  const y = Number(origin?.y ?? origin?.cy) || 0;
+  let best = null;
+  let bestScore = -Infinity;
+  for (const path of paths || []) {
+    if (!path || looksLikeHexNoteGlyph(path)) continue;
+    if (partNearPrintedLabel(path, tokens)) continue;
+    const cx = Number(path.cx) || 0;
+    const cy = Number(path.cy) || 0;
+    const dist = Math.hypot(cx - x, cy - y);
+    if (dist > 1.25 || dist < 0.02) continue;
+    const long = partLong(path);
+    const short = Math.min(Number(path.w) || long, Number(path.h) || long);
+    if (long < 0.16 || long > 1.65 || short < 0.12) continue;
+    if (long / (short || 1e-9) > 2.8) continue;
+    const compact = long >= 0.22 && long / (short || 1e-9) <= 1.75;
+    const score = (compact ? 1.5 : 0.75) - dist * 1.2 + Math.min(0.4, long);
+    if (score > bestScore) {
+      best = path;
+      bestScore = score;
+    }
+  }
+  return bestScore > 0.2 ? best : null;
+}
+
+export function symbolBodyOutline(geometry, tokens = [], options = {}) {
+  const outline = geometry?.outline || geometry;
+  if (!outline) return null;
+  if (looksLikeHexNoteGlyph(geometry) || looksLikeHexNoteGlyph(outline)) return null;
+
+  const paths = options.paths || [];
+  const origin = {
+    x: Number(outline.cx ?? geometry?.cx ?? geometry?.x) || 0,
+    y: Number(outline.cy ?? geometry?.cy ?? geometry?.y) || 0,
+  };
+  const snapAwayFromLabel = (point) => outlineFromPath(nearbySymbolBody(point, paths, tokens));
+
+  if (outline.kind === "composite" && outline.parts?.length) {
+    const parts = outline.parts.filter((part) => !partNearPrintedLabel(part, tokens) && !looksLikeHexNoteGlyph(part));
+    if (!parts.length) return snapAwayFromLabel(origin);
+    const area = (part) => {
+      const w = Number(part?.w) || (Number(part?.r) || 0) * 2;
+      const h = Number(part?.h) || (Number(part?.r) || 0) * 2;
+      return Math.max(0.0001, w * h);
+    };
+    const core = [...parts].sort((a, b) => area(b) - area(a))[0];
+    if (partNearPrintedLabel(core, tokens) || looksLikeHexNoteGlyph(core)) return snapAwayFromLabel(origin);
+    const coreLong = Math.max(partLong(core), 0.12);
+    const kept = parts.filter((part) => {
+      if (part === core) return true;
+      if (partNearPrintedLabel(part, tokens)) return false;
+      const d = gap(core, part);
+      const center = Math.hypot((Number(part.cx) || 0) - (Number(core.cx) || 0), (Number(part.cy) || 0) - (Number(core.cy) || 0));
+      return d <= Math.max(0.16, coreLong * 0.42) && center <= Math.max(0.45, coreLong * 1.45);
+    });
+    const bodyParts = kept.length ? kept : [core];
+    const box = unionBounds(bodyParts);
+    return {
+      kind: "composite",
+      source: outline.source || geometry?.source || "vector",
+      cx: box?.cx,
+      cy: box?.cy,
+      w: box?.w,
+      h: box?.h,
+      parts: bodyParts,
+    };
+  }
+
+  const asPart = {
+    cx: origin.x,
+    cy: origin.y,
+    w: Number(outline.w) || partLong(outline),
+    h: Number(outline.h) || partLong(outline),
+    r: outline.r,
+  };
+  if (partNearPrintedLabel(asPart, tokens)) return snapAwayFromLabel(origin);
+  return {
+    ...outline,
+    cx: outline.cx ?? origin.x,
+    cy: outline.cy ?? origin.y,
+  };
+}
 function normalizedPart(part, box) {
   return {
     dx: box.w ? (part.cx-box.cx)/box.w : 0,
@@ -49,8 +187,44 @@ export function isSlashFragment(candidate) {
 
 function allowCandidate(candidate, options = {}) {
   if (!candidate) return false;
-  if (!isJunkGeometry(candidate)) return true;
+  if (!isJunkGeometry(candidate, options.nearby || [])) return true;
   return Boolean(options.allowSlash) && isDeviceFragment(candidate);
+}
+
+const SPATIAL_CELL = 2;
+
+export function buildSpatialIndex(candidates = [], cell = SPATIAL_CELL) {
+  const buckets = new Map();
+  for (const item of candidates || []) {
+    const gx = Math.floor((Number(item?.cx) || 0) / cell);
+    const gy = Math.floor((Number(item?.cy) || 0) / cell);
+    const key = `${gx}:${gy}`;
+    const bin = buckets.get(key);
+    if (bin) bin.push(item);
+    else buckets.set(key, [item]);
+  }
+  return { buckets, cell };
+}
+
+export function nearbyFromIndex(index, x, y, radius) {
+  if (!index?.buckets) return [];
+  const cell = index.cell || SPATIAL_CELL;
+  const reach = Math.ceil((Number(radius) || 0) / cell) + 1;
+  const gx = Math.floor((Number(x) || 0) / cell);
+  const gy = Math.floor((Number(y) || 0) / cell);
+  const out = [];
+  for (let dy = -reach; dy <= reach; dy += 1) {
+    for (let dx = -reach; dx <= reach; dx += 1) {
+      const bin = index.buckets.get(`${gx + dx}:${gy + dy}`);
+      if (bin) out.push(...bin);
+    }
+  }
+  return out;
+}
+
+function candidatePool(candidates, options, x, y, radius) {
+  if (options?.index) return nearbyFromIndex(options.index, x, y, radius);
+  return candidates || [];
 }
 
 export function clusterSymbolGeometry(seed, candidates=[], options={}) {
@@ -64,7 +238,8 @@ export function clusterSymbolGeometry(seed, candidates=[], options={}) {
   while(changed && parts.length<maxParts){
     changed=false;
     const box=unionBounds(parts);
-    for(const c of candidates){
+    const pool=candidatePool(candidates,options,box.cx,box.cy,maxSpan+joinGap);
+    for(const c of pool){
       if(parts.includes(c)||!allowCandidate(c,options)) continue;
       if (options.keepSeedBody && looksLikeTroffer(seed)) continue;
       const nextBox=unionBounds([...parts,c]);
@@ -112,6 +287,50 @@ function ratioScore(a,b){
   const r=Math.max(a,b)/Math.min(a,b);
   if(r<=1.2)return 1;if(r<=1.45)return .8;if(r<=1.8)return .55;if(r<=2.3)return .25;return 0;
 }
+
+function layoutDistanceScore(layoutA=[], layoutB=[]){
+  if(!layoutA.length||!layoutB.length)return 0.5;
+  const scoreOneWay=(A,B)=>{
+    let total=0;
+    for(const a of A){
+      let best=Infinity;
+      for(const b of B){
+        const kindPenalty=a.kind===b.kind?0:0.18;
+        const d=Math.hypot((a.dx||0)-(b.dx||0),(a.dy||0)-(b.dy||0))
+          + Math.abs((a.w||0)-(b.w||0))*0.55
+          + Math.abs((a.h||0)-(b.h||0))*0.55
+          + kindPenalty;
+        if(d<best)best=d;
+      }
+      total+=best;
+    }
+    return total/Math.max(1,A.length);
+  };
+  const raw=(scoreOneWay(layoutA,layoutB)+scoreOneWay(layoutB,layoutA))/2;
+  return Math.max(0,Math.min(1,1-raw/1.25));
+}
+
+function rotateLayout(layout=[],turns=0){
+  const t=((turns%4)+4)%4;
+  return layout.map((part)=>{
+    let dx=part.dx||0,dy=part.dy||0,w=part.w||0,h=part.h||0;
+    for(let i=0;i<t;i+=1){
+      const nextDx=-dy;
+      const nextDy=dx;
+      dx=nextDx;dy=nextDy;
+      const nextW=h;h=w;w=nextW;
+    }
+    return {...part,dx,dy,w,h};
+  });
+}
+
+function bestLayoutScore(A,B){
+  let best=0;
+  for(let turns=0;turns<4;turns+=1){
+    best=Math.max(best,layoutDistanceScore(A.layout||[],rotateLayout(B.layout||[],turns)));
+  }
+  return best;
+}
 export function geometrySimilarity(a,b){
   const A=a?.signature||geometrySignature(a), B=b?.signature||geometrySignature(b);
   if(!A||!B)return 0;
@@ -122,7 +341,8 @@ export function geometrySimilarity(a,b){
   let kind=0,total=0;
   for(const k of keys){kind+=Math.min(A.kinds[k]||0,B.kinds[k]||0);total+=Math.max(A.kinds[k]||0,B.kinds[k]||0);}
   kind=total?kind/total:0;
-  return aspect*.28+size*.28+count*.22+kind*.22;
+  const layout=bestLayoutScore(A,B);
+  return aspect*.18+size*.20+count*.16+kind*.16+layout*.30;
 }
 
 export function bodySimilarity(a, b) {
@@ -203,6 +423,48 @@ function circleHintEntry(entry) {
 }
 
 function compact(v){return String(v||"").toLowerCase().replace(/[^a-z0-9]+/g,"");}
+function legendCodeEntries(dictionary) {
+  const map = new Map();
+  for (const entry of dictionary?.entries || []) {
+    const code = compact(normalizeTypeMark(entry?.code || entry?.symbol?.abbr || ""));
+    if (!code || map.has(code)) continue;
+    map.set(code, entry);
+  }
+  return map;
+}
+
+export function nearbyLegendEntry(point, tokens = [], dictionary, options = {}) {
+  if (!point) return null;
+  const radius = Number(options.radius) > 0 ? Number(options.radius) : 1.35;
+  const planType = String(options.planType || "");
+  const anchorFamily = String(options.anchorFamily || "");
+  const entries = legendCodeEntries(dictionary);
+  let best = null;
+  let bestDist = Infinity;
+  for (const token of tokens || []) {
+    const code = compact(normalizeTypeMark(token?.text));
+    const entry = entries.get(code);
+    if (!entry) continue;
+    const family = entryFamily(entry);
+    if (planType && family && family !== planType) continue;
+    if (anchorFamily && family && family !== anchorFamily) continue;
+    // Circuit / keynote digits next to a power glyph are not lighting type codes.
+    if ((planType === "power" || anchorFamily === "power") && family === "lighting" && /^\d{1,2}[a-z]?$/.test(code)) continue;
+    const dist = Math.hypot(
+      (Number(token?.x) || 0) - (Number(point.x ?? point.cx) || 0),
+      (Number(token?.y) || 0) - (Number(point.y ?? point.cy) || 0),
+    );
+    if (dist <= radius && dist < bestDist) {
+      best = { entry, token, distance: dist };
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
+function emergencyVariantEntry(entry) {
+  return /^\d{1,2}e$/i.test(String(entry?.code || "").trim());
+}
 function meaningfulWords(label){
   return String(label||"").toLowerCase().split(/[^a-z0-9]+/).filter((w)=>w.length>=4&&!["type","with","wall","mount","mounted","device","fixture"].includes(w));
 }
@@ -239,14 +501,26 @@ export function attachLegendGeometryPrototypes(dictionary,pages=[]){
     const category=entry.symbol?.takeoffCategory||entry.symbol?.category||"";
     if(category&&!CATEGORY_ALLOW.has(category))continue;
     const sourcePages=pages.filter((p)=>String(p.kind||"").includes("legend")||String(p.kind||"").includes("schedule"));
-    let prototype=null;
+    const prototypes=[];
     for(const page of sourcePages){
       const seed=seedNearLegendEntry(entry,page);
       if(!seed)continue;
-      prototype=clusterSymbolGeometry(seed,page.paths||[],{maxSpan:2.8});
-      if(prototype)break;
+      const seedLong=Math.max(Number(seed.w)||0,Number(seed.h)||0,0.2);
+      const prototype=clusterSymbolGeometry(seed,page.paths||[],{
+        maxSpan:Math.max(0.7,Math.min(1.8,seedLong*2.4)),
+        joinGap:Math.max(0.08,Math.min(0.28,seedLong*0.55)),
+        maxParts:10,
+      });
+      if(!prototype)continue;
+      if(!prototypes.some((existing)=>geometrySimilarity(existing,prototype)>=0.97)){
+        prototypes.push(prototype);
+      }
+      if(prototypes.length>=3)break;
     }
-    if(prototype)entry.prototype=prototype;
+    if(prototypes.length){
+      entry.prototypes=prototypes;
+      entry.prototype=prototypes[0];
+    }
   }
   return {...dictionary,entries};
 }
@@ -410,6 +684,85 @@ export function findNearbyReceptacleGlyph(point, paths = [], options = {}) {
     .sort((a, b) => (rank(a.path) - rank(b.path)) || a.dist - b.dist)[0]?.path || null;
 }
 
+export function looksLikeOccupancyGlyph(candidate) {
+  if (!candidate || looksLikeHexNoteGlyph(candidate)) return false;
+  const w = Number(candidate.w) || 0;
+  const h = Number(candidate.h) || 0;
+  const long = Math.max(w, h);
+  const short = Math.min(w, h);
+  const aspect = long / (short || 1e-9);
+  // Printed OS sits on a stacked pair of ~0.14x0.21 paths or a ~0.21 circle.
+  // Those are smaller than the recessed-can / junk cutoff, so they need an
+  // explicit glyph test instead of the generic circle hint.
+  if (long < 0.10 || long > 0.32 || short < 0.08 || short > 0.26) return false;
+  if (aspect > 2.2) return false;
+  return candidate.kind === "path" || candidate.kind === "circle" || candidate.kind === "rect" || candidate.kind === "composite";
+}
+
+function occupancyOutline(path) {
+  const w = Math.max(Number(path?.w) || 0, 0.22);
+  const h = Math.max(Number(path?.h) || 0, 0.22);
+  if ((path?.outline?.points || []).length >= 3) {
+    return { ...path.outline, source: path.outline.source || "vector" };
+  }
+  return {
+    kind: path?.kind === "circle" ? "circle" : "rect",
+    source: "vector",
+    w,
+    h,
+    cx: Number(path?.cx) || 0,
+    cy: Number(path?.cy) || 0,
+    points: [],
+  };
+}
+
+export function findNearbyOccupancyGlyph(point, paths = [], options = {}) {
+  const x = Number(point?.x ?? point?.cx) || 0;
+  const y = Number(point?.y ?? point?.cy) || 0;
+  const radius = Number(options.radius) || 0.62;
+  const seeds = (paths || [])
+    .filter((path) => looksLikeOccupancyGlyph(path))
+    .map((path) => ({ path, dist: Math.hypot((Number(path.cx) || 0) - x, (Number(path.cy) || 0) - y) }))
+    .filter((item) => item.dist <= radius)
+    .sort((a, b) => a.dist - b.dist);
+  if (!seeds.length) return null;
+  const seed = seeds[0].path;
+  const twin = seeds.find((item) => (
+    item.path !== seed
+    && Math.abs((Number(item.path.cx) || 0) - (Number(seed.cx) || 0)) < 0.10
+    && Math.abs((Number(item.path.cy) || 0) - (Number(seed.cy) || 0)) < 0.34
+  ));
+  if (!twin) {
+    return {
+      ...seed,
+      source: "vector",
+      outline: occupancyOutline(seed),
+    };
+  }
+  const minX = Math.min((Number(seed.cx) || 0) - (Number(seed.w) || 0) / 2, (Number(twin.path.cx) || 0) - (Number(twin.path.w) || 0) / 2);
+  const maxX = Math.max((Number(seed.cx) || 0) + (Number(seed.w) || 0) / 2, (Number(twin.path.cx) || 0) + (Number(twin.path.w) || 0) / 2);
+  const minY = Math.min((Number(seed.cy) || 0) - (Number(seed.h) || 0) / 2, (Number(twin.path.cy) || 0) - (Number(twin.path.h) || 0) / 2);
+  const maxY = Math.max((Number(seed.cy) || 0) + (Number(seed.h) || 0) / 2, (Number(twin.path.cy) || 0) + (Number(twin.path.h) || 0) / 2);
+  return {
+    cx: (minX + maxX) / 2,
+    cy: (minY + maxY) / 2,
+    w: Math.max(maxX - minX, 0.22),
+    h: Math.max(maxY - minY, 0.22),
+    kind: "rect",
+    source: "vector",
+    parts: [seed, twin.path],
+    outline: {
+      kind: "rect",
+      source: "vector",
+      w: Math.max(maxX - minX, 0.22),
+      h: Math.max(maxY - minY, 0.22),
+      cx: (minX + maxX) / 2,
+      cy: (minY + maxY) / 2,
+      points: [],
+    },
+  };
+}
+
 function classifyNearbyPowerLabel(point, tokens = []) {
   let best = "";
   let bestDist = 1.15;
@@ -453,6 +806,7 @@ export function attachPowerGlyphPrototypes(dictionary, marks = [], page = null) 
     if (!seed) continue;
     const cluster = clusterSymbolGeometry(seed, (page?.paths || []).filter((path) => looksLikeReceptacleGlyph(path)), { maxSpan: 0.55, maxParts: 5, joinGap: 0.12 });
     if (!cluster || looksLikeHexNoteGlyph(cluster) || !looksLikeReceptacleGlyph(cluster)) continue;
+    if (Math.max(Number(cluster.w) || 0, Number(cluster.h) || 0) < 0.16) continue;
     entry.prototype = {
       ...cluster,
       source: "vector",
@@ -487,16 +841,23 @@ export function scanUnlabeledPowerGlyphs(page, options = {}) {
       score: 0.91,
       margin: 0.08,
       ambiguous: true,
+      source: "unlabeled-power-glyph",
     });
   }
   return hits;
 }
 
-function entryFamily(entry) {
-  const blob = `${entry?.symbol?.takeoffCategory || ""} ${entry?.symbol?.category || ""} ${entry?.symbol?.label || ""} ${entry?.code || ""}`;
+export function entryFamily(entry) {
+  const code = String(entry?.code || "");
+  const blob = `${entry?.symbol?.takeoffCategory || ""} ${entry?.symbol?.category || ""} ${entry?.symbol?.label || ""} ${code}`;
+  // Ceiling / bay fans are lighting fixtures. The word "fan" used to dump them
+  // into the power family, so F2 painted and hovered on receptacles.
+  if (/ceiling\s*fan|bay\s*fan|fanimation|paddle\s*fan/i.test(blob)) return "lighting";
+  if (/^OS$/i.test(code) || /occupanc|vacanc/i.test(blob)) return "lighting";
+  if (/^F\d/i.test(code) && !/recept|gfi|exhaust|vent/i.test(blob)) return "lighting";
   if (/lighting|downlight|troffer|can light|fixture/i.test(blob) && !/recept|gfi|switch/i.test(blob)) return "lighting";
   if (/recept|gfi|switch|outlet|duplex|weatherproof|special-purpose|\bwp\b|\bsp\b|\bspr\b/i.test(blob)) return "power";
-  if (/equipment|panel|fan|hvac/i.test(blob)) return "power";
+  if (/exhaust\s*fan|vent(?:ilation)?\s*fan|equipment|panel|hvac/i.test(blob)) return "power";
   return "";
 }
 
@@ -688,11 +1049,21 @@ export function snapToEntryPrototype(token, page, entry, options = {}) {
   return best;
 }
 
+function pushHypothesis(hypotheses, cluster, entry, proto, planType, nearby, options) {
+  const geom = geometrySimilarity(cluster, proto);
+  const body = bodySimilarity(cluster, proto);
+  const sizeOk = sizeCompatible(cluster, proto);
+  const score = Math.max(geom, options.bodyOnly ? body : 0)
+    + planTypeScore(entry, planType)
+    + emergencyTwinAdjustment(cluster, entry, nearby);
+  hypotheses.push({ cluster, entry, raw: geom, score, sizeOk, nearby });
+}
+
 export function scanPageByLegendGeometry(page,dictionary,options={}){
-  const threshold=Number(options.threshold)||0.82;
+  const threshold=Number(options.threshold)||0.76;
   const entries=(dictionary?.entries||[]).filter((e)=>{
     if(!e.prototype) return false;
-    if (!options.planType) return true;
+    if (!options.planType || options.allowCrossFamilyReview) return true;
     const family = entryFamily(e);
     return !family || family === options.planType;
   });
@@ -700,48 +1071,268 @@ export function scanPageByLegendGeometry(page,dictionary,options={}){
   const planType=options.planType||pagePlanType(page);
   const occupied=options.occupied||[];
   const paths=(page?.paths||[]).filter((p)=>allowCandidate(p,options));
-  const clusters=[];
-  // Do not globally consume primitives here. A single primitive can be the seed
-  // for several nearby symbol hypotheses; consuming it after the first cluster
-  // caused one fixture family to dominate a sheet and hid other device types.
-  const seenClusterKeys=new Set();
-  const clusterOpts = options.allowSlash
-    ? { allowSlash: true, maxSpan: 0.85, joinGap: 0.26, maxParts: 6 }
-    : { maxSpan: 2.8, keepSeedBody: Boolean(options.keepSeedBody) };
+  const hypotheses=[];
+  const seen=new Set();
+  const index=buildSpatialIndex(paths);
+  const started=Date.now();
+  const budget=Number(options.timeBudgetMs)>0?Number(options.timeBudgetMs):12000;
+  const maxSeeds=Number(options.maxSeeds)>0?Number(options.maxSeeds):1800;
+  const dense=paths.length>2500 || paths.length*entries.length>80000;
+  let seedsUsed=0;
+
   for(const seed of paths){
+    if(Date.now()-started>budget) break;
+    if(seedsUsed>=maxSeeds) break;
     if (options.allowSlash && !isDeviceFragment(seed) && isJunkGeometry(seed)) continue;
     if (options.twinHatch && !looksLikeTroffer(seed)) continue;
-    const cluster=clusterSymbolGeometry(seed,paths,clusterOpts);
-    if(!cluster)continue;
-    if (options.allowSlash) {
-      const long = Math.max(cluster.w || 0, cluster.h || 0);
-      if (long < 0.1 || long > 0.98) continue;
+    const seedLong=Math.max(Number(seed.w)||0,Number(seed.h)||0,0.02);
+    if(dense && (seedLong>3.2 || seedLong<0.06)) continue;
+    seedsUsed+=1;
+
+    if(dense){
+      const cluster=clusterSymbolGeometry(seed,paths,{
+        allowSlash:Boolean(options.allowSlash),
+        keepSeedBody:Boolean(options.keepSeedBody),
+        maxSpan:Math.max(0.42,Math.min(2.5,seedLong*1.42)),
+        joinGap:Math.max(0.06,Math.min(0.38,seedLong*0.72)),
+        maxParts:14,
+        index,
+      });
+      if(!cluster) continue;
+      const distKey=[cluster.cx.toFixed(2),cluster.cy.toFixed(2),cluster.w.toFixed(2),cluster.h.toFixed(2),cluster.parts?.length||1].join(":");
+      if(seen.has(distKey)) continue;
+      seen.add(distKey);
+      const nearby=nearbyFromIndex(index,cluster.cx,cluster.cy,Math.max(0.5,seedLong*1.2));
+      for(const entry of entries){
+        const protos=entry.prototypes?.length?entry.prototypes:[entry.prototype];
+        for(const proto of protos){
+          if(!proto) continue;
+          pushHypothesis(hypotheses,cluster,entry,proto,planType,nearby,options);
+        }
+      }
+      continue;
     }
-    const key=[cluster.cx.toFixed(2),cluster.cy.toFixed(2),cluster.w.toFixed(2),cluster.h.toFixed(2),cluster.parts?.length||1].join(":");
-    if(seenClusterKeys.has(key))continue;
-    seenClusterKeys.add(key);
-    clusters.push(cluster);
+
+    for(const entry of entries){
+      const protos=entry.prototypes?.length?entry.prototypes:[entry.prototype];
+      for(const proto of protos){
+        if(!proto) continue;
+        const pLong=Math.max(Number(proto.w)||0,Number(proto.h)||0,0.18);
+        const pShort=Math.max(0.08,Math.min(Number(proto.w)||0,Number(proto.h)||0,pLong));
+        if(options.strictSize && (seedLong>pLong*1.75 || seedLong<pShort*0.15)) continue;
+        const cluster=clusterSymbolGeometry(seed,paths,{
+          allowSlash:Boolean(options.allowSlash),
+          keepSeedBody:Boolean(options.keepSeedBody),
+          maxSpan:Math.max(0.42,Math.min(2.5,pLong*1.42)),
+          joinGap:Math.max(0.06,Math.min(0.38,pShort*0.72)),
+          maxParts:Math.max(4,Math.min(14,(proto.parts?.length||1)+5)),
+          index,
+        });
+        if(!cluster) continue;
+        const distKey=[entry.symbol?.id||entry.code,cluster.cx.toFixed(2),cluster.cy.toFixed(2),cluster.w.toFixed(2),cluster.h.toFixed(2),cluster.parts?.length||1].join(":");
+        if(seen.has(distKey)) continue;
+        seen.add(distKey);
+        const nearby=nearbyFromIndex(index,cluster.cx,cluster.cy,Math.max(0.5,pLong*0.9));
+        pushHypothesis(hypotheses,cluster,entry,proto,planType,nearby,options);
+      }
+    }
   }
+
   const hits=[];
-  for(const cluster of clusters){
-    if(occupied.some((point)=>Math.hypot((point.x||0)-cluster.cx,(point.y||0)-cluster.cy)<(Number(options.occupyRadius)||0.34))) continue;
-    const nearby = (page?.paths || []).filter((path) => Math.hypot((path.cx || 0) - cluster.cx, (path.cy || 0) - cluster.cy) <= 0.7);
-    const resolved=resolveGeometryMatch(cluster,entries,{
-      planType,
-      strictSize:options.strictSize,
-      bodyOnly:options.bodyOnly,
-      nearby,
+  hypotheses.sort((a,b)=>b.score-a.score);
+  // Rival checks previously scanned every hypothesis for every candidate (O(n²)).
+  // Index the sorted hypotheses spatially so crowded plan sheets remain responsive.
+  const rivalCellSize=0.22;
+  const rivalBuckets=new Map();
+  const cell=(v)=>Math.floor(v/rivalCellSize);
+  const bucketKey=(x,y)=>`${x}:${y}`;
+  for(const hypothesis of hypotheses){
+    const x=cell(hypothesis.cluster.cx),y=cell(hypothesis.cluster.cy);
+    const key=bucketKey(x,y);
+    if(!rivalBuckets.has(key))rivalBuckets.set(key,[]);
+    rivalBuckets.get(key).push(hypothesis);
+  }
+  function nearestRival(row){
+    const x=cell(row.cluster.cx),y=cell(row.cluster.cy);
+    let best=null;
+    for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){
+      for(const other of rivalBuckets.get(bucketKey(x+dx,y+dy))||[]){
+        if(other===row)continue;
+        if(Math.hypot(other.cluster.cx-row.cluster.cx,other.cluster.cy-row.cluster.cy)>=0.22)continue;
+        if(!best||other.score>best.score)best=other;
+      }
+    }
+    return best;
+  }
+  for(const row of hypotheses){
+    if(row.raw < threshold) continue;
+    if(options.strictSize && !row.sizeOk) continue;
+    const cluster=row.cluster;
+    if(occupied.some((point)=>Math.hypot((point.x||0)-cluster.cx,(point.y||0)-cluster.cy)<(Number(options.occupyRadius)||0.26))) continue;
+    if(hits.some((hit)=>Math.hypot(hit.geometry.cx-cluster.cx,hit.geometry.cy-cluster.cy)<0.20)) continue;
+
+    const runner=nearestRival(row);
+    const margin=row.score-(runner?.score||0);
+    hits.push({
+      geometry:cluster,
+      entry:row.entry,
+      score:row.raw,
+      margin,
+      ambiguous:Boolean(runner && margin<0.035),
     });
-    if(resolved&&resolved.score>=threshold){
-      hits.push({geometry:cluster,entry:resolved.entry,score:resolved.score,margin:resolved.margin,ambiguous:resolved.ambiguous});
+  }
+  return hits;
+}
+
+export function recoverMissedLegendSymbols(page, dictionary, options = {}) {
+  const planType = options.planType || pagePlanType(page);
+  const occupied = options.occupied || [];
+  const tokens = page?.tokens || [];
+  const paths = page?.paths || [];
+  const deadline = Number(options.deadline) > 0
+    ? Number(options.deadline)
+    : Date.now() + Math.max(200, Number(options.timeBudgetMs) > 0 ? Number(options.timeBudgetMs) : 8000);
+  const entries = (dictionary?.entries || []).filter((entry) => {
+    if (!entry?.prototype) return false;
+    if (options.allowCrossFamilyReview !== false) return true;
+    const family = entryFamily(entry);
+    return !planType || !family || family === planType;
+  });
+  const recovered = [];
+  for (const entry of entries) {
+    const remaining = deadline - Date.now();
+    if (remaining < 80) break;
+    const hits = scanPageByLegendGeometry(page, { entries: [entry] }, {
+      planType,
+      // Recovery must not turn wall fragments into devices on weak resemblance.
+      // Require close legend geometry and compatible symbol dimensions.
+      threshold: 0.90,
+      strictSize: true,
+      occupyRadius: 0.24,
+      occupied: [...occupied, ...recovered.map((hit) => ({ x: hit.geometry.cx, y: hit.geometry.cy }))],
+      timeBudgetMs: Math.min(4500, remaining),
+      maxSeeds: 2200,
+      allowSlash: true,
+      keepSeedBody: true,
+      allowCrossFamilyReview: true,
+    });
+    if (!hits.length) continue;
+    const repeated = hits.length >= 2;
+    const wanted = compact(entry.code);
+    for (const hit of hits) {
+      const nearestPrinted = nearbyLegendEntry(
+        { x: hit.geometry.cx, y: hit.geometry.cy },
+        tokens,
+        dictionary,
+        { radius: 1.35, planType, anchorFamily: entryFamily(entry) },
+      );
+      const nearestPrintedCode = compact(nearestPrinted?.entry?.code);
+      // Printed type text is authoritative when it is a known legend code.
+      // A visually similar 1E prototype must never override a nearby 1, 2E,
+      // 3E, OS, F, etc. label.
+      if (nearestPrintedCode && nearestPrintedCode !== wanted) continue;
+
+      const nearbyCode = Boolean(nearestPrintedCode === wanted);
+      // Unlabeled WP lookalikes were flooding power plans (title ticks, hatch).
+      // Recovery may still copy unlabeled OS / GFI / lighting repeats.
+      if (/^(wp|sp|spr)$/.test(wanted) && !nearbyCode) continue;
+      const nearby = nearbyFromIndex(
+        buildSpatialIndex(paths.filter((path) => allowCandidate(path, { allowSlash: true }))),
+        hit.geometry.cx,
+        hit.geometry.cy,
+        1.1,
+      );
+      // Emergency fixture variants must have either their exact printed type
+      // beside the symbol or actual emergency/hatch geometry. Ordinary fixture
+      // geometry alone is not sufficient to classify an E variant.
+      if (emergencyVariantEntry(entry) && !nearbyCode && !isEmergencyHatch(hit.geometry, nearby)) continue;
+
+      const strong = hit.score >= 0.86;
+      const repeatedStrong = repeated && hit.score >= 0.78;
+      const labeledStrong = nearbyCode && hit.score >= 0.72;
+      if (!strong && !repeatedStrong && !labeledStrong) continue;
+      if (recovered.some((other) => Math.hypot(other.geometry.cx-hit.geometry.cx,other.geometry.cy-hit.geometry.cy) < 0.22)) continue;
+      recovered.push({
+        ...hit,
+        entry,
+        recoveryReason: nearbyCode ? "geometry+type-code" : "high-geometry",
+        ambiguous: false,
+      });
     }
   }
-  // Keep the strongest hypothesis for the same physical footprint, but do not
-  // suppress distinct nearby symbols.
-  return hits.sort((a,b)=>b.score-a.score).filter((hit,index,all)=>!all.slice(0,index).some((other)=>
-    Math.hypot(other.geometry.cx-hit.geometry.cx,other.geometry.cy-hit.geometry.cy)<0.16 &&
-    other.entry.symbol?.id===hit.entry.symbol?.id
-  ));
+  return recovered;
+}
+
+export function pickInteractiveSymbolGeometry(page, point, options = {}) {
+  if (!page || !point) return null;
+  const paths=(page.paths||[]).filter((path)=>allowCandidate(path,{allowSlash:true}));
+  const radius=Number(options.radius)||1.25;
+  const nearby=paths
+    .map((path)=>({path,dist:Math.hypot((path.cx||0)-point.x,(path.cy||0)-point.y)}))
+    .filter((row)=>row.dist<=radius)
+    .sort((a,b)=>a.dist-b.dist)
+    .slice(0,18);
+  if(!nearby.length) return null;
+
+  let best=null;
+  let bestScore=-Infinity;
+  for(const row of nearby){
+    const seed=row.path;
+    const seedLong=Math.max(Number(seed.w)||0,Number(seed.h)||0,0.16);
+    for(const span of [Math.max(0.42,seedLong*1.7),Math.max(0.7,seedLong*2.5),1.35]){
+      const cluster=clusterSymbolGeometry(seed,paths,{
+        allowSlash:true,
+        maxSpan:Math.min(2.2,span),
+        joinGap:Math.max(0.08,Math.min(0.32,seedLong*0.7)),
+        maxParts:12,
+      });
+      if(!cluster) continue;
+      const long=Math.max(Number(cluster.w)||0,Number(cluster.h)||0);
+      const short=Math.min(Number(cluster.w)||0,Number(cluster.h)||0);
+      if(long<0.10||long>2.4||short<0.04) continue;
+      const d=Math.hypot(cluster.cx-point.x,cluster.cy-point.y);
+      const contains = Math.abs(point.x-cluster.cx)<=Math.max(0.12,(cluster.w||0)/2+0.12)
+        && Math.abs(point.y-cluster.cy)<=Math.max(0.12,(cluster.h||0)/2+0.12);
+      const partBonus=Math.min(0.45,(cluster.parts?.length||1)*0.045);
+      const outside = Math.hypot(
+        Math.max(0, Math.abs(point.x - cluster.cx) - (Number(cluster.w) || 0) / 2),
+        Math.max(0, Math.abs(point.y - cluster.cy) - (Number(cluster.h) || 0) / 2),
+      );
+      if (outside > 0.28) continue;
+      const score=(contains?2.2:0.8)-d*1.4+partBonus-Math.max(0,long-1.6)*0.25 - outside * 2;
+      if(score>bestScore){best=cluster;bestScore=score;}
+    }
+  }
+  if (!best) return null;
+  const under = nearby
+    .map((row) => row.path)
+    .filter((path) => {
+      const dx = Math.max(0, Math.abs(point.x - (path.cx || 0)) - (Number(path.w) || 0) / 2);
+      const dy = Math.max(0, Math.abs(point.y - (path.cy || 0)) - (Number(path.h) || 0) / 2);
+      return Math.hypot(dx, dy) <= 0.22;
+    })
+    .sort((a, b) => Math.hypot((a.cx || 0) - point.x, (a.cy || 0) - point.y) - Math.hypot((b.cx || 0) - point.x, (b.cy || 0) - point.y))[0];
+  if (under && Math.hypot((best.cx || 0) - (under.cx || 0), (best.cy || 0) - (under.cy || 0)) > 0.4) {
+    return {
+      ...under,
+      cx: under.cx,
+      cy: under.cy,
+      outline: under.outline || { kind: under.kind || "rect", source: under.source || "vector", w: under.w, h: under.h, cx: under.cx, cy: under.cy },
+    };
+  }
+  return best;
+}
+
+export function matchGeometryToLegend(cluster, dictionary, options = {}) {
+  if(!cluster) return null;
+  const entries=(dictionary?.entries||[]).filter((entry)=>entry?.prototype);
+  if(!entries.length) return null;
+  return resolveGeometryMatch(cluster, entries, {
+    planType: options.planType || "",
+    strictSize: false,
+    bodyOnly: false,
+    nearby: options.nearby || [],
+  });
 }
 
 export function attachProjectPrototypes(dictionary, prototypes = []) {

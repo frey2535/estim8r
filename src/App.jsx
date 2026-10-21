@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from "react";
+import React, { Suspense, lazy, useEffect } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter as Router, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
@@ -7,8 +7,10 @@ import { AuthProvider } from "@/lib/AuthContext";
 import { ThemeProvider } from "@/lib/ThemeContext";
 import ProtectedRoute, { LoginRedirect } from "@/components/ProtectedRoute";
 import AppLayout from "@/components/layout/AppLayout";
+import AppErrorBoundary from "@/components/AppErrorBoundary";
 import Login from "@/pages/Login";
 import UpdateAvailablePrompt from "@/components/UpdateAvailablePrompt";
+import { RESET_ERRORS_EVENT } from "@/lib/appRefresh";
 import { installOwnerChatEvidence } from "@/lib/ownerChatEvidence";
 
 installOwnerChatEvidence();
@@ -18,6 +20,7 @@ const LaborLibrary = lazy(() => import("@/pages/LaborLibrary"));
 const EstimateBuilder = lazy(() => import("@/pages/EstimateBuilder"));
 const Production = lazy(() => import("@/pages/Production"));
 const TakeoffWorkspace = lazy(() => import("@/pages/TakeoffWorkspace"));
+const QuantityLinkPage = lazy(() => import("@/pages/QuantityLinkPage"));
 const MarkupPages = lazy(() => import("@/pages/MarkupPages"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const OwnerAdmin = lazy(() => import("@/pages/OwnerAdmin"));
@@ -28,6 +31,17 @@ const FromBuildr = lazy(() => import("@/pages/FromBuildr"));
 
 function PageLoader() {
   return <div className="flex items-center justify-center py-24"><div className="w-8 h-8 border-4 border-slate-200 border-t-blue-600 dark:border-t-orange-500 rounded-full animate-spin" /></div>;
+}
+
+function FailedRequestReset() {
+  useEffect(() => {
+    const onReset = () => {
+      queryClientInstance.clear();
+    };
+    window.addEventListener(RESET_ERRORS_EVENT, onReset);
+    return () => window.removeEventListener(RESET_ERRORS_EVENT, onReset);
+  }, []);
+  return null;
 }
 
 function AppRoutes() {
@@ -47,6 +61,7 @@ function AppRoutes() {
             <Route path="/labor" element={<LaborLibrary />} />
             <Route path="/production" element={<Production />} />
             <Route path="/takeoff" element={<TakeoffWorkspace />} />
+            <Route path="/quantity-link" element={<QuantityLinkPage />} />
             <Route path="/markup" element={<MarkupPages />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/profile" element={<Settings />} />
@@ -68,8 +83,11 @@ export default function App() {
         <ThemeProvider>
           <QueryClientProvider client={queryClientInstance}>
             <Router>
-              <AppRoutes />
+              <AppErrorBoundary>
+                <AppRoutes />
+              </AppErrorBoundary>
             </Router>
+            <FailedRequestReset />
             <UpdateAvailablePrompt />
             <Toaster />
           </QueryClientProvider>

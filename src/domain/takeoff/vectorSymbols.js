@@ -29,6 +29,19 @@ export function applyCtm(ctm = IDENTITY, x = 0, y = 0) {
   };
 }
 
+// A PDF minMax rectangle must transform all four corners: transforming only
+// opposite corners collapses or shifts bounds under rotated/sheared CTMs.
+export function transformedMinMaxBounds(minMax, ctm, toPagePct) {
+  if (!Array.isArray(minMax) || minMax.length < 4) return null;
+  const [x0, y0, x1, y1] = minMax.map(Number);
+  if (![x0, y0, x1, y1].every(Number.isFinite)) return null;
+  const points = [[x0, y0], [x0, y1], [x1, y0], [x1, y1]].map(([x, y]) => {
+    const pdf = applyCtm(ctm, x, y);
+    return toPagePct(pdf.x, pdf.y);
+  });
+  return boundsOfPoints(points);
+}
+
 export function boundsOfPoints(points = []) {
   if (!points.length) return null;
   let minX = Infinity;
@@ -87,6 +100,43 @@ export function parseDrawOps(data) {
     }
   }
   return { points, hasCurves, closed };
+}
+
+// Sample Bezier segments for geometric bounds. PDF drawing operators store curve
+// control points separately from endpoints; endpoint-only bounds miss curved ink.
+export function drawOpsExtentPoints(data) {
+  const list = data ? Array.from(data) : [];
+  const points = [];
+  let current = null;
+  for (let i = 0; i < list.length;) {
+    const op = list[i++];
+    if (op === DRAW_MOVE || op === DRAW_LINE) {
+      if (i + 1 >= list.length) break;
+      current = { x: Number(list[i++]), y: Number(list[i++]) };
+      points.push(current);
+    } else if (op === DRAW_CUBIC || op === DRAW_QUAD) {
+      const n = op === DRAW_CUBIC ? 6 : 4;
+      if (i + n - 1 >= list.length) break;
+      const values = list.slice(i, i + n).map(Number);
+      i += n;
+      const end = { x: values[n - 2], y: values[n - 1] };
+      if (current) {
+        for (let step = 1; step <= 16; step++) {
+          const t = step / 16;
+          const u = 1 - t;
+          const x = op === DRAW_CUBIC
+            ? u ** 3 * current.x + 3 * u ** 2 * t * values[0] + 3 * u * t ** 2 * values[2] + t ** 3 * end.x
+            : u ** 2 * current.x + 2 * u * t * values[0] + t ** 2 * end.x;
+          const y = op === DRAW_CUBIC
+            ? u ** 3 * current.y + 3 * u ** 2 * t * values[1] + 3 * u * t ** 2 * values[3] + t ** 3 * end.y
+            : u ** 2 * current.y + 2 * u * t * values[1] + t ** 2 * end.y;
+          points.push({ x, y });
+        }
+      } else points.push(end);
+      current = end;
+    } else if (op !== DRAW_CLOSE) break;
+  }
+  return points;
 }
 
 export function isSymbolSized(bounds) {
@@ -226,6 +276,104 @@ export function toCandidate(geometry) {
   };
 }
 
+function pageBoundsForPoints(pagePoints) {
+  const bounds = boundsOfPoints(pagePoints);
+  if (bounds) return bounds;
+  if (!pagePoints || pagePoints.length < 2) return null;
+  const a = pagePoints[0];
+  const b = pagePoints[pagePoints.length - 1];
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1.6) return null;
+  return {
+    minX: Math.min(a.x, b.x),
+    minY: Math.min(a.y, b.y),
+    maxX: Math.max(a.x, b.x),
+    maxY: Math.max(a.y, b.y),
+    w: Math.max(Math.abs(dx), 0.2),
+    h: Math.max(Math.abs(dy), 0.2),
+    cx: (a.x + b.x) / 2,
+    cy: (a.y + b.y) / 2,
+  };
+}
+
+function isLineOrRoomBounds(bounds) {
+  if (!bounds || isSymbolSized(bounds)) return false;
+  const long = Math.max(bounds.w, bounds.h);
+  const short = Math.min(bounds.w, bounds.h);
+  if (long < 0.12 || long > 96) return false;
+  if (bounds.w > 88 && bounds.h > 88) return false;
+  const aspect = long / Math.max(short, 0.001);
+  const area = bounds.w * bounds.h;
+  if (long >= 4 && short >= 3 && aspect <= 3.2 && area >= 18 && area <= 4200 && long < 78 && short < 70) return true;
+  return long >= 1.6 && short <= 0.55 && aspect >= 5 && long < 90;
+}
+
+export function subpathsFromDrawOps(data) {
+  const list = data ? Array.from(data) : [];
+  const paths = [];
+  let current = [];
+  const flush = () => {
+    if (current.length) paths.push(current);
+    current = [];
+  };
+  for (let index = 0; index < list.length;) {
+    const op = list[index++];
+    if (op === DRAW_MOVE || op === DRAW_LINE) {
+      if (index + 1 >= list.length) break;
+      if (op === DRAW_MOVE && current.length) flush();
+      current.push({ x: list[index++], y: list[index++], curve: false });
+    } else if (op === DRAW_CUBIC) {
+      if (index + 5 >= list.length) break;
+      index += 4;
+      current.push({ x: list[index++], y: list[index++], curve: true });
+    } else if (op === DRAW_QUAD) {
+      if (index + 3 >= list.length) break;
+      index += 2;
+      current.push({ x: list[index++], y: list[index++], curve: true });
+    } else if (op === DRAW_CLOSE) {
+      flush();
+    } else {
+      break;
+    }
+  }
+  flush();
+  return paths;
+}
+
+export function sheetGeometryFromConstructedPaths(entries, toPagePct) {
+  const raw = [];
+  for (const entry of entries || []) {
+    const ctm = entry.ctm || IDENTITY;
+    const groups = subpathsFromDrawOps(entry.drawOps);
+    const parsedGroups = groups.length ? groups : [[]];
+    for (const group of parsedGroups) {
+      const pagePoints = group.map((point) => {
+        const pdf = applyCtm(ctm, point.x, point.y);
+        const page = toPagePct(pdf.x, pdf.y);
+        return { ...page, curve: point.curve };
+      });
+      let bounds = pageBoundsForPoints(pagePoints);
+      if (!bounds && entry.minMax && entry.minMax.length >= 4 && parsedGroups.length === 1) {
+        bounds = transformedMinMaxBounds(entry.minMax, ctm, toPagePct);
+      }
+      if (!isLineOrRoomBounds(bounds)) continue;
+      const points = pagePoints.length ? pagePoints : rectPoints(bounds);
+      const candidate = toCandidate({
+        kind: "path",
+        w: bounds.w,
+        h: bounds.h,
+        cx: bounds.cx,
+        cy: bounds.cy,
+        points,
+      });
+      if (candidate) raw.push(candidate);
+    }
+  }
+  return raw;
+}
+
 export function candidatesFromConstructedPaths(entries, toPagePct) {
   const raw = [];
   for (const entry of entries || []) {
@@ -236,18 +384,15 @@ export function candidatesFromConstructedPaths(entries, toPagePct) {
       const page = toPagePct(pdf.x, pdf.y);
       return { ...page, curve: point.curve };
     });
-    let bounds = boundsOfPoints(pagePoints);
+    const extentPoints = parsed.hasCurves
+      ? drawOpsExtentPoints(entry.drawOps).map((point) => {
+        const pdf = applyCtm(ctm, point.x, point.y);
+        return toPagePct(pdf.x, pdf.y);
+      })
+      : pagePoints;
+    let bounds = boundsOfPoints(extentPoints);
     if (!bounds && entry.minMax && entry.minMax.length >= 4) {
-      const aPdf = applyCtm(ctm, entry.minMax[0], entry.minMax[1]);
-      const bPdf = applyCtm(ctm, entry.minMax[2], entry.minMax[3]);
-      const a = toPagePct(aPdf.x, aPdf.y);
-      const b = toPagePct(bPdf.x, bPdf.y);
-      bounds = boxFromExtents(
-        Math.min(a.x, b.x),
-        Math.min(a.y, b.y),
-        Math.max(a.x, b.x),
-        Math.max(a.y, b.y),
-      );
+      bounds = transformedMinMaxBounds(entry.minMax, ctm, toPagePct);
     }
     if (!isSymbolSized(bounds)) continue;
     const geometry = classifySymbolGeometry(pagePoints.length ? pagePoints : rectPoints(bounds), bounds, {
@@ -387,22 +532,92 @@ export function shapeHintFromLabel(text) {
   return null;
 }
 
+export function isWallOrArchitecturalMark(geometry, nearby = []) {
+  if (!geometry) return true;
+  const long = Math.max(Number(geometry.w) || 0, Number(geometry.h) || 0, (Number(geometry.r) || 0) * 2);
+  const short = Math.min(
+    Number(geometry.w) || long,
+    Number(geometry.h) || long,
+    (Number(geometry.r) || 0) * 2 || long,
+  );
+  const aspect = long / (short || 1e-9);
+  if (long > 8) return true;
+  if (aspect >= 4.2 && long >= 1.15) return true;
+  const walls = (nearby || []).filter((part) => {
+    const partLong = Math.max(Number(part.w) || 0, Number(part.h) || 0);
+    const partShort = Math.min(Number(part.w) || 0, Number(part.h) || 0);
+    return partLong / (partShort || 1e-9) >= 3.6 && partLong >= 1.4;
+  });
+  if (walls.length >= 2 && aspect >= 2.4 && long >= 0.9) return true;
+  return false;
+}
+
 export function looksLikeRecessedCanBody(candidate) {
   if (!candidate || isJunkGeometry(candidate)) return false;
   const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
   const short = Math.min(Number(candidate.w) || 0, Number(candidate.h) || 0);
   const aspect = long / (short || 1e-9);
-  if (long < 0.60 || long > 0.82 || short < 0.58 || aspect > 1.35) return false;
+  if (long < 0.38 || long > 0.86 || short < 0.32 || aspect > 1.4) return false;
   return candidate.kind === "circle" || candidate.kind === "rect";
 }
 
-export function isJunkGeometry(candidate) {
+export function looksLikeTrofferShard(candidate) {
+  if (!candidate) return false;
+  const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
+  const short = Math.min(Number(candidate.w) || 0, Number(candidate.h) || 0);
+  if (long < 0.12 || long > 0.48 || short < 0.08) return false;
+  if (long / (short || 1e-9) > 3.4) return false;
+  if (isWallOrArchitecturalMark(candidate)) return false;
+  return candidate.kind === "rect" || candidate.kind === "path" || candidate.kind === "composite";
+}
+
+export function assembleTrofferNearTag(token, candidates = [], options = {}) {
+  if (!token) return null;
+  const radius = Number(options.radius) > 0 ? Number(options.radius) : 1.15;
+  const parts = (candidates || []).filter((candidate) => {
+    if (!looksLikeTrofferShard(candidate) && !isPlausibleSymbolForHint(candidate, "rect")) return false;
+    const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
+    if (long > 1.15) return false;
+    return distanceToCandidate(token, candidate) <= radius || containsPoint(candidate, token);
+  });
+  if (parts.length < 2) return null;
+  const minX = Math.min(...parts.map((part) => (part.cx || 0) - (Number(part.w) || 0) / 2));
+  const maxX = Math.max(...parts.map((part) => (part.cx || 0) + (Number(part.w) || 0) / 2));
+  const minY = Math.min(...parts.map((part) => (part.cy || 0) - (Number(part.h) || 0) / 2));
+  const maxY = Math.max(...parts.map((part) => (part.cy || 0) + (Number(part.h) || 0) / 2));
+  const w = maxX - minX;
+  const h = maxY - minY;
+  if (w < 0.28 || h < 0.16 || Math.max(w, h) > 2.4) return null;
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  const inside = token.x >= minX - 0.12 && token.x <= maxX + 0.12 && token.y >= minY - 0.12 && token.y <= maxY + 0.12;
+  if (!inside && Math.hypot((token.x || 0) - cx, (token.y || 0) - cy) > 1.25) return null;
+  return {
+    cx,
+    cy,
+    w,
+    h,
+    kind: "composite",
+    source: "vector",
+    parts,
+    outline: {
+      kind: "rect",
+      source: "vector",
+      w,
+      h,
+      points: [],
+    },
+  };
+}
+
+export function isJunkGeometry(candidate, nearby = []) {
   if (!candidate) return true;
   const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
   const short = Math.min(Number(candidate.w) || 0, Number(candidate.h) || 0);
   if (long < 0.18 || short < 0.09) return true;
   if (long > 2.7 && short < 0.9) return true;
   if (long / (short || 1e-9) > 6 && long > 1.8) return true;
+  if (isWallOrArchitecturalMark(candidate, nearby)) return true;
   return false;
 }
 
@@ -415,9 +630,9 @@ export function isPlausibleSymbolForHint(candidate, hint) {
     if (candidate.kind === "circle" && long <= 1.25 && aspect <= 1.45) return true;
     // Recessed-can bodies on E210 are compact rects (~0.6x0.72), not
     // letter-sized ticks (~0.29x0.41) that flood Soccer type 4 / F.
-    return long >= 0.55 && long <= 1.05 && aspect <= 1.45;
+    return long >= 0.28 && long <= 1.05 && aspect <= 1.45;
   }
-  if (hint === "rect") return long >= 0.22 && long <= 2.3 && aspect <= 4.2;
+  if (hint === "rect") return long >= 0.18 && long <= 2.3 && aspect <= 4.2;
   return long <= 2.3 && aspect <= 4.5;
 }
 
@@ -502,6 +717,10 @@ export function associateGeometry(token, candidates = [], options = {}) {
 export function placeOnSymbolGeometry(token, candidates = [], options = {}) {
   const hint = options.shapeHint;
   const radius = Number(options.radius) > 0 ? Number(options.radius) : associateRadiusForHint(hint);
+  if (hint === "rect") {
+    const clustered = assembleTrofferNearTag(token, candidates, { radius: Math.max(radius, 1.15) });
+    if (clustered) return clustered;
+  }
   const near = associateGeometry(token, candidates, { ...options, radius });
   if (near) return near;
   if (hint === "circle") return null;
@@ -624,16 +843,48 @@ export function scaleOutline(outline, factor, origin) {
   };
 }
 
+function distanceToSegment(point, a, b) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  if (!len2) return Math.hypot(point.x - a.x, point.y - a.y);
+  const t = Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / len2));
+  return Math.hypot(point.x - (a.x + t * dx), point.y - (a.y + t * dy));
+}
+
+function outlineCenter(outline, origin) {
+  const x = Number(outline?.cx);
+  const y = Number(outline?.cy);
+  return {
+    x: Number.isFinite(x) ? x : Number(origin?.x) || 0,
+    y: Number.isFinite(y) ? y : Number(origin?.y) || 0,
+  };
+}
+
 export function pointHitsOutline(outline, origin, point, pad = 0.55) {
   if (!outline || !point) return false;
+  const center = outlineCenter(outline, origin);
+  const grab = Math.max(0, Number(pad) || 0);
+  // Expand only by a stroke, so a click on the ink hits and a click beside it does not.
+  const slop = Math.min(grab, 0.3);
   if (outline.kind === "circle") {
-    return Math.hypot(point.x - origin.x, point.y - origin.y) <= Math.max(outline.r || 0, pad);
+    return Math.hypot(point.x - center.x, point.y - center.y) <= Math.max((outline.r || 0) + slop, grab);
   }
-  if (outline.kind === "path" && outline.points?.length >= 3) {
-    if (pointInPolygon(point, outline.points)) return true;
-    return outline.points.some((item) => Math.hypot(item.x - point.x, item.y - point.y) <= pad);
+  if (outline.kind === "path" && outline.points?.length >= 2) {
+    if (outline.points.length >= 3 && pointInPolygon(point, outline.points)) return true;
+    if (!slop) return false;
+    for (let index = 1; index < outline.points.length; index += 1) {
+      if (distanceToSegment(point, outline.points[index - 1], outline.points[index]) <= slop) return true;
+    }
+    if (outline.points.length >= 3 && distanceToSegment(point, outline.points[outline.points.length - 1], outline.points[0]) <= slop) return true;
+    return false;
   }
-  const w = Math.max((outline.w || 0) / 2, pad);
-  const h = Math.max((outline.h || 0) / 2, pad);
-  return Math.abs(point.x - origin.x) <= w && Math.abs(point.y - origin.y) <= h;
+  if (outline.kind === "composite" && outline.parts?.length) {
+    return outline.parts.some((part) => pointHitsOutline(part, center, point, pad));
+  }
+  const halfW = (Number(outline.w) || 0) / 2;
+  const halfH = (Number(outline.h) || 0) / 2;
+  const w = Math.max(halfW + slop, grab);
+  const h = Math.max(halfH + slop, grab);
+  return Math.abs(point.x - center.x) <= w && Math.abs(point.y - center.y) <= h;
 }

@@ -1,3 +1,5 @@
+import { classifyAiEvidence } from "./takeoffQuality.js";
+
 export const REVIEW_VISUAL_THRESHOLD = 0.72;
 export const ACCEPT_VISUAL_THRESHOLD = 0.9;
 
@@ -5,8 +7,11 @@ const CIRCUIT_TAG_RE = /^(?:LN|LP|PP|RP|H|L|EM)\d{1,2}$|^P\d{2}$/i;
 
 export function pointFromGeometry(geometry) {
   if (!geometry) return null;
-  const x = Number(geometry.cx ?? geometry.x);
-  const y = Number(geometry.cy ?? geometry.y);
+  const rawX = geometry.cx ?? geometry.x;
+  const rawY = geometry.cy ?? geometry.y;
+  if (rawX == null || rawY == null || rawX === "" || rawY === "") return null;
+  const x = Number(rawX);
+  const y = Number(rawY);
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
   return { x, y };
 }
@@ -17,7 +22,9 @@ export function boundsFromGeometry(geometry) {
   const h = Number(geometry.h ?? geometry.outline?.h) || 0;
   const r = Number(geometry.r ?? geometry.outline?.r) || 0;
   const body = pointFromGeometry(geometry);
-  if (!body) return null;
+  if (!body || !Number.isFinite(w) || !Number.isFinite(h) || !Number.isFinite(r)) return null;
+  if (w < 0 || h < 0 || r < 0) return null;
+  if (w <= 0 && h <= 0 && r <= 0) return null;
   return {
     x: body.x - (w || r * 2) / 2,
     y: body.y - (h || r * 2) / 2,
@@ -29,7 +36,7 @@ export function boundsFromGeometry(geometry) {
 
 export function isReviewOnlyMark(mark) {
   if (!mark) return false;
-  if (mark.layer === "review") return true;
+  if (mark.layer === "review" || mark.reviewStatus === "rejected") return true;
   if (mark.symbol === "unknown" || String(mark.typeCode || "").toUpperCase() === "UNKNOWN") return true;
   return false;
 }
@@ -76,9 +83,14 @@ export function attachDetectionRecord(mark, fields = {}) {
   const legendScore = Number(fields.legendMatchScore ?? (mark.matchedFrom === "legend" || mark.matchedFrom === "legend-geometry" ? 0.85 : 0));
   const visualScore = Number(fields.visualMatchScore ?? (mark.matchedFrom === "plan-repeat" || mark.matchedFrom === "legend-geometry" ? (mark.geometryScore || 0.8) : 0));
   const textScore = Number(fields.textContextScore ?? (fields.labelLocation ? 0.7 : 0));
+  const evidence = classifyAiEvidence({
+    visual: visualScore,
+    legend: legendScore,
+    context: Math.max(textScore, vectorScore),
+  });
   const combined = Number.isFinite(Number(fields.combinedConfidence))
     ? Number(fields.combinedConfidence)
-    : Math.max(vectorScore, legendScore, visualScore, textScore);
+    : Math.max(vectorScore, legendScore, visualScore, textScore, evidence.combined);
   const textOnly = uniqueSources.length > 0
     && uniqueSources.every((item) => item === "text" || item === "drawing")
     && !uniqueSources.includes("vector")
@@ -93,7 +105,7 @@ export function attachDetectionRecord(mark, fields = {}) {
     x: body.x,
     y: body.y,
     symbolBodyLocation: body,
-    symbolBodyBounds: fields.symbolBodyBounds || boundsFromGeometry(fields.geometry || { ...mark.outline, cx: body.x, cy: body.y, w: mark.outline?.w, h: mark.outline?.h, r: mark.outline?.r, kind: mark.outline?.kind }),
+    symbolBodyBounds: fields.symbolBodyBounds || boundsFromGeometry(fields.geometry || { ...(mark.outline || {}), cx: body.x, cy: body.y, w: mark.outline?.w, h: mark.outline?.h, r: mark.outline?.r, kind: mark.outline?.kind }),
     labelLocation: fields.labelLocation || null,
     circuitTagLocation: fields.circuitTagLocation || null,
     visualMatchScore: visualScore,
@@ -101,6 +113,8 @@ export function attachDetectionRecord(mark, fields = {}) {
     legendMatchScore: legendScore,
     textContextScore: textScore,
     combinedConfidence: combined,
+    evidenceDecision: evidence.decision,
+    evidenceSources: evidence.sources,
     detectionSources: uniqueSources,
     requiresReview,
     reviewReason: fields.reviewReason || mark.reviewReason || (textOnly ? "text-only-body" : requiresReview ? "needs-review" : ""),

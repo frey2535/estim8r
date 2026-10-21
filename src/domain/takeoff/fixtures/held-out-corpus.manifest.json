@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "name": "Estim8r independent held-out takeoff accuracy corpus",
+  "status": "not-populated",
+  "purpose": "Production 99% symbol detection, classification, and placement claims may only be made from this held-out corpus when it is populated with real independent human-labeled drawings.",
+  "requirements": {
+    "minHeldOutProjects": 3,
+    "minHeldOutFirms": 3,
+    "requiredModes": ["vector", "raster-or-scanned"],
+    "requiredLabelAuthority": "independent",
+    "bodyLabeled": true,
+    "noTuningOnHeldOut": true
+  },
+  "knownRepositoryFixtures": [
+    {
+      "id": "soccer-pavilion",
+      "file": "soccer-pavilion-electrical.json",
+      "role": "regression",
+      "labelAuthority": "independent",
+      "reasonNotSufficient": "Single firm/project; extracted vector fixture only; not a multi-firm held-out corpus with raster/scanned sheets."
+    },
+    {
+      "id": "pottsville",
+      "file": "pottsville-electrical.json",
+      "role": "regression",
+      "labelAuthority": "derived-tokens-and-derived-glyphs",
+      "reasonNotSufficient": "Useful regression fixture, but not independent human body-labeled ground truth for all devices."
+    }
+  ],
+  "candidateSources": [
+    {
+      "id": "unlv-revised-electrical-drawings",
+      "organization": "University of Nevada, Las Vegas",
+      "url": "https://www.unlv.edu/sites/default/files/page_files/182/Revised%20Electrical%20Drawings.pdf",
+      "observedSheets": ["E0.01", "E1.01", "E2.01", "E3.01", "E5.01"],
+      "observedModes": ["vector-or-searchable-pdf"],
+      "status": "candidate-needs-license-review-and-human-labeling",
+      "reasonNotHeldOut": "Publicly discoverable drawing set, but not archived in repo and no independent body-label file exists."
+    },
+    {
+      "id": "grady-cafeteria-electrical-bid-set",
+      "organization": "Grady Health",
+      "url": "https://www.gradyhealth.org/wp-content/uploads/Grady-Cafeteria-Progress-Bid-Set-Electrical.pdf",
+      "observedSheets": ["E0.01", "E0.02", "E0.03", "E1.01", "E1.02", "E2.01", "E2.02", "FA1.02"],
+      "observedModes": ["vector-or-searchable-pdf"],
+      "status": "candidate-needs-license-review-and-human-labeling",
+      "reasonNotHeldOut": "Publicly discoverable bid set, but not archived in repo and no independent body-label file exists."
+    },
+    {
+      "id": "skagit-concrete-community-center-electrical",
+      "organization": "Skagit County",
+      "url": "https://www.skagitcounty.net/Rfp/Documents/2025ConcreteCommunityCenter/202502_B121_DD_BidSetElectrical.pdf",
+      "observedSheets": ["electrical-notes-legend-index", "main-building-lighting-plan", "storage-building-lighting-plan", "power-system-riser-and-panel-schedules"],
+      "observedModes": ["vector-or-searchable-pdf"],
+      "status": "candidate-needs-license-review-and-human-labeling",
+      "reasonNotHeldOut": "Publicly discoverable electrical bid set, but not archived in repo and no independent body-label file exists."
+    },
+    {
+      "id": "smccd-theater-house-lighting-retrofit",
+      "organization": "San Mateo County Community College District",
+      "url": "https://downloads.smccd.edu/file?du=%2Fsites%2Fdownloads%2Ffacilities%2FFacilities+Public%2FFacilities+Downloads%2FFPMO%2FBusiness+Opportunities%2FCollege+of+San+Mateo%2FTheater+House+Lighting+Retrofit+Project%2F2014+0916+Bid+Set+Drawings.pdf&s=%2Fsites%2Fdownloads%2Ffacilities",
+      "observedSheets": ["E0.1", "E2.1", "E2.2"],
+      "observedModes": ["vector-or-searchable-pdf"],
+      "status": "candidate-needs-license-review-and-human-labeling",
+      "reasonNotHeldOut": "Publicly discoverable electrical drawing set, but not archived in repo and no independent body-label file exists."
+    },
+    {
+      "id": "asc-2018-electrical-drawings",
+      "organization": "ASC student competition public problem archive",
+      "url": "https://asc67.org/ASC_Previous_Problems/Open/IP/2018/Drawings/Electrical%20Drawings.pdf",
+      "observedSheets": ["E0.01", "E2.00", "E2.01", "E2.02", "E2.03", "E4.09"],
+      "observedModes": ["large-searchable-or-scanned-pdf"],
+      "status": "candidate-needs-license-review-and-human-labeling",
+      "reasonNotHeldOut": "Publicly discoverable large electrical drawing set, but not archived in repo and no independent body-label file exists."
+    },
+    {
+      "id": "edgecombe-electrical-bid-set",
+      "organization": "D&DC / Edgecombe project public bid set",
+      "url": "https://www.danddcc.com/wp-content/uploads/2024/10/Edgecombe-Electrical-Bid-Set-7.19.2024.pdf",
+      "observedSheets": ["E1.0", "E1.1", "E1.2", "E2.0"],
+      "observedModes": ["vector-or-searchable-pdf"],
+      "status": "candidate-needs-license-review-and-human-labeling",
+      "reasonNotHeldOut": "Publicly discoverable electrical bid set, but not archived in repo and no independent body-label file exists."
+    }
+  ],
+  "projects": []
+}

@@ -96,14 +96,14 @@ export default function EstimateLineCard({
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Line {index + 1}</span>
-                <h3 className="text-sm font-black leading-tight">{title}</h3>
+                <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Line {index + 1}</span>
+                <h3 className="text-base font-black leading-tight">{title}</h3>
               </div>
               {subtitle ? <p className="mt-0.5 truncate text-xs text-muted-foreground">{subtitle}</p> : null}
               <div className="mt-1 flex flex-wrap items-center gap-1">
-                {row.itemType ? <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">{row.itemType}</Badge> : null}
-                {row.category ? <Badge variant="outline" className="px-1.5 py-0 text-[10px]">{row.category}</Badge> : null}
-                {row.laborItemId ? <Badge variant="outline" className="px-1.5 py-0 text-[10px]">{row.laborItemId}</Badge> : null}
+                {row.itemType ? <Badge variant="secondary" className="px-2 py-0.5 text-xs">{row.itemType}</Badge> : null}
+                {row.category ? <Badge variant="outline" className="px-2 py-0.5 text-xs">{row.category}</Badge> : null}
+                {row.laborItemId ? <Badge variant="outline" className="px-2 py-0.5 text-xs">{row.laborItemId}</Badge> : null}
                 {notice ? (
                   <Badge
                     variant={notice.tone === "unmatched" ? "destructive" : "outline"}
@@ -116,10 +116,10 @@ export default function EstimateLineCard({
               </div>
             </div>
             <div className="flex shrink-0 items-start gap-2">
-              <div className="text-right text-xs">
-                <p className="font-semibold">{qty} {row.unit || "EA"}</p>
-                <p className="text-muted-foreground">{hours.toFixed(2)} hrs</p>
-                <p className="font-semibold">${labor.toFixed(2)} lab</p>
+              <div className="text-right text-sm">
+                <p className="font-bold">{qty} {row.unit || "EA"}</p>
+                <p className="font-semibold text-foreground/80">{hours.toFixed(2)} hrs</p>
+                <p className="font-bold">${labor.toFixed(2)} lab</p>
               </div>
               {itemized ? (
                 <label className="flex items-center gap-1 text-[10px] font-semibold">
@@ -150,7 +150,7 @@ export default function EstimateLineCard({
             </p>
           ) : null}
 
-          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-7">
+          <div className="mt-2 grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-7 lg:gap-2">
             <Field label="Type">
               <Sel value={row.itemType} vals={LINE_TYPES} set={(v) => onPatch?.(row.id, "itemType", v)} placeholder="Type" />
             </Field>
@@ -162,8 +162,8 @@ export default function EstimateLineCard({
                 placeholder={row.itemType ? "Category" : "Type first"}
               />
             </Field>
-            <div className="col-span-2 min-w-0 sm:col-span-2">
-              <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Labor item</span>
+            <div className="min-w-0 min-[480px]:col-span-2 lg:col-span-2">
+              <span className="mb-1 block text-sm font-bold text-foreground">Labor item</span>
               <LaborItemPicker
                 items={library}
                 value={row.laborItemId}
@@ -189,7 +189,7 @@ export default function EstimateLineCard({
           </div>
 
           <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen} className="mt-2">
-            <CollapsibleTrigger className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground">
+            <CollapsibleTrigger className="flex min-h-[44px] items-center gap-1 text-base font-bold text-foreground">
               <ChevronDown className={`h-3.5 w-3.5 transition-transform ${detailsOpen ? "rotate-180" : ""}`} />
               {detailsOpen ? "Hide details" : "Details"}
             </CollapsibleTrigger>
@@ -268,20 +268,20 @@ export default function EstimateLineCard({
 function Field({ label, children, className = "" }) {
   return (
     <label className={`min-w-0 ${className}`}>
-      <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="mb-1 block text-sm font-bold text-foreground">{label}</span>
       {children}
     </label>
   );
 }
 
 function Cell({ value, set, type = "text", placeholder = "" }) {
-  return <input type={type} step={type === "number" ? "0.01" : undefined} value={value} placeholder={placeholder} onChange={(e) => set(e.target.value)} className="w-full min-w-0 rounded-md border border-input bg-background px-2 py-1.5 text-sm" />;
+  return <input type={type} step={type === "number" ? "0.01" : undefined} value={value} placeholder={placeholder} onChange={(e) => set(e.target.value)} className="w-full min-h-[44px] min-w-0 rounded-md border border-input bg-background px-3 py-2 text-base" />;
 }
 
 function Sel({ value, vals, set, placeholder = "" }) {
   const options = vals.includes(value) || !value ? vals : [value, ...vals];
   return (
-    <select value={value} onChange={(e) => set(e.target.value)} className="w-full min-w-0 rounded-md border border-input bg-background px-2 py-1.5 text-sm">
+    <select value={value} onChange={(e) => set(e.target.value)} className="w-full min-h-[44px] min-w-0 rounded-md border border-input bg-background px-3 py-2 text-base">
       {placeholder ? <option value="">{placeholder}</option> : null}
       {options.map((option) => <option key={option}>{option}</option>)}
     </select>
@@ -291,8 +291,8 @@ function Sel({ value, vals, set, placeholder = "" }) {
 function Readout({ label, value }) {
   return (
     <div className="min-w-0">
-      <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{label}</span>
-      <div className="rounded-md bg-muted/50 px-2 py-1.5 text-sm font-semibold">{value}</div>
+      <span className="mb-1 block text-sm font-bold text-foreground">{label}</span>
+      <div className="min-h-[44px] rounded-md bg-muted/50 px-3 py-2 text-base font-bold">{value}</div>
     </div>
   );
 }

@@ -109,26 +109,27 @@ export default function SheetThumbnailPanel({
   }, [layout, open, page]);
 
   const side = layout === "side";
+  const sheet = layout === "sheet";
   const total = Math.max(pageCount || thumbs.length || 1, thumbs.length || 1);
 
   if (!open) {
     return (
       <div className={cn(
         "flex shrink-0 border-border bg-card",
-        side ? "h-full w-9 flex-col border-r" : "h-9 w-full flex-row border-b",
+        side ? "h-full w-11 flex-col border-r" : "hidden h-11 w-full flex-row border-b lg:flex",
       )}>
         <button
           type="button"
           onClick={onToggle}
           className={cn(
-            "flex items-center justify-center gap-1 text-xs font-bold text-muted-foreground hover:bg-muted hover:text-foreground",
-            side ? "h-full w-9 flex-col py-3" : "h-9 w-full flex-row px-3",
+            "flex min-h-[44px] items-center justify-center gap-1 text-sm font-bold text-foreground hover:bg-muted",
+            side ? "h-full w-11 flex-col py-3" : "h-11 w-full flex-row px-3",
           )}
           aria-expanded={false}
           aria-label="Show sheet thumbnails"
           title="Show sheets"
         >
-          <ChevronsRight className={cn("h-4 w-4", !side && "rotate-90")} />
+          <ChevronsRight className={cn("h-5 w-5", !side && "rotate-90")} />
           <span className={cn(side && "mt-2 [writing-mode:vertical-rl] rotate-180")}>Sheets ({total})</span>
         </button>
       </div>
@@ -138,12 +139,12 @@ export default function SheetThumbnailPanel({
   return (
     <div className={cn(
       "flex shrink-0 border-border bg-card",
-      side ? "h-full w-[158px] flex-col border-r" : "w-full flex-col border-b",
+        sheet ? "h-full w-full flex-col" : side ? "h-full w-[158px] flex-col border-r" : "hidden max-h-36 w-full shrink-0 flex-col border-b lg:flex",
     )}>
       <div className="flex shrink-0 items-center justify-between gap-1 border-b border-border px-2 py-1.5">
         <div className="min-w-0">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Sheets</div>
-          <div className="truncate text-xs font-semibold text-foreground">{total} in {fileName || "drawing"}</div>
+          <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Sheets</div>
+          <div className="truncate text-sm font-bold text-foreground">{total} in {fileName || "drawing"}</div>
         </div>
         <button
           type="button"
@@ -161,7 +162,8 @@ export default function SheetThumbnailPanel({
         ref={listRef}
         className={cn(
           "min-h-0 flex-1 gap-2 p-2",
-          side ? "overflow-y-auto" : "flex overflow-x-auto",
+          side || sheet ? "overflow-y-auto" : "flex overflow-x-auto overflow-y-hidden",
+          sheet && "grid grid-cols-2 sm:grid-cols-3",
         )}
       >
         {(thumbs.length ? thumbs : Array.from({ length: total }, (_, index) => ({ page: index + 1, src: "", label: `Sheet ${index + 1}` }))).map((item) => {
@@ -175,7 +177,7 @@ export default function SheetThumbnailPanel({
               onClick={() => onSelectPage(item.page)}
               className={cn(
                 "group block rounded-lg border p-1.5 text-left transition-colors",
-                side ? "w-full" : "w-[132px] shrink-0",
+                side || sheet ? "w-full min-h-[44px]" : "w-[132px] shrink-0",
                 active
                   ? "border-blue-600 bg-blue-50 ring-2 ring-blue-600/30 dark:border-orange-500 dark:bg-orange-500/10 dark:ring-orange-500/30"
                   : "border-border bg-background hover:border-blue-300 hover:bg-muted",
@@ -190,12 +192,12 @@ export default function SheetThumbnailPanel({
                   </div>
                 )}
                 {markCount > 0 && (
-                  <span className="absolute right-1 top-1 rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white dark:bg-orange-500">
+                  <span className="absolute right-1 top-1 rounded bg-blue-600 px-1.5 py-0.5 text-xs font-black text-white dark:bg-orange-500">
                     {markCount}
                   </span>
                 )}
               </div>
-              <div className={cn("mt-1 truncate text-[11px] font-semibold", active ? "text-blue-700 dark:text-orange-300" : "text-foreground")}>
+              <div className={cn("mt-1 truncate text-sm font-bold", active ? "text-blue-700 dark:text-orange-300" : "text-foreground")}>
                 {item.label}
               </div>
             </button>

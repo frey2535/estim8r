@@ -2,8 +2,10 @@ import { applyDeviceTypeColors, deviceOutline } from "./deviceStyles.js";
 import {
   attachDetectionRecord,
   bidDeviceMarks,
+  boundsFromGeometry,
   isReviewOnlyMark,
   nearbyCircuitTag,
+  pointFromGeometry,
   reviewCandidateMark,
 } from "./detectionRecord.js";
 import { persistedPlanDeviceCount } from "./symbolDetection.js";
@@ -63,6 +65,13 @@ const textOnly = attachDetectionRecord({
 });
 assert(textOnly.requiresReview === true, "text-only placement stays visible and flagged for review");
 assert(textOnly.reviewReason === "text-only-body", "text-only body is explained");
+assert(textOnly.symbolBodyBounds === null, "text-only detection must not invent zero-area symbol bounds");
+assert(deviceOutline(textOnly) === null, "text-only detection must not paint an invented body");
+assert(boundsFromGeometry({ cx: 40, cy: 40 }) === null, "point-only geometry has no measurable body");
+assert(pointFromGeometry({ cx: null, cy: 12 }) === null, "null x is not a valid origin");
+assert(pointFromGeometry({ cx: 12, cy: "" }) === null, "blank y is not a valid origin");
+assert(pointFromGeometry({ cx: 0, cy: 0 })?.x === 0, "real zero coordinates remain valid");
+assert(boundsFromGeometry({ cx: 10, cy: 12, w: -0.3, h: 0.2 }) === null, "negative symbol width is invalid");
 assert(!isReviewOnlyMark(textOnly), "a classified text-on-symbol device is still a bid count");
 
 const review = reviewCandidateMark({
@@ -78,6 +87,11 @@ assert(review.type === "count" && review.typeCode === "UNKNOWN", "review candida
 assert(review.symbolBodyLocation.x === 15 && review.layer === "review", "review marker still sits on the candidate body");
 assert(persistedPlanDeviceCount([body, textOnly, review], { 50: "drawing" }) === 2, "review-only marks do not inflate persisted bid counts");
 assert(bidDeviceMarks([body, textOnly, review]).length === 2, "bidDeviceMarks excludes UNKNOWN/REVIEW");
+
+const rejected = { ...body, id: "rejected-device", reviewStatus: "rejected" };
+assert(isReviewOnlyMark(rejected), "rejected detection is excluded from accepted bid devices");
+assert(bidDeviceMarks([body, rejected]).length === 1, "rejected device does not inflate the bid count");
+assert(persistedPlanDeviceCount([body, rejected], { 50: "drawing" }) === 1, "rejected device does not inflate persisted plan summary");
 
 const painted = applyDeviceTypeColors([review, body]);
 assert(painted.find((mark) => mark.typeCode === "UNKNOWN")?.layer === "review", "coloring does not promote review marks to bid devices");

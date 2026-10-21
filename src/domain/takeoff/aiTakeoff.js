@@ -942,7 +942,7 @@ function trustedOffsetEmergencyBody(token, geometry, placed) {
   return long >= 0.55 && long <= 1.45 && short >= 0.45 && aspect <= 2.1 && dist <= 1.8;
 }
 
-function snapQuotedTypeOntoTag(token, geometry, placed, hint) {
+function snapQuotedTypeOntoTag(token, geometry, placed, hint, options = {}) {
   if (!token || !placed) return null;
   const printed = normalizeTypeMark(token.text).toUpperCase();
   const quotedOrLighting = isQuotedTypeMark(token.text)
@@ -956,7 +956,8 @@ function snapQuotedTypeOntoTag(token, geometry, placed, hint) {
   const short = Math.min(Number(geometry?.w) || 0, Number(geometry?.h) || 0);
   const aspect = long / (short || 1e-9);
   const junkOffset = long < 0.50 || short < 0.35 || aspect > 2.4;
-  if (!junkOffset) return null;
+  const tagOnSymbolCodes = /^(1|2|4|2E|F)$/;
+  if (!junkOffset && !(options.preferTag && tagOnSymbolCodes.test(printed))) return null;
   return tagOnSymbolGeometry(token, {
     shapeHint: hint || (printed === "F" || isLightingFixtureCode(printed) ? "rect" : "circle"),
   });
@@ -1145,6 +1146,7 @@ function addRepeatedConfirmedPointMarks(marks, pages, { trade, color } = {}) {
     if (!/^(vector|raster|mixed)$/i.test(String(mark.outlineSource || "")) || !mark.outline) continue;
     const page = pageMap.get(mark.sheet);
     if (!page?.paths?.length) continue;
+    if ((page.paths || []).length > 80) continue;
     const protoW = Number(mark.outline.w) || (Number(mark.outline.r) || 0) * 2 || 0;
     const protoH = Number(mark.outline.h) || (Number(mark.outline.r) || 0) * 2 || protoW;
     const protoLong = Math.max(protoW, protoH);
@@ -1396,7 +1398,9 @@ export function buildAiMarks({
         } : null;
       }
       if (geometryPoint) {
-        const snapped = snapQuotedTypeOntoTag(token, geometry, geometryPoint, hint);
+        const snapped = snapQuotedTypeOntoTag(token, geometry, geometryPoint, hint, {
+          preferTag: (page.paths || []).length > 80,
+        });
         if (snapped) {
           geometry = snapped;
           paintOutline = symbolBodyOutline(geometry, page.tokens, { paths: page.paths });
@@ -1492,7 +1496,7 @@ export function buildAiMarks({
       if (near) continue;
       // For point devices without trusted geometry (like OS), create a minimal circle outline
       // so they are hit-testable and renderable with a generic chip.
-      if (!paintOutline && /^(OS|GFI|GFI\/WP|WP|SP|SPR)$/.test(typeCode)) {
+      if ((!paintOutline || paintOutline.source === "text") && /^(OS|GFI|GFI\/WP|WP|SP|SPR|DB)$/.test(typeCode)) {
         paintOutline = {
           kind: "circle",
           source: "generic",
@@ -1547,6 +1551,7 @@ export function buildAiMarks({
     // Visual legend pass: detect repeated graphical symbols even when the plan has
     // no adjacent type text. This is required for power receptacles and many light
     // fixtures whose only identity is their legend geometry.
+    const allowTypedVisualRepeats = (page.paths || []).length <= 80;
     const visualHits = timedScan(page, dictionary, {
       planType,
       threshold: 0.74,
@@ -1567,7 +1572,7 @@ export function buildAiMarks({
       if (!placementAllowed(placed, { sitePlan })) continue;
       const duplicate = seen.some((item) => item.sheet === page.page && distance(item, placed) < 0.34);
       if (duplicate) continue;
-      const typed = typedVisualDetectionMark({
+      const typed = allowTypedVisualRepeats ? typedVisualDetectionMark({
         trade,
         sheet: page.page,
         visual,
@@ -1577,7 +1582,7 @@ export function buildAiMarks({
         color,
         matchedFrom: "legend-geometry",
         reason: "legend-geometry",
-      });
+      }) : null;
       if (typed) {
         counts.push(typed);
         seen.push({ ...typed, tagX: placed.x, tagY: placed.y });
@@ -1606,36 +1611,6 @@ export function buildAiMarks({
       && (planType !== "lighting" || !isReviewOnlyMark(item))
     ));
     const repeatedPointHits = [];
-    const confirmedPointMarks = pageCounts.filter((mark) => (
-      !isReviewOnlyMark(mark)
-      && /^(GFI|GFI\/WP|OS|WP|SP|R)$/i.test(String(mark.typeCode || mark.abbr || ""))
-      && /^(vector|raster|mixed)$/i.test(String(mark.outlineSource || ""))
-      && mark.outline
-    ));
-    for (const mark of confirmedPointMarks) {
-      const protoW = Number(mark.outline?.w) || (Number(mark.outline?.r) || 0) * 2 || 0;
-      const protoH = Number(mark.outline?.h) || (Number(mark.outline?.r) || 0) * 2 || protoW;
-      const protoLong = Math.max(protoW, protoH);
-      if (protoLong < 0.18 || protoLong > 1.25) continue;
-      for (const path of page.paths || []) {
-        const pathLong = Math.max(Number(path.w) || 0, Number(path.h) || 0, (Number(path.r) || 0) * 2);
-        const pathShort = Math.min(Number(path.w) || pathLong, Number(path.h) || pathLong, (Number(path.r) || 0) * 2 || pathLong);
-        if (pathLong < 0.18 || pathLong > 1.25 || pathLong / (pathShort || 1e-9) > 1.6) continue;
-        const ratio = pathLong / Math.max(0.001, protoLong);
-        if (ratio < 0.72 || ratio > 1.38) continue;
-        const placed = { x: Number(path.cx) || 0, y: Number(path.cy) || 0 };
-        if (!placementAllowed(placed, { sitePlan }) || !isPlanInterior(placed)) continue;
-        if (occupied.some((item) => item.sheet === page.page && distance(item, placed) < 0.42)) continue;
-        if ((page.tokens || []).some((token) => Math.hypot((Number(token.x) || 0) - placed.x, (Number(token.y) || 0) - placed.y) < 1.15)) continue;
-        repeatedPointHits.push({
-          geometry: { ...path, source: path.source || "vector", outline: path.outline || { ...path, source: path.source || "vector" } },
-          entry: { code: mark.typeCode || mark.abbr, symbol: { id: mark.symbol, label: mark.symbolLabel, abbr: mark.abbr, category: mark.category, takeoffCategory: mark.category } },
-          score: 0.9,
-          ambiguous: false,
-          source: "confirmed-point-repeat",
-        });
-      }
-    }
     const twinHits = planType === "power" ? [] : timedScan(page, {
       ...dictionary,
       entries: (dictionary.entries || []).filter((entry) => /^\d{1,2}e?$/i.test(entry.code || "") && /2x4|troffer/i.test(entry.symbol?.label || "")),
@@ -1691,7 +1666,7 @@ export function buildAiMarks({
         const nearby = (page.paths || []).filter((path) => Math.hypot((path.cx || 0) - placed.x, (path.cy || 0) - placed.y) <= 0.8);
         if (isEmergencyHatch(geometry, nearby)) {
           const emergencyEntry = (dictionary.entries || []).find((entry) => compactLegendCode(entry.code) === `${visualCode}e`);
-          const emergency = typedVisualDetectionMark({
+          const emergency = allowTypedVisualRepeats ? typedVisualDetectionMark({
             trade,
             sheet: page.page,
             visual: { ...visual, entry: emergencyEntry, ambiguous: false, score: Math.max(Number(visual.score) || 0, 0.9) },
@@ -1701,7 +1676,7 @@ export function buildAiMarks({
             color,
             matchedFrom: "plan-repeat",
             reason: "emergency-hatch-repeat",
-          });
+          }) : null;
           if (emergency) {
             counts.push(emergency);
             seen.push({ ...emergency, tagX: placed.x, tagY: placed.y });
@@ -1747,7 +1722,7 @@ export function buildAiMarks({
         seen.push({ ...mark, tagX: placed.x, tagY: placed.y });
         continue;
       }
-      const typed = typedVisualDetectionMark({
+      const typed = allowTypedVisualRepeats ? typedVisualDetectionMark({
         trade,
         sheet: page.page,
         visual,
@@ -1759,7 +1734,7 @@ export function buildAiMarks({
         reason: matchingPrintedLegend(placed, page, dictionary, planType, visual.entry)
           ? "duplicate-plan-repeat"
           : "unlabeled-plan-repeat",
-      });
+      }) : null;
       if (typed) {
         counts.push(typed);
         seen.push({ ...typed, tagX: placed.x, tagY: placed.y });
@@ -1810,7 +1785,7 @@ export function buildAiMarks({
         && compactLegendCode(mark.typeCode || mark.abbr || mark.symbol) === reviewCode
       ));
       if (confirmedSameType) {
-        const typed = typedVisualDetectionMark({
+        const typed = allowTypedVisualRepeats ? typedVisualDetectionMark({
           trade,
           sheet: page.page,
           visual,
@@ -1822,7 +1797,7 @@ export function buildAiMarks({
           reason: "confirmed-type-repeat",
           minScore: REVIEW_VISUAL_THRESHOLD,
           allowAmbiguous: true,
-        });
+        }) : null;
         if (typed) {
           counts.push(typed);
           seen.push({ ...typed, tagX: placed.x, tagY: placed.y });
@@ -1872,7 +1847,7 @@ export function buildAiMarks({
         const nearby = (page.paths || []).filter((path) => Math.hypot((path.cx || 0) - placed.x, (path.cy || 0) - placed.y) <= 0.8);
         if (isEmergencyHatch(geometry, nearby)) {
           const emergencyEntry = (dictionary.entries || []).find((entry) => compactLegendCode(entry.code) === `${recoveryCode}e`);
-          const emergency = typedVisualDetectionMark({
+          const emergency = allowTypedVisualRepeats ? typedVisualDetectionMark({
             trade,
             sheet: page.page,
             visual: { ...visual, entry: emergencyEntry, ambiguous: false, score: Math.max(Number(visual.score) || 0, 0.9) },
@@ -1882,7 +1857,7 @@ export function buildAiMarks({
             color,
             matchedFrom: "legend-recovery",
             reason: "emergency-hatch-recovery",
-          });
+          }) : null;
           if (emergency) {
             counts.push(emergency);
             seen.push({ ...emergency, tagX: placed.x, tagY: placed.y });
@@ -1890,7 +1865,7 @@ export function buildAiMarks({
           continue;
         }
       }
-      const typed = typedVisualDetectionMark({
+      const typed = allowTypedVisualRepeats ? typedVisualDetectionMark({
         trade,
         sheet: page.page,
         visual,
@@ -1902,7 +1877,7 @@ export function buildAiMarks({
         reason: matchingPrintedLegend(placed, page, dictionary, planType, visual.entry)
           ? "duplicate-legend-recovery"
           : "unlabeled-legend-recovery",
-      });
+      }) : null;
       if (typed) {
         counts.push(typed);
         seen.push({ ...typed, tagX: placed.x, tagY: placed.y });

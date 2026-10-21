@@ -336,7 +336,7 @@ export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
   };
   const maxExtent = maxFillExtent(mark);
   const source = String(cleaned?.source || mark?.outline?.source || mark?.outlineSource || "").toLowerCase();
-  const trustedAiSource = source === "vector" || source === "raster" || source === "mixed";
+  const trustedAiSource = source === "vector" || source === "raster" || source === "mixed" || source === "generic";
   const usable = cleaned && isUsablePaintOutline(cleaned, origin, maxExtent) && !outlineOnPrintedTag(cleaned, mark);
 
   if (mark?.source === "ai") {
@@ -344,6 +344,12 @@ export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
     // still the device — displayDeviceOutline scales them into the visible cap.
     // Room-sized junk, text-only boxes, and circuit-number glyphs stay unpainted.
     if (!trustedAiSource) {
+      if (source === "text" && mark?.requiresReview === true && isPointDevice(mark)) {
+        return genericDeviceOutline(mark, markerSize);
+      }
+      if (source === "text" && /^(SP|SPR|DB)$/i.test(String(mark?.typeCode || mark?.abbr || ""))) {
+        return genericDeviceOutline(mark, markerSize);
+      }
       return null;
     }
     const core = isTrustedAiBodyOutline(cleaned, origin, mark)

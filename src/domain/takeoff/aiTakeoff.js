@@ -1494,9 +1494,9 @@ export function buildAiMarks({
         return tagDist < 0.35 || (distance(item, placed) < 0.42 && tagDist < 0.9);
       });
       if (near) continue;
-      // For point devices without trusted geometry (like OS), create a minimal circle outline
-      // so they are hit-testable and renderable with a generic chip.
-      if ((!paintOutline || paintOutline.source === "text") && /^(OS|GFI|GFI\/WP|WP|SP|SPR|DB)$/.test(typeCode)) {
+      // For point devices with extracted but underspecified bodies (like OS),
+      // create a bounded review chip without overwriting text-only provenance.
+      if (!paintOutline && geometrySource !== "text" && /^(OS|GFI|GFI\/WP|WP|SP|SPR|DB)$/.test(typeCode)) {
         paintOutline = {
           kind: "circle",
           source: "generic",

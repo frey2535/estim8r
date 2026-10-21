@@ -1,17 +1,29 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { BookOpen, Calculator, FileText, FolderOpen, Image as ImageIcon, Shield, ShieldCheck, StickyNote, Trash2, TrendingUp } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { canManageEstim8rAccess } from "@/lib/ownerAccessRules";
+import { readLinkedBuildrCompanyId } from "@/lib/buildrCompany";
+import { readBuildrFamilyAccess } from "@/lib/buildrFamilyAccess";
+import {
+  buildrApiUrl,
+  fetchBuildrAccountStatus,
+  fetchBuildrEstimates,
+  isBuildrConfigured,
+  readBuildrSessionToken,
+} from "@/api/buildrBridge";
 import {
   deleteDrawingFile,
   deleteProjectFolder,
   downloadBlob,
+  draftFromBuildrEstimateJson,
   getDrawingFile,
   isDrawingFileName,
   listProjectFolders,
+  mergeEstimateFolderRows,
+  upsertProjectFolder,
 } from "@/domain/estimate/projectDocuments";
-import { activateEstimate, deleteStoredEstimate, readEstimate } from "@/domain/estimate/estimateStore";
+import { activateEstimate, deleteStoredEstimate, readEstimate, writeEstimate } from "@/domain/estimate/estimateStore";
 import { readCompanyBranding } from "@/domain/estimate/branding";
 import { estimatePdfBlob } from "@/domain/estimate/estimatePdf";
 
@@ -30,9 +42,55 @@ function markupPath(folder) {
   return `/markup?${params.toString()}`;
 }
 
-function FolderDocs({ folder }) {
+function formatMoney(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount === 0) return "";
+  return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(amount);
+}
+
+function resolveCompanyId(user) {
+  return readLinkedBuildrCompanyId(user) || String(readBuildrFamilyAccess()?.companyId || "").trim();
+}
+
+/**
+ * Load the full company estimate JSON (labor lines included) into local storage.
+ * @param {any} folder
+ */
+async function hydrateCompanyEstimate(folder) {
+  const existing = readEstimate(folder.fileName, folder.fileSize);
+  if (existing?.lines?.length || existing?.header?.projectName) {
+    activateEstimate(folder.fileName, folder.fileSize);
+    return existing;
+  }
+  if (!folder.estimateFileUrl) {
+    throw new Error("This Buildr estimate has no Estim8r JSON file to open.");
+  }
+  const response = await fetch(folder.estimateFileUrl, {
+    method: "GET",
+    credentials: "include",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error("Could not download the company estimate from Buildr.");
+  }
+  const json = await response.json();
+  const draft = draftFromBuildrEstimateJson(json, folder);
+  const saved = writeEstimate(draft);
+  upsertProjectFolder({
+    projectName: saved.header?.projectName || folder.projectName,
+    projectAddress: saved.header?.projectAddress || folder.projectAddress,
+    fileName: saved.fileName,
+    fileSize: saved.fileSize || 0,
+    savedTo: "buildr",
+    buildrProjectId: folder.buildrProjectId || saved.buildrSync?.projectId || null,
+  });
+  return saved;
+}
+
+function FolderDocs({ folder, onHydrated, onError }) {
   const navigate = useNavigate();
   const hasDrawing = isDrawingFileName(folder.fileName);
+  const [busy, setBusy] = useState("");
 
   async function downloadDrawing() {
     const file = await getDrawingFile(folder.fileName, folder.fileSize);
@@ -40,19 +98,42 @@ function FolderDocs({ folder }) {
     downloadBlob(file, folder.drawingName || folder.fileName);
   }
 
-  function downloadEstimate() {
-    const estimate = readEstimate(folder.fileName, folder.fileSize);
+  async function ensureLocalEstimate() {
+    if (folder.origin !== "buildr") {
+      return readEstimate(folder.fileName, folder.fileSize);
+    }
+    setBusy("open");
+    try {
+      const saved = await hydrateCompanyEstimate(folder);
+      onHydrated?.();
+      return saved;
+    } catch (error) {
+      onError?.(error?.message || "Could not open the company estimate.");
+      return null;
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function downloadEstimate() {
+    const estimate = folder.origin === "buildr"
+      ? await ensureLocalEstimate()
+      : readEstimate(folder.fileName, folder.fileSize);
     if (!estimate) return;
     const { blob, fileName } = estimatePdfBlob(estimate, readCompanyBranding());
     downloadBlob(blob, fileName);
   }
 
-  function openEstimate() {
+  async function openEstimate() {
+    const estimate = folder.origin === "buildr"
+      ? await ensureLocalEstimate()
+      : readEstimate(folder.fileName, folder.fileSize);
+    if (folder.origin === "buildr" && !estimate) return;
     const params = new URLSearchParams({
-      file: folder.fileName || "",
-      size: String(folder.fileSize || 0),
+      file: (estimate?.fileName || folder.fileName) || "",
+      size: String(estimate?.fileSize ?? folder.fileSize ?? 0),
     });
-    activateEstimate(folder.fileName, folder.fileSize);
+    activateEstimate(estimate?.fileName || folder.fileName, estimate?.fileSize ?? folder.fileSize);
     navigate(`/estimates/new?${params.toString()}`);
   }
 
@@ -67,7 +148,12 @@ function FolderDocs({ folder }) {
           <ImageIcon className="h-3.5 w-3.5" /> Drawing
         </button>
       ) : null}
-      <button type="button" onClick={downloadEstimate} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-muted">
+      <button
+        type="button"
+        disabled={busy === "open"}
+        onClick={() => void downloadEstimate()}
+        className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-muted disabled:opacity-60"
+      >
         <FileText className="h-3.5 w-3.5" /> Estimate PDF
       </button>
       {hasDrawing ? (
@@ -75,8 +161,13 @@ function FolderDocs({ folder }) {
           <StickyNote className="h-3.5 w-3.5" /> Markup pages
         </button>
       ) : null}
-      <button type="button" onClick={openEstimate} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-muted">
-        Open estimate
+      <button
+        type="button"
+        disabled={busy === "open"}
+        onClick={() => void openEstimate()}
+        className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-muted disabled:opacity-60"
+      >
+        {busy === "open" ? "Opening…" : "Open estimate"}
       </button>
     </div>
   );
@@ -85,17 +176,76 @@ function FolderDocs({ folder }) {
 export default function Dashboard() {
   const { user } = useAuth();
   const [folders, setFolders] = useState([]);
+  const [companyStatus, setCompanyStatus] = useState("");
+  const [folderError, setFolderError] = useState("");
+
+  const refreshFolders = useCallback(async () => {
+    const local = listProjectFolders();
+    setFolders(local);
+    setFolderError("");
+
+    const email = String(user?.email || "").trim();
+    const companyId = resolveCompanyId(user);
+    if (!email || !companyId || !isBuildrConfigured() || !buildrApiUrl()) {
+      setCompanyStatus("");
+      return;
+    }
+
+    setCompanyStatus("Loading company estimates from Buildr…");
+    try {
+      let session = readBuildrSessionToken(email);
+      const account = await fetchBuildrAccountStatus(email, companyId);
+      if (account.token) session = account.token;
+      else session = readBuildrSessionToken(email) || session;
+
+      if (!account.canUseBuildr) {
+        setFolders(local);
+        setCompanyStatus(account.error
+          ? `Company estimates unavailable: ${account.error}`
+          : "Company estimates appear here when Buildr Access Control grants Estim8r for this company.");
+        return;
+      }
+      if (!session) {
+        setFolders(local);
+        setCompanyStatus("Sign in from Buildr (or refresh your Buildr session) to list company estimates.");
+        return;
+      }
+
+      const listed = await fetchBuildrEstimates({
+        email,
+        companyId: account.companyId || companyId,
+        token: session,
+      });
+      if (!listed.ok) {
+        setFolders(local);
+        setCompanyStatus(listed.error
+          ? `Company estimates unavailable: ${listed.error}`
+          : "Could not load company estimates from Buildr.");
+        return;
+      }
+
+      const merged = mergeEstimateFolderRows(local, listed.estimates);
+      setFolders(merged);
+      const remoteCount = merged.filter((row) => row.origin === "buildr").length;
+      setCompanyStatus(remoteCount > 0
+        ? `${remoteCount} company estimate${remoteCount === 1 ? "" : "s"} from Buildr Access Control (open to review applied labor).`
+        : "No company estimates on Buildr yet. Local drafts still appear below.");
+    } catch (error) {
+      setFolders(local);
+      setCompanyStatus(error?.message || "Could not load company estimates from Buildr.");
+    }
+  }, [user]);
 
   useEffect(() => {
-    setFolders(listProjectFolders());
-    const refresh = () => setFolders(listProjectFolders());
-    window.addEventListener("focus", refresh);
-    window.addEventListener("storage", refresh);
+    void refreshFolders();
+    const onFocus = () => { void refreshFolders(); };
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("storage", onFocus);
     return () => {
-      window.removeEventListener("focus", refresh);
-      window.removeEventListener("storage", refresh);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("storage", onFocus);
     };
-  }, []);
+  }, [refreshFolders]);
 
   return (
     <div className="py-4 sm:py-6">
@@ -131,9 +281,14 @@ export default function Dashboard() {
           <div className="min-w-0 flex-1">
             <h2 className="text-lg font-bold text-foreground">Estimates folder</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Saved estimates are stored under the project name. Drawings and takeoff are optional.
-              If a Buildr company is linked, the estimate also syncs to that project’s Estimate tab. Otherwise they stay here with the project address under the name.
+              Local drafts stay on this device. When Buildr Access Control grants Estim8r for your company, company estimates also appear here so you can open them in Estim8r and review applied labor — the same projects stay visible on the Buildr Estimate tab.
             </p>
+            {companyStatus ? (
+              <p className="mt-2 text-xs font-semibold text-blue-600 dark:text-orange-500">{companyStatus}</p>
+            ) : null}
+            {folderError ? (
+              <p className="mt-2 text-xs font-semibold text-destructive">{folderError}</p>
+            ) : null}
           </div>
         </div>
         {folders.length === 0 ? (
@@ -142,34 +297,63 @@ export default function Dashboard() {
           </p>
         ) : (
           <div className="mt-5 grid gap-3">
-            {folders.map((folder) => (
-              <article key={folder.id} className="rounded-xl border border-border px-4 py-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-base font-bold text-foreground">{folder.projectName}</h3>
-                    <p className="text-sm text-muted-foreground">{folder.projectAddress || "No project address yet"}</p>
-                    {folder.savedTo === "buildr" ? (
-                      <p className="mt-1 text-xs font-semibold text-blue-600 dark:text-orange-500">Also saved on the Buildr project Estimate tab</p>
-                    ) : null}
+            {folders.map((folder) => {
+              const totalLabel = formatMoney(folder.total);
+              const isRemote = folder.origin === "buildr";
+              return (
+                <article key={folder.id} className="rounded-xl border border-border px-4 py-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-base font-bold text-foreground">{folder.projectName}</h3>
+                        {isRemote ? (
+                          <span className="rounded-md border border-blue-500/40 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-600 dark:border-orange-500/40 dark:text-orange-500">
+                            Buildr
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="text-sm text-muted-foreground">{folder.projectAddress || "No project address yet"}</p>
+                      {totalLabel ? (
+                        <p className="mt-1 text-sm font-semibold text-foreground">Estimate total {totalLabel}</p>
+                      ) : null}
+                      {folder.savedTo === "buildr" && !isRemote ? (
+                        <p className="mt-1 text-xs font-semibold text-blue-600 dark:text-orange-500">Also saved on the Buildr project Estimate tab</p>
+                      ) : null}
+                      {isRemote ? (
+                        <p className="mt-1 text-xs font-semibold text-blue-600 dark:text-orange-500">
+                          Company estimate from Buildr — open to review labor hours and applied costs in Estim8r
+                        </p>
+                      ) : null}
+                    </div>
+                    {isRemote ? (
+                      <span className="inline-flex items-center rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-muted-foreground">
+                        Managed in Buildr
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!window.confirm(`Delete ${folder.projectName || "this project"} from the Estimates folder?`)) return;
+                          deleteStoredEstimate(folder.fileName, folder.fileSize);
+                          deleteProjectFolder(folder);
+                          void deleteDrawingFile(folder.fileName, folder.fileSize).catch(() => {});
+                          void refreshFolders();
+                        }}
+                        className="inline-flex items-center gap-1 rounded-lg border border-destructive/40 px-2.5 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10"
+                        aria-label={`Delete ${folder.projectName || "project"}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" /> Delete
+                      </button>
+                    )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!window.confirm(`Delete ${folder.projectName || "this project"} from the Estimates folder?`)) return;
-                      deleteStoredEstimate(folder.fileName, folder.fileSize);
-                      deleteProjectFolder(folder);
-                      void deleteDrawingFile(folder.fileName, folder.fileSize).catch(() => {});
-                      setFolders(listProjectFolders());
-                    }}
-                    className="inline-flex items-center gap-1 rounded-lg border border-destructive/40 px-2.5 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10"
-                    aria-label={`Delete ${folder.projectName || "project"}`}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" /> Delete
-                  </button>
-                </div>
-                <FolderDocs folder={folder} />
-              </article>
-            ))}
+                  <FolderDocs
+                    folder={folder}
+                    onHydrated={() => { void refreshFolders(); }}
+                    onError={(message) => setFolderError(message)}
+                  />
+                </article>
+              );
+            })}
           </div>
         )}
       </section>

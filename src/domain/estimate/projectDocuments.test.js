@@ -3,8 +3,12 @@ import {
   buildrSyncFromResult,
   canSaveProjectDocuments,
   decideSaveDestination,
+  draftFromBuildrEstimateJson,
   estimateFileNameForSave,
+  estim8rEstimateDocumentUrl,
+  folderFromBuildrEstimate,
   isDrawingFileName,
+  mergeEstimateFolderRows,
   saveRequiresProjectName,
   standaloneEstimateFileName,
   deleteProjectFolder,
@@ -243,5 +247,90 @@ assert(buildrSyncFromResult({
   invoice: { id: "inv_1" },
   documents: [{ id: "doc_e", doc_type: "estim8r_estimate" }],
 }, "est_abc").projectId === "proj_1", "sync record keeps project id");
+
+assert(
+  estim8rEstimateDocumentUrl([
+    { doc_type: "estim8r_drawing", file_url: "https://files.example/d.pdf" },
+    { doc_type: "estim8r_estimate", file_url: "https://files.example/e.json" },
+  ]) === "https://files.example/e.json",
+  "estimate document url prefers estim8r_estimate",
+);
+
+const remoteFolder = folderFromBuildrEstimate({
+  id: "inv_9",
+  project_id: "proj_9",
+  project_name: "Day One Shop",
+  project_address: "1 Main",
+  estim8r_estimate_id: "est_9",
+  total: 900,
+  documents: [{ doc_type: "estim8r_estimate", file_url: "https://files.example/9.json" }],
+});
+assert(remoteFolder?.origin === "buildr", "Buildr rows are marked remote");
+assert(remoteFolder?.estimateFileUrl === "https://files.example/9.json", "Buildr folder keeps estimate file url");
+assert(remoteFolder?.fileName === standaloneEstimateFileName("Day One Shop"), "Buildr folder uses standalone storage key");
+
+const localOnly = mergeEstimateFolderRows(
+  [{ id: "local-a", projectName: "Local Draft", projectAddress: "2 Pine", updatedAt: "2026-01-02" }],
+  [],
+);
+assert(localOnly.length === 1 && localOnly[0].origin === "local", "local drafts stay when Buildr is empty");
+
+const companyOnly = mergeEstimateFolderRows([], [{
+  id: "inv_9",
+  project_id: "proj_9",
+  project_name: "Day One Shop",
+  estim8r_estimate_id: "est_9",
+  documents: [{ doc_type: "estim8r_estimate", file_url: "https://files.example/9.json" }],
+}]);
+assert(companyOnly.length === 1 && companyOnly[0].origin === "buildr", "Access Control users see company estimates");
+
+const deduped = mergeEstimateFolderRows(
+  [{
+    id: "local-shop",
+    projectName: "Day One Shop",
+    buildrProjectId: "proj_9",
+    estim8rEstimateId: "est_9",
+    updatedAt: "2026-02-01",
+  }],
+  [{
+    id: "inv_9",
+    project_id: "proj_9",
+    project_name: "Day One Shop",
+    estim8r_estimate_id: "est_9",
+    documents: [{ doc_type: "estim8r_estimate", file_url: "https://files.example/9.json" }],
+  }],
+);
+assert(deduped.length === 1 && deduped[0].origin === "local", "matching local draft wins over the Buildr duplicate");
+
+const both = mergeEstimateFolderRows(
+  [{ id: "local-a", projectName: "Local Draft", updatedAt: "2026-01-02" }],
+  [{
+    id: "inv_9",
+    project_id: "proj_9",
+    project_name: "Day One Shop",
+    estim8r_estimate_id: "est_9",
+    documents: [{ doc_type: "estim8r_estimate", file_url: "https://files.example/9.json" }],
+  }],
+);
+assert(both.length === 2, "unrelated local and company estimates both appear");
+assert(both.some((row) => row.origin === "local") && both.some((row) => row.origin === "buildr"), "merged list keeps both origins");
+
+const hydrated = draftFromBuildrEstimateJson({
+  id: "est_labor",
+  header: { projectName: "Shop Wire", projectAddress: "9 Oak" },
+  lines: [{ id: "l1", description: "EMT", laborMhPerUnit: 0.2, laborRate: 85, amount: 170 }],
+  crew: [{ id: "jw", wage: 85 }],
+}, {
+  projectName: "Shop Wire",
+  projectAddress: "9 Oak",
+  buildrProjectId: "proj_labor",
+  buildrInvoiceId: "inv_labor",
+  estim8rEstimateId: "est_labor",
+  fileName: standaloneEstimateFileName("Shop Wire"),
+});
+assert(hydrated.lines[0].laborMhPerUnit === 0.2, "hydrate keeps applied labor hours");
+assert(hydrated.lines[0].laborRate === 85, "hydrate keeps labor rate");
+assert(hydrated.buildrSync.projectId === "proj_labor", "hydrate links Buildr project for both places");
+assert(hydrated.fileName === standaloneEstimateFileName("Shop Wire"), "hydrate uses standalone storage key");
 
 if (!process.exitCode) console.log("project document checks passed");

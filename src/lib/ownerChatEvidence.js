@@ -29,9 +29,9 @@ function push(list, item) {
 
 export function redactOwnerDiagnostic(value) {
   return String(value || "")
-    .replace(/(authorization\\s*[:=]\\s*bearer\\s+)\\S+/gi, "$1[REDACTED]")
-    .replace(/(\\b(?:token|secret|api[_-]?key|password|access[_-]?token|refresh[_-]?token)\\b\\s*[:=]\\s*["\x27]?)\\S+/gi, "$1[REDACTED]")
-    .replace(/([?&](?:token|key|access_token|refresh_token|code|secret)=)[^&#\\s]+/gi, "$1[REDACTED]");
+    .replace(/(authorization\s*[:=]\s*bearer\s+)\S+/gi, "$1[REDACTED]")
+    .replace(/(\b(?:token|secret|api[_-]?key|password|access[_-]?token|refresh[_-]?token)\b\s*[:=]\s*["']?)\S+/gi, "$1[REDACTED]")
+    .replace(/([?&](?:token|key|access_token|refresh_token|code|secret)=)[^&#\s]+/gi, "$1[REDACTED]");
 }
 
 function safeRequestUrl(raw) {

@@ -349,7 +349,7 @@ export default function EstimateBuilder() {
   function patchLine(id, key, value) {
     setLines((current) => current.map((line) => {
       if (line.id !== id) return line;
-      const next = { ...line, [key]: value };
+      const next = /** @type {any} */ ({ ...line, [key]: value });
       if (key === "quantity" || key === "unit") next.quantityEdited = true;
       if (key === "laborMhPerUnit") {
         next.laborMhEdited = true;
@@ -1102,7 +1102,7 @@ export default function EstimateBuilder() {
   );
 }
 
-function Field({ label, value, set, type = "text", children, className = "", required = false, hint = "" }) {
+function Field({ label, value, set, type = "text", children = null, className = "", required = false, hint = "" }) {
   return (
     <label className={`min-w-0 ${className}`}>
       <span className="mb-1 block text-sm font-bold text-foreground">

@@ -5,7 +5,7 @@ export default function TradeSymbolSelect({
   trade,
   marks = [],
   pageKinds = {},
-  category,
+  category = null,
   value,
   onChange,
   className = "w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm",

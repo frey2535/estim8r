@@ -2378,7 +2378,7 @@ export default function TakeoffWorkspace() {
   }
 
   async function readScannedText() {
-    const canvas = document.querySelector("[data-testid='takeoff-sheet-viewport'] canvas");
+    const canvas = /** @type {HTMLCanvasElement | null} */ (document.querySelector("[data-testid='takeoff-sheet-viewport'] canvas"));
     if (!canvas) {
       setStatus("Open a drawing page before reading scanned text.");
       return;
@@ -3506,7 +3506,7 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
   );
 }
 
-function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber, viewportWidth, viewportHeight, onPageInfo, selectedMark }) {
+function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber = null, viewportWidth, viewportHeight, onPageInfo = null, selectedMark = null }) {
   const canvasRef = useRef(null);
   const focusCanvasRef = useRef(null);
   const pdfRef = useRef(null);

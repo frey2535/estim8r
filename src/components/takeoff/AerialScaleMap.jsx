@@ -3,6 +3,9 @@ import { MapContainer, TileLayer, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { haversineFeet } from "@/domain/takeoff/professionalTools";
 
+const LooseMapContainer = /** @type {any} */ (MapContainer);
+const LooseTileLayer = /** @type {any} */ (TileLayer);
+
 function Clicks({ origin, onOrigin, onMeasure }) {
   useMapEvents({
     click(event) {
@@ -38,8 +41,8 @@ export default function AerialScaleMap({ onLength }) {
       </button>
       {shown && ready ? (
         <div className="h-48 overflow-hidden rounded-md border border-border">
-          <MapContainer center={[centerLat, centerLng]} zoom={18} style={{ height: "100%", width: "100%" }}>
-            <TileLayer
+          <LooseMapContainer center={[centerLat, centerLng]} zoom={18} style={{ height: "100%", width: "100%" }}>
+            <LooseTileLayer
               attribution='&copy; OpenStreetMap contributors'
               url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
@@ -51,7 +54,7 @@ export default function AerialScaleMap({ onLength }) {
                 if (feet != null) onLength?.(start, end, feet);
               }}
             />
-          </MapContainer>
+          </LooseMapContainer>
         </div>
       ) : null}
       <p className="text-[11px] leading-4 text-muted-foreground">Click two points on the aerial photo. The distance is the measured ground length in feet. Map tiles are OpenStreetMap.</p>

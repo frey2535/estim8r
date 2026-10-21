@@ -803,7 +803,7 @@ export default function MarkupPages() {
   );
 }
 
-function ReviewOverlay({ marks, selectedId }) {
+function ReviewOverlay({ marks, selectedId, groups = [] }) {
   const styled = applyDeviceTypeColors(marks);
   const devices = styled.filter((mark) => isDeviceMark(mark));
   const notes = styled.filter((mark) => isNoteMark(mark));

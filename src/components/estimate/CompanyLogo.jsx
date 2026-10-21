@@ -4,17 +4,17 @@ import { brandingLayout, resolveLogoBox } from "@/domain/estimate/branding";
 
 export default function CompanyLogo({
   branding,
-  design,
-  className,
+  design = {},
+  className = "",
   alt = "Company logo",
 }) {
   const layout = brandingLayout(branding);
   const box = resolveLogoBox(layout, design);
-  const style = {
+  const style = /** @type {React.CSSProperties} */ ({
     width: `${box.width}px`,
     height: `${box.height}px`,
     objectFit: "fill",
-  };
+  });
 
   if (!layout.logoDataUrl) {
     return (

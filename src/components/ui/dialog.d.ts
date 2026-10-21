@@ -1,0 +1,12 @@
+import * as React from "react";
+
+export const Dialog: any;
+export const DialogPortal: any;
+export const DialogOverlay: any;
+export const DialogTrigger: any;
+export const DialogClose: any;
+export const DialogContent: any;
+export const DialogHeader: any;
+export const DialogFooter: any;
+export const DialogTitle: any;
+export const DialogDescription: any;

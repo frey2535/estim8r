@@ -1,0 +1,26 @@
+import * as React from "react";
+
+export const Sidebar: any;
+export const SidebarContent: any;
+export const SidebarFooter: any;
+export const SidebarGroup: any;
+export const SidebarGroupAction: any;
+export const SidebarGroupContent: any;
+export const SidebarGroupLabel: any;
+export const SidebarHeader: any;
+export const SidebarInput: any;
+export const SidebarInset: any;
+export const SidebarMenu: any;
+export const SidebarMenuAction: any;
+export const SidebarMenuBadge: any;
+export const SidebarMenuButton: any;
+export const SidebarMenuItem: any;
+export const SidebarMenuSkeleton: any;
+export const SidebarMenuSub: any;
+export const SidebarMenuSubButton: any;
+export const SidebarMenuSubItem: any;
+export const SidebarProvider: any;
+export const SidebarRail: any;
+export const SidebarSeparator: any;
+export const SidebarTrigger: any;
+export const useSidebar: any;

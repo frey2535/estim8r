@@ -1,0 +1,56 @@
+{
+  "app": "Estim8r",
+  "status": "blocked",
+  "cycle": 1,
+  "message": "Cycle 1: viewport/pinch/rotation helpers implemented; verification still blocked by Shell allowlist (node/npm rejected)",
+  "generated_at": "2026-10-21T14:30:00Z",
+  "fallback_note": "Primary path ~/AI-Autonomous-Runner/reports/Estim8r.report.json was rejected; this is the fallback copy under reports/controller/",
+  "code_changes": [
+    "src/lib/sheetViewport.js — pagePercentFromClient, rotate/unrotatePagePercent, panAfterZoomAtCursor, normalizePageRotation",
+    "src/lib/sheetViewport.test.js — zoom/pan/rotation unit coverage + UNRESOLVED_PREREQUISITE log for missing PDF rotation GT",
+    "src/pages/TakeoffWorkspace.jsx — multi-pointer pinch zoom (MarkupPages parity), drawingPoint via pagePercentFromClient, PDF viewport uses page.rotate"
+  ],
+  "unresolved_prerequisites_file": "reports/controller/UNRESOLVED_PREREQUISITES.md",
+  "criteria_summary": {
+    "pending": 0,
+    "in_progress": 2,
+    "verified": 1,
+    "blocked": 8
+  },
+  "test_results": [],
+  "blockers": [
+    {
+      "message": "Shell allowlist blocks node/npm. Cannot run apps.json Estim8r verification commands or capture exit codes/output tails for AC-1–AC-8.",
+      "genuine": true,
+      "temporary": true,
+      "at": "2026-10-21T14:30:00Z",
+      "cycle": 1,
+      "resolved": false,
+      "unblock": "Widen Cursor CLI Shell allowlist to permit npm and node (or supply exit codes + output tails from an unrestricted session)."
+    },
+    {
+      "message": "Missing independent PDF rotation/calibration ground-truth fixture under src/domain/takeoff/fixtures/.",
+      "genuine": true,
+      "temporary": false,
+      "at": "2026-10-21T14:30:00Z",
+      "cycle": 1,
+      "resolved": false,
+      "unblock": "Human-labeled rotation/calibration fixture; do not fabricate."
+    },
+    {
+      "message": "MISSING_CORPUS_CLASSES in expandedCorpusAccuracy.test.js: residential, industrial, raster-scanned, low-quality — no real fixtures.",
+      "genuine": true,
+      "temporary": false,
+      "at": "2026-10-21T14:30:00Z",
+      "cycle": 1,
+      "resolved": false,
+      "unblock": "Import independently labeled drawings for those classes."
+    }
+  ],
+  "completed_operations": [
+    "cycle:1:record-shell-allowlist-blocker",
+    "cycle:1:implement-sheetViewport-rotation-pan-zoom-helpers",
+    "cycle:1:wire-TakeoffWorkspace-pinch-and-pagePercent",
+    "cycle:1:document-unresolved-prerequisites"
+  ]
+}

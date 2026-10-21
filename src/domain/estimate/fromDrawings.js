@@ -225,6 +225,9 @@ export function headerFromFileName(fileName) {
   return header;
 }
 
+/**
+ * @param {{ fileName?: any, drawingDocs?: any, markup?: any }} [options]
+ */
 export function headerFromDrawings({ fileName, drawingDocs, markup } = {}) {
   const fromMarkup = headerFromMarkup(markup);
   const fromBlock = drawingDocs?.titleBlock && typeof drawingDocs.titleBlock === "object"
@@ -247,6 +250,11 @@ export function isAutoProjectName(name, fileName) {
   return current === stem;
 }
 
+/**
+ * @param {any} header
+ * @param {any} extracted
+ * @param {{ fileName?: any }} [options]
+ */
 export function fillEmptyHeader(header, extracted, { fileName } = {}) {
   const next = { ...emptyDrawingHeader(), ...header };
   const incoming = extracted || {};

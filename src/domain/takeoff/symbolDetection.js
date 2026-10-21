@@ -153,11 +153,26 @@ export function hasNearbyFixtureBody(token, paths = []) {
   const x = Number(token?.x) || 0;
   const y = Number(token?.y) || 0;
   return (paths || []).some((path) => {
-    const long = Math.max(Number(path?.w) || 0, Number(path?.h) || 0);
-    const short = Math.min(Number(path?.w) || 0, Number(path?.h) || 0);
+    // Pottsville E210 type-3 strip bars are taller than wide (aspect ~2.7) and
+    // sit just outside the compact-body window below — still real fixture bodies.
+    const w = Number(path?.w) || 0;
+    const h = Number(path?.h) || 0;
+    const long = Math.max(w, h);
+    const short = Math.min(w, h);
     const aspect = long / (short || 1e-9);
+    const dist = Math.hypot((Number(path.cx) || 0) - x, (Number(path.cy) || 0) - y);
+    if (
+      path?.kind === "rect"
+      && h >= w
+      && short >= 0.16 && short <= 0.36
+      && long >= 0.48 && long <= 0.62
+      && aspect >= 1.5 && aspect <= 3.6
+      && dist <= 0.72
+    ) {
+      return true;
+    }
     if (long < 0.45 || long > 1.05 || aspect > 1.55) return false;
-    return Math.hypot((Number(path.cx) || 0) - x, (Number(path.cy) || 0) - y) <= 0.55;
+    return dist <= 0.55;
   });
 }
 
@@ -380,7 +395,10 @@ export function shouldAcceptPlanToken(token, tokens = [], options = {}) {
   }
   if (isSheetGridTick(token)) return false;
   if (isNotesClusterToken(token, tokens)) return false;
-  if (isZoneNoteContext(token, tokens)) return false;
+  // Room/corridor labels can share a horizontal band with real type digits
+  // (E210 type 3 @ 69.549 is ~10 units from "CORRIDOR"). Keep the zone-note
+  // reject only when no extracted fixture body sits beside the tag.
+  if (isZoneNoteContext(token, tokens) && !hasNearbyFixtureBody(token, options.paths)) return false;
   if (isTypContextToken(token, tokens) || isTypContextToken(marked, tokens)) return false;
   if (isDigitCodeNoteToken(token, tokens) || isDigitCodeNoteToken(marked, tokens)) return false;
   if (isKeyNoteNumberToken(token, tokens) || isKeyNoteNumberToken(marked, tokens)) return false;

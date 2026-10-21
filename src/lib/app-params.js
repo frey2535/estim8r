@@ -1,5 +1,6 @@
 const isNode = typeof window === 'undefined';
 const windowObj = isNode ? { localStorage: new Map() } : window;
+/** @type {Pick<Storage, "getItem" | "setItem" | "removeItem"> | Map<any, any> | any} */
 const storage = windowObj.localStorage;
 
 const toSnakeCase = (str) => {

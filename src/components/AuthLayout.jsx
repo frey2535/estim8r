@@ -1,6 +1,15 @@
 import React from "react";
 import AppLogo from "@/components/branding/AppLogo";
 
+/**
+ * @param {{
+ *   title?: React.ReactNode,
+ *   subtitle?: React.ReactNode,
+ *   footer?: React.ReactNode,
+ *   icon?: React.ComponentType<any> | React.ReactNode,
+ *   children?: React.ReactNode,
+ * }} props
+ */
 export default function AuthLayout({ title, subtitle, footer, children }) {
   return (
     <div className="flex items-center justify-center px-4 py-8">

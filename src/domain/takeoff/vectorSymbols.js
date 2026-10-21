@@ -443,6 +443,28 @@ export function containsPoint(candidate, point) {
     && Math.abs(point.y - candidate.cy) <= candidate.h / 2;
 }
 
+/**
+ * True when the printed tag sits on or immediately beside the extracted body.
+ * Uses cardinal-edge contact so side-tagged Soccer fixtures (gaps ~0.4–1.0)
+ * associate, while diagonal foreign neighbors (Pottsville E210 type 3 @ ~0.47
+ * outside on both axes) stay rejected.
+ */
+export function tagAdjacentToSymbolBody(token, candidate, pad = 0.80) {
+  if (!token || !candidate) return false;
+  if (containsPoint(candidate, token)) return true;
+  const w = Number(candidate.w) || 0;
+  const h = Number(candidate.h) || 0;
+  const cx = Number(candidate.cx) || 0;
+  const cy = Number(candidate.cy) || 0;
+  const needX = Math.abs((Number(token.x) || 0) - cx) - w / 2;
+  const needY = Math.abs((Number(token.y) || 0) - cy) - h / 2;
+  // Cardinal: inside one axis, or nearly flush on at least one edge (not a
+  // diagonal corner steal).
+  const onEdge = needX <= 0 || needY <= 0 || Math.min(needX, needY) <= 0.22;
+  const edgePad = Math.max(Number(pad) || 0, 1.05, Math.max(w, h) * 0.12);
+  return onEdge && needX <= edgePad && needY <= edgePad;
+}
+
 export function pointInPolygon(point, points = []) {
   let inside = false;
   for (let index = 0, last = points.length - 1; index < points.length; last = index++) {
@@ -459,13 +481,45 @@ export function distanceToCandidate(token, candidate) {
   return Math.hypot((token?.x || 0) - candidate.cx, (token?.y || 0) - candidate.cy);
 }
 
+/**
+ * Pottsville E210 type-3 fixture bar: a vertical thin/mid rect (e.g. 0.201×0.548
+ * at 69.825,77.442 or 0.331×0.548 beside 69.048,79.524) sits immediately beside
+ * the printed type digit. Cardinal-adjacent + vertical bar geometry — not digit
+ * ink, a foreign body, or a horizontal Soccer hatch scrap (0.504×0.2).
+ */
+export function isAdjacentThinFixtureBar(token, candidate) {
+  if (!token || !candidate || candidate.kind !== "rect") return false;
+  if (!tagAdjacentToSymbolBody(token, candidate)) return false;
+  const w = Number(candidate.w) || 0;
+  const h = Number(candidate.h) || 0;
+  // Strip-light bars beside type digits are taller than wide; horizontal scraps
+  // under Soccer 1E tags must not steal the troffer body via this exception.
+  if (h < w) return false;
+  const long = Math.max(w, h);
+  const short = Math.min(w, h);
+  const aspect = long / (short || 1e-9);
+  const area = w * h;
+  return short >= 0.16 && short <= 0.36
+    && long >= 0.48 && long <= 0.62
+    && aspect >= 1.5 && aspect <= 3.6
+    && area >= 0.09 && area <= 0.22;
+}
+
 export function looksLikeTextGlyph(candidate, token) {
   if (!candidate || !token) return false;
   const dist = distanceToCandidate(token, candidate);
-  const size = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
+  const w = Number(candidate.w) || 0;
+  const h = Number(candidate.h) || 0;
+  const size = Math.max(w, h);
+  const short = Math.min(w, h);
+  const aspect = size / (short || 1e-9);
   const tokenLen = String(token.text || "").trim().replace(/^['"‘’“”`]+|['"‘’“”`]+$/g, "").length || 1;
   const expected = Math.max(0.35, tokenLen * 0.42);
   if (size > 0.70) return false;
+  // Vertical fixture bars beside type tags are bodies, not letter ink
+  // (E210 type 3: 0.201×0.548 or mid-width 0.331×0.548 next to printed "3").
+  if (isAdjacentThinFixtureBar(token, candidate)) return false;
+  if (aspect >= 2.2 && short <= 0.28) return false;
   return dist < 0.7 && size <= expected + 0.4 && size < 1.35;
 }
 
@@ -624,8 +678,31 @@ export function associateGeometry(token, candidates = [], options = {}) {
     const dist = distanceToCandidate(token, candidate);
     const inside = containsPoint(candidate, token);
     if (hint === "circle" && candidate.kind !== "circle" && dist > 0.55 && !inside) continue;
+    // Rect lighting fixtures (troffer / type 1–3) must not steal a neighboring
+    // can/OS circle just because it sits within the associate radius. That
+    // yanks the fill onto the wrong body and fails tag-on-symbol marker checks
+    // (Pottsville E210 type 3 @ ~0.85 from a neighbor circle).
+    if (hint === "rect" && candidate.kind === "circle" && !inside) continue;
+    // Same sheet: a foreign rect ~0.92 away (E210 type 3 @ 69.55,77.86) is not
+    // the tagged fixture — require the tag on or adjacent to the body.
+    if (hint === "rect" && !inside && !tagAdjacentToSymbolBody(token, candidate)) continue;
+    // Room/corridor scraps (E210 type 3 @ 69.048 → 1.614×0.634) must not win
+    // over the printed tag's own fixture bar. Keep real 2x4 bodies (short≥0.75).
+    if (
+      hint === "rect"
+      && !inside
+      && Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0) > 1.45
+      && Math.min(Number(candidate.w) || 0, Number(candidate.h) || 0) < 0.75
+    ) continue;
     if (dist > radius && !(inside && Math.max(candidate.w, candidate.h) <= 2.3)) continue;
-    if (hint === "rect" && !inside && (Math.max(candidate.w, candidate.h) < 0.55 || candidate.w * candidate.h < 0.28)) continue;
+    // Adjacent thin fixture bars (E210 type 3: long 0.548 < 0.55, area 0.110
+    // < 0.28) are genuine bodies; keep the floor for everything else.
+    if (
+      hint === "rect"
+      && !inside
+      && !isAdjacentThinFixtureBar(token, candidate)
+      && (Math.max(candidate.w, candidate.h) < 0.55 || candidate.w * candidate.h < 0.28)
+    ) continue;
     if (rivals.some((rival) => distanceToCandidate(rival, candidate) + 0.12 < dist)) continue;
     if (inside && Math.max(candidate.w, candidate.h) > 2.4) continue;
     const score = fixtureAssociationScore(token, candidate, { shapeHint: hint });
@@ -698,8 +775,21 @@ export function assignExclusiveGeometry(tokens = [], candidates = [], options = 
       const dist = distanceToCandidate(token, candidate);
       const inside = containsPoint(candidate, token);
       if (hint === "circle" && candidate.kind !== "circle" && dist > 0.55 && !inside) continue;
+      if (hint === "rect" && candidate.kind === "circle" && !inside) continue;
+      if (hint === "rect" && !inside && !tagAdjacentToSymbolBody(token, candidate)) continue;
+      if (
+        hint === "rect"
+        && !inside
+        && Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0) > 1.45
+        && Math.min(Number(candidate.w) || 0, Number(candidate.h) || 0) < 0.75
+      ) continue;
       if (dist > maxDist && !(inside && Math.max(candidate.w, candidate.h) <= 2.3)) continue;
-      if (hint === "rect" && !inside && (Math.max(candidate.w, candidate.h) < 0.55 || candidate.w * candidate.h < 0.28)) continue;
+      if (
+        hint === "rect"
+        && !inside
+        && !isAdjacentThinFixtureBar(token, candidate)
+        && (Math.max(candidate.w, candidate.h) < 0.55 || candidate.w * candidate.h < 0.28)
+      ) continue;
       const score = fixtureAssociationScore(token, candidate, { shapeHint: hint });
       if (score < 1.35) continue;
       pairs.push({ token, candidate, dist, score });

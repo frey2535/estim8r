@@ -51,6 +51,7 @@ export const supabaseAuth = {
     const { data: { user }, error } = await client.auth.getUser();
     if (error) throw error;
     if (!user) {
+      /** @type {Error & { status?: number }} */
       const authError = new Error("Authentication required");
       authError.status = 401;
       throw authError;
@@ -93,6 +94,16 @@ export const supabaseAuth = {
     window.location.assign(data.url);
   },
 
+  /**
+   * @param {{
+   *   email: any,
+   *   password: any,
+   *   fullName?: any,
+   *   organizationName?: any,
+   *   companyName?: any,
+   *   inviteCode?: any,
+   * }} args
+   */
   async register({ email, password, fullName, organizationName, companyName, inviteCode }) {
     const client = requireSupabase();
     const normalized = normalizeEmail(email);

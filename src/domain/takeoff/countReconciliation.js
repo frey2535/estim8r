@@ -82,6 +82,15 @@ export function scheduleItemsFromPages(pages, trade) {
   return items;
 }
 
+/**
+ * @param {{
+ *   marks?: any[],
+ *   scheduleItems?: any[],
+ *   pages?: any[],
+ *   pageKinds?: Record<string, any>,
+ *   trade?: any,
+ * }} [options]
+ */
 export function reconcilePlanToSchedule({ marks, scheduleItems = [], pages = [], pageKinds = {}, trade } = {}) {
   const planCounts = new Map();
   for (const mark of marks || []) {

@@ -7,6 +7,7 @@ export const UNMATCHED_LABOR_NOTE = "No labor-library match. Enter man-hours.";
 export const CONDUIT_STICK_FEET = 10;
 export const FEET_UNITS = new Set(["LF", "100 LF", "1000 LF"]);
 
+/** @type {Array<[RegExp, string]>} */
 const ITEM_TYPE_FOR_CATEGORY = [
   [/raceway/i, "Conduit"],
   [/lighting/i, "Fixture"],
@@ -21,6 +22,11 @@ export function laborItemSearchText(item) {
     .toLowerCase();
 }
 
+/**
+ * @param {any[]} [items]
+ * @param {string} [query]
+ * @param {{ limit?: number, itemType?: any, category?: any }} [options]
+ */
 export function filterLaborLibrary(items = [], query = "", { limit = 2500, itemType, category } = {}) {
   const scoped = (itemType || category)
     ? laborItemsForLine(items, { itemType, category })
@@ -107,6 +113,11 @@ function displayUnitFor(line, item) {
   return line.unit && !FEET_UNITS.has(String(line.unit).toUpperCase()) ? line.unit : "STICK";
 }
 
+/**
+ * @param {any} line
+ * @param {any} item
+ * @param {{ factors?: any[], rate?: any }} [options]
+ */
 export function applyLibraryItemToLine(line, item, { factors, rate } = {}) {
   const laborUnit = primaryLaborUnit(item);
   if (!item || !laborUnit || laborUnit.normal_mh == null) {
@@ -172,6 +183,10 @@ export function findLibraryItem(items, line) {
   return (items || []).find((row) => row.id === line.laborItemId) || null;
 }
 
+/**
+ * @param {any} line
+ * @param {{ items?: any[], factors?: any[], rate?: any }} [options]
+ */
 export function applyManualLineLabor(line, { items, factors, rate } = {}) {
   const item = findLibraryItem(items, line);
   if (item) return applyLibraryItemToLine(line, item, { factors, rate });

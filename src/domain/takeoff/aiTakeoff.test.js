@@ -364,4 +364,148 @@ assert(typeF?.color === SCHEDULE_TYPE_COLORS.f, "AI type F is distinct");
 assert(gfi && gfi.color !== type1.color, "receptacles on the same sheet use another color");
 assert(typed.marks.filter((mark) => mark.tool === "conduit").every((mark) => mark.color === CIRCUIT_COLOR), "circuit overlay stays off the device palette");
 
+// Pottsville E210 3@52: printed type 3 beside a foreign can must stay on the
+// tag (or its own body), not steal the neighbor — even when legend seeding
+// would prefer a circle hint for "Type 3 lighting fixture".
+const type3Neighbor = buildAiMarks({
+  trade: "electrical",
+  symbols: electrical.symbols,
+  drawingSymbols: [
+    { abbr: "3", type: "3", label: "Type 3 lighting fixture", takeoffCategory: "Lighting", category: "From drawing" },
+  ],
+  pages: [{
+    page: 52,
+    kind: "drawing",
+    sheetId: "E210",
+    title: "LIGHTING FLOOR PLAN",
+    planType: "lighting",
+    tokens: [
+      { text: "LIGHTING FLOOR PLAN", x: 80, y: 88 },
+      { text: "E210", x: 92, y: 94 },
+      { text: "3", x: 69.549, y: 77.862 },
+    ],
+    paths: [
+      { kind: "path", cx: 69.547, cy: 78.144, w: 0.152, h: 0.196, outline: { kind: "path", source: "vector", w: 0.152, h: 0.196, points: [] } },
+      { kind: "circle", cx: 70.148, cy: 78.562, w: 0.726, h: 0.959, r: 0.48, outline: { kind: "circle", source: "vector", w: 0.726, h: 0.959, r: 0.48, points: [] } },
+      { kind: "rect", cx: 70.337, cy: 77.168, w: 0.628, h: 0.503, outline: { kind: "rect", source: "vector", w: 0.628, h: 0.503, points: [] } },
+    ],
+  }],
+});
+const type3Mark = type3Neighbor.marks.find((mark) => mark.type === "count" && String(mark.typeCode) === "3" && mark.sheet === 52);
+assert(type3Mark, "type 3 on E210 is detected");
+assert(
+  Math.hypot(type3Mark.x - 69.549, type3Mark.y - 77.862) < 0.35,
+  `type 3@52 stays on the printed tag, not a neighbor body, got ${type3Mark.x.toFixed(2)},${type3Mark.y.toFixed(2)}`,
+);
+assert(
+  Math.hypot(type3Mark.x - 70.148, type3Mark.y - 78.562) > 0.5,
+  "type 3@52 does not sit on the neighboring can",
+);
+
+// Same sheet with the genuine fixture bar extracted: marker must bind the bar
+// at (69.825,77.442), not the printed tag or the neighboring can.
+const type3WithBar = buildAiMarks({
+  trade: "electrical",
+  symbols: electrical.symbols,
+  drawingSymbols: [
+    { abbr: "3", type: "3", label: "Type 3 lighting fixture", takeoffCategory: "Lighting", category: "From drawing" },
+  ],
+  pages: [{
+    page: 52,
+    kind: "drawing",
+    sheetId: "E210",
+    title: "LIGHTING FLOOR PLAN",
+    planType: "lighting",
+    tokens: [
+      { text: "LIGHTING FLOOR PLAN", x: 80, y: 88 },
+      { text: "E210", x: 92, y: 94 },
+      { text: "3", x: 69.549, y: 77.862 },
+      { text: "P1-41", x: 70.024, y: 76.867 },
+    ],
+    paths: [
+      { kind: "path", cx: 69.547, cy: 78.144, w: 0.152, h: 0.196, outline: { kind: "path", source: "vector", w: 0.152, h: 0.196, points: [] } },
+      { kind: "rect", cx: 69.825, cy: 77.442, w: 0.201, h: 0.548, outline: { kind: "rect", source: "vector", w: 0.201, h: 0.548, points: [] } },
+      { kind: "circle", cx: 70.148, cy: 78.562, w: 0.726, h: 0.959, r: 0.48, outline: { kind: "circle", source: "vector", w: 0.726, h: 0.959, r: 0.48, points: [] } },
+      { kind: "rect", cx: 70.337, cy: 77.168, w: 0.628, h: 0.503, outline: { kind: "rect", source: "vector", w: 0.628, h: 0.503, points: [] } },
+    ],
+  }],
+});
+const type3BarMark = type3WithBar.marks.find((mark) => mark.type === "count" && String(mark.typeCode) === "3" && mark.sheet === 52);
+assert(type3BarMark, "type 3 with fixture bar is detected despite nearby panel callout");
+assert(
+  Math.hypot(type3BarMark.x - 69.825, type3BarMark.y - 77.442) < 0.15,
+  `type 3@52 binds the fixture bar, got ${type3BarMark.x.toFixed(3)},${type3BarMark.y.toFixed(3)}`,
+);
+assert(type3BarMark.outlineSource === "vector", "type 3@52 uses extracted bar geometry");
+assert(
+  Math.hypot(type3BarMark.x - 69.549, type3BarMark.y - 77.862) > 0.35,
+  "type 3@52 does not stay on the printed tag when the bar is present",
+);
+
+// Soccer E1.01: side-tagged 1E must bind the fixture body, not the printed tag.
+const soccerSideTag = buildAiMarks({
+  trade: "electrical",
+  symbols: electrical.symbols,
+  drawingSymbols: [
+    { abbr: "1E", type: "1E", label: "Type 1E 2x4 LED surface troffer with emergency battery", takeoffCategory: "Lighting", category: "From drawing" },
+  ],
+  pages: [{
+    page: 50,
+    kind: "drawing",
+    sheetId: "E1.01",
+    title: "LIGHTING FLOOR PLAN - MAIN LEVEL",
+    planType: "lighting",
+    tokens: [
+      { text: "LIGHTING FLOOR PLAN - MAIN LEVEL", x: 80, y: 88 },
+      { text: "E1.01", x: 92, y: 94 },
+      { text: "1E", x: 25.464, y: 18.095 },
+    ],
+    paths: [
+      { kind: "rect", cx: 26.369, cy: 18.431, w: 0.627, h: 0.972, outline: { kind: "rect", source: "vector", w: 0.627, h: 0.972, points: [] } },
+    ],
+  }],
+});
+const soccer1eMark = soccerSideTag.marks.find((mark) => mark.type === "count" && String(mark.typeCode).toUpperCase() === "1E");
+assert(soccer1eMark, "Soccer side-tagged 1E is detected");
+assert(
+  Math.hypot(soccer1eMark.x - 26.369, soccer1eMark.y - 18.431) < 0.2,
+  `Soccer 1E marker sits on the fixture body, got ${soccer1eMark.x.toFixed(2)},${soccer1eMark.y.toFixed(2)}`,
+);
+assert(soccer1eMark.outlineSource === "vector", "Soccer 1E uses extracted vector geometry");
+
+// E110 SP@50: cover preference + paintable outline (or text fallback) — never
+// outlineSource=vector with a null paint perimeter.
+const spPower = buildAiMarks({
+  trade: "electrical",
+  symbols: electrical.symbols,
+  drawingSymbols: [
+    { abbr: "SP", type: "SP", label: "Special purpose receptacle", takeoffCategory: "Receptacles", category: "From drawing" },
+  ],
+  pages: [{
+    page: 50,
+    kind: "drawing",
+    sheetId: "E110",
+    title: "POWER & SYSTEMS PLAN",
+    planType: "power",
+    tokens: [
+      { text: "POWER & SYSTEMS PLAN", x: 80, y: 88 },
+      { text: "E110", x: 92, y: 94 },
+      { text: "SP", x: 33.78, y: 78.852 },
+    ],
+    paths: [
+      { kind: "path", cx: 33.963, cy: 79.1, w: 0.443, h: 0.622, outline: { kind: "path", source: "vector", w: 0.443, h: 0.622, points: [] } },
+      { kind: "path", cx: 33.85, cy: 78.95, w: 0.391, h: 0.503, outline: { kind: "path", source: "vector", w: 0.391, h: 0.503, points: [] } },
+      { kind: "rect", cx: 33.78, cy: 78.85, w: 0.09, h: 0.126, outline: { kind: "rect", source: "vector", w: 0.09, h: 0.126, points: [] } },
+    ],
+  }],
+});
+const spMark = spPower.marks.find((mark) => mark.type === "count" && /^(SP|SPR)$/i.test(String(mark.typeCode || "")) && mark.sheet === 50);
+assert(spMark, "SP on E110 is detected");
+assert(
+  spMark.outlineSource === "text"
+  || (spMark.outlineSource === "vector" && spMark.outline && Number(spMark.outline.w) >= 0.14),
+  `SP@50 must be text-located or have a paintable vector outline, got outlineSource=${spMark.outlineSource} w=${spMark.outline?.w}`,
+);
+assert(!(spMark.outlineSource === "vector" && spMark.outline?.kind === "path" && !(spMark.outline.points || []).length), "SP@50 must not claim an empty path vector outline");
+
 if (!process.exitCode) console.log("trade and AI takeoff checks passed");

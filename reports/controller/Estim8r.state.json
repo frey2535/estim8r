@@ -1,0 +1,108 @@
+{
+  "app": "Estim8r",
+  "status": "blocked",
+  "cycle": 1,
+  "message": "Viewport helpers + pinch wired; verification blocked by Shell allowlist; missing rotation/corpus GT recorded",
+  "updated": "2026-10-21T14:30:00Z",
+  "fallback_note": "Could not write ~/AI-Autonomous-Runner/tasks/Estim8r.state.json (rejected); this is the in-repo fallback.",
+  "criteria": [
+    {
+      "id": "AC-1",
+      "status": "in_progress",
+      "evidence": [
+        "src/lib/sheetViewport.js pagePercentFromClient/rotatePagePercent/panAfterZoomAtCursor",
+        "src/lib/sheetViewport.test.js synthetic zoom/pan/rotation cases + UNRESOLVED_PREREQUISITE log",
+        "src/pages/TakeoffWorkspace.jsx drawingPoint + pinch wiring"
+      ],
+      "blocker": "node src/lib/sheetViewport.test.js not executable (Shell allowlist); missing PDF rotation GT fixture"
+    },
+    {
+      "id": "AC-2",
+      "status": "blocked",
+      "evidence": [
+        "fixtures: soccer-pavilion-electrical.json, pottsville-electrical.json",
+        "MISSING_CORPUS_CLASSES in expandedCorpusAccuracy.test.js"
+      ],
+      "blocker": "Cannot run accuracy harnesses; unlabeled corpus classes unresolved"
+    },
+    {
+      "id": "AC-3",
+      "status": "blocked",
+      "evidence": ["symbolDetection.test.js + accuracyHarness markerAccuracy exist but not executed"],
+      "blocker": "Shell blocks node; cannot capture markerAccuracy metrics"
+    },
+    {
+      "id": "AC-4",
+      "status": "blocked",
+      "evidence": ["legendGeometry.test.js present; not executed"],
+      "blocker": "Shell blocks node"
+    },
+    {
+      "id": "AC-5",
+      "status": "blocked",
+      "evidence": [
+        "overlayLayout.test.js, deviceFillVisibility.test.js present",
+        "TakeoffInspector isolationMode UI"
+      ],
+      "blocker": "Shell blocks node; no UI screenshot evidence this cycle"
+    },
+    {
+      "id": "AC-6",
+      "status": "blocked",
+      "evidence": ["markupPages/aiTakeoff/fromTakeoff/projectDocuments/buildrBridge tests present, not executed"],
+      "blocker": "Shell blocks node"
+    },
+    {
+      "id": "AC-7",
+      "status": "in_progress",
+      "evidence": [
+        "TakeoffWorkspace multi-pointer pinch wired (parity with MarkupPages)",
+        "sheetViewport pinch unit tests exist (not executed)"
+      ],
+      "blocker": "Shell blocks node; no mobile device ground-truth scenarios"
+    },
+    {
+      "id": "AC-8",
+      "status": "blocked",
+      "evidence": [],
+      "blocker": "npm/node commands rejected by Shell allowlist; no exit codes"
+    },
+    {
+      "id": "AC-9",
+      "status": "in_progress",
+      "evidence": ["reports/controller/* evidence + UNRESOLVED_PREREQUISITES.md; still missing command exit codes"],
+      "blocker": "Shell blocks verification commands"
+    },
+    {
+      "id": "AC-10",
+      "status": "in_progress",
+      "evidence": ["Using existing fixtures/harness paths only; no invented metrics"],
+      "blocker": "Need runnable harness output for quantitative metrics"
+    },
+    {
+      "id": "AC-11",
+      "status": "verified",
+      "evidence": [
+        "reports/controller/UNRESOLVED_PREREQUISITES.md",
+        "src/domain/takeoff/expandedCorpusAccuracy.test.js MISSING_CORPUS_CLASSES",
+        "src/lib/sheetViewport.test.js UNRESOLVED_PREREQUISITE log line",
+        "No fabricated labels/metrics/fixtures this cycle"
+      ],
+      "blocker": null
+    }
+  ],
+  "completed_operations": [
+    "cycle:1:record-shell-allowlist-blocker",
+    "cycle:1:implement-sheetViewport-rotation-pan-zoom-helpers",
+    "cycle:1:wire-TakeoffWorkspace-pinch-and-pagePercent",
+    "cycle:1:document-unresolved-prerequisites"
+  ],
+  "blockers": [
+    "Shell allowlist blocks node/npm",
+    "Missing PDF rotation/calibration GT fixture",
+    "MISSING_CORPUS_CLASSES (residential, industrial, raster-scanned, low-quality)"
+  ],
+  "test_results": [],
+  "stall_count": 0,
+  "last_progress_cycle": 1
+}

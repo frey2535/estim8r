@@ -137,7 +137,9 @@ export function subscribeDrawingUpload(listener) {
       error: pendingError,
     });
   }
-  return () => listeners.delete(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }
 
 export function listDrawingFiles(fileList) {
@@ -185,8 +187,9 @@ export async function handleNativeDrawingChange(event) {
 }
 
 export function openSharedDrawingPicker() {
+  /** @type {HTMLInputElement | null} */
   const input = typeof document !== "undefined"
-    ? document.getElementById(DRAWING_INPUT_ID)
+    ? /** @type {HTMLInputElement | null} */ (document.getElementById(DRAWING_INPUT_ID))
     : null;
   if (!input) {
     const error = "Estim8r could not open the file picker.";

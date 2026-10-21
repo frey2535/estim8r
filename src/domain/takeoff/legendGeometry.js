@@ -1,6 +1,6 @@
 
 import { pagePlanType } from "./drawing-docs.js";
-import { isJunkGeometry } from "./vectorSymbols.js";
+import { containsPoint, isJunkGeometry, tagAdjacentToSymbolBody } from "./vectorSymbols.js";
 import { isPlanInterior, isPlotStampToken, normalizeTypeMark } from "./symbolDetection.js";
 
 const CATEGORY_ALLOW = new Set(["Lighting","Receptacles","Switches","Equipment","Panels / MCC","Fire Alarm","Low Voltage","HVAC"]);
@@ -543,7 +543,9 @@ export function looksLikeReceptacleGlyph(candidate) {
   const long = Math.max(w, h);
   const short = Math.min(w, h);
   const area = w * h;
-  if (long < 0.10 || long > 0.40 || short < 0.08 || short > 0.32) return false;
+  // Floor matches isUsablePaintOutline (0.14): letter-stroke scraps (~0.09×0.13)
+  // under WP tags must not win as "vector" bodies that deviceOutline then rejects.
+  if (long < 0.14 || long > 0.40 || short < 0.08 || short > 0.32) return false;
   if (area < 0.010 || area > 0.11) return false;
   const aspect = long / (short || 1e-9);
   if (aspect > 2.75) return false;
@@ -634,22 +636,52 @@ export function looksLikeWpCoverGlyph(candidate) {
   return long >= 0.36 && long <= 0.72 && short >= 0.32 && aspect <= 1.45;
 }
 
+/**
+ * Vector outline that deviceOutline can paint. Empty path outlines (AABB only)
+ * are promoted to rect so WP/SP cover plates are not claimed as vector then
+ * rejected at paint time.
+ */
+export function paintableGlyphOutline(path) {
+  if (!path) return null;
+  const points = path.points || path.outline?.points || [];
+  const w = Number(path.w ?? path.outline?.w) || 0;
+  const h = Number(path.h ?? path.outline?.h) || 0;
+  let kind = path.outline?.kind || path.kind || "rect";
+  if (kind === "path" && points.length < 3) kind = "rect";
+  if (kind === "composite" && !(path.outline?.parts || path.parts || []).length) kind = "rect";
+  return {
+    kind,
+    source: "vector",
+    w,
+    h,
+    r: path.r ?? path.outline?.r,
+    points,
+    parts: path.outline?.parts || path.parts,
+  };
+}
+
 export function findNearbyReceptacleGlyph(point, paths = [], options = {}) {
   const x = Number(point?.x ?? point?.cx) || 0;
   const y = Number(point?.y ?? point?.cy) || 0;
   const radius = Number(options.radius) || 1.15;
   const hexClearance = Number(options.hexClearance) || 0.22;
+  // WP and special-purpose (SP/SPR) share weatherproof cover plates on E110.
   const allowWpCover = Boolean(options.allowWpCover);
+  const rank = (path) => {
+    // Real duplex/stroke boxes first; WP/SP cover plates next; loose
+    // receptacle matches last so cover wins over unpaintable scraps.
+    if (looksLikeUnlabeledReceptacleGlyph(path)) return 0;
+    if (allowWpCover && looksLikeWpCoverGlyph(path)) return 1;
+    if (looksLikeReceptacleGlyph(path)) return 2;
+    return 3;
+  };
   return (paths || [])
     .filter((path) => looksLikeReceptacleGlyph(path) || (allowWpCover && looksLikeWpCoverGlyph(path)))
     .filter((path) => !(paths || []).some((hex) => looksLikeHexNoteGlyph(hex)
       && Math.hypot((Number(hex.cx) || 0) - (Number(path.cx) || 0), (Number(hex.cy) || 0) - (Number(path.cy) || 0)) < hexClearance))
     .map((path) => ({ path, dist: Math.hypot((Number(path.cx) || 0) - x, (Number(path.cy) || 0) - y) }))
     .filter((item) => item.dist <= radius)
-    .sort((a, b) => {
-      const receptacleFirst = Number(looksLikeReceptacleGlyph(b.path)) - Number(looksLikeReceptacleGlyph(a.path));
-      return receptacleFirst || a.dist - b.dist;
-    })[0]?.path || null;
+    .sort((a, b) => (rank(a.path) - rank(b.path)) || a.dist - b.dist)[0]?.path || null;
 }
 
 export function looksLikeOccupancyGlyph(candidate) {
@@ -749,7 +781,7 @@ function classifyNearbyPowerLabel(point, tokens = []) {
 }
 
 function glyphOutline(path) {
-  return path?.outline || {
+  return paintableGlyphOutline(path) || {
     kind: path?.kind || "rect",
     source: "vector",
     w: path?.w,
@@ -1011,6 +1043,9 @@ export function snapToEntryPrototype(token, page, entry, options = {}) {
   }
   if (!best || bestScore < 0.86) return null;
   if (Math.hypot(best.cx - token.x, best.cy - token.y) > 1.15) return null;
+  // Prototype snap must not yank a tag onto a neighboring fixture body
+  // (Pottsville E210 type 3 @ ~0.92 from a foreign rect).
+  if (!containsPoint(best, token) && !tagAdjacentToSymbolBody(token, best)) return null;
   return best;
 }
 

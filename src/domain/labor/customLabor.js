@@ -18,6 +18,10 @@ export function normalizeCustomLabor(row) {
   };
 }
 
+/**
+ * @param {any[]} rows
+ * @param {{ laborItemId?: any, itemName?: any, unit?: any }} [options]
+ */
 export function findCustomLabor(rows, { laborItemId, itemName, unit } = {}) {
   const list = (rows || []).map(normalizeCustomLabor).filter((row) => row.active);
   if (laborItemId) {

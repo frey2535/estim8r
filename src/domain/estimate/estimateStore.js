@@ -59,6 +59,9 @@ export function startNewEstimate() {
 }
 
 /** Open a saved estimate, or clear the last one so New Estimate is a blank template. */
+/**
+ * @param {{ fileName?: any, fileSize?: any }} [options]
+ */
 export function openEstimateSession({ fileName, fileSize } = {}) {
   if (fileName) {
     const stored = activateEstimate(fileName, fileSize) || readEstimate(fileName, fileSize);

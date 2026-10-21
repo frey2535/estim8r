@@ -4,6 +4,7 @@ import { assignLaborHours } from "../labor/libraryDocument.js";
 import { compositeWage, defaultCrew, journeymanWage } from "../labor/employeeClasses.js";
 import { estimateLineHours, estimateLineLaborCost } from "./manualLineLabor.js";
 
+/** @type {{ laborRate: number, contingency: number, materialMarkup: number, overhead: number, profit: number, bondInsurance: number }} */
 export const DEFAULT_TRUE_BID_SETTINGS = Object.freeze({
   laborRate: 95,
   contingency: 3,
@@ -257,6 +258,9 @@ function addIfMissing(lines, seenText, args) {
   lines.push(makeEstimateLine(args));
 }
 
+/**
+ * @param {{ drawingDocs?: any, rollup?: any, runs?: any[], marks?: any[] }} [options]
+ */
 export function analyzeElectricalTakeoff({ drawingDocs, rollup, runs = [], marks = [] } = {}) {
   const text = wholeText(drawingDocs);
   const panels = parsePanels(text);
@@ -331,6 +335,9 @@ export function analyzeElectricalTakeoff({ drawingDocs, rollup, runs = [], marks
   };
 }
 
+/**
+ * @param {{ analysis?: any, rollup?: any, runs?: any[], laborRate?: number }} [options]
+ */
 export function buildTrueElectricalEstimateLines({
   analysis,
   rollup,
@@ -461,6 +468,19 @@ export function calculateBidByScope(lines, settings = DEFAULT_TRUE_BID_SETTINGS)
   );
 }
 
+/**
+ * @param {any} existing
+ * @param {{
+ *   fileName?: any,
+ *   fileSize?: any,
+ *   drawingDocs?: any,
+ *   rollup?: any,
+ *   runs?: any[],
+ *   marks?: any[],
+ *   pageKinds?: Record<string, any>,
+ *   settings?: typeof DEFAULT_TRUE_BID_SETTINGS,
+ * }} [options]
+ */
 export function buildTrueElectricalEstimateDraft(existing, {
   fileName,
   fileSize,

@@ -250,7 +250,7 @@ const pottsvilleLabeled = runCase("pottsville-e210 labeled 1-4/OS", {
   ...pottsville,
   pages: pottsville.pages.filter((page) => page.page === 48 || page.page === 52),
   groundTruth: e210LabeledTruth(e210),
-}, { filterTypes: true, requirePlacement: false });
+}, { filterTypes: true });
 
 assert(soccerFull.truth === 129, "Soccer independent GT stays 129");
 assert(soccerFull.found === 129 && soccerFull.falsePositives === 0, `Phase 2 Soccer baseline is 129/129 FP 0, got ${soccerFull.found}/${soccerFull.truth} FP ${soccerFull.falsePositives}`);

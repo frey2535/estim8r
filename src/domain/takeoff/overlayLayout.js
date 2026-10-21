@@ -124,6 +124,15 @@ function tryPlace(anchor, text, occupied, fontSize = OVERLAY_FONT_SIZE) {
   return null;
 }
 
+/**
+ * @param {{
+ *   conduits?: any[],
+ *   devices?: any[],
+ *   selectedId?: any,
+ *   lengthTextFor?: (mark: any) => string,
+ *   fontSize?: number,
+ * }} [options]
+ */
 export function layoutOverlayCallouts({
   conduits = [],
   devices: _devices = [],

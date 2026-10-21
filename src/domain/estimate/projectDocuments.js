@@ -18,6 +18,10 @@ export function matchProjectByName(projects, projectName) {
   return (projects || []).find((project) => projectFolderKey(project.name) === key) || null;
 }
 
+/**
+ * @param {any[]} projects
+ * @param {{ projectId?: any, projectName?: any, projectAddress?: any }} [options]
+ */
 export function matchCompanyProject(projects, { projectId, projectName, projectAddress } = {}) {
   const rows = projects || [];
   const id = String(projectId || "").trim();
@@ -35,6 +39,14 @@ export function matchCompanyProject(projects, { projectId, projectName, projectA
   return matches.length === 1 ? matches[0] : null;
 }
 
+/**
+ * @param {{
+ *   canUseBuildr?: any,
+ *   matchingProject?: any,
+ *   existingProjectId?: any,
+ *   accountError?: any,
+ * }} [options]
+ */
 export function decideSaveDestination({
   canUseBuildr,
   matchingProject,
@@ -75,6 +87,10 @@ export function parseEstim8rEstimateId(notes) {
   return match?.[1] || null;
 }
 
+/**
+ * @param {any[]} invoices
+ * @param {{ invoiceId?: any, estimateId?: any, invoiceNumber?: any }} [options]
+ */
 export function findInvoiceForEstim8r(invoices, { invoiceId, estimateId, invoiceNumber } = {}) {
   const rows = invoices || [];
   if (invoiceId) {
@@ -91,6 +107,10 @@ export function findInvoiceForEstim8r(invoices, { invoiceId, estimateId, invoice
   return null;
 }
 
+/**
+ * @param {any[]} docs
+ * @param {{ docType?: any, estimateId?: any, title?: any }} [options]
+ */
 export function findDocumentForEstim8r(docs, { docType, estimateId, title } = {}) {
   const rows = docs || [];
   if (estimateId) {
@@ -137,6 +157,17 @@ export function buildrSyncFromResult(result, estimateId) {
   };
 }
 
+/**
+ * @param {{
+ *   fileName?: any,
+ *   pageCount?: any,
+ *   marks?: any,
+ *   calibration?: any,
+ *   titleBlock?: any,
+ *   reconciliation?: any,
+ *   skippedSheets?: any,
+ * }} args
+ */
 export function buildMarkupPages({ fileName, pageCount, marks, calibration, titleBlock, reconciliation, skippedSheets }) {
   const count = Math.max(1, Number(pageCount) || 1);
   const pages = [];
@@ -342,16 +373,185 @@ export function standaloneEstimateFileName(projectName) {
   return key ? `${STANDALONE_ESTIMATE_PREFIX}${key}` : "";
 }
 
-/** Storage identity for an estimate: keep a real drawing name, otherwise key by project. */
+/**
+ * Storage identity for an estimate: keep a real drawing name, otherwise key by project.
+ * @param {{ fileName?: any, projectName?: any }} [options]
+ */
 export function estimateFileNameForSave({ fileName, projectName } = {}) {
   if (isDrawingFileName(fileName)) return String(fileName).trim();
   return standaloneEstimateFileName(projectName);
 }
 
+/**
+ * @param {{ projectName?: any }} [options]
+ */
 export function canSaveProjectDocuments({ projectName } = {}) {
   return Boolean(String(projectName || "").trim());
 }
 
+/**
+ * @param {{ projectName?: any }} [options]
+ */
 export function saveRequiresProjectName({ projectName } = {}) {
   return canSaveProjectDocuments({ projectName }) ? "" : "Enter a project name to save this estimate.";
+}
+
+export const ESTIM8R_ESTIMATE_DOC_TYPE = "estim8r_estimate";
+
+/**
+ * @param {any[]} [documents]
+ */
+export function estim8rEstimateDocumentUrl(documents = []) {
+  const doc = (documents || []).find((item) => (
+    String(item?.doc_type || item?.docType || "") === ESTIM8R_ESTIMATE_DOC_TYPE
+  ));
+  return doc?.file_url || doc?.fileUrl || null;
+}
+
+/**
+ * Map a Buildr company estimate row into the Dashboard folder shape.
+ * @param {any} row
+ */
+export function folderFromBuildrEstimate(row) {
+  if (!row) return null;
+  const projectName = String(row.project_name || row.projectName || "Estimate").trim() || "Estimate";
+  const documents = Array.isArray(row.documents) ? row.documents : [];
+  const estimateId = row.estim8r_estimate_id || row.estim8rEstimateId || null;
+  const projectId = row.project_id || row.projectId || null;
+  const fileName = estimateFileNameForSave({ projectName });
+  return {
+    id: `buildr:${row.id || estimateId || projectId || projectFolderKey(projectName)}`,
+    origin: "buildr",
+    projectName,
+    projectAddress: String(row.project_address || row.projectAddress || "").trim(),
+    fileName,
+    fileSize: 0,
+    savedTo: "buildr",
+    buildrProjectId: projectId,
+    buildrInvoiceId: row.invoice_id || row.invoiceId || null,
+    estim8rEstimateId: estimateId,
+    estimateName: `${projectName}-estimate.json`,
+    drawingName: "",
+    markupName: `${projectName}-markup-pages.json`,
+    documents,
+    estimateFileUrl: estim8rEstimateDocumentUrl(documents),
+    total: Number(row.total) || 0,
+    status: String(row.status || "draft"),
+    hasDrawings: Boolean(row.has_drawings ?? row.hasDrawings),
+    createdAt: row.issue_date || row.issueDate || null,
+    updatedAt: row.issue_date || row.issueDate || null,
+  };
+}
+
+function localEstimateKeys(folder) {
+  const keys = new Set();
+  const projectId = String(folder?.buildrProjectId || folder?.buildrSync?.projectId || "").trim();
+  const estimateId = String(
+    folder?.estim8rEstimateId
+    || folder?.buildrSync?.estimateId
+    || folder?.id
+    || "",
+  ).trim();
+  const nameKey = projectFolderKey(folder?.projectName);
+  if (projectId) keys.add(`project:${projectId}`);
+  if (estimateId && !String(estimateId).startsWith("buildr:")) keys.add(`estimate:${estimateId}`);
+  if (nameKey) keys.add(`name:${nameKey}`);
+  return keys;
+}
+
+function buildrEstimateKeys(row) {
+  const keys = new Set();
+  const projectId = String(row?.project_id || row?.projectId || "").trim();
+  const estimateId = String(row?.estim8r_estimate_id || row?.estim8rEstimateId || "").trim();
+  const nameKey = projectFolderKey(row?.project_name || row?.projectName);
+  if (projectId) keys.add(`project:${projectId}`);
+  if (estimateId) keys.add(`estimate:${estimateId}`);
+  if (nameKey) keys.add(`name:${nameKey}`);
+  return keys;
+}
+
+function setsIntersect(a, b) {
+  for (const key of a) {
+    if (b.has(key)) return true;
+  }
+  return false;
+}
+
+/**
+ * Merge browser-local folders with Buildr company estimates.
+ * Prefer a local draft when it matches a company row; otherwise show the Buildr row.
+ * @param {any[]} [localFolders]
+ * @param {any[]} [buildrEstimates]
+ */
+export function mergeEstimateFolderRows(localFolders = [], buildrEstimates = []) {
+  const locals = (localFolders || []).map((folder) => ({
+    ...folder,
+    origin: folder?.origin === "buildr" ? "buildr" : "local",
+  }));
+  const claimed = new Set();
+  const merged = [];
+
+  for (const folder of locals) {
+    const keys = localEstimateKeys(folder);
+    for (const key of keys) claimed.add(key);
+    merged.push(folder);
+  }
+
+  for (const row of buildrEstimates || []) {
+    const keys = buildrEstimateKeys(row);
+    if (setsIntersect(keys, claimed)) continue;
+    const remote = folderFromBuildrEstimate(row);
+    if (!remote) continue;
+    for (const key of keys) claimed.add(key);
+    merged.push(remote);
+  }
+
+  return merged.sort((a, b) => String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")));
+}
+
+/**
+ * Normalize a downloaded estim8r_estimate JSON into a local draft.
+ * Preserves labor lines, crew, factors, and totals so reviewers can open
+ * company estimates in Estim8r as well as Buildr.
+ * @param {any} json
+ * @param {any} [folder]
+ */
+export function draftFromBuildrEstimateJson(json, folder = null) {
+  const source = json && typeof json === "object" ? json : {};
+  const projectName = String(
+    source.header?.projectName
+    || folder?.projectName
+    || "Estimate",
+  ).trim() || "Estimate";
+  const fileName = isDrawingFileName(source.fileName)
+    ? String(source.fileName).trim()
+    : (folder?.fileName || estimateFileNameForSave({ projectName }));
+  const fileSize = Number(source.fileSize) || Number(folder?.fileSize) || 0;
+  const estimateId = source.id || folder?.estim8rEstimateId || makeEstimateId();
+  const priorSync = source.buildrSync && typeof source.buildrSync === "object" ? source.buildrSync : {};
+  return {
+    ...source,
+    id: estimateId,
+    fileName,
+    fileSize,
+    header: {
+      ...(source.header || {}),
+      projectName,
+      projectAddress: String(
+        source.header?.projectAddress
+        || folder?.projectAddress
+        || "",
+      ).trim(),
+    },
+    lines: Array.isArray(source.lines) ? source.lines : [],
+    crew: Array.isArray(source.crew) ? source.crew : source.crew || undefined,
+    factors: Array.isArray(source.factors) ? source.factors : source.factors || undefined,
+    buildrSync: {
+      ...priorSync,
+      estimateId: priorSync.estimateId || estimateId,
+      projectId: priorSync.projectId || folder?.buildrProjectId || null,
+      invoiceId: priorSync.invoiceId || folder?.buildrInvoiceId || null,
+      documents: priorSync.documents || {},
+    },
+  };
 }

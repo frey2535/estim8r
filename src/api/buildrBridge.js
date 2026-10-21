@@ -168,6 +168,11 @@ export async function verifyBuildrFamilyAppSso(token, audience = "estim8r") {
   return verified;
 }
 
+/**
+ * @param {string} email
+ * @param {string} [companyId]
+ * @param {{ ssoToken?: string }} [options]
+ */
 export async function fetchBuildrAccountStatus(email, companyId, { ssoToken } = {}) {
   const api = buildrApiUrl();
   if (!api || !email) {
@@ -188,7 +193,7 @@ export async function fetchBuildrAccountStatus(email, companyId, { ssoToken } = 
       }),
     });
     const data = await readJson(response);
-    persistReturnedBuildrToken(email, data);
+    const token = persistReturnedBuildrToken(email, data);
     if (!response.ok) {
       return { configured: true, hasAccount: false, canUseBuildr: false, projects: [], error: data.message || data.error };
     }
@@ -199,6 +204,7 @@ export async function fetchBuildrAccountStatus(email, companyId, { ssoToken } = 
       projects: Array.isArray(data.projects) ? data.projects : [],
       companyId: data.companyId || null,
       companyName: data.companyName || null,
+      token: token || null,
     };
   } catch (error) {
     return {
@@ -211,6 +217,141 @@ export async function fetchBuildrAccountStatus(email, companyId, { ssoToken } = 
   }
 }
 
+/**
+ * @param {string} api
+ * @param {{ companyId?: string, projectId?: string }} [query]
+ */
+export function buildBuildrEstimatesUrl(api, { companyId, projectId } = {}) {
+  const base = trimUrl(api);
+  if (!base) return "";
+  const url = new URL(`${base}/estim8r/estimates`);
+  const company = String(companyId || "").trim();
+  const project = String(projectId || "").trim();
+  if (company) url.searchParams.set("companyId", company);
+  if (project) url.searchParams.set("projectId", project);
+  return url.toString();
+}
+
+/**
+ * @param {any} row
+ */
+export function normalizeBuildrEstimateRow(row) {
+  if (!row || typeof row !== "object") return null;
+  const documents = Array.isArray(row.documents)
+    ? row.documents.map((doc) => ({
+      id: doc?.id || null,
+      doc_type: String(doc?.doc_type || doc?.docType || ""),
+      title: String(doc?.title || ""),
+      file_url: doc?.file_url || doc?.fileUrl || null,
+    }))
+    : [];
+  return {
+    id: String(row.id || row.invoice_id || "").trim() || null,
+    invoice_id: row.invoice_id || row.invoiceId || null,
+    source: String(row.source || "buildr"),
+    estim8r_estimate_id: row.estim8r_estimate_id || row.estim8rEstimateId || null,
+    project_id: row.project_id || row.projectId || null,
+    project_name: String(row.project_name || row.projectName || "Estimate").trim() || "Estimate",
+    project_address: String(row.project_address || row.projectAddress || "").trim(),
+    invoice_number: row.invoice_number || row.invoiceNumber || null,
+    client_name: row.client_name || row.clientName || null,
+    issue_date: row.issue_date || row.issueDate || null,
+    total: Number(row.total) || 0,
+    status: String(row.status || "draft"),
+    has_drawings: Boolean(row.has_drawings ?? row.hasDrawings),
+    documents,
+  };
+}
+
+/**
+ * List company estimates from Buildr for an Access Control–granted session.
+ * Requires a stored Buildr JWT — never lists projects from email alone.
+ * @param {{
+ *   email?: string,
+ *   companyId?: string,
+ *   projectId?: string,
+ *   apiUrl?: string,
+ *   token?: string,
+ *   fetchImpl?: typeof fetch,
+ * }} [options]
+ */
+export async function fetchBuildrEstimates({
+  email,
+  companyId,
+  projectId,
+  apiUrl,
+  token,
+  fetchImpl = fetch,
+} = {}) {
+  const api = trimUrl(apiUrl) || buildrApiUrl();
+  if (!api) {
+    return { ok: false, estimates: [], error: "buildr_not_configured" };
+  }
+  if (!email) {
+    return { ok: false, estimates: [], error: "email_required" };
+  }
+  const session = String(token || readBuildrSessionToken(email) || "").trim();
+  if (!session) {
+    return { ok: false, estimates: [], error: "auth_required" };
+  }
+  try {
+    const response = await fetchImpl(buildBuildrEstimatesUrl(api, { companyId, projectId }), {
+      method: "GET",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+        ...buildrAuthHeaders(session),
+      },
+    });
+    const data = await readJson(response);
+    persistReturnedBuildrToken(email, data);
+    if (!response.ok) {
+      return {
+        ok: false,
+        estimates: [],
+        companyId: data.companyId || companyId || null,
+        error: data.message || data.error || "Could not load company estimates.",
+      };
+    }
+    const estimates = (Array.isArray(data.estimates) ? data.estimates : [])
+      .map(normalizeBuildrEstimateRow)
+      .filter(Boolean);
+    return {
+      ok: Boolean(data.ok ?? true),
+      companyId: data.companyId || companyId || null,
+      estimates,
+      error: data.ok === false ? (data.message || data.error || "no_buildr_account") : null,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      estimates: [],
+      companyId: companyId || null,
+      error: error?.message || "Buildr is unavailable.",
+    };
+  }
+}
+
+/**
+ * @param {{
+ *   email?: any,
+ *   companyId?: any,
+ *   projectName?: any,
+ *   projectAddress?: any,
+ *   createProject?: any,
+ *   estimate?: any,
+ *   drawingFile?: any,
+ *   markupPages?: any,
+ *   estim8rEstimateId?: any,
+ *   buildrProjectId?: any,
+ *   buildrInvoiceId?: any,
+ *   customerCompany?: any,
+ *   customerName?: any,
+ *   customerEmail?: any,
+ *   customerPhone?: any,
+ *   ssoToken?: any,
+ * }} args
+ */
 export async function saveBuildrProjectDocuments({
   email,
   companyId,

@@ -113,6 +113,16 @@ export function readBuildrHandoffParams(search = "", hash = "") {
   };
 }
 
+/**
+ * @param {{
+ *   isAuthenticated?: boolean,
+ *   hasProductAccess?: boolean,
+ *   hasPlatformAccess?: boolean,
+ *   user?: any,
+ *   store?: Storage,
+ *   now?: number,
+ * }} [options]
+ */
 export function canEnterCompanyEstim8r({
   isAuthenticated,
   hasProductAccess,

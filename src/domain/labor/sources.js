@@ -49,6 +49,9 @@ export function isPublishedReferenceType(sourceType) {
   return PUBLISHED_REFERENCE_TYPES.has(sourceType);
 }
 
+/**
+ * @param {{ sourceType?: any, verificationStatus?: any }} [options]
+ */
 export function sourceBadges({ sourceType, verificationStatus } = {}) {
   const verified = verificationStatus === "verified";
   if (isPublishedReferenceType(sourceType)) {
@@ -66,6 +69,9 @@ export function sourceBadges({ sourceType, verificationStatus } = {}) {
   return ["UNVERIFIED"];
 }
 
+/**
+ * @param {{ verificationStatus?: any, productionAllowed?: any, sourceType?: any }} [options]
+ */
 export function isProductionSafeLabor({ verificationStatus, productionAllowed, sourceType } = {}) {
   if (isExperimentalSource(sourceType)) return false;
   return verificationStatus === "verified" && productionAllowed === true && PRODUCTION_SOURCES.has(sourceType);

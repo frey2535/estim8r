@@ -42,6 +42,10 @@ import CompanyLogo from "@/components/estimate/CompanyLogo";
 import LogoStretchControls from "@/components/estimate/LogoStretchControls";
 import { readCompanyBranding, writeCompanyBranding } from "@/domain/estimate/branding";
 
+/**
+ * @param {number} rate
+ * @returns {Record<string, any>}
+ */
 function blankLine(rate) {
   return {
     id: crypto.randomUUID(),
@@ -62,6 +66,10 @@ function blankLine(rate) {
     laborRateEdited: false,
     laborMhEdited: false,
     laborMatchStatus: "",
+    laborSelection: null,
+    laborItemId: "",
+    quantityBasis: "each",
+    materialCostEdited: false,
   };
 }
 
@@ -1102,6 +1110,18 @@ export default function EstimateBuilder() {
   );
 }
 
+/**
+ * @param {{
+ *   label: any,
+ *   value?: any,
+ *   set?: (v: any) => void,
+ *   type?: string,
+ *   children?: any,
+ *   className?: string,
+ *   required?: boolean,
+ *   hint?: string,
+ * }} props
+ */
 function Field({ label, value, set, type = "text", children, className = "", required = false, hint = "" }) {
   return (
     <label className={`min-w-0 ${className}`}>

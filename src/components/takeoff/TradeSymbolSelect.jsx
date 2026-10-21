@@ -1,6 +1,18 @@
 import React from "react";
 import { symbolsOnDrawingForTrade } from "@/domain/takeoff/trades";
 
+/**
+ * @param {{
+ *   trade: any,
+ *   marks?: any[],
+ *   pageKinds?: Record<string, any>,
+ *   category?: any,
+ *   value: any,
+ *   onChange: (item: any) => void,
+ *   className?: string,
+ *   "aria-label"?: string,
+ * }} props
+ */
 export default function TradeSymbolSelect({
   trade,
   marks = [],

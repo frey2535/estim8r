@@ -37,6 +37,11 @@ function hexRgb(hex, fallback = [17, 24, 39]) {
   return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
 }
 
+/**
+ * @param {any} hex
+ * @param {[number, number, number]} fallback
+ * @returns {[number, number, number]}
+ */
 function rgbTuple(hex, fallback) {
   const { r, g, b } = hexRgb(hex, fallback);
   return [r, g, b];
@@ -46,6 +51,12 @@ function isDarkRgb([r, g, b]) {
   return r * 0.299 + g * 0.587 + b * 0.114 < 128;
 }
 
+/**
+ * @param {[number, number, number]} docBg
+ * @param {[number, number, number]} docText
+ * @param {number} [mix]
+ * @returns {[number, number, number]}
+ */
 function softFill(docBg, docText, mix = 0.03) {
   return [
     Math.min(255, Math.round(docBg[0] * (1 - mix) + docText[0] * mix)),
@@ -232,12 +243,16 @@ export function buildEstimatePdf(estimate, brandingInput) {
 
   const headerBg = rgbTuple(design.headerFillColor || branding.headerColor, [17, 24, 39]);
   const darkHeader = isDarkRgb(headerBg);
+  /** @type {[number, number, number]} */
   const headerText = darkHeader ? [255, 255, 255] : [17, 24, 39];
+  /** @type {[number, number, number]} */
   const headerSub = darkHeader ? [209, 213, 219] : [55, 65, 81];
+  /** @type {[number, number, number]} */
   const headerAccent = darkHeader ? [249, 115, 22] : [234, 88, 12];
   const docBg = rgbTuple(branding.pageColor, [255, 255, 255]);
   const docText = rgbTuple(branding.textColor, [17, 24, 39]);
   const border = rgbTuple(design.cardBorderColor || "#e5e7eb", [229, 231, 235]);
+  /** @type {[number, number, number]} */
   const stripe = [249, 250, 251];
   const cardFill = rgbTuple(design.cardFillColor || branding.cardColor || "#f8fafc", [248, 250, 252]);
   const pageBorder = rgbTuple(design.pageBorderColor || "#111827", [17, 24, 39]);

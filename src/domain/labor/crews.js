@@ -18,6 +18,11 @@ export function crewFromNamed(named, wageBook = {}) {
   });
 }
 
+/**
+ * @param {any} name
+ * @param {any} crew
+ * @param {{ id?: string, notes?: string }} [options]
+ */
 export function namedFromCrew(name, crew, { id, notes = "" } = {}) {
   const members = (crew || [])
     .filter((row) => row.selected || Number(row.headcount) > 0)

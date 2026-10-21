@@ -165,6 +165,20 @@ export function mergeEstimate(existing, incomingLines) {
   return applySavedLineOrder(next, (existing?.lines || []).map((line) => line.id));
 }
 
+/**
+ * @param {{
+ *   fileName?: any,
+ *   fileSize?: any,
+ *   drawingDocs?: any,
+ *   rollup?: any,
+ *   pageCount?: any,
+ *   wageBook?: any,
+ *   markup?: any,
+ *   marks?: any[],
+ *   runs?: any[],
+ *   pageKinds?: Record<string, any>,
+ * }} args
+ */
 export function buildEstimateDraft({ fileName, fileSize, drawingDocs, rollup, pageCount, wageBook, markup, marks = [], runs = [], pageKinds = {} }) {
   const crew = defaultCrew(wageBook);
   const rate = compositeWage(crew).rate || journeymanWage(crew);

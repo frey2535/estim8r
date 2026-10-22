@@ -2912,6 +2912,19 @@ export default function TakeoffWorkspace() {
         </section>
 
         <aside className="hidden min-h-0 flex-col border-l border-border bg-card lg:flex">
+          <div className="shrink-0 border-b border-border p-3">
+            <label
+              htmlFor={DRAWING_INPUT_ID}
+              data-testid="right-panel-drawing-upload"
+              className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-md bg-foreground px-3 text-sm font-semibold text-background hover:opacity-90"
+            >
+              <Upload className="h-4 w-4" />
+              {file ? "Replace drawing" : "Upload drawing"}
+            </label>
+            <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+              Opens PDF, PNG, JPG, JPEG, or WEBP files using the same drawing importer.
+            </p>
+          </div>
           <div className="flex shrink-0 border-b border-border" role="tablist" aria-label="Takeoff panel">
             {[["quantities", "Quantities"], ["symbol", "Symbol"], ["output", "Output"]].map(([id, label]) => (
               <button

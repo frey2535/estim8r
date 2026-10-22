@@ -1,0 +1,12 @@
+import * as React from "react";
+
+export const Drawer: any;
+export const DrawerPortal: any;
+export const DrawerOverlay: any;
+export const DrawerTrigger: any;
+export const DrawerClose: any;
+export const DrawerContent: any;
+export const DrawerHeader: any;
+export const DrawerFooter: any;
+export const DrawerTitle: any;
+export const DrawerDescription: any;

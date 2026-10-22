@@ -1,0 +1,12 @@
+import * as React from "react";
+
+export const Select: any;
+export const SelectGroup: any;
+export const SelectValue: any;
+export const SelectTrigger: any;
+export const SelectContent: any;
+export const SelectLabel: any;
+export const SelectItem: any;
+export const SelectSeparator: any;
+export const SelectScrollUpButton: any;
+export const SelectScrollDownButton: any;

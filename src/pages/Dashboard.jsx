@@ -15,11 +15,11 @@ import { activateEstimate, deleteStoredEstimate, readEstimate } from "@/domain/e
 import { readCompanyBranding } from "@/domain/estimate/branding";
 import { estimatePdfBlob } from "@/domain/estimate/estimatePdf";
 
-const cards = [
+const cards = /** @type {Array<[string, string, string, any]>} */ ([
   ["Create Estimate", "Build a bid using verified labor, company history and transparent productivity factors.", "/estimates/new", Calculator],
   ["Labor Library", "Search the master electrical trade labor taxonomy and inspect source verification.", "/labor", BookOpen],
   ["Production History", "Turn actual field production into company-specific labor intelligence.", "/production", TrendingUp],
-];
+]);
 
 function markupPath(folder) {
   const params = new URLSearchParams({

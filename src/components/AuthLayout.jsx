@@ -1,7 +1,8 @@
 import React from "react";
 import AppLogo from "@/components/branding/AppLogo";
 
-export default function AuthLayout({ title, subtitle, footer, children }) {
+/** @param {any} props */
+export default function AuthLayout({ title, subtitle, footer = null, children = null }) {
   return (
     <div className="flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-md">

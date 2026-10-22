@@ -52,10 +52,10 @@ const fixture = {
 const score = scoreTakeoffAccuracy(fixture);
 console.log(formatAccuracyReport(score));
 assert(score.truth === 2, "regression case labels the tagged symbol and the unlabeled repeat");
-assert(score.found === 1 && score.falseNegatives === 1, "current detector finds the tagged WP and misses the unlabeled repeat");
+assert(score.found === 2 && score.falseNegatives === 0, "detector finds both the tagged WP and the unlabeled repeat");
 assert(score.classificationAccuracy === 1, "the found WP keeps the legend type");
 assert(score.falsePositives === 0, "the wall crossing is not an extra bid device");
-assert(score.canClaimThreshold === false, "a missed symbol blocks any accuracy claim");
+assert(score.canClaimThreshold === false, "synthetic labels still block any production accuracy claim");
 const wallHits = bidDeviceMarks(buildAiMarks({
   trade: "electrical",
   symbols: electrical.symbols,

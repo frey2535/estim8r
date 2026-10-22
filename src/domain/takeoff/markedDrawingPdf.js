@@ -81,6 +81,9 @@ function drawSheetBanner(ctx, width, title, pageNumber) {
   ctx.restore();
 }
 
+/**
+ * @param {Record<string, any>} options
+ */
 export async function buildMarkedDrawingPdf({
   fileBytes,
   fileName,
@@ -135,6 +138,9 @@ export async function buildMarkedDrawingPdf({
   };
 }
 
+/**
+ *  * @param {Record<string, any>} options
+ */
 export function buildConduitCircuitSchedulePdf({ marks = [], fileName } = {}) {
   const schedule = conduitCircuitSchedule(marks);
   const doc = new jsPDF({ unit: "pt", format: "letter", orientation: "landscape" });
@@ -201,6 +207,9 @@ export function buildConduitCircuitSchedulePdf({ marks = [], fileName } = {}) {
 }
 
 
+/**
+ *  * @param {Record<string, any>} options
+ */
 export function buildConduitWireMakeupPdf({
   marks = [],
   runs = [],

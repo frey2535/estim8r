@@ -57,14 +57,24 @@ function oneOf(value, options, fallback) {
   return options.some((option) => option.id === value) ? value : fallback;
 }
 
+/**
+ * @param {any} value
+ * @param {any} fallback
+ */
 export function clampLogoStretch(value, fallback = DEFAULT_BRANDING.logoStretchX) {
   const next = Number(value);
   if (!Number.isFinite(next) || next <= 0) return fallback;
   return Math.max(20, Math.min(400, Math.round(next)));
 }
 
+/**
+ * @param {any} input
+ */
+/**
+ * @param {any} [input]
+ */
 export function normalizeBranding(input = {}) {
-  const source = input && typeof input === "object" ? input : {};
+  const source = /** @type {Record<string, any>} */ (input && typeof input === "object" ? input : {});
   return {
     companyName: text(source.companyName),
     companyAddress: text(source.companyAddress),
@@ -90,6 +100,9 @@ export function normalizeBranding(input = {}) {
   };
 }
 
+/**
+ * @param {any} branding
+ */
 export function brandingLayout(branding = DEFAULT_BRANDING) {
   const next = normalizeBranding(branding);
   const headerHeight = { small: 56, medium: 78, large: 104 }[next.headerSize];
@@ -102,6 +115,10 @@ export function brandingLayout(branding = DEFAULT_BRANDING) {
   return { ...next, headerHeight, cardPad, cardRadius, logo, logoWidth, logoHeight, font };
 }
 
+/**
+ * @param {any} brandingInput
+ * @param {any} design
+ */
 export function resolveLogoBox(brandingInput = DEFAULT_BRANDING, design = {}) {
   const branding = brandingLayout(brandingInput);
   const base = Number(design.logoSizePt) > 0
@@ -137,6 +154,9 @@ export function readCompanyBranding() {
   }
 }
 
+/**
+ * @param {any} input
+ */
 export function writeCompanyBranding(input) {
   const next = normalizeBranding(input);
   try {
@@ -147,6 +167,9 @@ export function writeCompanyBranding(input) {
   return next;
 }
 
+/**
+ * @param {any} branding
+ */
 export function companyLines(branding = DEFAULT_BRANDING) {
   const next = normalizeBranding(branding);
   return [

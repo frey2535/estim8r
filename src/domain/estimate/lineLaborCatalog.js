@@ -107,6 +107,9 @@ function itemName(item) {
   return String(item?.item_name || item?.itemName || "");
 }
 
+/**
+ * @param {any} item
+ */
 export function isTransferSwitchItem(item) {
   if (!item) return false;
   if (librarySubcategory(item) === "ATS") return true;
@@ -123,6 +126,9 @@ export function isSubcontractibleItem(item) {
   return /excav|trench|concrete/.test(blob);
 }
 
+/**
+ * @param {any} item
+ */
 export function lineTypeForLibraryItem(item) {
   const category = libraryCategory(item);
   if (!category) return "";
@@ -159,6 +165,9 @@ function activityLabelsForItem(item) {
   return labels;
 }
 
+/**
+ * @param {any} item
+ */
 export function workCategoriesForItem(item) {
   const labels = [];
   const category = libraryCategory(item);
@@ -186,6 +195,10 @@ function matchesLegacyCategory(item, type, category) {
   ));
 }
 
+/**
+ * @param {any} item
+ * @param {Record<string, any>} itemType
+ */
 export function laborItemMatchesLine(item, { itemType, category } = {}) {
   if (!item || item.active === false) return false;
   const type = String(itemType || "").trim();
@@ -199,10 +212,18 @@ export function laborItemMatchesLine(item, { itemType, category } = {}) {
   return matchesLegacyCategory(item, type, cat);
 }
 
+/**
+ * @param {any} items
+ * @param {any} line
+ */
 export function laborItemsForLine(items = [], line = {}) {
   return catalogItems(items).filter((item) => laborItemMatchesLine(item, line));
 }
 
+/**
+ * @param {any} type
+ * @param {any} items
+ */
 export function categoriesForType(type, items) {
   const wanted = String(type || "").trim();
   if (!wanted) return [];
@@ -218,12 +239,18 @@ export function defaultCategoryForType() {
   return "";
 }
 
+/**
+ * @param {any} line
+ */
 export function laborPickerPlaceholder(line) {
   if (!line?.itemType) return "Select Type first";
   if (!line?.category) return `Search ${line.itemType} labor…`;
   return `Search ${line.category}…`;
 }
 
+/**
+ * @param {any} items
+ */
 export function unmappedLibraryCategories(items) {
   const missing = new Set();
   for (const item of catalogItems(items)) {
@@ -233,6 +260,9 @@ export function unmappedLibraryCategories(items) {
   return [...missing].sort();
 }
 
+/**
+ * @param {any} items
+ */
 export function unreachableCatalogRows(items) {
   const missing = [];
   for (const item of catalogItems(items)) {

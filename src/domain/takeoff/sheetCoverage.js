@@ -5,6 +5,9 @@ export const PLAN_COVERAGE_BOUNDS = { minX: 7, minY: 10, maxX: 76, maxY: 88 };
 export const COVERAGE_COLS = 4;
 export const COVERAGE_ROWS = 3;
 
+/**
+ * @param {any} bounds
+ */
 export function coverageCells(bounds = PLAN_COVERAGE_BOUNDS) {
   const width = bounds.maxX - bounds.minX;
   const height = bounds.maxY - bounds.minY;
@@ -30,6 +33,10 @@ export function coverageCells(bounds = PLAN_COVERAGE_BOUNDS) {
   return cells;
 }
 
+/**
+ * @param {any} page
+ * @param {any} options
+ */
 export function isApplicablePlanSheet(page, options = {}) {
   if (!page) return false;
   const kind = page.kind || options.pageKinds?.[page.page];
@@ -40,6 +47,11 @@ export function isApplicablePlanSheet(page, options = {}) {
   return true;
 }
 
+/**
+ * @param {any} page
+ * @param {any} marks
+ * @param {any} options
+ */
 export function planSheetCoverage(page, marks = [], options = {}) {
   const sheet = page?.page;
   const applicable = isApplicablePlanSheet(page, options);
@@ -98,6 +110,11 @@ export function planSheetCoverage(page, marks = [], options = {}) {
   };
 }
 
+/**
+ * @param {any} pages
+ * @param {any} marks
+ * @param {any} options
+ */
 export function pagesCoverage(pages = [], marks = [], options = {}) {
   const sheets = (pages || []).map((page) => planSheetCoverage(page, marks, options));
   return {
@@ -107,12 +124,22 @@ export function pagesCoverage(pages = [], marks = [], options = {}) {
   };
 }
 
+/**
+ * @param {any} queue
+ * @param {any} coverage
+ * @param {any} sheet
+ */
 export function mergeReviewQueue(queue = [], coverage, sheet) {
   const regions = (coverage?.unscannedRegions || coverage?.unresolvedRegions || [])
     .filter((region) => sheet == null || region.sheet === sheet);
   return [...queue, ...regions];
 }
 
+/**
+ * @param {any} items
+ * @param {any} currentId
+ * @param {any} direction
+ */
 export function neighborQueueId(items, currentId, direction = 1) {
   if (!items?.length) return null;
   const index = items.findIndex((item) => item.id === currentId);
@@ -120,6 +147,9 @@ export function neighborQueueId(items, currentId, direction = 1) {
   return items[(start + direction + items.length) % items.length]?.id || null;
 }
 
+/**
+ * @param {any} coverage
+ */
 export function describeSheetCoverage(coverage) {
   if (!coverage) return "Sheet coverage has not been computed.";
   if (!coverage.applicable) return "This sheet is not an applicable plan sheet.";

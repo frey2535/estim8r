@@ -51,10 +51,16 @@ const FALLBACK_COLORS = [
   "#b45309",
 ];
 
+/**
+ * @param {any} mark
+ */
 export function isDeviceMark(mark) {
   return mark?.type === "count" || mark?.type === "drop";
 }
 
+/**
+ * @param {any} mark
+ */
 export function isCircuitMark(mark) {
   return mark?.tool === "conduit"
     || mark?.tool === "circuit"
@@ -62,6 +68,10 @@ export function isCircuitMark(mark) {
     || (mark?.type === "route" && mark?.tool !== "polyline");
 }
 
+/**
+ * @param {any} mark
+ * @param {any} trade
+ */
 export function markBelongsToTrade(mark, trade) {
   if (!mark || !trade) return true;
   // Old saved electrical takeoffs predate the trade field. Preserve those,
@@ -70,10 +80,18 @@ export function markBelongsToTrade(mark, trade) {
   return markTrade === String(trade).toLowerCase();
 }
 
+/**
+ * @param {any} marks
+ * @param {any} trade
+ */
 export function marksForTrade(marks, trade) {
   return (marks || []).filter((mark) => markBelongsToTrade(mark, trade));
 }
 
+/**
+ * @param {any} marks
+ * @param {any} options
+ */
 export function planOverlayMarks(marks, options = {}) {
   // Review/unknown AI candidates belong in the review queue, never painted on
   // the normal bid drawing. The live interactive sheet still needs pending and
@@ -91,6 +109,9 @@ export function planOverlayMarks(marks, options = {}) {
   return list;
 }
 
+/**
+ * @param {any} mark
+ */
 export function deviceTypeKey(mark) {
   const raw = String(mark?.typeCode || mark?.abbr || mark?.symbol || "")
     .trim()
@@ -100,6 +121,9 @@ export function deviceTypeKey(mark) {
   return raw;
 }
 
+/**
+ * @param {any} key
+ */
 export function scheduleTypeColor(key) {
   const compact = String(key || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
   if (SCHEDULE_TYPE_COLORS[compact]) return SCHEDULE_TYPE_COLORS[compact];
@@ -107,6 +131,9 @@ export function scheduleTypeColor(key) {
   return "";
 }
 
+/**
+ * @param {any} keys
+ */
 export function colorMapForDeviceTypes(keys) {
   const map = new Map();
   let fallback = 0;
@@ -118,6 +145,10 @@ export function colorMapForDeviceTypes(keys) {
   return map;
 }
 
+/**
+ * @param {any} color
+ * @param {any} fallback
+ */
 export function readableFillColor(color, fallback = FALLBACK_COLORS[0]) {
   const hex = String(color || "").trim();
   const match = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex);
@@ -138,6 +169,9 @@ export function readableFillColor(color, fallback = FALLBACK_COLORS[0]) {
   return `#${raw.toLowerCase()}`;
 }
 
+/**
+ * @param {any} marks
+ */
 export function applyDeviceTypeColors(marks) {
   const list = marks || [];
   const bySheet = new Map();
@@ -165,6 +199,9 @@ export function applyDeviceTypeColors(marks) {
   });
 }
 
+/**
+ * @param {any} marks
+ */
 export function sheetTypeColorSwatches(marks) {
   const seen = new Map();
   for (const mark of marks || []) {
@@ -179,6 +216,9 @@ export function sheetTypeColorSwatches(marks) {
   return [...seen.values()];
 }
 
+/**
+ * @param {any} outline
+ */
 export function outlineExtent(outline) {
   if (!outline) return 0;
   if (outline.kind === "circle") return (Number(outline.r) || 0) * 2;
@@ -210,27 +250,44 @@ function isOnSheet(x, y) {
   return Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x <= 100 && y >= 0 && y <= 100;
 }
 
+/**
+ * @param {any} mark
+ */
 export function deviceFillBlob(mark) {
   return `${mark?.symbol || ""} ${mark?.symbolLabel || ""} ${mark?.abbr || ""} ${mark?.typeCode || ""}`.toLowerCase();
 }
 
+/**
+ * @param {any} mark
+ */
 export function isPointDevice(mark) {
   const blob = deviceFillBlob(mark);
   return isCanDeviceText(blob)
     || /downlight|pendant|occup|sensor|switch|\bos\b|recept|gfci|gfi|duplex|outlet|\br\b|quad/.test(blob);
 }
 
+/**
+ * @param {any} mark
+ */
 export function isFixtureDevice(mark) {
   const blob = deviceFillBlob(mark);
   return /2\s*[x×]\s*4|1\s*[x×]\s*4|2\s*[x×]\s*2|troffer|fixture/.test(blob);
 }
 
+/**
+ * @param {any} mark
+ */
 export function maxFillExtent(mark) {
   if (isFixtureDevice(mark)) return MAX_FIXTURE_FILL;
   if (isPointDevice(mark)) return MAX_POINT_FILL;
   return MAX_GENERIC_FILL;
 }
 
+/**
+ * @param {any} outline
+ * @param {any} origin
+ * @param {any} maxExtent
+ */
 export function isUsablePaintOutline(outline, origin, maxExtent = MAX_GENERIC_FILL) {
   if (!outline) return false;
   if (outline.kind === "path" && (outline.points || []).length < 3) return false;
@@ -245,12 +302,20 @@ export function isUsablePaintOutline(outline, origin, maxExtent = MAX_GENERIC_FI
   return true;
 }
 
+/**
+ * @param {any} mark
+ */
 export function trustedAiBodyMax(mark) {
   if (isFixtureDevice(mark)) return MAX_TRUSTED_FIXTURE_BODY;
   if (isPointDevice(mark)) return MAX_TRUSTED_AI_BODY;
   return 2.8;
 }
 
+/**
+ * @param {any} outline
+ * @param {any} origin
+ * @param {any} mark
+ */
 export function isTrustedAiBodyOutline(outline, origin, mark) {
   if (!outline) return false;
   if (outline.kind === "path" && (outline.points || []).length < 3) return false;
@@ -326,6 +391,11 @@ function outlineOnPrintedTag(outline, mark) {
   ));
 }
 
+/**
+ * @param {any} mark
+ * @param {any} markerSize
+ * @param {any} _options
+ */
 export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
   const cleaned = mark?.outline
     ? symbolBodyOutline({ ...mark.outline, outline: mark.outline, cx: mark.outline.cx ?? mark.x, cy: mark.outline.cy ?? mark.y }, paintTokensForMark(mark))
@@ -339,14 +409,16 @@ export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
   const trustedAiSource = source === "vector" || source === "raster" || source === "mixed";
   const usable = cleaned && isUsablePaintOutline(cleaned, origin, maxExtent) && !outlineOnPrintedTag(cleaned, mark);
 
+  // Text-only placements (outlineSource=text) never invent a paint body — the
+  // printed tag is the locator, not a fabricated circle/rect fill.
+  if (source === "text" || (!cleaned && String(mark?.outlineSource || "").toLowerCase() === "text")) {
+    return null;
+  }
+
   if (mark?.source === "ai") {
-    // Paint the measured symbol body. Slightly oversize or tiny CAD glyphs are
-    // still the device — displayDeviceOutline scales them into the visible cap.
-    // Room-sized junk, text-only boxes, and circuit-number glyphs stay unpainted.
-    if (!trustedAiSource) {
-      // For point devices (like OS), always show a generic chip even without trusted geometry
-      return mark?.requiresReview === true || isPointDevice(mark) ? genericDeviceOutline(mark, markerSize) : null;
-    }
+    // AI may paint only a measured vector/raster/mixed perimeter. Never invent
+    // a chip for text-only or missing geometry (strictAiSymbolPainting).
+    if (!trustedAiSource || !mark?.outline) return null;
     const core = isTrustedAiBodyOutline(cleaned, origin, mark)
       ? cleaned
       : coreDeviceOutline(cleaned, origin, mark);
@@ -354,8 +426,9 @@ export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
       const extent = outlineExtent(core);
       return extent > maxExtent ? scaleOutline(core, maxExtent / extent, origin) : scaleOutline(core, 1, origin);
     }
-    if ((!cleaned || outlineExtent(cleaned) < MIN_TRUSTED_AI_BODY) && mark.symbolBodyLocation && !outlineOnPrintedTag(cleaned, mark)) {
-      return genericDeviceOutline(mark, markerSize);
+    if (usable) {
+      const extent = outlineExtent(cleaned);
+      return extent > maxExtent ? scaleOutline(cleaned, maxExtent / extent, origin) : scaleOutline(cleaned, 1, origin);
     }
     return null;
   }
@@ -373,12 +446,20 @@ export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
   return genericDeviceOutline(mark, markerSize);
 }
 
+/**
+ * @param {any} mark
+ * @param {any} markerSize
+ * @param {any} options
+ */
 export function displayDeviceOutline(mark, markerSize = 0.55, options = {}) {
   const outline = deviceOutline(mark, markerSize, options);
   if (!outline) {
-    // Never paint an invented dot for an AI detection. If the actual printed
-    // symbol body cannot be recovered, keep the item for review instead of
-    // coloring a nearby type/circuit number.
+    // Strict AI paint forbids inventing bid fills for text-only detections.
+    // An explicit marker-size override (review chip resized by the estimator)
+    // still needs a live hit target on the drawing.
+    if (mark?.source === "ai" && mark?.markerSizeOverride && isDeviceMark(mark)) {
+      return genericDeviceOutline(mark, markerSize);
+    }
     return null;
   }
   const displayMax = isFixtureDevice(mark)
@@ -417,6 +498,11 @@ function routePointerDistance(mark, point) {
   return best;
 }
 
+/**
+ * @param {any} mark
+ * @param {any} point
+ * @param {any} markerSize
+ */
 export function hitTestDeviceFill(mark, point, markerSize = 0.55) {
   if (!mark || !point) return false;
   const outline = displayDeviceOutline(mark, markerSize);
@@ -427,6 +513,11 @@ export function hitTestDeviceFill(mark, point, markerSize = 0.55) {
   return pointHitsOutline(outline, { x: mark.symbolBodyLocation?.x ?? mark.x, y: mark.symbolBodyLocation?.y ?? mark.y }, point, tolerance);
 }
 
+/**
+ * @param {any} marks
+ * @param {any} point
+ * @param {any} options
+ */
 export function selectMarkAtPoint(marks, point, options = {}) {
   const aspect = options.aspect || 1;
   const markerSizeFor = typeof options.markerSize === "function"
@@ -446,6 +537,10 @@ export function selectMarkAtPoint(marks, point, options = {}) {
   return routes[0];
 }
 
+/**
+ * @param {any} points
+ * @param {any} pad
+ */
 export function shortenCircuitPath(points, pad = 0.55) {
   const list = points || [];
   if (list.length < 2) return list;
@@ -461,6 +556,10 @@ export function shortenCircuitPath(points, pad = 0.55) {
 }
 
 
+/**
+ * @param {any} outline
+ * @param {any} factor
+ */
 export function interiorDeviceOutline(outline, factor = DEVICE_INTERIOR_INSET) {
   if (!outline) return null;
   const f = Math.max(0.45, Math.min(1, Number(factor) || DEVICE_INTERIOR_INSET));
@@ -513,6 +612,9 @@ export function interiorDeviceOutline(outline, factor = DEVICE_INTERIOR_INSET) {
   };
 }
 
+/**
+ * @param {any} mark
+ */
 export function deviceFillEnabled(mark) {
   return mark?.fillEnabled !== false && mark?.fillMode !== "off";
 }

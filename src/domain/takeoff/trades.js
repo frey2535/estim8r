@@ -127,19 +127,32 @@ export const CONDUIT_OPTIONS = [
 export const DEFAULT_CONDUIT_ID = "emt-3-4";
 export const DEFAULT_MAX_HOMERUNS = 3;
 
+/**
+ * @param {any} id
+ */
 export function tradeById(id) {
   return TRADES.find((trade) => trade.id === id) || TRADES.find((trade) => trade.id === "electrical");
 }
 
+/**
+ * @param {any} tradeId
+ */
 export function categoriesForTrade(tradeId) {
   return TRADE_CATEGORIES[tradeId] || TRADE_CATEGORIES.etc;
 }
 
+/**
+ * @param {any} tradeId
+ */
 export function conduitOptionsForTrade(tradeId) {
   const rows = CONDUIT_OPTIONS.filter((item) => item.trade === tradeId);
   return rows.length ? rows : CONDUIT_OPTIONS.filter((item) => item.trade === "etc");
 }
 
+/**
+ * @param {any} id
+ * @param {any} tradeId
+ */
 export function findConduitOption(id, tradeId) {
   const rows = conduitOptionsForTrade(tradeId);
   return rows.find((item) => item.id === id) || rows[0];
@@ -164,10 +177,16 @@ const CATEGORY_TO_TRADE = {
   ETC: "etc",
 };
 
+/**
+ * @param {any} category
+ */
 export function tradeIdForCategory(category) {
   return CATEGORY_TO_TRADE[category] || "";
 }
 
+/**
+ * @param {any} label
+ */
 export function tradeIdFromLabel(label) {
   const text = String(label || "").toLowerCase();
   if (!text.trim()) return "";
@@ -194,6 +213,9 @@ function isDrawingSymbol(item) {
     || String(item?.id || "").startsWith("sched:");
 }
 
+/**
+ * @param {any} item
+ */
 export function tradeIdForSymbol(item) {
   if (!item) return "";
   if (item.trade && TRADES.some((row) => row.id === item.trade)) return item.trade;
@@ -210,6 +232,10 @@ function stampTrade(item) {
   return trade ? { ...item, trade } : null;
 }
 
+/**
+ * @param {any} tradeId
+ * @param {any} drawingSymbols
+ */
 export function paletteForTrade(tradeId, drawingSymbols = []) {
   const selected = tradeById(tradeId).id;
   const symbols = [...DEVICE_SYMBOLS, ...TRADE_ONLY_SYMBOLS]
@@ -226,6 +252,11 @@ export function paletteForTrade(tradeId, drawingSymbols = []) {
   return { categories, symbols, fromDrawing };
 }
 
+/**
+ * @param {any} tradeId
+ * @param {any} drawingSymbols
+ * @param {any} options
+ */
 export function symbolsForSelectedTrade(tradeId, drawingSymbols = [], options = {}) {
   const selected = tradeById(tradeId).id;
   const palette = paletteForTrade(selected, drawingSymbols);
@@ -246,6 +277,9 @@ export function symbolsForSelectedTrade(tradeId, drawingSymbols = [], options = 
   return list.filter(belongs);
 }
 
+/**
+ * @param {any} item
+ */
 export function symbolPatchFromCatalog(item) {
   if (!item) return {};
   return {
@@ -267,6 +301,9 @@ const LEGEND_SHEET_KINDS = new Set([
   "detail",
 ]);
 
+/**
+ * @param {any} docs
+ */
 export function pageKindsFromDocs(docs) {
   const map = {};
   for (const page of docs?.pages || []) {
@@ -276,6 +313,9 @@ export function pageKindsFromDocs(docs) {
   return map;
 }
 
+/**
+ * @param {any} kind
+ */
 export function isLegendSheetKind(kind) {
   return LEGEND_SHEET_KINDS.has(kind);
 }
@@ -288,6 +328,9 @@ function isPlanDeviceMark(mark, pageKinds = {}) {
   return true;
 }
 
+/**
+ * @param {any} mark
+ */
 export function symbolFromDrawingMark(mark) {
   const id = mark?.symbol || mark?.typeCode || mark?.abbr;
   if (!id) return null;
@@ -308,6 +351,11 @@ export function symbolFromDrawingMark(mark) {
   };
 }
 
+/**
+ * @param {any} tradeId
+ * @param {any} marks
+ * @param {any} options
+ */
 export function symbolsOnDrawingForTrade(tradeId, marks = [], options = {}) {
   const selected = tradeById(tradeId).id;
   const pageKinds = options.pageKinds || {};

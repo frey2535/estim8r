@@ -6,6 +6,9 @@ import { rollupTakeoff } from "./quantities.js";
 import { drawingProcessingPlan } from "./drawingUpload.js";
 import { createPageCache, largeDrawingNavigable, workerJobPlan } from "./takeoffRuntime.js";
 
+/**
+ * @param {any} rollup
+ */
 export function estimateLinesFromQuantities(rollup) {
   return (rollup?.rows || [])
     .filter((row) => (Number(row.count) || 0) > 0 || (Number(row.lf) || 0) > 0)
@@ -18,6 +21,10 @@ export function estimateLinesFromQuantities(rollup) {
     }));
 }
 
+/**
+ * @param {any} marks
+ * @param {any} pages
+ */
 export function markedDrawingPdfSpec(marks = [], pages = []) {
   const devices = bidDeviceMarks(marks);
   return {
@@ -29,6 +36,9 @@ export function markedDrawingPdfSpec(marks = [], pages = []) {
   };
 }
 
+/**
+ * @param {Record<string, any>} file
+ */
 export function runTakeoffPipeline({
   file = {},
   pages = [],

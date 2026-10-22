@@ -15,6 +15,7 @@ import { activateEstimate, deleteStoredEstimate, readEstimate } from "@/domain/e
 import { readCompanyBranding } from "@/domain/estimate/branding";
 import { estimatePdfBlob } from "@/domain/estimate/estimatePdf";
 
+/** @type {[string, string, string, import("react").ComponentType<{ className?: string }>][]} */
 const cards = [
   ["Create Estimate", "Build a bid using verified labor, company history and transparent productivity factors.", "/estimates/new", Calculator],
   ["Labor Library", "Search the master electrical trade labor taxonomy and inspect source verification.", "/labor", BookOpen],

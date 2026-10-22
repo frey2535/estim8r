@@ -2,6 +2,9 @@ import { getDocument } from "pdfjs-dist";
 
 const cache = new WeakMap();
 
+/**
+ * @param {any} fileBytes
+ */
 export function getPdfDocument(fileBytes) {
   if (!fileBytes) return Promise.reject(new Error("No PDF data"));
   const hit = cache.get(fileBytes);

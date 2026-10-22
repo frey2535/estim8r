@@ -3,27 +3,45 @@ export const BACKUP_ADMIN_EMAIL = "marcus.a.frey@gmail.com";
 export const FIRST_CUSTOMER_COMPANY = "Day One Electric";
 export const FIRST_CUSTOMER_ADMIN_EMAIL = "mfrey@dayoneelectric.com";
 
+/**
+ * @param {any} value
+ */
 export function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+/**
+ * @param {any} userOrEmail
+ */
 export function emailOf(userOrEmail) {
   if (typeof userOrEmail === "string") return normalizeEmail(userOrEmail);
   return normalizeEmail(userOrEmail?.email);
 }
 
+/**
+ * @param {any} userOrEmail
+ */
 export function isPlatformOwner(userOrEmail) {
   return emailOf(userOrEmail) === PLATFORM_OWNER_EMAIL;
 }
 
+/**
+ * @param {any} userOrEmail
+ */
 export function isBackupAdmin(userOrEmail) {
   return emailOf(userOrEmail) === BACKUP_ADMIN_EMAIL;
 }
 
+/**
+ * @param {any} userOrEmail
+ */
 export function isPlatformStaff(userOrEmail) {
   return isPlatformOwner(userOrEmail) || isBackupAdmin(userOrEmail);
 }
 
+/**
+ * @param {any} userOrOrgName
+ */
 export function isDayOneElectricCompany(userOrOrgName) {
   const name = typeof userOrOrgName === "string"
     ? userOrOrgName
@@ -31,6 +49,9 @@ export function isDayOneElectricCompany(userOrOrgName) {
   return String(name || "").trim().toLowerCase() === FIRST_CUSTOMER_COMPANY.toLowerCase();
 }
 
+/**
+ * @param {any} userOrEmail
+ */
 export function isCompanyAdmin(userOrEmail) {
   if (isPlatformStaff(userOrEmail)) return false;
   if (emailOf(userOrEmail) === FIRST_CUSTOMER_ADMIN_EMAIL) return true;
@@ -42,6 +63,9 @@ export function isCompanyAdmin(userOrEmail) {
   return false;
 }
 
+/**
+ * @param {any} userOrEmail
+ */
 export function platformRoleLabel(userOrEmail) {
   if (isPlatformOwner(userOrEmail)) return "Platform owner";
   if (isBackupAdmin(userOrEmail)) return "Current Flow backup admin";
@@ -49,6 +73,9 @@ export function platformRoleLabel(userOrEmail) {
   return null;
 }
 
+/**
+ * @param {any} profile
+ */
 export function applyPlatformIdentity(profile) {
   const email = emailOf(profile);
   const owner = isPlatformOwner(email);
@@ -68,14 +95,24 @@ export function applyPlatformIdentity(profile) {
   };
 }
 
+/**
+ * @param {any} userOrEmail
+ */
 export function hasPlatformAccess(userOrEmail) {
   return isPlatformStaff(userOrEmail);
 }
 
+/**
+ * @param {any} userOrEmail
+ */
 export function canUseOwnerCursorChat(userOrEmail) {
   return isPlatformStaff(userOrEmail);
 }
 
+/**
+ * @param {any} userOrEmail
+ * @param {any} hasProductAccess
+ */
 export function needsProductEntitlementGate(userOrEmail, hasProductAccess) {
   if (hasPlatformAccess(userOrEmail)) return false;
   return !hasProductAccess;

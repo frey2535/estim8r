@@ -14,6 +14,9 @@ export function readThumbsOpen() {
   }
 }
 
+/**
+ * @param {any} open
+ */
 export function writeThumbsOpen(open) {
   try {
     localStorage.setItem(OPEN_KEY, open ? "1" : "0");

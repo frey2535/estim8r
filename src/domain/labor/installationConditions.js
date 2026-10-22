@@ -21,12 +21,19 @@ export function defaultInstallationConditions() {
   return INSTALLATION_CONDITION_CATALOG.map((row) => ({ ...row, enabled: false, multiplier: 1, note: "", source: "estimator" }));
 }
 
+/**
+ * @param {any} conditions
+ */
 export function installationConditionSummary(conditions = []) {
   const active = (conditions || []).filter((row) => row.enabled);
   const multiplier = active.reduce((total, row) => total * safeMultiplier(row.multiplier), 1);
   return { active, multiplier: round4(multiplier) };
 }
 
+/**
+ * @param {any} baseMhPerUnit
+ * @param {any} conditions
+ */
 export function applyInstallationConditions(baseMhPerUnit, conditions = []) {
   const base = Math.max(0, Number(baseMhPerUnit) || 0);
   const summary = installationConditionSummary(conditions);

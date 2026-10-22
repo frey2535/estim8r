@@ -110,9 +110,31 @@ if (extraType2.length) {
 }
 
 assert(legendStripBid.length === 0, `fixture legend strip is not schedule qty, got ${legendStripBid.length}`);
+assert(labeledPlan.length === 25, `Pottsville E210 labeled plan types stay 25, got ${labeledPlan.length}`);
+assert(labeledFound.length === 25, `Pottsville E210 labeled recall is 25/25, got ${labeledFound.length}/${labeledPlan.length}`);
 assert(labeledFound.length === labeledPlan.length, `printed plan lighting types must be marked, ${labeledFound.length}/${labeledPlan.length}`);
 assert(matchedCans >= Math.floor(cans.length * 0.7), `type 2 can-body recall ${matchedCans}/${cans.length}`);
 assert(extraType2.length === 0, `type 2 extras must be 0 against can coordinates, got ${extraType2.length}`);
+// Typed FP against the labeled 1-4/OS set must stay 0 (extras that are not those plan tags).
+const typedLabeledFp = bid.filter((mark) => {
+  const code = String(mark.typeCode || "").toUpperCase();
+  if (!/^(?:[1-4]|OS)$/.test(code) && mark.symbol !== "occ") return false;
+  const want = mark.symbol === "occ" ? "OS" : code;
+  return !labeledPlan.some((token) => normalizeTypeMark(token.text).toUpperCase() === want
+    && (Math.hypot(mark.x - token.x, mark.y - token.y) < 1.8
+      || Math.hypot((mark.labelLocation?.x ?? 999) - token.x, (mark.labelLocation?.y ?? 999) - token.y) < 0.45));
+});
+assert(typedLabeledFp.length === 0, `Pottsville E210 labeled typed FP must be 0, got ${typedLabeledFp.length}`);
+const labeledMarkerOk = labeledFound.every((token) => bid.some((mark) => {
+  const code = normalizeTypeMark(token.text).toUpperCase();
+  const same = String(mark.typeCode || "").toUpperCase() === code
+    || (code === "OS" && mark.symbol === "occ");
+  if (!same) return false;
+  const bodyDist = Math.hypot(mark.x - token.x, mark.y - token.y);
+  const tagDist = Math.hypot((mark.labelLocation?.x ?? mark.x) - token.x, (mark.labelLocation?.y ?? mark.y) - token.y);
+  return bodyDist < 1.8 || tagDist < 0.45;
+}));
+assert(labeledMarkerOk, "Pottsville E210 labeled markers stay on plan tags/bodies at 100%");
 assert(type1Bid.length <= labeledPlan.filter((token) => normalizeTypeMark(token.text) === "1").length + 2, `type 1 bid copies stay near printed plan 1s, got ${type1Bid.length}`);
 assert((result.marks || []).filter((mark) => mark.sheet === 1 && (mark.type === "count" || mark.type === "drop")).length === 0, "cover stays 0");
 assert((result.marks || []).filter((mark) => mark.sheet === 48 && (mark.type === "count" || mark.type === "drop")).length === 0, "E001 stays 0");

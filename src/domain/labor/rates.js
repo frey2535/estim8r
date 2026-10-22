@@ -28,6 +28,9 @@ function rateMap(input) {
   return new Map(Object.entries(input).map(([id, wage]) => [id, Number(wage)]));
 }
 
+/**
+ * @param {any} input
+ */
 export function looksLikeLegacyDefaultRates(input) {
   const byId = rateMap(input);
   const ids = Object.keys(LEGACY_DEFAULT_WAGES);
@@ -36,6 +39,9 @@ export function looksLikeLegacyDefaultRates(input) {
   return present.every((id) => Math.abs(byId.get(id) - LEGACY_DEFAULT_WAGES[id]) < 0.005);
 }
 
+/**
+ * @param {any} wageBook
+ */
 export function defaultLaborRates(wageBook = {}) {
   return EMPLOYEE_CLASSES.map((row) => ({
     classId: row.id,
@@ -44,12 +50,19 @@ export function defaultLaborRates(wageBook = {}) {
   }));
 }
 
+/**
+ * @param {any} rates
+ */
 export function ratesToWageBook(rates) {
   const book = {};
   for (const row of rates || []) book[row.classId] = Number(row.hourlyRate) || 0;
   return book;
 }
 
+/**
+ * @param {any} stored
+ * @param {any} wageBook
+ */
 export function mergeLaborRates(stored, wageBook = {}) {
   const defaults = defaultLaborRates(wageBook);
   if (!stored?.length) return defaults;
@@ -62,12 +75,20 @@ export function mergeLaborRates(stored, wageBook = {}) {
   });
 }
 
+/**
+ * @param {any} stored
+ * @param {any} wageBook
+ */
 export function resolveShopRates(stored, wageBook = {}) {
   if (looksLikeLegacyDefaultRates(stored)) return defaultLaborRates();
   if (!stored?.length && looksLikeLegacyDefaultRates(wageBook)) return defaultLaborRates();
   return mergeLaborRates(stored, looksLikeLegacyDefaultRates(wageBook) ? {} : wageBook);
 }
 
+/**
+ * @param {any} crew
+ * @param {any} rates
+ */
 export function applyRatesToCrew(crew, rates) {
   const byId = new Map((rates || []).map((row) => [row.classId, row]));
   return (crew || []).map((row) => {

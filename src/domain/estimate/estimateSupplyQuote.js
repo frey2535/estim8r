@@ -32,6 +32,9 @@ export const BUY_LIST_LINE_TYPES = new Set([
 
 const LABOR_ONLY_TEXT = /site\s*\/?\s*earthwork|hand\s*trench|sawcut(?:ting)?(?:\s+\w+)*\s*(?:asphalt|concrete)|mini excavator trench|backhoe trench|\btrencher\b|concrete encasement|patch (?:asphalt|concrete)|core drill|excavate (?:equipment|pole)|locate\/mark trench|hand expose existing|place sand bedding|backfill\/compact|journeyman supervision|project superintendent|project management|daily cleanup|mobilization\/demobilization|circuit tracing|as-built field markup|prefab |material kitting|material handling|remove (?:receptacle|light|panel|transformer|conduit|wire|data)/i;
 
+/**
+ * @param {any} line
+ */
 export function estimateLineHasQuoteData(line) {
   if (!line) return false;
   return Boolean(
@@ -43,15 +46,25 @@ export function estimateLineHasQuoteData(line) {
   );
 }
 
+/**
+ * @param {any} line
+ */
 export function knownEstimateModel(line) {
   const raw = line?.model ?? line?.modelNumber ?? line?.catalogNumber ?? line?.catalogNo ?? "";
   return String(raw).trim();
 }
 
+/**
+ * @param {any} line
+ */
 export function estimateQuoteDevice(line) {
   return String(line?.category || line?.itemType || "").trim();
 }
 
+/**
+ * @param {any} line
+ * @param {any} laborItem
+ */
 export function estimateQuoteDescription(line, laborItem) {
   return String(line?.description || "").trim() || laborItemLabel(laborItem) || "Line";
 }
@@ -72,15 +85,25 @@ function laborOnlyBlob(line, laborItem) {
   ].filter(Boolean).join(" ");
 }
 
+/**
+ * @param {any} item
+ */
 export function isLaborOnlyCatalogItem(item) {
   if (!item) return false;
   return LABOR_ONLY_LIBRARY_CATEGORIES.has(String(item.category || "").trim());
 }
 
+/**
+ * @param {any} category
+ */
 export function isBuyListLaborCategory(category) {
   return BUY_LIST_LABOR_CATEGORIES.has(String(category || "").trim());
 }
 
+/**
+ * @param {any} line
+ * @param {any} laborItem
+ */
 export function isLaborOnlySupplyQuoteLine(line, laborItem) {
   if (isLaborOnlyCatalogItem(laborItem)) return true;
   const category = catalogCategory(line, laborItem);
@@ -92,11 +115,18 @@ export function isLaborOnlySupplyQuoteLine(line, laborItem) {
   return false;
 }
 
+/**
+ * @param {any} line
+ * @param {any} laborItem
+ */
 export function estimateLineBelongsOnSupplyQuote(line, laborItem) {
   if (!estimateLineHasQuoteData(line)) return false;
   return !isLaborOnlySupplyQuoteLine(line, laborItem);
 }
 
+/**
+ * @param {Record<string, any>} lines
+ */
 export function buildEstimateSupplyQuote({
   lines = [],
   itemized = false,
@@ -135,6 +165,9 @@ export function buildEstimateSupplyQuote({
   };
 }
 
+/**
+ * @param {any} quote
+ */
 export function supplyQuotePreviewKey(quote) {
   return JSON.stringify({
     title: quote?.title || "",
@@ -146,6 +179,9 @@ export function supplyQuotePreviewKey(quote) {
   });
 }
 
+/**
+ * @param {any} quote
+ */
 export function createSupplyQuotePdfPreview(quote) {
   const fileName = `${quote?.fileBase || supplyQuoteFileBase(quote?.projectName)}.pdf`;
   if (!quote?.rows?.length) {

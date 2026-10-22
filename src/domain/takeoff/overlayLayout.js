@@ -2,6 +2,10 @@ export const OVERLAY_FONT_SIZE = 1.55;
 export const MOBILE_OVERLAY_FONT_SIZE = 3.6;
 export const DEVICE_CLUSTER_RADIUS = 2.8;
 
+/**
+ * @param {any} mark
+ * @param {any} options
+ */
 export function compactConduitLabel(mark, options = {}) {
   const run = `R${mark?.runNumber || ""}`;
   const parallel = Number(mark?.parallelRuns) || 1;
@@ -19,6 +23,10 @@ export function compactConduitLabel(mark, options = {}) {
   return run;
 }
 
+/**
+ * @param {any} text
+ * @param {any} fontSize
+ */
 export function labelBoxSize(text, fontSize = OVERLAY_FONT_SIZE) {
   const value = String(text || "");
   return {
@@ -27,6 +35,9 @@ export function labelBoxSize(text, fontSize = OVERLAY_FONT_SIZE) {
   };
 }
 
+/**
+ * @param {any} points
+ */
 export function polylineAnchor(points) {
   const list = points || [];
   if (!list.length) return null;
@@ -58,6 +69,10 @@ export function polylineAnchor(points) {
   };
 }
 
+/**
+ * @param {any} devices
+ * @param {any} radius
+ */
 export function clusterDeviceCallouts(devices, radius = DEVICE_CLUSTER_RADIUS) {
   const leftover = [...(devices || [])];
   const clusters = [];
@@ -124,6 +139,9 @@ function tryPlace(anchor, text, occupied, fontSize = OVERLAY_FONT_SIZE) {
   return null;
 }
 
+/**
+ * @param {Record<string, any>} conduits
+ */
 export function layoutOverlayCallouts({
   conduits = [],
   devices: _devices = [],

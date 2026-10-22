@@ -4,6 +4,11 @@ export const SHEET_PAN_THRESHOLD_PX = 5;
 export const TAKEOFF_MIN_ZOOM = 0.25;
 export const TAKEOFF_MAX_ZOOM = 8;
 
+/**
+ * @param {any} start
+ * @param {any} origin
+ * @param {any} current
+ */
 export function sheetPanOffset(start, origin, current) {
   return {
     x: start.x + (current.x - origin.x),
@@ -11,16 +16,29 @@ export function sheetPanOffset(start, origin, current) {
   };
 }
 
+/**
+ * @param {any} origin
+ * @param {any} current
+ * @param {any} threshold
+ */
 export function isSheetPanDrag(origin, current, threshold = SHEET_PAN_THRESHOLD_PX) {
   const dx = current.x - origin.x;
   const dy = current.y - origin.y;
   return (dx * dx + dy * dy) >= threshold * threshold;
 }
 
+/**
+ * @param {any} a
+ * @param {any} b
+ */
 export function pointerDistance(a, b) {
   return Math.hypot((a?.x || 0) - (b?.x || 0), (a?.y || 0) - (b?.y || 0));
 }
 
+/**
+ * @param {any} a
+ * @param {any} b
+ */
 export function pinchMidpoint(a, b) {
   return {
     x: ((a?.x || 0) + (b?.x || 0)) / 2,
@@ -28,6 +46,13 @@ export function pinchMidpoint(a, b) {
   };
 }
 
+/**
+ * @param {any} startZoom
+ * @param {any} startDistance
+ * @param {any} currentDistance
+ * @param {any} minZoom
+ * @param {any} maxZoom
+ */
 export function sheetPinchZoom(startZoom, startDistance, currentDistance, minZoom = 0.5, maxZoom = 4) {
   if (!startDistance) return startZoom;
   const next = startZoom * (currentDistance / startDistance);
@@ -67,6 +92,9 @@ export function sheetZoomAboutPoint({
   };
 }
 
+/**
+ *  * @param {Record<string, any>} options
+ */
 export function sheetPinchViewport({
   startZoom,
   startDistance,

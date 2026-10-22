@@ -2,6 +2,9 @@ import { normalizeEmail } from "./platformIdentity.js";
 
 export const BUILDR_COMPANY_STORAGE_KEY = "estim8r.buildrCompanyId.v1";
 
+/**
+ * @param {any} value
+ */
 export function normalizeCompanyId(value) {
   return String(value || "").trim();
 }
@@ -53,6 +56,9 @@ function writeLocal(companyId, email) {
   return value;
 }
 
+/**
+ * @param {any} user
+ */
 export function readLinkedBuildrCompanyId(user) {
   const fromProfile = normalizeCompanyId(user?.buildr_company_id);
   if (fromProfile) return fromProfile;

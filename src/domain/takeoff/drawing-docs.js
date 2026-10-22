@@ -36,6 +36,9 @@ function parseFraction(value) {
   return Number(text) || 0;
 }
 
+/**
+ * @param {any} text
+ */
 export function parsePrintedScale(text) {
   const blob = String(text || "");
   const architectural = blob.match(/\b(\d+(?:\/\d+)?|\d*\.\d+)\s*"\s*=\s*(\d+)\s*'\s*(?:-\s*(\d+)\s*")?/i);
@@ -47,6 +50,9 @@ export function parsePrintedScale(text) {
   return null;
 }
 
+/**
+ * @param {any} page
+ */
 export function printedScaleCalibration(page) {
   const scale = page?.printedScale;
   const widthPt = Number(page?.widthPt) || 0;
@@ -65,6 +71,9 @@ const STRONG_LEGEND_TITLE_RE = /\belectrical\s+(?:symbol\s+)?legend(?:\s*(?:and|
 const LIGHTING_PLAN_TITLE_RE = /\b(?:electrical\s+)?lighting(?:\s+floor)?\s+plans?\b|\bfloor\s+lighting\s+plans?\b/i;
 const POWER_PLAN_TITLE_RE = /\b(?:electrical\s+)?power(?:\s+floor)?\s+plans?\b|\bbranch\s+power\s+plans?\b|\bpower\s*(?:&|and)\s*systems?\s+plans?\b/i;
 
+/**
+ * @param {any} text
+ */
 export function isPlanTitleText(text) {
   const blob = String(text || "");
   if (DETAIL_RE.test(blob) || ONELINE_RE.test(blob)) return false;
@@ -74,6 +83,9 @@ export function isPlanTitleText(text) {
     || SITE_ELECTRICAL_PLAN_RE.test(blob);
 }
 
+/**
+ * @param {any} text
+ */
 export function isIndexText(text) {
   const blob = String(text || "");
   if (INDEX_RE.test(blob)) return true;
@@ -84,6 +96,9 @@ export function isIndexText(text) {
   return new Set(ids.map((id) => id.toUpperCase().replace(/[\s-]/g, ""))).size >= 8;
 }
 
+/**
+ * @param {any} text
+ */
 export function isCoverOrRenderingText(text) {
   const blob = String(text || "");
   if (isIndexText(blob)) return false;
@@ -96,6 +111,9 @@ export function isCoverOrRenderingText(text) {
   return false;
 }
 
+/**
+ * @param {any} page
+ */
 export function pageTextBlob(page) {
   const tokenText = (page?.tokens || []).map((token) => token.text).filter(Boolean);
   const parts = [page?.title, page?.sheetId, ...tokenText];
@@ -103,6 +121,9 @@ export function pageTextBlob(page) {
   return parts.filter(Boolean).join(" ");
 }
 
+/**
+ * @param {any} value
+ */
 export function isJunkScheduleType(value) {
   const raw = String(value || "").trim();
   if (!raw) return true;
@@ -113,6 +134,10 @@ export function isJunkScheduleType(value) {
   return false;
 }
 
+/**
+ * @param {any} value
+ * @param {any} label
+ */
 export function isPrintedFixtureType(value, label = "") {
   if (isJunkScheduleType(value)) return false;
   const key = String(value || "").replace(/^type\s+/i, "").replace(/[.,;:()]+$/g, "").trim().toUpperCase();
@@ -121,6 +146,9 @@ export function isPrintedFixtureType(value, label = "") {
   return true;
 }
 
+/**
+ * @param {any} rows
+ */
 export function hasPrintedQtyHeader(rows = []) {
   return (rows || []).some((row) => {
     const text = String(row.text || "");
@@ -131,12 +159,18 @@ export function hasPrintedQtyHeader(rows = []) {
   });
 }
 
+/**
+ * @param {any} page
+ */
 export function looksLikeIndexPage(page) {
   if (!page) return false;
   if (page.kind === "index") return true;
   return isIndexText(pageTextBlob(page));
 }
 
+/**
+ * @param {any} page
+ */
 export function looksLikeCoverOrRendering(page) {
   if (!page) return false;
   if (/^(cover|rendering|photo|title)$/i.test(String(page.kind || ""))) return true;
@@ -151,6 +185,9 @@ export function looksLikeCoverOrRendering(page) {
   return false;
 }
 
+/**
+ * @param {any} page
+ */
 export function looksLikeElectricalPlan(page) {
   if (!page) return false;
   if (looksLikeCoverOrRendering(page) || looksLikeIndexPage(page)) return false;
@@ -178,6 +215,9 @@ export function looksLikeElectricalPlan(page) {
   return false;
 }
 
+/**
+ * @param {any} text
+ */
 export function classifyPageText(text) {
   const blob = String(text || "");
   if (isIndexText(blob)) return "index";
@@ -197,6 +237,10 @@ export function classifyPageText(text) {
   return "other";
 }
 
+/**
+ * @param {any} items
+ * @param {any} viewport
+ */
 export function classifyPageItems(items = [], viewport = {}) {
   const width = Number(viewport?.width) || 1;
   const height = Number(viewport?.height) || 1;
@@ -212,6 +256,10 @@ export function classifyPageItems(items = [], viewport = {}) {
   return classifyPageText(full);
 }
 
+/**
+ * @param {any} items
+ * @param {any} viewport
+ */
 export function inferPlanType(items = [], viewport = {}) {
   const width = Number(viewport?.width) || 1;
   const height = Number(viewport?.height) || 1;
@@ -226,6 +274,9 @@ export function inferPlanType(items = [], viewport = {}) {
   return "";
 }
 
+/**
+ * @param {any} page
+ */
 export function pagePlanType(page) {
   if (page?.planType) return String(page.planType);
   const blob = [page?.title, page?.sheetId, ...(page?.tokens || []).map((token) => token.text)].filter(Boolean).join(" ");
@@ -234,6 +285,10 @@ export function pagePlanType(page) {
   return "";
 }
 
+/**
+ * @param {any} items
+ * @param {any} yTolerance
+ */
 export function clusterTextRows(items, yTolerance = 3.5) {
   const sorted = [...items].sort((a, b) => a.y - b.y || a.x - b.x);
   const rows = [];
@@ -255,6 +310,10 @@ export function clusterTextRows(items, yTolerance = 3.5) {
   }).filter((row) => row.text);
 }
 
+/**
+ * @param {any} rows
+ * @param {any} options
+ */
 export function parseLegendRows(rows, options = {}) {
   const symbols = [];
   const hasQtyColumn = Boolean(options.hasQtyColumn || hasPrintedQtyHeader(rows));
@@ -283,6 +342,10 @@ export function parseLegendRows(rows, options = {}) {
 
 const VOLTAGE = new Set(["120", "208", "240", "277", "347", "480", "600"]);
 
+/**
+ * @param {any} tokens
+ * @param {any} options
+ */
 export function scheduleQuantityFromTokens(tokens = [], options = {}) {
   const list = (tokens || []).map((token) => String(token || "").trim()).filter(Boolean);
   const qtyIndex = list.findIndex((token) => /^(qty|quantity)$/i.test(token));
@@ -303,6 +366,11 @@ function parsePrintedQty(text) {
   return value;
 }
 
+/**
+ * @param {any} rows
+ * @param {any} source
+ * @param {any} options
+ */
 export function parseScheduleRows(rows, source, options = {}) {
   const items = [];
   const hasQtyColumn = Boolean(options.hasQtyColumn || hasPrintedQtyHeader(rows));
@@ -389,7 +457,7 @@ export async function readDrawingDocuments(fileBytes) {
     if (kind === "legend") symbols.push(...parseLegendRows(rows, { hasQtyColumn: hasPrintedQtyHeader(rows) }).map((item) => ({ ...item, page: pageNumber })));
     if (kind === "lighting-schedule" || kind === "device-schedule" || kind === "equipment-schedule" || kind === "spec") {
       scheduleItems.push(...parseScheduleRows(rows, kind).map((item) => ({ ...item, page: pageNumber })));
-      if (kind === "spec" || kind === "legend") {
+      if (kind === "spec" || String(kind) === "legend") {
         symbols.push(...parseLegendRows(rows).map((item) => ({ ...item, page: pageNumber })));
       }
     }
@@ -404,6 +472,9 @@ export async function readDrawingDocuments(fileBytes) {
   };
 }
 
+/**
+ * @param {any} docs
+ */
 export function drawingSymbolsFromDocs(docs) {
   const fromLegend = docs?.symbols || [];
   const fromSched = (docs?.scheduleItems || []).map((item) => ({

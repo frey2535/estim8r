@@ -41,6 +41,9 @@ async function searchViaDevProxy(body) {
   throw new Error("Live catalog returned a non-JSON response.");
 }
 
+/**
+ * @param {Record<string, any>} options
+ */
 export async function searchLiveSupplierCatalog({ query, quantity = 1, limit = 8 } = {}) {
   const body = { query, quantity, limit };
   const useProxy = shouldUseLiveCatalogDevProxy({

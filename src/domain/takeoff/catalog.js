@@ -279,20 +279,35 @@ export const DEVICE_SYMBOLS = [
 
 export const DEFAULT_DROP_FEET = 10;
 
+/**
+ * @param {any} category
+ * @param {any} extra
+ */
 export function symbolsForCategory(category, extra = []) {
   const all = [...extra, ...DEVICE_SYMBOLS];
   if (!category) return all;
   return all.filter((item) => item.category === category);
 }
 
+/**
+ * @param {any} symbolId
+ * @param {any} extra
+ */
 export function findSymbol(symbolId, extra = []) {
   return [...extra, ...DEVICE_SYMBOLS].find((item) => item.id === symbolId) || extra[0] || DEVICE_SYMBOLS[0];
 }
 
+/**
+ * @param {any} key
+ */
 export function toolByKey(key) {
   return TAKEOFF_TOOLS.find((item) => item.key === key) || TAKEOFF_TOOLS[0];
 }
 
+/**
+ * @param {any} list
+ * @param {any} query
+ */
 export function filterSymbols(list, query) {
   const q = String(query || "").trim().toLowerCase();
   if (!q) return list;

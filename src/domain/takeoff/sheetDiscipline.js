@@ -46,6 +46,9 @@ const RELATED = {
   mechanical: ["hvac"],
 };
 
+/**
+ * @param {any} text
+ */
 export function parseSheetId(text) {
   const blob = String(text || "").toUpperCase();
   const dotted = blob.match(SHEET_ID_RE);
@@ -55,6 +58,9 @@ export function parseSheetId(text) {
   return `${compact[1]}${compact[2]}`;
 }
 
+/**
+ * @param {any} sheetId
+ */
 export function electricalSheetLooksLikePlan(sheetId) {
   const raw = String(sheetId || "").toUpperCase();
   if (!/^E[A-Z]*/.test(raw)) return false;
@@ -66,12 +72,18 @@ export function electricalSheetLooksLikePlan(sheetId) {
   return n >= 100 && n < 500;
 }
 
+/**
+ * @param {any} sheetId
+ */
 export function tradeFromSheetId(sheetId) {
   const match = String(sheetId || "").toUpperCase().match(/^([A-Z]{1,3})/);
   if (!match) return "";
   return PREFIX_TRADE[match[1].toLowerCase()] || "";
 }
 
+/**
+ * @param {any} tokens
+ */
 export function findSheetId(tokens) {
   let best = "";
   let bestScore = -1;
@@ -96,6 +108,10 @@ function hintTrade(text) {
   return "";
 }
 
+/**
+ * @param {any} text
+ * @param {any} tokens
+ */
 export function classifySheetDiscipline(text, tokens = []) {
   const list = tokens || [];
   const titleTokens = list.filter((token) => (token.x || 0) >= 68 && (token.y || 0) >= 70);
@@ -113,6 +129,9 @@ export function classifySheetDiscipline(text, tokens = []) {
   return tradeFromSheetId(parseSheetId(blob)) || "unknown";
 }
 
+/**
+ * @param {any} page
+ */
 export function pageDiscipline(page) {
   if (page?.discipline) return page.discipline;
   const tokens = page?.tokens || [];
@@ -120,6 +139,10 @@ export function pageDiscipline(page) {
   return classifySheetDiscipline(text, tokens);
 }
 
+/**
+ * @param {any} page
+ * @param {any} trade
+ */
 export function pageMatchesTrade(page, trade) {
   if (!trade) return true;
   const discipline = pageDiscipline(page);
@@ -128,6 +151,9 @@ export function pageMatchesTrade(page, trade) {
   return (RELATED[trade] || []).includes(discipline);
 }
 
+/**
+ * @param {any} token
+ */
 export function isSheetChrome(token) {
   const x = Number(token?.x) || 0;
   const y = Number(token?.y) || 0;

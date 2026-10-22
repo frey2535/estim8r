@@ -4,6 +4,11 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, Number(value) || 0));
 }
 
+/**
+ * @param {any} marks
+ * @param {any} current
+ * @param {any} symbol
+ */
 export function changeReviewDeviceType(marks, current, symbol) {
   if (!current || !symbol) return marks || [];
   const typeCode = String(symbol.abbr || symbol.type || "").toUpperCase();
@@ -25,6 +30,11 @@ export function changeReviewDeviceType(marks, current, symbol) {
   });
 }
 
+/**
+ * @param {any} marks
+ * @param {any} current
+ * @param {any} point
+ */
 export function moveReviewMark(marks, current, point) {
   if (!current || !point) return marks || [];
   const x = clamp(point.x, 0, 100);
@@ -49,6 +59,11 @@ export function moveReviewMark(marks, current, point) {
   });
 }
 
+/**
+ * @param {any} marks
+ * @param {any} current
+ * @param {any} bounds
+ */
 export function resizeReviewBounds(marks, current, bounds = {}) {
   if (!current) return marks || [];
   const w = clamp(bounds.w ?? current.outline?.w ?? 0.7, 0.2, 2.4);
@@ -78,6 +93,9 @@ export function resizeReviewBounds(marks, current, bounds = {}) {
   });
 }
 
+/**
+ * @param {Record<string, any>} sheet
+ */
 export function createManualDeviceMark({
   sheet = 1,
   trade = "electrical",
@@ -113,6 +131,9 @@ export function createManualDeviceMark({
   };
 }
 
+/**
+ * @param {any} marks
+ */
 export function projectPrototypesFromCorrections(marks = []) {
   const out = [];
   for (const mark of marks || []) {
@@ -141,6 +162,10 @@ export function projectPrototypesFromCorrections(marks = []) {
   return out;
 }
 
+/**
+ * @param {any} marks
+ * @param {any} current
+ */
 export function rejectReviewMark(marks, current) {
   return applyReviewDecision(marks, current, "rejected");
 }

@@ -45,6 +45,9 @@ export const DEFAULT_ASSEMBLIES = [
   },
 ];
 
+/**
+ * @param {any} input
+ */
 export function normalizeAssembly(input = {}) {
   return {
     id: input.id || makeId(),
@@ -57,6 +60,9 @@ export function normalizeAssembly(input = {}) {
   };
 }
 
+/**
+ * @param {any} input
+ */
 export function normalizeComponent(input = {}) {
   return {
     id: input.id || makeId(),
@@ -73,6 +79,9 @@ export function normalizeComponent(input = {}) {
   };
 }
 
+/**
+ * @param {any} input
+ */
 export function validateAssembly(input) {
   const assembly = normalizeAssembly(input);
   const errors = [];
@@ -85,11 +94,16 @@ export function validateAssembly(input) {
   return { assembly, errors, valid: errors.length === 0 };
 }
 
+/**
+ * @param {any} input
+ * @param {any} assemblyQuantity
+ * @param {any} laborRate
+ */
 export function assemblyToEstimateLines(input, assemblyQuantity = 1, laborRate = 0) {
   const { assembly, errors, valid } = validateAssembly(input);
   if (!valid) {
     const error = new Error(errors.join(" "));
-    error.code = "INVALID_ASSEMBLY";
+    /** @type {any} */ (error).code = "INVALID_ASSEMBLY";
     throw error;
   }
   const multiplier = positive(assemblyQuantity, 1);

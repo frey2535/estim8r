@@ -17,6 +17,9 @@ export const EMPLOYEE_CLASSES = [
 
 export const DEFAULT_CLASS_ID = "journeyman";
 
+/**
+ * @param {any} wageOverrides
+ */
 export function defaultCrew(wageOverrides = {}) {
   return EMPLOYEE_CLASSES.map((row) => {
     const selected = row.id === DEFAULT_CLASS_ID;
@@ -31,6 +34,9 @@ export function defaultCrew(wageOverrides = {}) {
   });
 }
 
+/**
+ * @param {any} crew
+ */
 export function journeymanWage(crew) {
   const row = (crew || []).find((item) => item.id === DEFAULT_CLASS_ID);
   const fallback = EMPLOYEE_CLASSES.find((item) => item.id === DEFAULT_CLASS_ID);

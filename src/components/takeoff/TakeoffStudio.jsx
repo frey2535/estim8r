@@ -25,6 +25,9 @@ const TOOL_ICONS = {
 
 const iconButton = "inline-flex h-8 w-8 items-center justify-center rounded-md text-foreground hover:bg-muted disabled:opacity-40";
 
+/**
+ *  * @param {Record<string, any>} options
+ */
 export function TakeoffToolRail({ tool, onTool }) {
   return (
     <nav aria-label="Takeoff tools" className="hidden min-h-0 flex-col gap-1 overflow-y-auto border-r border-border bg-card px-1 py-2 lg:flex">
@@ -57,6 +60,9 @@ export function TakeoffToolRail({ tool, onTool }) {
   );
 }
 
+/**
+ *  * @param {Record<string, any>} options
+ */
 export function TakeoffCommandBar({
   fileName,
   detail,
@@ -126,6 +132,9 @@ export function TakeoffCommandBar({
   );
 }
 
+/**
+ *  * @param {Record<string, any>} options
+ */
 export function TakeoffSelectionBar({
   selected,
   isDevice,

@@ -4,6 +4,9 @@ import { isAbbreviationJunkType, isNonPlanSheetKind, isNotesOrTitleBand, normali
 
 export { scheduleQuantityFromTokens };
 
+/**
+ * @param {any} value
+ */
 export function typeKey(value) {
   const tagged = taggedEquipmentCode(value);
   if (tagged) return tagged;
@@ -12,6 +15,9 @@ export function typeKey(value) {
   return text;
 }
 
+/**
+ * @param {any} mark
+ */
 export function markTypeKey(mark) {
   const typed = typeKey(mark?.typeCode || mark?.abbr);
   if (typed && typed !== "?" && typed !== "UNKNOWN" && !isAbbreviationJunkType(typed) && isPrintedFixtureType(typed)) {
@@ -35,6 +41,11 @@ export function markTypeKey(mark) {
   return "";
 }
 
+/**
+ * @param {any} mark
+ * @param {any} pageKinds
+ * @param {any} pages
+ */
 export function sheetAllowsPlanCount(mark, pageKinds = {}, pages = []) {
   const page = (pages || []).find((item) => Number(item.page) === Number(mark?.sheet));
   if (page) return looksLikeElectricalPlan(page);
@@ -44,6 +55,11 @@ export function sheetAllowsPlanCount(mark, pageKinds = {}, pages = []) {
   return true;
 }
 
+/**
+ * @param {any} mark
+ * @param {any} pageKinds
+ * @param {any} pages
+ */
 export function isPlanCountMark(mark, pageKinds = {}, pages = []) {
   if (!mark) return false;
   if (mark.type !== "count" && mark.type !== "drop") return false;
@@ -69,6 +85,10 @@ function tokenRows(tokens = []) {
   }).filter((row) => row.text);
 }
 
+/**
+ * @param {any} pages
+ * @param {any} trade
+ */
 export function scheduleItemsFromPages(pages, trade) {
   const items = [];
   for (const page of pages || []) {
@@ -82,6 +102,9 @@ export function scheduleItemsFromPages(pages, trade) {
   return items;
 }
 
+/**
+ * @param {Record<string, any>} marks
+ */
 export function reconcilePlanToSchedule({ marks, scheduleItems = [], pages = [], pageKinds = {}, trade } = {}) {
   const planCounts = new Map();
   for (const mark of marks || []) {
@@ -129,6 +152,9 @@ export function reconcilePlanToSchedule({ marks, scheduleItems = [], pages = [],
   };
 }
 
+/**
+ * @param {any} result
+ */
 export function describeReconciliation(result) {
   if (!result?.rows?.length) return "No schedule quantities were printed next to legend types. Plan counts stay as the takeoff.";
   if (!result.discrepancyCount) {

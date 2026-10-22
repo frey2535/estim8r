@@ -62,6 +62,10 @@ function blankLine(rate) {
     laborRateEdited: false,
     laborMhEdited: false,
     laborMatchStatus: "",
+    laborSelection: null,
+    materialCostEdited: false,
+    laborItemId: "",
+    quantityBasis: "",
   };
 }
 
@@ -1102,7 +1106,7 @@ export default function EstimateBuilder() {
   );
 }
 
-function Field({ label, value, set, type = "text", children, className = "", required = false, hint = "" }) {
+function Field({ label, value, set, type = "text", children = null, className = "", required = false, hint = "" }) {
   return (
     <label className={`min-w-0 ${className}`}>
       <span className="mb-1 block text-sm font-bold text-foreground">

@@ -9,7 +9,8 @@ import { localFallbackIdentity, readLocalEmailOverride } from "@/lib/ownerCursor
 import { describeAuthError, hasAuthCode, readAuthCallbackError, waitForAuthCallbackSession } from "@/lib/authRedirect";
 import { isDrawingPickerOpen } from "@/domain/takeoff/drawingUpload";
 
-const AuthContext = createContext();
+/** @type {React.Context<any>} */
+const AuthContext = createContext(null);
 const AUTH_STARTUP_TIMEOUT_MS = 10000;
 function withTimeout(promise, ms, message) {
   let id;
@@ -57,7 +58,7 @@ export const AuthProvider = ({ children }) => {
         const callbackError = readAuthCallbackError(window.location.search, window.location.hash);
         if (callbackError) {
           const authCallbackError = new Error(describeAuthError(callbackError, { google: true }));
-          authCallbackError.status = 401;
+          /** @type {any} */ (authCallbackError).status = 401;
           throw authCallbackError;
         }
         if (hasAuthCode(window.location.search, window.location.hash)) {

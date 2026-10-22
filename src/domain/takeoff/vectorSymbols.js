@@ -11,6 +11,10 @@ export const OVERLAP_IOU = 0.55;
 
 const IDENTITY = [1, 0, 0, 1, 0, 0];
 
+/**
+ * @param {any} a
+ * @param {any} b
+ */
 export function multiplyCtm(a = IDENTITY, b = IDENTITY) {
   return [
     a[0] * b[0] + a[2] * b[1],
@@ -22,6 +26,11 @@ export function multiplyCtm(a = IDENTITY, b = IDENTITY) {
   ];
 }
 
+/**
+ * @param {any} ctm
+ * @param {any} x
+ * @param {any} y
+ */
 export function applyCtm(ctm = IDENTITY, x = 0, y = 0) {
   return {
     x: ctm[0] * x + ctm[2] * y + ctm[4],
@@ -31,6 +40,11 @@ export function applyCtm(ctm = IDENTITY, x = 0, y = 0) {
 
 // A PDF minMax rectangle must transform all four corners: transforming only
 // opposite corners collapses or shifts bounds under rotated/sheared CTMs.
+/**
+ * @param {any} minMax
+ * @param {any} ctm
+ * @param {any} toPagePct
+ */
 export function transformedMinMaxBounds(minMax, ctm, toPagePct) {
   if (!Array.isArray(minMax) || minMax.length < 4) return null;
   const [x0, y0, x1, y1] = minMax.map(Number);
@@ -42,6 +56,9 @@ export function transformedMinMaxBounds(minMax, ctm, toPagePct) {
   return boundsOfPoints(points);
 }
 
+/**
+ * @param {any} points
+ */
 export function boundsOfPoints(points = []) {
   if (!points.length) return null;
   let minX = Infinity;
@@ -57,6 +74,12 @@ export function boundsOfPoints(points = []) {
   return boxFromExtents(minX, minY, maxX, maxY);
 }
 
+/**
+ * @param {any} minX
+ * @param {any} minY
+ * @param {any} maxX
+ * @param {any} maxY
+ */
 export function boxFromExtents(minX, minY, maxX, maxY) {
   const w = maxX - minX;
   const h = maxY - minY;
@@ -73,6 +96,9 @@ export function boxFromExtents(minX, minY, maxX, maxY) {
   };
 }
 
+/**
+ * @param {any} data
+ */
 export function parseDrawOps(data) {
   const list = data ? Array.from(data) : [];
   const points = [];
@@ -104,6 +130,9 @@ export function parseDrawOps(data) {
 
 // Sample Bezier segments for geometric bounds. PDF drawing operators store curve
 // control points separately from endpoints; endpoint-only bounds miss curved ink.
+/**
+ * @param {any} data
+ */
 export function drawOpsExtentPoints(data) {
   const list = data ? Array.from(data) : [];
   const points = [];
@@ -139,6 +168,9 @@ export function drawOpsExtentPoints(data) {
   return points;
 }
 
+/**
+ * @param {any} bounds
+ */
 export function isSymbolSized(bounds) {
   if (!bounds) return false;
   const long = Math.max(bounds.w, bounds.h);
@@ -150,6 +182,9 @@ export function isSymbolSized(bounds) {
   return true;
 }
 
+/**
+ * @param {any} points
+ */
 export function polygonArea(points = []) {
   if (points.length < 3) return 0;
   let sum = 0;
@@ -159,6 +194,9 @@ export function polygonArea(points = []) {
   return Math.abs(sum) / 2;
 }
 
+/**
+ * @param {any} points
+ */
 export function polygonPerimeter(points = []) {
   if (points.length < 2) return 0;
   let sum = 0;
@@ -169,6 +207,10 @@ export function polygonPerimeter(points = []) {
   return sum;
 }
 
+/**
+ * @param {any} points
+ * @param {any} bounds
+ */
 export function pathCircularity(points, bounds) {
   const area = polygonArea(points) || (bounds ? bounds.w * bounds.h * 0.785 : 0);
   const peri = polygonPerimeter(points) || (bounds ? 2 * (bounds.w + bounds.h) : 0);
@@ -176,6 +218,9 @@ export function pathCircularity(points, bounds) {
   return (4 * Math.PI * area) / (peri * peri);
 }
 
+/**
+ * @param {any} points
+ */
 export function isAxisAlignedRect(points = []) {
   const verts = uniqueVertices(points);
   if (verts.length < 4 || verts.length > 5) return false;
@@ -207,6 +252,11 @@ function uniqueVertices(points) {
   return verts;
 }
 
+/**
+ * @param {any} points
+ * @param {any} bounds
+ * @param {any} options
+ */
 export function classifySymbolGeometry(points, bounds, options = {}) {
   const box = bounds || boundsOfPoints(points);
   if (!box) return null;
@@ -245,6 +295,9 @@ export function classifySymbolGeometry(points, bounds, options = {}) {
   };
 }
 
+/**
+ * @param {any} box
+ */
 export function rectPoints(box) {
   return [
     { x: box.minX, y: box.minY },
@@ -254,6 +307,9 @@ export function rectPoints(box) {
   ];
 }
 
+/**
+ * @param {any} geometry
+ */
 export function toCandidate(geometry) {
   if (!geometry) return null;
   const outline = {
@@ -310,6 +366,9 @@ function isLineOrRoomBounds(bounds) {
   return long >= 1.6 && short <= 0.55 && aspect >= 5 && long < 90;
 }
 
+/**
+ * @param {any} data
+ */
 export function subpathsFromDrawOps(data) {
   const list = data ? Array.from(data) : [];
   const paths = [];
@@ -342,6 +401,10 @@ export function subpathsFromDrawOps(data) {
   return paths;
 }
 
+/**
+ * @param {any} entries
+ * @param {any} toPagePct
+ */
 export function sheetGeometryFromConstructedPaths(entries, toPagePct) {
   const raw = [];
   for (const entry of entries || []) {
@@ -374,6 +437,10 @@ export function sheetGeometryFromConstructedPaths(entries, toPagePct) {
   return raw;
 }
 
+/**
+ * @param {any} entries
+ * @param {any} toPagePct
+ */
 export function candidatesFromConstructedPaths(entries, toPagePct) {
   const raw = [];
   for (const entry of entries || []) {
@@ -404,12 +471,19 @@ export function candidatesFromConstructedPaths(entries, toPagePct) {
   return mergeOverlappingCandidates(raw);
 }
 
+/**
+ * @param {any} box
+ */
 export function candidateFromPageBox(box) {
   if (!isSymbolSized(box)) return null;
   const geometry = classifySymbolGeometry(rectPoints(box), box);
   return toCandidate(geometry);
 }
 
+/**
+ * @param {any} a
+ * @param {any} b
+ */
 export function iou(a, b) {
   const minX = Math.max(a.cx - a.w / 2, b.cx - b.w / 2);
   const minY = Math.max(a.cy - a.h / 2, b.cy - b.h / 2);
@@ -422,6 +496,9 @@ export function iou(a, b) {
   return inter / (a.w * a.h + b.w * b.h - inter);
 }
 
+/**
+ * @param {any} candidates
+ */
 export function mergeOverlappingCandidates(candidates = []) {
   const list = [...candidates].sort((a, b) => (a.w * a.h) - (b.w * b.h));
   const kept = [];
@@ -433,6 +510,10 @@ export function mergeOverlappingCandidates(candidates = []) {
   return kept;
 }
 
+/**
+ * @param {any} candidate
+ * @param {any} point
+ */
 export function containsPoint(candidate, point) {
   if (!candidate || !point) return false;
   if (candidate.kind === "circle") {
@@ -443,6 +524,32 @@ export function containsPoint(candidate, point) {
     && Math.abs(point.y - candidate.cy) <= candidate.h / 2;
 }
 
+/**
+ * True when the printed tag sits on or immediately beside the extracted body.
+ * Uses cardinal-edge contact so side-tagged Soccer fixtures (gaps ~0.4–1.0)
+ * associate, while diagonal foreign neighbors (Pottsville E210 type 3 @ ~0.47
+ * outside on both axes) stay rejected.
+ */
+export function tagAdjacentToSymbolBody(token, candidate, pad = 0.80) {
+  if (!token || !candidate) return false;
+  if (containsPoint(candidate, token)) return true;
+  const w = Number(candidate.w) || 0;
+  const h = Number(candidate.h) || 0;
+  const cx = Number(candidate.cx) || 0;
+  const cy = Number(candidate.cy) || 0;
+  const needX = Math.abs((Number(token.x) || 0) - cx) - w / 2;
+  const needY = Math.abs((Number(token.y) || 0) - cy) - h / 2;
+  // Cardinal: inside one axis, or nearly flush on at least one edge (not a
+  // diagonal corner steal).
+  const onEdge = needX <= 0 || needY <= 0 || Math.min(needX, needY) <= 0.22;
+  const edgePad = Math.max(Number(pad) || 0, 1.05, Math.max(w, h) * 0.12);
+  return onEdge && needX <= edgePad && needY <= edgePad;
+}
+
+/**
+ * @param {any} point
+ * @param {any} points
+ */
 export function pointInPolygon(point, points = []) {
   let inside = false;
   for (let index = 0, last = points.length - 1; index < points.length; last = index++) {
@@ -455,20 +562,63 @@ export function pointInPolygon(point, points = []) {
   return inside;
 }
 
+/**
+ * @param {any} token
+ * @param {any} candidate
+ */
 export function distanceToCandidate(token, candidate) {
   return Math.hypot((token?.x || 0) - candidate.cx, (token?.y || 0) - candidate.cy);
 }
 
+/**
+ * Pottsville E210 type-3 fixture bar: a vertical thin/mid rect (e.g. 0.201×0.548
+ * at 69.825,77.442 or 0.331×0.548 beside 69.048,79.524) sits immediately beside
+ * the printed type digit. Cardinal-adjacent + vertical bar geometry — not digit
+ * ink, a foreign body, or a horizontal Soccer hatch scrap (0.504×0.2).
+ */
+export function isAdjacentThinFixtureBar(token, candidate) {
+  if (!token || !candidate || candidate.kind !== "rect") return false;
+  if (!tagAdjacentToSymbolBody(token, candidate)) return false;
+  const w = Number(candidate.w) || 0;
+  const h = Number(candidate.h) || 0;
+  // Strip-light bars beside type digits are taller than wide; horizontal scraps
+  // under Soccer 1E tags must not steal the troffer body via this exception.
+  if (h < w) return false;
+  const long = Math.max(w, h);
+  const short = Math.min(w, h);
+  const aspect = long / (short || 1e-9);
+  const area = w * h;
+  return short >= 0.16 && short <= 0.36
+    && long >= 0.48 && long <= 0.62
+    && aspect >= 1.5 && aspect <= 3.6
+    && area >= 0.09 && area <= 0.22;
+}
+
+/**
+ * @param {any} candidate
+ * @param {any} token
+ */
 export function looksLikeTextGlyph(candidate, token) {
   if (!candidate || !token) return false;
   const dist = distanceToCandidate(token, candidate);
-  const size = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
+  const w = Number(candidate.w) || 0;
+  const h = Number(candidate.h) || 0;
+  const size = Math.max(w, h);
+  const short = Math.min(w, h);
+  const aspect = size / (short || 1e-9);
   const tokenLen = String(token.text || "").trim().replace(/^['"‘’“”`]+|['"‘’“”`]+$/g, "").length || 1;
   const expected = Math.max(0.35, tokenLen * 0.42);
   if (size > 0.70) return false;
+  // Vertical fixture bars beside type tags are bodies, not letter ink
+  // (E210 type 3: 0.201×0.548 or mid-width 0.331×0.548 next to printed "3").
+  if (isAdjacentThinFixtureBar(token, candidate)) return false;
+  if (aspect >= 2.2 && short <= 0.28) return false;
   return dist < 0.7 && size <= expected + 0.4 && size < 1.35;
 }
 
+/**
+ * @param {any} text
+ */
 export function shapeHintFromLabel(text) {
   const blob = String(text || "").toLowerCase();
   if (!blob.trim()) return null;
@@ -478,6 +628,10 @@ export function shapeHintFromLabel(text) {
   return null;
 }
 
+/**
+ * @param {any} geometry
+ * @param {any} nearby
+ */
 export function isWallOrArchitecturalMark(geometry, nearby = []) {
   if (!geometry) return true;
   const long = Math.max(Number(geometry.w) || 0, Number(geometry.h) || 0, (Number(geometry.r) || 0) * 2);
@@ -498,15 +652,23 @@ export function isWallOrArchitecturalMark(geometry, nearby = []) {
   return false;
 }
 
+/**
+ * @param {any} candidate
+ */
 export function looksLikeRecessedCanBody(candidate) {
   if (!candidate || isJunkGeometry(candidate)) return false;
   const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
   const short = Math.min(Number(candidate.w) || 0, Number(candidate.h) || 0);
   const aspect = long / (short || 1e-9);
   if (long < 0.38 || long > 0.86 || short < 0.32 || aspect > 1.4) return false;
-  return candidate.kind === "circle" || candidate.kind === "rect";
+  // Circles only — small type-code rect/composite glyphs beside a troffer must
+  // not become unlabeled-lighting-can review marks that inflate deviceCount.
+  return candidate.kind === "circle";
 }
 
+/**
+ * @param {any} candidate
+ */
 export function looksLikeTrofferShard(candidate) {
   if (!candidate) return false;
   const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
@@ -517,6 +679,11 @@ export function looksLikeTrofferShard(candidate) {
   return candidate.kind === "rect" || candidate.kind === "path" || candidate.kind === "composite";
 }
 
+/**
+ * @param {any} token
+ * @param {any} candidates
+ * @param {any} options
+ */
 export function assembleTrofferNearTag(token, candidates = [], options = {}) {
   if (!token) return null;
   const radius = Number(options.radius) > 0 ? Number(options.radius) : 1.15;
@@ -556,6 +723,10 @@ export function assembleTrofferNearTag(token, candidates = [], options = {}) {
   };
 }
 
+/**
+ * @param {any} candidate
+ * @param {any} nearby
+ */
 export function isJunkGeometry(candidate, nearby = []) {
   if (!candidate) return true;
   const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
@@ -567,6 +738,10 @@ export function isJunkGeometry(candidate, nearby = []) {
   return false;
 }
 
+/**
+ * @param {any} candidate
+ * @param {any} hint
+ */
 export function isPlausibleSymbolForHint(candidate, hint) {
   if (!candidate || isJunkGeometry(candidate)) return false;
   const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
@@ -582,12 +757,20 @@ export function isPlausibleSymbolForHint(candidate, hint) {
   return long <= 2.3 && aspect <= 4.5;
 }
 
+/**
+ * @param {any} hint
+ */
 export function associateRadiusForHint(hint) {
   if (hint === "circle") return 1.2;
   if (hint === "rect") return 1.5;
   return TAG_ASSOCIATE_RADIUS;
 }
 
+/**
+ * @param {any} token
+ * @param {any} candidate
+ * @param {any} options
+ */
 export function fixtureAssociationScore(token, candidate, options = {}) {
   const dist = distanceToCandidate(token, candidate);
   const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
@@ -612,6 +795,11 @@ export function fixtureAssociationScore(token, candidate, options = {}) {
   return score;
 }
 
+/**
+ * @param {any} token
+ * @param {any} candidates
+ * @param {any} options
+ */
 export function associateGeometry(token, candidates = [], options = {}) {
   let best = null;
   let bestScore = -Infinity;
@@ -624,8 +812,31 @@ export function associateGeometry(token, candidates = [], options = {}) {
     const dist = distanceToCandidate(token, candidate);
     const inside = containsPoint(candidate, token);
     if (hint === "circle" && candidate.kind !== "circle" && dist > 0.55 && !inside) continue;
+    // Rect lighting fixtures (troffer / type 1–3) must not steal a neighboring
+    // can/OS circle just because it sits within the associate radius. That
+    // yanks the fill onto the wrong body and fails tag-on-symbol marker checks
+    // (Pottsville E210 type 3 @ ~0.85 from a neighbor circle).
+    if (hint === "rect" && candidate.kind === "circle" && !inside) continue;
+    // Same sheet: a foreign rect ~0.92 away (E210 type 3 @ 69.55,77.86) is not
+    // the tagged fixture — require the tag on or adjacent to the body.
+    if (hint === "rect" && !inside && !tagAdjacentToSymbolBody(token, candidate)) continue;
+    // Room/corridor scraps (E210 type 3 @ 69.048 → 1.614×0.634) must not win
+    // over the printed tag's own fixture bar. Keep real 2x4 bodies (short≥0.75).
+    if (
+      hint === "rect"
+      && !inside
+      && Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0) > 1.45
+      && Math.min(Number(candidate.w) || 0, Number(candidate.h) || 0) < 0.75
+    ) continue;
     if (dist > radius && !(inside && Math.max(candidate.w, candidate.h) <= 2.3)) continue;
-    if (hint === "rect" && !inside && (Math.max(candidate.w, candidate.h) < 0.55 || candidate.w * candidate.h < 0.28)) continue;
+    // Adjacent thin fixture bars (E210 type 3: long 0.548 < 0.55, area 0.110
+    // < 0.28) are genuine bodies; keep the floor for everything else.
+    if (
+      hint === "rect"
+      && !inside
+      && !isAdjacentThinFixtureBar(token, candidate)
+      && (Math.max(candidate.w, candidate.h) < 0.55 || candidate.w * candidate.h < 0.28)
+    ) continue;
     if (rivals.some((rival) => distanceToCandidate(rival, candidate) + 0.12 < dist)) continue;
     if (inside && Math.max(candidate.w, candidate.h) > 2.4) continue;
     const score = fixtureAssociationScore(token, candidate, { shapeHint: hint });
@@ -637,13 +848,18 @@ export function associateGeometry(token, candidates = [], options = {}) {
   return bestScore >= 1.35 ? best : null;
 }
 
+/**
+ * @param {any} token
+ * @param {any} candidates
+ * @param {any} options
+ */
 export function placeOnSymbolGeometry(token, candidates = [], options = {}) {
   const hint = options.shapeHint;
   const radius = Number(options.radius) > 0 ? Number(options.radius) : associateRadiusForHint(hint);
-  if (hint === "rect") {
-    const clustered = assembleTrofferNearTag(token, candidates, { radius: Math.max(radius, 1.15) });
-    if (clustered) return clustered;
-  }
+  // Match the verified source path: associate a single body first. Do not run
+  // assembleTrofferNearTag here — it merges E210 type-3 bars / neighbor cans into
+  // a foreign composite. Troffer shard assembly stays available to callers that
+  // need it explicitly after association fails.
   const near = associateGeometry(token, candidates, { ...options, radius });
   if (near) return near;
   if (hint === "circle") return null;
@@ -658,6 +874,10 @@ export function placeOnSymbolGeometry(token, candidates = [], options = {}) {
   return far;
 }
 
+/**
+ * @param {any} token
+ * @param {any} options
+ */
 export function tagOnSymbolGeometry(token, options = {}) {
   if (!token) return null;
   const x = Number(token.x);
@@ -687,6 +907,11 @@ export function tagOnSymbolGeometry(token, options = {}) {
   };
 }
 
+/**
+ * @param {any} tokens
+ * @param {any} candidates
+ * @param {any} options
+ */
 export function assignExclusiveGeometry(tokens = [], candidates = [], options = {}) {
   const pairs = [];
   for (const token of tokens || []) {
@@ -698,8 +923,21 @@ export function assignExclusiveGeometry(tokens = [], candidates = [], options = 
       const dist = distanceToCandidate(token, candidate);
       const inside = containsPoint(candidate, token);
       if (hint === "circle" && candidate.kind !== "circle" && dist > 0.55 && !inside) continue;
+      if (hint === "rect" && candidate.kind === "circle" && !inside) continue;
+      if (hint === "rect" && !inside && !tagAdjacentToSymbolBody(token, candidate)) continue;
+      if (
+        hint === "rect"
+        && !inside
+        && Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0) > 1.45
+        && Math.min(Number(candidate.w) || 0, Number(candidate.h) || 0) < 0.75
+      ) continue;
       if (dist > maxDist && !(inside && Math.max(candidate.w, candidate.h) <= 2.3)) continue;
-      if (hint === "rect" && !inside && (Math.max(candidate.w, candidate.h) < 0.55 || candidate.w * candidate.h < 0.28)) continue;
+      if (
+        hint === "rect"
+        && !inside
+        && !isAdjacentThinFixtureBar(token, candidate)
+        && (Math.max(candidate.w, candidate.h) < 0.55 || candidate.w * candidate.h < 0.28)
+      ) continue;
       const score = fixtureAssociationScore(token, candidate, { shapeHint: hint });
       if (score < 1.35) continue;
       pairs.push({ token, candidate, dist, score });
@@ -718,6 +956,11 @@ export function assignExclusiveGeometry(tokens = [], candidates = [], options = 
   return assigned;
 }
 
+/**
+ * @param {any} outline
+ * @param {any} factor
+ * @param {any} origin
+ */
 export function scaleOutline(outline, factor, origin) {
   const scale = Number(factor) || 1;
   if (!outline || scale === 1) return outline;
@@ -771,6 +1014,12 @@ function outlineCenter(outline, origin) {
   };
 }
 
+/**
+ * @param {any} outline
+ * @param {any} origin
+ * @param {any} point
+ * @param {any} pad
+ */
 export function pointHitsOutline(outline, origin, point, pad = 0.55) {
   if (!outline || !point) return false;
   const center = outlineCenter(outline, origin);

@@ -14,6 +14,9 @@ function clamp01(value) {
   return Math.min(1, n);
 }
 
+/**
+ * @param {any} page
+ */
 export function isScannedOrSparsePage(page) {
   if (!page) return false;
   if (page.scanned === true || page.kind === "scan" || page.forceRaster === true) return true;
@@ -22,6 +25,10 @@ export function isScannedOrSparsePage(page) {
   return paths < 8 && tokens < 12;
 }
 
+/**
+ * @param {any} file
+ * @param {any} options
+ */
 export function drawingProcessingPlan(file = {}, options = {}) {
   const size = Number(file?.size ?? options.byteLength ?? 0) || 0;
   const mime = String(file?.type || options.mime || "").toLowerCase();
@@ -38,6 +45,11 @@ export function drawingProcessingPlan(file = {}, options = {}) {
   };
 }
 
+/**
+ * @param {any} candidate
+ * @param {any} prototype
+ * @param {any} options
+ */
 export function legendGraphicMatch(candidate, prototype, options = {}) {
   if (!candidate || !prototype) return 0;
   const score = Number(geometrySimilarity(candidate, prototype)) || 0;
@@ -48,6 +60,11 @@ export function legendGraphicMatch(candidate, prototype, options = {}) {
   return sizeOk ? score : score * 0.35;
 }
 
+/**
+ * @param {any} seed
+ * @param {any} candidates
+ * @param {any} options
+ */
 export function assembleOverlappingSymbol(seed, candidates = [], options = {}) {
   if (!seed) return null;
   const joinGap = Number(options.joinGap) > 0 ? Number(options.joinGap) : 0.22;
@@ -80,6 +97,10 @@ export function assembleOverlappingSymbol(seed, candidates = [], options = {}) {
   };
 }
 
+/**
+ * @param {any} candidate
+ * @param {any} options
+ */
 export function rasterCandidateSurvivesNoise(candidate, options = {}) {
   if (!candidate) return false;
   const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
@@ -92,6 +113,9 @@ export function rasterCandidateSurvivesNoise(candidate, options = {}) {
   return true;
 }
 
+/**
+ * @param {Record<string, any>} visual
+ */
 export function classifyAiEvidence({ visual = 0, legend = 0, context = 0 } = {}) {
   const v = clamp01(visual);
   const l = clamp01(legend);
@@ -104,6 +128,10 @@ export function classifyAiEvidence({ visual = 0, legend = 0, context = 0 } = {})
   return { decision, combined, sources, visual: v, legend: l, context: c };
 }
 
+/**
+ * @param {any} outline
+ * @param {any} tokens
+ */
 export function outlineExcludesAdjacentAnnotation(outline, tokens = []) {
   if (!outline) return null;
   const cx = Number(outline.cx ?? outline.x) || 0;
@@ -131,6 +159,9 @@ export function outlineExcludesAdjacentAnnotation(outline, tokens = []) {
   };
 }
 
+/**
+ * @param {any} mark
+ */
 export function evidenceScore(mark) {
   return Math.max(
     Number(mark?.combinedConfidence) || 0,
@@ -147,6 +178,10 @@ function labelAttachmentScore(mark) {
   return 0;
 }
 
+/**
+ * @param {any} marks
+ * @param {any} radius
+ */
 export function dedupePhysicalSymbols(marks = [], radius = PHYSICAL_SYMBOL_RADIUS) {
   const kept = [];
   for (const mark of marks || []) {
@@ -173,6 +208,9 @@ export function dedupePhysicalSymbols(marks = [], radius = PHYSICAL_SYMBOL_RADIU
   return kept;
 }
 
+/**
+ * @param {Record<string, any>} width
+ */
 export function takeoffPerformanceBudget({
   width = 2592,
   height = 1944,
@@ -202,6 +240,9 @@ export function takeoffPerformanceBudget({
   };
 }
 
+/**
+ * @param {any} start
+ */
 export function stressZoomPan(start = { zoom: 1, pan: { x: 0, y: 0 } }) {
   const viewportRect = { left: 0, top: 0, width: 1200, height: 800 };
   let state = { ...start, pan: { ...start.pan } };

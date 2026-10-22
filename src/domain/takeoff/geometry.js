@@ -5,12 +5,21 @@ export function sheetAspect(widthPx, heightPx) {
   return heightPx / widthPx;
 }
 
+/**
+ * @param {any} a
+ * @param {any} b
+ * @param {any} aspect
+ */
 export function widthPercentDistance(a, b, aspect = 1) {
   const dx = Number(b?.x) - Number(a?.x);
   const dy = (Number(b?.y) - Number(a?.y)) * Number(aspect || 1);
   return Math.hypot(dx, dy);
 }
 
+/**
+ * @param {any} points
+ * @param {any} aspect
+ */
 export function polylineLength(points, aspect = 1) {
   if (!Array.isArray(points) || points.length < 2) return 0;
   let total = 0;
@@ -20,6 +29,10 @@ export function polylineLength(points, aspect = 1) {
   return total;
 }
 
+/**
+ * @param {any} points
+ * @param {any} aspect
+ */
 export function polygonArea(points, aspect = 1) {
   if (!Array.isArray(points) || points.length < 3) return 0;
   let sum = 0;
@@ -31,6 +44,12 @@ export function polygonArea(points, aspect = 1) {
   return Math.abs(sum) / 2;
 }
 
+/**
+ * @param {any} a
+ * @param {any} b
+ * @param {any} feet
+ * @param {any} aspect
+ */
 export function calibrationFromPoints(a, b, feet, aspect = 1) {
   const percentLength = widthPercentDistance(a, b, aspect);
   const knownFeet = Number(feet);
@@ -38,17 +57,28 @@ export function calibrationFromPoints(a, b, feet, aspect = 1) {
   return { feet: knownFeet, percentLength, a, b };
 }
 
+/**
+ * @param {any} percentLength
+ * @param {any} calibration
+ */
 export function feetFromPercent(percentLength, calibration) {
   if (!calibration?.percentLength || !calibration.feet) return null;
   return percentLength * (calibration.feet / calibration.percentLength);
 }
 
+/**
+ * @param {any} percentArea
+ * @param {any} calibration
+ */
 export function areaFromPercent(percentArea, calibration) {
   if (!calibration?.percentLength || !calibration.feet) return null;
   const feetPerPercent = calibration.feet / calibration.percentLength;
   return percentArea * feetPerPercent * feetPerPercent;
 }
 
+/**
+ * @param {any} value
+ */
 export function formatFeet(value) {
   if (value == null || !Number.isFinite(value)) return "—";
   if (value >= 100) return `${value.toFixed(0)} LF`;
@@ -56,6 +86,9 @@ export function formatFeet(value) {
   return `${value.toFixed(2)} LF`;
 }
 
+/**
+ * @param {any} value
+ */
 export function formatArea(value) {
   if (value == null || !Number.isFinite(value)) return "—";
   if (value >= 100) return `${value.toFixed(0)} SF`;
@@ -64,6 +97,12 @@ export function formatArea(value) {
 
 export { snapOrthogonalPoint, orthogonalizePolyline, previewOrthogonalSegment } from "./ortho.js";
 
+/**
+ * @param {any} mark
+ * @param {any} point
+ * @param {any} aspect
+ * @param {any} threshold
+ */
 export function hitTestMark(mark, point, aspect = 1, threshold = 2.2) {
   if (!mark || !point) return false;
   if (mark.points?.length) {

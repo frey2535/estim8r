@@ -19,6 +19,9 @@ export function emptyPublishedReference() {
   };
 }
 
+/**
+ *  * @param {Record<string, any>} options
+ */
 export function buildLaborSourceOptions({
   laborItem,
   companyUnit = null,
@@ -132,6 +135,9 @@ export function buildLaborSourceOptions({
   return [published, company, experimental, custom];
 }
 
+/**
+ *  * @param {Record<string, any>} options
+ */
 export function makeLaborSelection({
   laborItemId = "",
   option,
@@ -174,6 +180,11 @@ export function makeLaborSelection({
   };
 }
 
+/**
+ * @param {any} line
+ * @param {any} selection
+ * @param {Record<string, any>} options
+ */
 export function applySelectionToLine(line, selection, { rate } = {}) {
   const quantity = Number(line.quantity) || 0;
   const hours = calculateEstimatedHours({
@@ -194,6 +205,10 @@ export function applySelectionToLine(line, selection, { rate } = {}) {
   };
 }
 
+/**
+ * @param {any} line
+ * @param {any} factors
+ */
 export function lineLaborHours(line, factors) {
   const qty = Number(line.quantity) || 0;
   const selection = line.laborSelection;

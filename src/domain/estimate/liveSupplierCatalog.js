@@ -26,6 +26,9 @@ function key(value) {
   return clean(value).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+/**
+ * @param {any} value
+ */
 export function money(value) {
   if (value == null || value === "") return null;
   const raw = String(value).trim();
@@ -34,6 +37,9 @@ export function money(value) {
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
+/**
+ * @param {any} line
+ */
 export function catalogQueryForLine(line = {}) {
   return [line.model, line.modelNumber, line.catalogNumber, line.description, line.category]
     .map(clean)
@@ -48,10 +54,16 @@ function adapterConfigured(adapter, env = {}) {
   return (adapter.env || []).every((name) => clean(env[name]));
 }
 
+/**
+ * @param {any} env
+ */
 export function configuredLiveCatalogAdapters(env = {}) {
   return LIVE_CATALOG_ADAPTERS.filter((adapter) => adapterConfigured(adapter, env));
 }
 
+/**
+ * @param {any} env
+ */
 export function liveCatalogDiagnostics(env = {}) {
   return LIVE_CATALOG_ADAPTERS.map((adapter) => {
     const configured = adapterConfigured(adapter, env);
@@ -65,6 +77,10 @@ export function liveCatalogDiagnostics(env = {}) {
   });
 }
 
+/**
+ * @param {any} breaks
+ * @param {any} quantity
+ */
 export function pickUnitPrice(breaks = [], quantity = 1) {
   const qty = Math.max(1, Number(quantity) || 1);
   const priced = (Array.isArray(breaks) ? breaks : [])
@@ -83,6 +99,9 @@ export function pickUnitPrice(breaks = [], quantity = 1) {
   return chosen;
 }
 
+/**
+ * @param {any} input
+ */
 export function normalizeLiveOffer(input = {}) {
   const unitCost = money(input.unitCost);
   const supplier = clean(input.supplier);
@@ -108,6 +127,10 @@ export function normalizeLiveOffer(input = {}) {
   };
 }
 
+/**
+ * @param {any} line
+ * @param {any} offer
+ */
 export function scoreLiveOffer(line, offer) {
   const model = key(line?.model || line?.modelNumber || line?.catalogNumber);
   const description = key(line?.description);
@@ -125,18 +148,31 @@ export function scoreLiveOffer(line, offer) {
   return 0;
 }
 
+/**
+ * @param {any} line
+ * @param {any} offers
+ */
 export function rankLiveOffers(line, offers = []) {
   return offers
     .map((offer) => ({ ...offer, matchScore: scoreLiveOffer(line, offer) }))
     .sort((a, b) => b.matchScore - a.matchScore || a.unitCost - b.unitCost);
 }
 
+/**
+ * @param {any} line
+ * @param {any} offers
+ */
 export function pickAutoApplyOffer(line, offers = []) {
   const ranked = rankLiveOffers(line, offers);
   const exact = ranked.find((offer) => offer.matchScore >= AUTO_APPLY_MIN_SCORE);
   return exact || null;
 }
 
+/**
+ * @param {any} line
+ * @param {any} offer
+ * @param {Record<string, any>} sourceType
+ */
 export function applySupplierOfferToLine(line, offer, {
   sourceType = LIVE_CATALOG_SOURCE_TYPE,
   now = new Date(),
@@ -167,6 +203,10 @@ function first(value) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+/**
+ * @param {any} payload
+ * @param {Record<string, any>} fetchedAt
+ */
 export function normalizeMouserResponse(payload, { fetchedAt, quantity = 1 } = {}) {
   const parts = payload?.SearchResults?.Parts || payload?.Parts || [];
   return parts.map((part, index) => {
@@ -195,6 +235,10 @@ export function normalizeMouserResponse(payload, { fetchedAt, quantity = 1 } = {
   }).filter(Boolean);
 }
 
+/**
+ * @param {any} payload
+ * @param {Record<string, any>} fetchedAt
+ */
 export function normalizeDigikeyResponse(payload, { fetchedAt, quantity = 1 } = {}) {
   const products = payload?.Products || payload?.ExactMatches || [];
   return products.map((product, index) => {
@@ -228,6 +272,10 @@ export function normalizeDigikeyResponse(payload, { fetchedAt, quantity = 1 } = 
   }).filter(Boolean);
 }
 
+/**
+ * @param {any} payload
+ * @param {Record<string, any>} fetchedAt
+ */
 export function normalizeNexarResponse(payload, { fetchedAt, quantity = 1 } = {}) {
   const results = payload?.data?.supSearch?.results
     || payload?.data?.supSearchMpn?.results
@@ -268,6 +316,10 @@ export function normalizeNexarResponse(payload, { fetchedAt, quantity = 1 } = {}
   return offers;
 }
 
+/**
+ * @param {any} payload
+ * @param {Record<string, any>} fetchedAt
+ */
 export function normalizeElement14Response(payload, { fetchedAt, quantity = 1 } = {}) {
   const block = payload?.keywordSearchReturn
     || payload?.manufacturerPartNumberSearchReturn

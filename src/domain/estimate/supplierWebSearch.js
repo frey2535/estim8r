@@ -11,6 +11,10 @@ const SUPPLIERS = [
 
 export const NO_SECRET_SUPPLIERS = SUPPLIERS.map(([id,supplier,domain])=>({id,supplier,domain}));
 
+/**
+ * @param {any} supplierId
+ * @param {any} query
+ */
 export function supplierPublicSearchUrl(supplierId, query="") {
   const row = NO_SECRET_SUPPLIERS.find((item)=>item.id===supplierId);
   if(!row) return "";
@@ -18,6 +22,9 @@ export function supplierPublicSearchUrl(supplierId, query="") {
   return `https://www.google.com/search?q=${encodeURIComponent(q)}`;
 }
 
+/**
+ * @param {any} query
+ */
 export function supplierPublicSearches(query="") {
   return NO_SECRET_SUPPLIERS.map((row)=>({...row,url:supplierPublicSearchUrl(row.id,query)}));
 }

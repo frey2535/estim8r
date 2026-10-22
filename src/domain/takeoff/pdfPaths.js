@@ -34,6 +34,11 @@ function drawOpsFromConstructArgs(args = []) {
   return [];
 }
 
+/**
+ * @param {any} opList
+ * @param {any} toPagePct
+ * @param {any} options
+ */
 export function symbolPathsFromOperatorList(opList, toPagePct, options = {}) {
   const fnArray = opList?.fnArray || [];
   const argsArray = opList?.argsArray || [];

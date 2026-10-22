@@ -86,12 +86,18 @@ function isTitleLine(line) {
   return /[A-Za-z]/.test(text) && text.length <= 80;
 }
 
+/**
+ * @param {any} text
+ */
 export function findEmails(text) {
   return [...String(text || "").matchAll(EMAIL_RE)]
     .map((match) => match[0].toLowerCase())
     .filter((email, index, list) => list.indexOf(email) === index);
 }
 
+/**
+ * @param {any} text
+ */
 export function findPhones(text) {
   return [...String(text || "").matchAll(PHONE_RE)]
     .map((match) => normalizePhone(match[0]))
@@ -155,6 +161,9 @@ function findProjectAddress(lines) {
   return found.project || "";
 }
 
+/**
+ * @param {any} text
+ */
 export function parseTitleBlock(text) {
   const raw = String(text || "").replace(/\r/g, "");
   const header = emptyDrawingHeader();
@@ -170,6 +179,11 @@ export function parseTitleBlock(text) {
   return header;
 }
 
+/**
+ * @param {any} items
+ * @param {any} viewport
+ * @param {any} rightRatio
+ */
 export function titleBlockRowsFromItems(items, viewport, rightRatio = 0.62) {
   const width = Number(viewport?.width) || 0;
   if (!width) return [];
@@ -197,6 +211,9 @@ function pickField(sources, keys) {
   return "";
 }
 
+/**
+ * @param {any} markup
+ */
 export function headerFromMarkup(markup) {
   if (!markup || typeof markup !== "object") return emptyDrawingHeader();
   const nested = [markup.titleBlock, markup.header, markup.metadata, markup];
@@ -211,6 +228,9 @@ export function headerFromMarkup(markup) {
   };
 }
 
+/**
+ * @param {any} fileName
+ */
 export function headerFromFileName(fileName) {
   const header = emptyDrawingHeader();
   const base = String(fileName || "").replace(/\.[^.]+$/, "").trim();
@@ -225,6 +245,9 @@ export function headerFromFileName(fileName) {
   return header;
 }
 
+/**
+ * @param {Record<string, any>} fileName
+ */
 export function headerFromDrawings({ fileName, drawingDocs, markup } = {}) {
   const fromMarkup = headerFromMarkup(markup);
   const fromBlock = drawingDocs?.titleBlock && typeof drawingDocs.titleBlock === "object"
@@ -240,6 +263,10 @@ export function headerFromDrawings({ fileName, drawingDocs, markup } = {}) {
   return header;
 }
 
+/**
+ * @param {any} name
+ * @param {any} fileName
+ */
 export function isAutoProjectName(name, fileName) {
   const current = clean(name);
   if (!current || current === "Drawing estimate") return true;
@@ -247,6 +274,11 @@ export function isAutoProjectName(name, fileName) {
   return current === stem;
 }
 
+/**
+ * @param {any} header
+ * @param {any} extracted
+ * @param {Record<string, any>} options
+ */
 export function fillEmptyHeader(header, extracted, { fileName } = {}) {
   const next = { ...emptyDrawingHeader(), ...header };
   const incoming = extracted || {};
@@ -261,6 +293,9 @@ export function fillEmptyHeader(header, extracted, { fileName } = {}) {
   return next;
 }
 
+/**
+ * @param {any} header
+ */
 export function titleBlockForMarkup(header) {
   const block = emptyDrawingHeader();
   let any = false;

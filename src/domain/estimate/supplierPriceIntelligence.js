@@ -2,6 +2,10 @@ function clean(value) { return String(value ?? "").trim(); }
 function key(value) { return clean(value).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); }
 function money(value) { const n = Number(value); return Number.isFinite(n) && n >= 0 ? n : null; }
 
+/**
+ * @param {any} text
+ * @param {Record<string, any>} supplier
+ */
 export function parseSupplierPriceCsv(text, { supplier = "", effectiveDate = "", reference = "" } = {}) {
   const rows = parseCsv(text);
   if (rows.length < 2) return [];
@@ -24,6 +28,10 @@ export function parseSupplierPriceCsv(text, { supplier = "", effectiveDate = "",
   })).filter((row) => row.unitCost != null && (row.description || row.model));
 }
 
+/**
+ * @param {any} line
+ * @param {any} priceRows
+ */
 export function matchSupplierPrices(line, priceRows = []) {
   const model = key(line?.model || line?.modelNumber || line?.catalogNumber);
   const description = key(line?.description);
@@ -44,6 +52,10 @@ export function matchSupplierPrices(line, priceRows = []) {
   }).filter((row) => row.matchScore >= 35).sort((a, b) => b.matchScore - a.matchScore || a.unitCost - b.unitCost);
 }
 
+/**
+ * @param {any} line
+ * @param {any} supplierBooks
+ */
 export function supplierComparison(line, supplierBooks = []) {
   return supplierBooks.flatMap((book) => matchSupplierPrices(line, book.rows || []).map((row) => ({
     ...row,

@@ -1,6 +1,6 @@
 
 import { pagePlanType } from "./drawing-docs.js";
-import { isJunkGeometry } from "./vectorSymbols.js";
+import { containsPoint, isJunkGeometry, tagAdjacentToSymbolBody } from "./vectorSymbols.js";
 import { isPlanInterior, isPlotStampToken, normalizeTypeMark } from "./symbolDetection.js";
 
 const CATEGORY_ALLOW = new Set(["Lighting","Receptacles","Switches","Equipment","Panels / MCC","Fire Alarm","Low Voltage","HVAC"]);
@@ -103,6 +103,11 @@ function nearbySymbolBody(origin, paths = [], tokens = []) {
   return bestScore > 0.2 ? best : null;
 }
 
+/**
+ * @param {any} geometry
+ * @param {any} tokens
+ * @param {any} options
+ */
 export function symbolBodyOutline(geometry, tokens = [], options = {}) {
   const outline = geometry?.outline || geometry;
   if (!outline) return null;
@@ -170,6 +175,9 @@ function normalizedPart(part, box) {
   };
 }
 
+/**
+ * @param {any} candidate
+ */
 export function isDeviceFragment(candidate) {
   if (!candidate) return false;
   const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
@@ -179,6 +187,9 @@ export function isDeviceFragment(candidate) {
   return aspect >= 1.28 && aspect <= 5.4;
 }
 
+/**
+ * @param {any} candidate
+ */
 export function isSlashFragment(candidate) {
   if (!isDeviceFragment(candidate)) return false;
   const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
@@ -193,6 +204,10 @@ function allowCandidate(candidate, options = {}) {
 
 const SPATIAL_CELL = 2;
 
+/**
+ * @param {any} candidates
+ * @param {any} cell
+ */
 export function buildSpatialIndex(candidates = [], cell = SPATIAL_CELL) {
   const buckets = new Map();
   for (const item of candidates || []) {
@@ -206,6 +221,12 @@ export function buildSpatialIndex(candidates = [], cell = SPATIAL_CELL) {
   return { buckets, cell };
 }
 
+/**
+ * @param {any} index
+ * @param {any} x
+ * @param {any} y
+ * @param {any} radius
+ */
 export function nearbyFromIndex(index, x, y, radius) {
   if (!index?.buckets) return [];
   const cell = index.cell || SPATIAL_CELL;
@@ -227,6 +248,11 @@ function candidatePool(candidates, options, x, y, radius) {
   return candidates || [];
 }
 
+/**
+ * @param {any} seed
+ * @param {any} candidates
+ * @param {any} options
+ */
 export function clusterSymbolGeometry(seed, candidates=[], options={}) {
   if(!seed) return null;
   const maxParts=Math.max(1,Number(options.maxParts)||12);
@@ -266,6 +292,9 @@ export function clusterSymbolGeometry(seed, candidates=[], options={}) {
   };
 }
 
+/**
+ * @param {any} candidate
+ */
 export function geometrySignature(candidate) {
   if(!candidate) return null;
   const parts=candidate.parts?.length?candidate.parts:[candidate];
@@ -331,6 +360,10 @@ function bestLayoutScore(A,B){
   }
   return best;
 }
+/**
+ * @param {any} a
+ * @param {any} b
+ */
 export function geometrySimilarity(a,b){
   const A=a?.signature||geometrySignature(a), B=b?.signature||geometrySignature(b);
   if(!A||!B)return 0;
@@ -345,6 +378,10 @@ export function geometrySimilarity(a,b){
   return aspect*.18+size*.20+count*.16+kind*.16+layout*.30;
 }
 
+/**
+ * @param {any} a
+ * @param {any} b
+ */
 export function bodySimilarity(a, b) {
   const A = a?.signature || geometrySignature(a);
   const B = b?.signature || geometrySignature(b);
@@ -352,6 +389,10 @@ export function bodySimilarity(a, b) {
   return (ratioScore(A.aspect, B.aspect) + ratioScore(A.long, B.long) + ratioScore(A.short, B.short)) / 3;
 }
 
+/**
+ * @param {any} cluster
+ * @param {any} nearby
+ */
 export function hatchEvidence(cluster, nearby = []) {
   const box = unionBounds(cluster?.parts?.length ? cluster.parts : (cluster ? [cluster] : [])) || cluster;
   const parts = [
@@ -374,11 +415,19 @@ export function hatchEvidence(cluster, nearby = []) {
   return { partCount: Math.max(cluster?.parts?.length || 1, seen.size), hatchParts };
 }
 
+/**
+ * @param {any} cluster
+ * @param {any} nearby
+ */
 export function isHatchedFixture(cluster, nearby = []) {
   const evidence = hatchEvidence(cluster, nearby);
   return evidence.hatchParts >= 3 || evidence.partCount >= 4;
 }
 
+/**
+ * @param {any} cluster
+ * @param {any} nearby
+ */
 export function isEmergencyHatch(cluster, nearby = []) {
   const box = unionBounds(cluster?.parts?.length ? cluster.parts : (cluster ? [cluster] : [])) || cluster;
   if (!box) return false;
@@ -394,6 +443,9 @@ export function isEmergencyHatch(cluster, nearby = []) {
   return nested.length >= 2;
 }
 
+/**
+ * @param {any} cluster
+ */
 export function looksLikeTroffer(cluster) {
   if (!cluster) return false;
   const long = Math.max(Number(cluster.w) || 0, Number(cluster.h) || 0);
@@ -403,6 +455,11 @@ export function looksLikeTroffer(cluster) {
   return long >= 0.7 && long <= 1.65 && short >= 0.55 && aspect >= 1.4 && aspect <= 2.2;
 }
 
+/**
+ * @param {any} cluster
+ * @param {any} entry
+ * @param {any} nearby
+ */
 export function emergencyTwinAdjustment(cluster, entry, nearby = []) {
   const code = compact(entry?.code);
   if (!/^\d{1,2}e?$/.test(code) || !looksLikeTroffer(cluster)) return 0;
@@ -433,6 +490,12 @@ function legendCodeEntries(dictionary) {
   return map;
 }
 
+/**
+ * @param {any} point
+ * @param {any} tokens
+ * @param {any} dictionary
+ * @param {any} options
+ */
 export function nearbyLegendEntry(point, tokens = [], dictionary, options = {}) {
   if (!point) return null;
   const radius = Number(options.radius) > 0 ? Number(options.radius) : 1.35;
@@ -495,6 +558,10 @@ function seedNearLegendEntry(entry,page){
   return bestScore>1.2?best:null;
 }
 
+/**
+ * @param {any} dictionary
+ * @param {any} pages
+ */
 export function attachLegendGeometryPrototypes(dictionary,pages=[]){
   const entries=(dictionary?.entries||[]).map((entry)=>({...entry}));
   for(const entry of entries){
@@ -525,6 +592,9 @@ export function attachLegendGeometryPrototypes(dictionary,pages=[]){
   return {...dictionary,entries};
 }
 
+/**
+ * @param {any} candidate
+ */
 export function looksLikeHexNoteGlyph(candidate) {
   if (!candidate) return false;
   const w = Number(candidate.w) || 0;
@@ -536,6 +606,9 @@ export function looksLikeHexNoteGlyph(candidate) {
   return area >= 0.20 && area <= 0.38 && long >= 0.48 && long <= 0.74 && short >= 0.36 && short <= 0.52 && aspect >= 1.2;
 }
 
+/**
+ * @param {any} candidate
+ */
 export function looksLikeReceptacleGlyph(candidate) {
   if (!candidate || looksLikeHexNoteGlyph(candidate)) return false;
   const w = Number(candidate.w) || 0;
@@ -543,7 +616,9 @@ export function looksLikeReceptacleGlyph(candidate) {
   const long = Math.max(w, h);
   const short = Math.min(w, h);
   const area = w * h;
-  if (long < 0.10 || long > 0.40 || short < 0.08 || short > 0.32) return false;
+  // Floor matches isUsablePaintOutline (0.14): letter-stroke scraps (~0.09×0.13)
+  // under WP tags must not win as "vector" bodies that deviceOutline then rejects.
+  if (long < 0.14 || long > 0.40 || short < 0.08 || short > 0.32) return false;
   if (area < 0.010 || area > 0.11) return false;
   const aspect = long / (short || 1e-9);
   if (aspect > 2.75) return false;
@@ -551,6 +626,9 @@ export function looksLikeReceptacleGlyph(candidate) {
   return candidate.kind === "rect" || candidate.kind === "path" || candidate.kind === "composite" || Boolean(candidate.outline);
 }
 
+/**
+ * @param {any} candidate
+ */
 export function looksLikeUnlabeledReceptacleGlyph(candidate) {
   if (!looksLikeReceptacleGlyph(candidate)) return false;
   const w = Number(candidate.w) || 0;
@@ -563,6 +641,11 @@ export function looksLikeUnlabeledReceptacleGlyph(candidate) {
   return strokeBox || duplexBox;
 }
 
+/**
+ * @param {any} candidate
+ * @param {any} paths
+ * @param {any} tokens
+ */
 export function isPlanReceptacleGlyph(candidate, paths = [], tokens = []) {
   if (!looksLikeUnlabeledReceptacleGlyph(candidate)) return false;
   if (isHatchTickCluster(candidate, paths) || looksLikeHexNoteGlyph(candidate)) return false;
@@ -578,6 +661,10 @@ export function isPlanReceptacleGlyph(candidate, paths = [], tokens = []) {
   return true;
 }
 
+/**
+ * @param {any} paths
+ * @param {any} tokens
+ */
 export function uniquePlanReceptacleGlyphs(paths = [], tokens = []) {
   const glyphs = (paths || []).filter((path) => isPlanReceptacleGlyph(path, paths, tokens));
   const unique = [];
@@ -588,6 +675,10 @@ export function uniquePlanReceptacleGlyphs(paths = [], tokens = []) {
   return unique;
 }
 
+/**
+ * @param {any} candidate
+ * @param {any} paths
+ */
 export function isHatchTickCluster(candidate, paths = []) {
   if (!candidate) return false;
   const w = Number(candidate.w) || 0;
@@ -606,6 +697,11 @@ export function isHatchTickCluster(candidate, paths = []) {
   return xs.length >= 3 && ys.length >= 3;
 }
 
+/**
+ * @param {any} point
+ * @param {any} paths
+ * @param {any} radius
+ */
 export function nearHexNoteGlyph(point, paths = [], radius = 0.55) {
   const x = Number(point?.x ?? point?.cx) || 0;
   const y = Number(point?.y ?? point?.cy) || 0;
@@ -624,6 +720,9 @@ function nearNoteChrome(point, tokens = []) {
   });
 }
 
+/**
+ * @param {any} candidate
+ */
 export function looksLikeWpCoverGlyph(candidate) {
   if (!candidate || looksLikeHexNoteGlyph(candidate)) return false;
   const w = Number(candidate.w) || 0;
@@ -634,24 +733,62 @@ export function looksLikeWpCoverGlyph(candidate) {
   return long >= 0.36 && long <= 0.72 && short >= 0.32 && aspect <= 1.45;
 }
 
+/**
+ * Vector outline that deviceOutline can paint. Empty path outlines (AABB only)
+ * are promoted to rect so WP/SP cover plates are not claimed as vector then
+ * rejected at paint time.
+ */
+export function paintableGlyphOutline(path) {
+  if (!path) return null;
+  const points = path.points || path.outline?.points || [];
+  const w = Number(path.w ?? path.outline?.w) || 0;
+  const h = Number(path.h ?? path.outline?.h) || 0;
+  let kind = path.outline?.kind || path.kind || "rect";
+  if (kind === "path" && points.length < 3) kind = "rect";
+  if (kind === "composite" && !(path.outline?.parts || path.parts || []).length) kind = "rect";
+  return {
+    kind,
+    source: "vector",
+    w,
+    h,
+    r: path.r ?? path.outline?.r,
+    points,
+    parts: path.outline?.parts || path.parts,
+  };
+}
+
+/**
+ * @param {any} point
+ * @param {any} paths
+ * @param {any} options
+ */
 export function findNearbyReceptacleGlyph(point, paths = [], options = {}) {
   const x = Number(point?.x ?? point?.cx) || 0;
   const y = Number(point?.y ?? point?.cy) || 0;
   const radius = Number(options.radius) || 1.15;
   const hexClearance = Number(options.hexClearance) || 0.22;
+  // WP and special-purpose (SP/SPR) share weatherproof cover plates on E110.
   const allowWpCover = Boolean(options.allowWpCover);
+  const rank = (path) => {
+    // Real duplex/stroke boxes first; WP/SP cover plates next; loose
+    // receptacle matches last so cover wins over unpaintable scraps.
+    if (looksLikeUnlabeledReceptacleGlyph(path)) return 0;
+    if (allowWpCover && looksLikeWpCoverGlyph(path)) return 1;
+    if (looksLikeReceptacleGlyph(path)) return 2;
+    return 3;
+  };
   return (paths || [])
     .filter((path) => looksLikeReceptacleGlyph(path) || (allowWpCover && looksLikeWpCoverGlyph(path)))
     .filter((path) => !(paths || []).some((hex) => looksLikeHexNoteGlyph(hex)
       && Math.hypot((Number(hex.cx) || 0) - (Number(path.cx) || 0), (Number(hex.cy) || 0) - (Number(path.cy) || 0)) < hexClearance))
     .map((path) => ({ path, dist: Math.hypot((Number(path.cx) || 0) - x, (Number(path.cy) || 0) - y) }))
     .filter((item) => item.dist <= radius)
-    .sort((a, b) => {
-      const receptacleFirst = Number(looksLikeReceptacleGlyph(b.path)) - Number(looksLikeReceptacleGlyph(a.path));
-      return receptacleFirst || a.dist - b.dist;
-    })[0]?.path || null;
+    .sort((a, b) => (rank(a.path) - rank(b.path)) || a.dist - b.dist)[0]?.path || null;
 }
 
+/**
+ * @param {any} candidate
+ */
 export function looksLikeOccupancyGlyph(candidate) {
   if (!candidate || looksLikeHexNoteGlyph(candidate)) return false;
   const w = Number(candidate.w) || 0;
@@ -684,6 +821,11 @@ function occupancyOutline(path) {
   };
 }
 
+/**
+ * @param {any} point
+ * @param {any} paths
+ * @param {any} options
+ */
 export function findNearbyOccupancyGlyph(point, paths = [], options = {}) {
   const x = Number(point?.x ?? point?.cx) || 0;
   const y = Number(point?.y ?? point?.cy) || 0;
@@ -749,7 +891,7 @@ function classifyNearbyPowerLabel(point, tokens = []) {
 }
 
 function glyphOutline(path) {
-  return path?.outline || {
+  return paintableGlyphOutline(path) || {
     kind: path?.kind || "rect",
     source: "vector",
     w: path?.w,
@@ -758,6 +900,11 @@ function glyphOutline(path) {
   };
 }
 
+/**
+ * @param {any} dictionary
+ * @param {any} marks
+ * @param {any} page
+ */
 export function attachPowerGlyphPrototypes(dictionary, marks = [], page = null) {
   const entries = (dictionary?.entries || []).map((entry) => ({ ...entry }));
   const byCode = new Map(entries.map((entry) => [compact(entry.code), entry]));
@@ -786,6 +933,10 @@ export function attachPowerGlyphPrototypes(dictionary, marks = [], page = null) 
   return { ...dictionary, entries };
 }
 
+/**
+ * @param {any} page
+ * @param {any} options
+ */
 export function scanUnlabeledPowerGlyphs(page, options = {}) {
   const occupied = options.occupied || [];
   const tokens = page?.tokens || [];
@@ -815,6 +966,9 @@ export function scanUnlabeledPowerGlyphs(page, options = {}) {
   return hits;
 }
 
+/**
+ * @param {any} entry
+ */
 export function entryFamily(entry) {
   const code = String(entry?.code || "");
   const blob = `${entry?.symbol?.takeoffCategory || ""} ${entry?.symbol?.category || ""} ${entry?.symbol?.label || ""} ${code}`;
@@ -829,6 +983,10 @@ export function entryFamily(entry) {
   return "";
 }
 
+/**
+ * @param {any} entry
+ * @param {any} planType
+ */
 export function planTypeScore(entry, planType) {
   const family = entryFamily(entry);
   if (!planType || !family) return 0;
@@ -837,6 +995,10 @@ export function planTypeScore(entry, planType) {
   return 0;
 }
 
+/**
+ * @param {any} a
+ * @param {any} b
+ */
 export function isEmergencyTwin(a, b) {
   const left = compact(a?.code || a);
   const right = compact(b?.code || b);
@@ -844,6 +1006,12 @@ export function isEmergencyTwin(a, b) {
   return left + "e" === right || right + "e" === left;
 }
 
+/**
+ * @param {any} cluster
+ * @param {any} entries
+ * @param {any} planType
+ * @param {any} options
+ */
 export function rankGeometryEntries(cluster, entries = [], planType = "", options = {}) {
   return (entries || [])
     .filter((entry) => entry?.prototype)
@@ -867,6 +1035,10 @@ export function rankGeometryEntries(cluster, entries = [], planType = "", option
     .sort((a, b) => b.score - a.score || b.raw - a.raw);
 }
 
+/**
+ * @param {any} a
+ * @param {any} b
+ */
 export function sizeCompatible(a, b) {
   const A = a?.signature || geometrySignature(a);
   const B = b?.signature || geometrySignature(b);
@@ -876,6 +1048,11 @@ export function sizeCompatible(a, b) {
   return longR <= 1.32 && shortR <= 1.32;
 }
 
+/**
+ * @param {any} cluster
+ * @param {any} entries
+ * @param {any} options
+ */
 export function resolveGeometryMatch(cluster, entries = [], options = {}) {
   const planType = options.planType || "";
   const ranked = rankGeometryEntries(cluster, entries, planType, options)
@@ -904,6 +1081,10 @@ export function resolveGeometryMatch(cluster, entries = [], options = {}) {
   };
 }
 
+/**
+ * @param {any} dictionary
+ * @param {any} marks
+ */
 export function attachConfirmedGeometryPrototypes(dictionary, marks = []) {
   const entries = (dictionary?.entries || []).map((entry) => ({ ...entry }));
   const byCode = new Map(entries.map((entry) => [compact(entry.code), entry]));
@@ -954,6 +1135,11 @@ function countFragmentMatches(page, prototype) {
   return hits.length;
 }
 
+/**
+ * @param {any} dictionary
+ * @param {any} marks
+ * @param {any} page
+ */
 export function attachFragmentPrototypes(dictionary, marks = [], page = null) {
   const entries = (dictionary?.entries || []).map((entry) => ({ ...entry }));
   const byCode = new Map(entries.map((entry) => [compact(entry.code), entry]));
@@ -993,6 +1179,12 @@ export function attachFragmentPrototypes(dictionary, marks = [], page = null) {
   return { ...dictionary, entries };
 }
 
+/**
+ * @param {any} token
+ * @param {any} page
+ * @param {any} entry
+ * @param {any} options
+ */
 export function snapToEntryPrototype(token, page, entry, options = {}) {
   if (!token || !entry?.prototype) return null;
   const used = options.used || new Set();
@@ -1011,6 +1203,9 @@ export function snapToEntryPrototype(token, page, entry, options = {}) {
   }
   if (!best || bestScore < 0.86) return null;
   if (Math.hypot(best.cx - token.x, best.cy - token.y) > 1.15) return null;
+  // Prototype snap must not yank a tag onto a neighboring fixture body
+  // (Pottsville E210 type 3 @ ~0.92 from a foreign rect).
+  if (!containsPoint(best, token) && !tagAdjacentToSymbolBody(token, best)) return null;
   return best;
 }
 
@@ -1024,6 +1219,11 @@ function pushHypothesis(hypotheses, cluster, entry, proto, planType, nearby, opt
   hypotheses.push({ cluster, entry, raw: geom, score, sizeOk, nearby });
 }
 
+/**
+ * @param {any} page
+ * @param {any} dictionary
+ * @param {any} options
+ */
 export function scanPageByLegendGeometry(page,dictionary,options={}){
   const threshold=Number(options.threshold)||0.76;
   const entries=(dictionary?.entries||[]).filter((e)=>{
@@ -1094,7 +1294,13 @@ export function scanPageByLegendGeometry(page,dictionary,options={}){
           index,
         });
         if(!cluster) continue;
-        const distKey=[entry.symbol?.id||entry.code,cluster.cx.toFixed(2),cluster.cy.toFixed(2),cluster.w.toFixed(2),cluster.h.toFixed(2),cluster.parts?.length||1].join(":");
+        // Twin-hatch scans must key by type code so 1 and 1E (shared symbol.id
+        // "2x4") both compete. General scans keep symbol-id keys to avoid
+        // inventing Soccer plan-repeat extras from every twin code.
+        const keyId = options.twinHatch
+          ? (entry.code || entry.symbol?.id)
+          : (entry.symbol?.id || entry.code);
+        const distKey=[keyId,cluster.cx.toFixed(2),cluster.cy.toFixed(2),cluster.w.toFixed(2),cluster.h.toFixed(2),cluster.parts?.length||1].join(":");
         if(seen.has(distKey)) continue;
         seen.add(distKey);
         const nearby=nearbyFromIndex(index,cluster.cx,cluster.cy,Math.max(0.5,pLong*0.9));
@@ -1149,6 +1355,11 @@ export function scanPageByLegendGeometry(page,dictionary,options={}){
   return hits;
 }
 
+/**
+ * @param {any} page
+ * @param {any} dictionary
+ * @param {any} options
+ */
 export function recoverMissedLegendSymbols(page, dictionary, options = {}) {
   const planType = options.planType || pagePlanType(page);
   const occupied = options.occupied || [];
@@ -1228,6 +1439,11 @@ export function recoverMissedLegendSymbols(page, dictionary, options = {}) {
   return recovered;
 }
 
+/**
+ * @param {any} page
+ * @param {any} point
+ * @param {any} options
+ */
 export function pickInteractiveSymbolGeometry(page, point, options = {}) {
   if (!page || !point) return null;
   const paths=(page.paths||[]).filter((path)=>allowCandidate(path,{allowSlash:true}));
@@ -1288,6 +1504,11 @@ export function pickInteractiveSymbolGeometry(page, point, options = {}) {
   return best;
 }
 
+/**
+ * @param {any} cluster
+ * @param {any} dictionary
+ * @param {any} options
+ */
 export function matchGeometryToLegend(cluster, dictionary, options = {}) {
   if(!cluster) return null;
   const entries=(dictionary?.entries||[]).filter((entry)=>entry?.prototype);
@@ -1300,6 +1521,10 @@ export function matchGeometryToLegend(cluster, dictionary, options = {}) {
   });
 }
 
+/**
+ * @param {any} dictionary
+ * @param {any} prototypes
+ */
 export function attachProjectPrototypes(dictionary, prototypes = []) {
   const entries = (dictionary?.entries || []).map((entry) => ({ ...entry }));
   const byCode = new Map(entries.map((entry) => [compact(entry.code), entry]));

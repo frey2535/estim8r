@@ -167,9 +167,9 @@ export default function LaborLibrary() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan="5" className="p-8 text-center text-muted-foreground">Loading labor library…</td></tr>
+              <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">Loading labor library…</td></tr>
             ) : visible.length === 0 ? (
-              <tr><td colSpan="5" className="p-8 text-center text-muted-foreground">No labor items match these filters.</td></tr>
+              <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">No labor items match these filters.</td></tr>
             ) : visible.map((row) => (
               <tr key={row.id} className="border-t border-border">
                 <td className="p-4">

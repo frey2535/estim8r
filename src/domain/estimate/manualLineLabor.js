@@ -14,6 +14,9 @@ const ITEM_TYPE_FOR_CATEGORY = [
   [/panel|mcc|distribution/i, "Gear"],
 ];
 
+/**
+ * @param {any} item
+ */
 export function laborItemSearchText(item) {
   return [item?.id, item?.item_name, item?.description, item?.category, item?.subcategory, item?.material_type, item?.size, item?.unit]
     .filter(Boolean)
@@ -21,6 +24,11 @@ export function laborItemSearchText(item) {
     .toLowerCase();
 }
 
+/**
+ * @param {any} items
+ * @param {any} query
+ * @param {Record<string, any>} options
+ */
 export function filterLaborLibrary(items = [], query = "", { limit = 2500, itemType, category } = {}) {
   const scoped = (itemType || category)
     ? laborItemsForLine(items, { itemType, category })
@@ -40,12 +48,19 @@ function primaryLaborUnit(item) {
   return (item?.labor_units || []).find((unit) => unit.normal_mh != null) || item?.labor_units?.[0] || null;
 }
 
+/**
+ * @param {any} item
+ */
 export function isConduitLaborItem(item) {
   if (!item) return false;
   const unit = String(item.unit || "");
   return unit === "LF" || unit === "100 LF" || /raceway/i.test(item.category || "");
 }
 
+/**
+ * @param {any} line
+ * @param {any} item
+ */
 export function isConduitEstimateLine(line, item) {
   if (line?.quantityBasis === "sticks") return true;
   if (line?.itemType === "Conduit") return true;
@@ -53,11 +68,18 @@ export function isConduitEstimateLine(line, item) {
   return isConduitLaborItem(item);
 }
 
+/**
+ * @param {any} line
+ */
 export function quantityIsFeet(line) {
   if (line?.quantityBasis === "feet") return true;
   return FEET_UNITS.has(String(line?.unit || "").toUpperCase());
 }
 
+/**
+ * @param {any} line
+ * @param {any} item
+ */
 export function laborInstallQuantity(line, item) {
   const qty = Number(line?.quantity) || 0;
   if (line?.source && line.source !== "manual") return qty;
@@ -66,15 +88,26 @@ export function laborInstallQuantity(line, item) {
   return qty * CONDUIT_STICK_FEET;
 }
 
+/**
+ * @param {any} line
+ * @param {any} item
+ */
 export function estimateLineHours(line, item) {
   const hours = laborInstallQuantity(line, item) * (Number(line?.laborMhPerUnit) || 0);
   return Math.round((hours + Number.EPSILON) * 10000) / 10000;
 }
 
+/**
+ * @param {any} line
+ * @param {any} item
+ */
 export function estimateLineLaborCost(line, item) {
   return Math.round((estimateLineHours(line, item) * (Number(line?.laborRate) || 0) + Number.EPSILON) * 100) / 100;
 }
 
+/**
+ * @param {any} item
+ */
 export function libraryMhPerLinearUnit(item) {
   const laborUnit = primaryLaborUnit(item);
   if (!laborUnit || laborUnit.normal_mh == null) return 0;
@@ -83,6 +116,9 @@ export function libraryMhPerLinearUnit(item) {
   return laborUnit.normal_mh;
 }
 
+/**
+ * @param {any} item
+ */
 export function laborItemLabel(item) {
   if (!item) return "";
   return [item.item_name, item.size, item.unit].filter(Boolean).join(" · ");
@@ -90,7 +126,7 @@ export function laborItemLabel(item) {
 
 function itemTypeFor(item) {
   const category = item?.category || "";
-  const mapped = ITEM_TYPE_FOR_CATEGORY.find(([pattern]) => pattern.test(category));
+  const mapped = ITEM_TYPE_FOR_CATEGORY.find(([pattern]) => (pattern instanceof RegExp ? pattern : new RegExp(pattern)).test(category));
   if (mapped) return mapped[1];
   if (item?.unit === "EA") return "Device";
   return "Material";
@@ -107,6 +143,11 @@ function displayUnitFor(line, item) {
   return line.unit && !FEET_UNITS.has(String(line.unit).toUpperCase()) ? line.unit : "STICK";
 }
 
+/**
+ * @param {any} line
+ * @param {any} item
+ * @param {Record<string, any>} factors
+ */
 export function applyLibraryItemToLine(line, item, { factors, rate } = {}) {
   const laborUnit = primaryLaborUnit(item);
   if (!item || !laborUnit || laborUnit.normal_mh == null) {
@@ -157,6 +198,9 @@ export function applyLibraryItemToLine(line, item, { factors, rate } = {}) {
   };
 }
 
+/**
+ * @param {any} notes
+ */
 export function isLaborAutoNote(notes) {
   const text = String(notes || "");
   if (!text) return true;
@@ -167,11 +211,19 @@ export function isLaborAutoNote(notes) {
     || text.includes("Baseline library");
 }
 
+/**
+ * @param {any} items
+ * @param {any} line
+ */
 export function findLibraryItem(items, line) {
   if (!line?.laborItemId) return null;
   return (items || []).find((row) => row.id === line.laborItemId) || null;
 }
 
+/**
+ * @param {any} line
+ * @param {Record<string, any>} items
+ */
 export function applyManualLineLabor(line, { items, factors, rate } = {}) {
   const item = findLibraryItem(items, line);
   if (item) return applyLibraryItemToLine(line, item, { factors, rate });
@@ -189,17 +241,28 @@ export function applyManualLineLabor(line, { items, factors, rate } = {}) {
   };
 }
 
+/**
+ * @param {any} line
+ */
 export function shouldHydrateManualLabor(line) {
   if (line.laborMatchStatus === "overridden") return false;
   if (line.laborMhEdited && Number(line.laborMhPerUnit) > 0) return false;
   return Boolean(line.laborItemId);
 }
 
+/**
+ * @param {any} line
+ * @param {any} options
+ */
 export function hydrateManualLineLabor(line, options = {}) {
   if (!shouldHydrateManualLabor(line)) return line;
   return applyManualLineLabor(line, options);
 }
 
+/**
+ * @param {any} line
+ * @param {any} item
+ */
 export function conduitQtyHint(line, item) {
   if (!isConduitEstimateLine(line, item)) return "";
   const qty = Number(line.quantity) || 0;
@@ -208,12 +271,19 @@ export function conduitQtyHint(line, item) {
   return `${qty} stick${qty === 1 ? "" : "s"} × ${CONDUIT_STICK_FEET}' = ${install} LF for labor`;
 }
 
+/**
+ * @param {any} line
+ * @param {any} items
+ */
 export function laborPickStillMatches(line, items) {
   const item = findLibraryItem(items, line);
   if (!item) return !line?.laborItemId;
   return laborItemMatchesLine(item, line);
 }
 
+/**
+ * @param {any} line
+ */
 export function clearLaborPick(line) {
   return {
     ...line,

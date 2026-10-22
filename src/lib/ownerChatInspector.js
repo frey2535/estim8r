@@ -1,21 +1,33 @@
 import { isChromeLabel, screenForPath } from "./ownerChatEvidence.js";
 
+/**
+ * @param {any} text
+ */
 export function mentionsEmptyTakeoff(text) {
   return /\b(empty takeoff|no (?:devices|marks|symbols)|not (?:identifying|counting|marking)|ai assist|ai is not|pottsville|takeoff is empty)\b/i.test(
     String(text || ""),
   );
 }
 
+/**
+ * @param {any} text
+ */
 export function wantsCorrection(text) {
   const source = String(text || "");
   if (mentionsEmptyTakeoff(source)) return true;
   return /\b(fix|correct|repair|patch|apply|change the code|make the change)\b/i.test(source);
 }
 
+/**
+ * @param {any} text
+ */
 export function wantsInspection(text) {
   return /\b(what'?s wrong|what is wrong|any error|errors?|bug|broken|fail(?:ed|ure)?|issue|inspect)\b/i.test(String(text || ""));
 }
 
+/**
+ * @param {any} text
+ */
 export function classifyOwnerMessage(text) {
   if (wantsCorrection(text)) return "fix";
   if (wantsInspection(text)) return "inspect";
@@ -27,6 +39,10 @@ function fileFromText(text) {
   return match ? match[1] : "";
 }
 
+/**
+ * @param {any} evidence
+ * @param {any} message
+ */
 export function inspectOwnerEvidence(evidence = {}, message = "") {
   const screen = screenForPath(evidence.pathname || "/");
   const findings = [];
@@ -153,6 +169,12 @@ function answerForAsk(message, evidence, inspection) {
   return `${inspection.screen} looks quiet — no console error or failed request.`;
 }
 
+/**
+ * @param {any} message
+ * @param {any} evidence
+ * @param {any} inspection
+ * @param {Record<string, any>} apply
+ */
 export function formatOwnerReply(message, evidence = {}, inspection, { apply = null } = {}) {
   const asked = String(message || "").trim();
   const intent = inspection?.intent || classifyOwnerMessage(asked);
@@ -177,6 +199,10 @@ export function formatOwnerReply(message, evidence = {}, inspection, { apply = n
   return answerForAsk(asked, evidence, inspection);
 }
 
+/**
+ * @param {any} inspection
+ * @param {any} options
+ */
 export function formatInspectionReply(inspection, options = {}) {
   return formatOwnerReply(
     inspection?.wantsFix ? "fix this" : "what's wrong",

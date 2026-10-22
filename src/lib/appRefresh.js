@@ -16,6 +16,9 @@ function currentRoute() {
   return window.location.pathname + window.location.search + window.location.hash;
 }
 
+/**
+ * @param {any} targetSha
+ */
 export function preserveOpenJob(targetSha = "") {
   try {
     sessionStorage.setItem(REDIRECT_KEY, currentRoute());
@@ -43,6 +46,9 @@ export function clearStaleAppErrors() {
   }
 }
 
+/**
+ * @param {any} locationImpl
+ */
 export function restoreRefreshRoute(locationImpl = typeof window !== "undefined" ? window.location : null) {
   if (!locationImpl) return "";
   try {

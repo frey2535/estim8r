@@ -12,6 +12,10 @@ export const CURSOR_SESSION_PROXY = "/api/cursor-session";
 
 export { canUseOwnerCursorChat };
 
+/**
+ * @param {any} search
+ * @param {any} storage
+ */
 export function readLocalEmailOverride(search = "", storage) {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
   if (params.has(LOCAL_EMAIL_QUERY)) {
@@ -23,6 +27,9 @@ export function readLocalEmailOverride(search = "", storage) {
   return "";
 }
 
+/**
+ * @param {any} email
+ */
 export function localFallbackIdentity(email) {
   const normalized = normalizeEmail(email) || "local@localhost";
   const staff = canUseOwnerCursorChat(normalized);
@@ -36,6 +43,9 @@ export function localFallbackIdentity(email) {
   };
 }
 
+/**
+ * @param {any} pathname
+ */
 export function screenLabel(pathname = "/") {
   if (pathname.startsWith("/takeoff")) return "Takeoff";
   if (pathname.startsWith("/markup")) return "Markup pages";
@@ -47,6 +57,9 @@ export function screenLabel(pathname = "/") {
   return "Estimates";
 }
 
+/**
+ * @param {any} status
+ */
 export function describeCursorSession(status) {
   if (status?.state === "loading") return "Connecting to the Buildr in-app agent…";
   if (status?.state === "ready") return "Connected. I will apply the fix from this chat.";

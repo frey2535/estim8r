@@ -27,6 +27,9 @@ function span(path) {
   };
 }
 
+/**
+ * @param {any} path
+ */
 export function classifySheetPath(path) {
   if (!path) return null;
   const { w, h, long, short, area } = span(path);
@@ -52,6 +55,9 @@ function outlineFor(path) {
   };
 }
 
+/**
+ * @param {any} path
+ */
 export function linePointsForPath(path) {
   const source = path?.points?.length >= 2 ? path.points : path?.outline?.points;
   if (source?.length >= 2) return source.map((point) => ({ x: Number(point.x) || 0, y: Number(point.y) || 0 }));
@@ -60,6 +66,9 @@ export function linePointsForPath(path) {
   return [{ x: cx, y: cy - h / 2 }, { x: cx, y: cy + h / 2 }];
 }
 
+/**
+ * @param {any} path
+ */
 export function roomPointsForPath(path) {
   const source = path?.points?.length >= 3 ? path.points : path?.outline?.points;
   if (source?.length >= 3) return source.map((point) => ({ x: Number(point.x) || 0, y: Number(point.y) || 0 }));
@@ -103,6 +112,9 @@ function objectContainsPoint(item, point) {
   return pointHitsOutline(item.outline, { x: item.x, y: item.y }, point, tolerance);
 }
 
+/**
+ * @param {Record<string, any>} pages
+ */
 export function buildDrawingObjectLayer({ pages = [], detectedMarks = [], trade = "electrical" } = {}) {
   const objects = (detectedMarks || []).filter(isDeviceMark).map((mark) => ({
     ...mark,
@@ -233,6 +245,9 @@ function detectedDeviceOutline(mark) {
   };
 }
 
+/**
+ * @param {any} object
+ */
 export function printedSelectionId(object) {
   if (!object) return null;
   return `printed:${object.objectId || object.id}`;
@@ -273,6 +288,11 @@ export function printedHighlightGeometry(object) {
   };
 }
 
+/**
+ * @param {any} objects
+ * @param {any} point
+ * @param {any} sheet
+ */
 export function hitDrawingObject(objects = [], point, sheet = 1) {
   if (!point) return null;
   const hits = (objects || []).filter((item) => (
@@ -284,6 +304,11 @@ export function hitDrawingObject(objects = [], point, sheet = 1) {
   return hits[0] || null;
 }
 
+/**
+ * @param {any} objects
+ * @param {any} point
+ * @param {any} sheet
+ */
 export function enclosingRoom(objects = [], point, sheet = 1) {
   if (!point) return null;
   const rooms = (objects || []).filter((item) => (
@@ -295,6 +320,10 @@ export function enclosingRoom(objects = [], point, sheet = 1) {
   return rooms[0] || null;
 }
 
+/**
+ * @param {any} object
+ * @param {any} existingMarks
+ */
 export function materializeDrawingObject(object, existingMarks = []) {
   if (!object) return null;
   const linked = (existingMarks || []).find((mark) =>

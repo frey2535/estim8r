@@ -2,6 +2,10 @@ import { compositeWage, defaultCrew } from "./employeeClasses.js";
 
 export const NAMED_CREWS_KEY = "estim8r.named-crews.v1";
 
+/**
+ * @param {any} named
+ * @param {any} wageBook
+ */
 export function crewFromNamed(named, wageBook = {}) {
   const members = new Map((named?.members || []).map((row) => [row.classId || row.class_id, row]));
   return defaultCrew(wageBook).map((row) => {
@@ -18,6 +22,11 @@ export function crewFromNamed(named, wageBook = {}) {
   });
 }
 
+/**
+ * @param {any} name
+ * @param {any} crew
+ * @param {Record<string, any>} id
+ */
 export function namedFromCrew(name, crew, { id, notes = "" } = {}) {
   const members = (crew || [])
     .filter((row) => row.selected || Number(row.headcount) > 0)
@@ -38,6 +47,10 @@ export function namedFromCrew(name, crew, { id, notes = "" } = {}) {
   };
 }
 
+/**
+ * @param {any} list
+ * @param {any} named
+ */
 export function upsertNamedCrew(list, named) {
   const rows = [...(list || [])];
   const index = rows.findIndex((row) => row.id === named.id);

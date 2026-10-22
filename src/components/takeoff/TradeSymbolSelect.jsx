@@ -1,11 +1,14 @@
 import React from "react";
 import { symbolsOnDrawingForTrade } from "@/domain/takeoff/trades";
 
+/**
+ * @param {{ trade: any; marks?: any[]; pageKinds?: Record<string, string>; category?: string; value: any; onChange: (item: any) => void; className?: string; "aria-label"?: string; }} props
+ */
 export default function TradeSymbolSelect({
   trade,
   marks = [],
   pageKinds = {},
-  category,
+  category = undefined,
   value,
   onChange,
   className = "w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm",

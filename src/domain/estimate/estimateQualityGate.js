@@ -1,6 +1,9 @@
 import { auditEstimateCompleteness } from "./estimatingIntelligence.js";
 import { materialPriceStatus } from "./materialPricing.js";
 
+/**
+ *  * @param {Record<string, any>} options
+ */
 export function estimateQualityGate({ lines = [], checklist = [], itemized = false, trueTakeoff = null } = {}) {
   const included = lines.filter((line) => !itemized || line.included !== false);
   const issues = [];

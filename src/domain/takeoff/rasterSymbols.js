@@ -11,6 +11,11 @@ function boundsToCandidate(minX, minY, maxX, maxY, width, height) {
   return { cx, cy, w, h, kind: "rect", source: "raster", outline: { kind: "rect", source: "raster", w, h, points: [] } };
 }
 
+/**
+ * @param {any} width
+ * @param {any} height
+ * @param {any} options
+ */
 export function rasterExtractScale(width, height, options = {}) {
   const w = Math.max(1, Number(width) || 1);
   const h = Math.max(1, Number(height) || 1);
@@ -78,12 +83,18 @@ export async function extractRasterSymbolCandidates(page, options = {}) {
   return out;
 }
 
+/**
+ * @param {any} page
+ */
 export function pdfPageFromTakeoffPage(page) {
   if (page?.pdfPage && typeof page.pdfPage.getViewport === "function") return page.pdfPage;
   if (typeof page?.getViewport === "function") return page;
   return null;
 }
 
+/**
+ * @param {any} page
+ */
 export function rasterCandidatesFromPage(page) {
   if (Array.isArray(page?.rasterCandidates) && page.rasterCandidates.length) return page.rasterCandidates;
   if (Array.isArray(page?.rasterPaths) && page.rasterPaths.length) return page.rasterPaths;
@@ -103,6 +114,10 @@ export async function hydrateRasterPaths(page, options = {}) {
 
 const SPARSE_VECTOR_LIMIT = 80;
 
+/**
+ * @param {any} pages
+ * @param {any} options
+ */
 export function pagesNeedingRaster(pages, options = {}) {
   const coarse = options.coarsePointer === true
     || (typeof window !== "undefined" && Boolean(window.matchMedia?.("(pointer: coarse)")?.matches));
@@ -134,6 +149,11 @@ export async function hydratePagesRaster(pages, options = {}) {
   return pages;
 }
 
+/**
+ * @param {any} candidates
+ * @param {any} dictionary
+ * @param {any} options
+ */
 export function matchRasterToLegend(candidates, dictionary, options = {}) {
   const threshold = Number(options.threshold) || 0.72;
   const entries = (dictionary?.entries || []).filter((entry) => entry?.prototype);

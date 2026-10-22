@@ -13,6 +13,9 @@ export const DEFAULT_TERMS_TEXT =
 const SCOPE_SAME_PAGE_MAX_LINES = 15;
 const SIG_BLOCK_H = 86;
 
+/**
+ * @param {any} value
+ */
 export function normalizeDocumentTitle(value) {
   const text = String(value ?? "").trim();
   if (!text || text === LEGACY_DOCUMENT_TITLE) return DEFAULT_DOCUMENT_TITLE;
@@ -29,6 +32,10 @@ const HIDDEN_LABELS = [
   "journeyman",
 ];
 
+/**
+ * @param {string} hex
+ * @param {[number, number, number]} [fallback]
+ */
 function hexRgb(hex, fallback = [17, 24, 39]) {
   const raw = String(hex || "").trim();
   const match = raw.match(/^#?([0-9a-f]{6})$/i);
@@ -37,15 +44,29 @@ function hexRgb(hex, fallback = [17, 24, 39]) {
   return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
 }
 
+/**
+ * @param {string} hex
+ * @param {[number, number, number]} [fallback]
+ * @returns {[number, number, number]}
+ */
 function rgbTuple(hex, fallback) {
   const { r, g, b } = hexRgb(hex, fallback);
   return [r, g, b];
 }
 
+/**
+ * @param {[number, number, number]} rgb
+ */
 function isDarkRgb([r, g, b]) {
   return r * 0.299 + g * 0.587 + b * 0.114 < 128;
 }
 
+/**
+ * @param {[number, number, number]} docBg
+ * @param {[number, number, number]} docText
+ * @param {number} [mix]
+ * @returns {[number, number, number]}
+ */
 function softFill(docBg, docText, mix = 0.03) {
   return [
     Math.min(255, Math.round(docBg[0] * (1 - mix) + docText[0] * mix)),
@@ -70,12 +91,18 @@ function safeName(value, fallback) {
   return next.replace(/[^\w.-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || fallback;
 }
 
+/**
+ * @param {any} estimate
+ */
 export function estimatePdfFileName(estimate) {
   const project = safeName(estimate?.header?.projectName, "estimate");
   const number = String(estimate?.header?.estimateNumber || "").trim();
   return number ? `${project}-${safeName(number, "estimate")}.pdf` : `${project}.pdf`;
 }
 
+/**
+ * @param {any} estimate
+ */
 export function estimatePresentation(estimate) {
   const header = estimate?.header || {};
   const design = estimate?.pdfDesign || {};
@@ -142,11 +169,17 @@ export function estimatePresentation(estimate) {
   };
 }
 
+/**
+ * @param {any} presentation
+ */
 export function presentationHasInternals(presentation) {
   const blob = JSON.stringify(presentation || {}).toLowerCase();
   return HIDDEN_LABELS.some((label) => blob.includes(label));
 }
 
+/**
+ * @param {any} estimate
+ */
 export function estimateHasPdfLines(estimate) {
   return includedLines(estimate).some((line) => {
     const label = String(line?.description || line?.itemType || line?.category || line?.notes || "").trim();
@@ -157,6 +190,10 @@ export function estimateHasPdfLines(estimate) {
   });
 }
 
+/**
+ * @param {any} estimate
+ * @param {any} brandingInput
+ */
 export function estimatePdfPreviewKey(estimate, brandingInput) {
   return JSON.stringify({
     presentation: estimatePresentation(estimate),
@@ -166,6 +203,10 @@ export function estimatePdfPreviewKey(estimate, brandingInput) {
   });
 }
 
+/**
+ * @param {any} estimate
+ * @param {any} brandingInput
+ */
 export function createEstimatePdfPreview(estimate, brandingInput) {
   const fileName = estimatePdfFileName(estimate);
   const presentation = estimatePresentation(estimate);
@@ -232,12 +273,16 @@ export function buildEstimatePdf(estimate, brandingInput) {
 
   const headerBg = rgbTuple(design.headerFillColor || branding.headerColor, [17, 24, 39]);
   const darkHeader = isDarkRgb(headerBg);
+  /** @type {[number, number, number]} */
   const headerText = darkHeader ? [255, 255, 255] : [17, 24, 39];
+  /** @type {[number, number, number]} */
   const headerSub = darkHeader ? [209, 213, 219] : [55, 65, 81];
+  /** @type {[number, number, number]} */
   const headerAccent = darkHeader ? [249, 115, 22] : [234, 88, 12];
   const docBg = rgbTuple(branding.pageColor, [255, 255, 255]);
   const docText = rgbTuple(branding.textColor, [17, 24, 39]);
   const border = rgbTuple(design.cardBorderColor || "#e5e7eb", [229, 231, 235]);
+  /** @type {[number, number, number]} */
   const stripe = [249, 250, 251];
   const cardFill = rgbTuple(design.cardFillColor || branding.cardColor || "#f8fafc", [248, 250, 252]);
   const pageBorder = rgbTuple(design.pageBorderColor || "#111827", [17, 24, 39]);
@@ -671,6 +716,10 @@ export function buildEstimatePdf(estimate, brandingInput) {
   };
 }
 
+/**
+ * @param {any} estimate
+ * @param {any} brandingInput
+ */
 export function estimatePdfBlob(estimate, brandingInput) {
   const { doc, fileName, presentation, strings } = buildEstimatePdf(estimate, brandingInput);
   return {
@@ -681,6 +730,9 @@ export function estimatePdfBlob(estimate, brandingInput) {
   };
 }
 
+/**
+ * @param {any} doc
+ */
 export function printEstimatePdf(doc) {
   if (typeof document === "undefined") return;
   const url = doc.output("bloburl");

@@ -24,6 +24,9 @@ export function readShopWageBook() {
   return ratesToWageBook(resolveShopRates(readJson(LABOR_RATES_KEY) || [], readJson(WAGE_BOOK_KEY) || {}));
 }
 
+/**
+ * @param {any} crew
+ */
 export function writeWageBook(crew) {
   const book = {};
   for (const row of crew || []) book[row.id] = Number(row.wage) || 0;
@@ -36,10 +39,17 @@ export function writeWageBook(crew) {
   return book;
 }
 
+/**
+ * @param {any} crew
+ */
 export function persistShopWageBook(crew) {
   return writeWageBook(crew);
 }
 
+/**
+ * @param {any} fileName
+ * @param {any} fileSize
+ */
 export function readEstimate(fileName, fileSize) {
   return readJson(estimateStorageKey(fileName, fileSize));
 }
@@ -58,7 +68,10 @@ export function startNewEstimate() {
   }
 }
 
-/** Open a saved estimate, or clear the last one so New Estimate is a blank template. */
+/**
+ * Open a saved estimate, or clear the last one so New Estimate is a blank template.
+ * @param {Record<string, any>} options
+ */
 export function openEstimateSession({ fileName, fileSize } = {}) {
   if (fileName) {
     const stored = activateEstimate(fileName, fileSize) || readEstimate(fileName, fileSize);
@@ -68,6 +81,10 @@ export function openEstimateSession({ fileName, fileSize } = {}) {
   return null;
 }
 
+/**
+ * @param {any} fileName
+ * @param {any} fileSize
+ */
 export function activateEstimate(fileName, fileSize) {
   const key = estimateStorageKey(fileName, fileSize);
   const stored = readJson(key);
@@ -76,12 +93,19 @@ export function activateEstimate(fileName, fileSize) {
   return stored;
 }
 
+/**
+ * @param {any} fileName
+ * @param {any} fileSize
+ */
 export function deleteStoredEstimate(fileName, fileSize) {
   const key = estimateStorageKey(fileName, fileSize);
   localStorage.removeItem(key);
   if (localStorage.getItem(ACTIVE_ESTIMATE_KEY) === key) localStorage.removeItem(ACTIVE_ESTIMATE_KEY);
 }
 
+/**
+ * @param {any} draft
+ */
 export function writeEstimate(draft) {
   const existing = readEstimate(draft.fileName, draft.fileSize) || {};
   const next = {
@@ -136,8 +160,22 @@ export function clearLiveEstimateDraft() {
   }
 }
 
-/** Copies takeoff quantities into the estimate. Never writes the takeoff sheet. */
-export function syncStoredEstimate({ fileName, fileSize, drawingDocs, rollup, pageCount, markup, marks = [], runs = [], pageKinds = {} }) {
+/**
+ * Copies takeoff quantities into the estimate. Never writes the takeoff sheet.
+ * @param {any} [options]
+ */
+export function syncStoredEstimate(options = {}) {
+  const {
+    fileName,
+    fileSize,
+    drawingDocs,
+    rollup,
+    pageCount,
+    markup,
+    marks = [],
+    runs = [],
+    pageKinds = {},
+  } = options;
   const existing = readEstimate(fileName, fileSize);
   const draft = syncEstimateDraft(existing, {
     fileName,

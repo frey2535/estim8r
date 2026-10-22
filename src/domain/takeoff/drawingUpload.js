@@ -36,6 +36,9 @@ export function markDrawingPickerClosed() {
   pickerOpen = false;
 }
 
+/**
+ * @param {any} fileList
+ */
 export function captureFileList(fileList) {
   if (!fileList) return null;
   if (typeof fileList.length === "number") {
@@ -47,6 +50,9 @@ export function captureFileList(fileList) {
   return fileList[0] || fileList.item?.(0) || null;
 }
 
+/**
+ * @param {any} file
+ */
 export function drawingFileName(file) {
   const name = String(file?.name || "").trim();
   if (name) return name;
@@ -58,6 +64,9 @@ export function drawingFileName(file) {
   return "drawing";
 }
 
+/**
+ * @param {any} file
+ */
 export function inferDrawingMime(file) {
   const type = String(file?.type || "").toLowerCase();
   if (type === "application/pdf" || type === "application/x-pdf") return "application/pdf";
@@ -71,6 +80,9 @@ export function inferDrawingMime(file) {
   return type;
 }
 
+/**
+ * @param {any} file
+ */
 export function validateDrawingFile(file) {
   if (!file) return "No drawing selected.";
   const name = drawingFileName(file);
@@ -110,6 +122,9 @@ export async function snapshotDrawingFile(file) {
   return { file: copy, bytes };
 }
 
+/**
+ * @param {any} next
+ */
 export function rememberPendingDrawing(next) {
   pendingDrawing = next?.file ? next : null;
   pendingError = "";
@@ -128,6 +143,9 @@ function notify(payload) {
   for (const listener of listeners) listener(payload);
 }
 
+/**
+ * @param {any} listener
+ */
 export function subscribeDrawingUpload(listener) {
   listeners.add(listener);
   if (pendingDrawing?.file || pendingError) {
@@ -137,9 +155,12 @@ export function subscribeDrawingUpload(listener) {
       error: pendingError,
     });
   }
-  return () => listeners.delete(listener);
+  return () => { listeners.delete(listener); };
 }
 
+/**
+ * @param {any} fileList
+ */
 export function listDrawingFiles(fileList) {
   const files = [];
   if (!fileList || typeof fileList.length !== "number") return files;
@@ -185,8 +206,9 @@ export async function handleNativeDrawingChange(event) {
 }
 
 export function openSharedDrawingPicker() {
+  /** @type {HTMLInputElement | null} */
   const input = typeof document !== "undefined"
-    ? document.getElementById(DRAWING_INPUT_ID)
+    ? /** @type {HTMLInputElement | null} */ (document.getElementById(DRAWING_INPUT_ID))
     : null;
   if (!input) {
     const error = "Estim8r could not open the file picker.";

@@ -11,6 +11,9 @@ const conditionField = {
   very_difficult: 'veryDifficultMh',
 };
 
+/**
+ * @param {any} input
+ */
 export function assertProductionSafeLaborUnit(input) {
   const laborUnit = LaborUnitSchema.parse(input);
 
@@ -18,14 +21,18 @@ export function assertProductionSafeLaborUnit(input) {
     const error = new Error(
       `Labor unit ${laborUnit.id} is not approved for production estimating.`
     );
-    error.code = 'LABOR_UNIT_NOT_PRODUCTION_READY';
-    error.laborUnit = laborUnit;
+    /** @type {any} */ (error).code = 'LABOR_UNIT_NOT_PRODUCTION_READY';
+    /** @type {any} */ (error).laborUnit = laborUnit;
     throw error;
   }
 
   return laborUnit;
 }
 
+/**
+ * @param {any} laborUnitInput
+ * @param {any} conditionInput
+ */
 export function getConditionMh(laborUnitInput, conditionInput = 'normal') {
   const laborUnit = LaborUnitSchema.parse(laborUnitInput);
   const condition = LaborCondition.parse(conditionInput);
@@ -33,17 +40,23 @@ export function getConditionMh(laborUnitInput, conditionInput = 'normal') {
 
   if (value === null || value === undefined) {
     const error = new Error(`No ${condition} labor value exists for labor unit ${laborUnit.id}.`);
-    error.code = 'LABOR_CONDITION_VALUE_MISSING';
+    /** @type {any} */ (error).code = 'LABOR_CONDITION_VALUE_MISSING';
     throw error;
   }
 
   return value;
 }
 
+/**
+ * @param {any} factors
+ */
 export function combineProductivityFactors(factors = []) {
   return factors.reduce((combined, factor) => combined * factor.multiplier, 1);
 }
 
+/**
+ * @param {any} selectionInput
+ */
 export function calculateEffectiveMhPerUnit(selectionInput) {
   const selection = EstimateLaborSelectionSchema.parse(selectionInput);
   const factorMultiplier = combineProductivityFactors(selection.factors);
@@ -59,6 +72,9 @@ export function calculateEffectiveMhPerUnit(selectionInput) {
   };
 }
 
+/**
+ * @param {Record<string, any>} quantity
+ */
 export function calculateEstimatedHours({ quantity, quantityPerLaborUnit = 1, selection }) {
   if (quantity < 0) throw new Error('Quantity cannot be negative.');
   if (quantityPerLaborUnit <= 0) throw new Error('quantityPerLaborUnit must be greater than zero.');
@@ -75,6 +91,10 @@ export function calculateEstimatedHours({ quantity, quantityPerLaborUnit = 1, se
   };
 }
 
+/**
+ * @param {any} historyInput
+ * @param {any} quantityPerLaborUnit
+ */
 export function calculateActualMhPerUnit(historyInput, quantityPerLaborUnit = 1) {
   const history = ProductionHistorySchema.parse(historyInput);
   if (quantityPerLaborUnit <= 0) throw new Error('quantityPerLaborUnit must be greater than zero.');
@@ -83,6 +103,10 @@ export function calculateActualMhPerUnit(historyInput, quantityPerLaborUnit = 1)
   return round(history.actualLaborHours / normalizedUnits, 4);
 }
 
+/**
+ * @param {any} records
+ * @param {any} quantityPerLaborUnit
+ */
 export function summarizeProductionHistory(records, quantityPerLaborUnit = 1) {
   const approved = records
     .map((record) => ProductionHistorySchema.parse(record))

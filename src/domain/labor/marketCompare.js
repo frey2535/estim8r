@@ -63,6 +63,10 @@ function flagVersus(value, low, high) {
   return "in_line";
 }
 
+/**
+ * @param {any} line
+ * @param {any} laborItem
+ */
 export function laborSourcePresentation(line, laborItem) {
   const selection = line?.laborSelection;
   const sourceType = selection?.selectedSource
@@ -85,6 +89,11 @@ export function laborSourcePresentation(line, laborItem) {
   };
 }
 
+/**
+ * @param {any} line
+ * @param {any} laborItem
+ * @param {Record<string, any>} licensedNeca
+ */
 export function compareLineToMarket(line, laborItem, { licensedNeca = isLicensedNeca() } = {}) {
   const source = laborSourcePresentation(line, laborItem);
   const hours = estimateLineHours(line, laborItem);
@@ -162,6 +171,11 @@ export function compareLineToMarket(line, laborItem, { licensedNeca = isLicensed
   };
 }
 
+/**
+ * @param {any} estimate
+ * @param {any} items
+ * @param {any} options
+ */
 export function compareEstimateToMarket(estimate, items = [], options) {
   const lines = includedLines(estimate);
   const compared = [];
@@ -231,6 +245,9 @@ export function compareEstimateToMarket(estimate, items = [], options) {
   };
 }
 
+/**
+ * @param {any} flag
+ */
 export function flagLabel(flag) {
   if (flag === "high") return "High vs reference";
   if (flag === "low") return "Low vs reference";

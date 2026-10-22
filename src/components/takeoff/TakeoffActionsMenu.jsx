@@ -81,10 +81,16 @@ export default function TakeoffActionsMenu({
   );
 }
 
+/**
+ * @param {any} file
+ */
 export function takeoffEstimatePath(file) {
   return file ? `/estimates/new?file=${encodeURIComponent(file.name)}&size=${file.size}` : "/estimates/new";
 }
 
+/**
+ * @param {any} file
+ */
 export function takeoffMarkupPath(file) {
   return file ? `/markup?file=${encodeURIComponent(file.name)}&size=${file.size}` : "/markup";
 }

@@ -49,6 +49,10 @@ function normalizeSize(value) {
     .trim();
 }
 
+/**
+ * @param {any} text
+ * @param {any} size
+ */
 export function textHasSize(text, size) {
   const token = normalizeSize(size);
   if (!token) return true;
@@ -90,6 +94,9 @@ function searchBlob(row) {
     .toLowerCase();
 }
 
+/**
+ * @param {Record<string, any>} search
+ */
 export function listBundledLaborLibrary({ search = "", category = "", limit = 2500 } = {}) {
   const q = search.trim().toLowerCase();
   const rows = AUDITED_LABOR_ITEMS.filter((row) => {
@@ -117,6 +124,9 @@ export function listBundledLaborTaxonomy() {
     .sort((a, b) => a.category.localeCompare(b.category));
 }
 
+/**
+ * @param {any} rows
+ */
 export function verificationSummary(rows = AUDITED_LABOR_ITEMS) {
   const units = rows.flatMap((row) => row.labor_units || []);
   return {
@@ -164,6 +174,9 @@ function mhForDisplayUnit(itemUnit, takeoffUnit, mh) {
   return mh;
 }
 
+/**
+ * @param {Record<string, any>} category
+ */
 export function matchAuditedLaborHours({ category, symbol, unit, items, minScore = 0 } = {}) {
   const catalog = items?.length ? items : AUDITED_LABOR_ITEMS;
   const text = `${category || ""} ${symbol || ""}`.toLowerCase();

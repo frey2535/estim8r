@@ -4,6 +4,9 @@ function trimUrl(value) {
   return String(value || "").trim().replace(/\/$/, "");
 }
 
+/**
+ * @param {any} value
+ */
 export function isLoopbackBuildrUrl(value) {
   const trimmed = trimUrl(value);
   if (!trimmed) return false;
@@ -22,10 +25,19 @@ function usableBuildrUrl(value, isProd) {
   return trimmed;
 }
 
+/**
+ * @param {any} appUrl
+ * @param {Record<string, any>} isProd
+ */
 export function resolveBuildrAppUrl(appUrl, { isProd = false } = {}) {
   return usableBuildrUrl(appUrl, isProd) || (isProd ? DEFAULT_BUILDR_PRODUCTION_URL : "");
 }
 
+/**
+ * @param {any} apiUrl
+ * @param {any} appUrl
+ * @param {Record<string, any>} isProd
+ */
 export function resolveBuildrApiUrl(apiUrl, appUrl, { isProd = false } = {}) {
   return usableBuildrUrl(apiUrl, isProd) || resolveBuildrAppUrl(appUrl, { isProd });
 }
@@ -48,11 +60,17 @@ export function isBuildrConfigured() {
 
 export const BUILDR_SESSION_STORAGE_KEY = "estim8r.buildrSession.v1";
 
+/**
+ * @param {any} email
+ */
 export function buildrSessionStorageKey(email) {
   const normalized = String(email || "").trim().toLowerCase();
   return normalized ? `${BUILDR_SESSION_STORAGE_KEY}:${normalized}` : BUILDR_SESSION_STORAGE_KEY;
 }
 
+/**
+ * @param {any} token
+ */
 export function buildrAuthHeaders(token) {
   const value = String(token || "").trim();
   return value ? { Authorization: `Bearer ${value}` } : {};
@@ -77,6 +95,10 @@ function sessionStore() {
   return null;
 }
 
+/**
+ * @param {any} email
+ * @param {any} store
+ */
 export function readBuildrSessionToken(email, store = sessionStore(), now = Date.now()) {
   if (!store) return "";
   try {
@@ -96,6 +118,11 @@ export function readBuildrSessionToken(email, store = sessionStore(), now = Date
   }
 }
 
+/**
+ * @param {any} email
+ * @param {any} token
+ * @param {any} store
+ */
 export function writeBuildrSessionToken(email, token, store = sessionStore()) {
   const value = String(token || "").trim();
   if (!store || !email || !value) return "";
@@ -168,6 +195,11 @@ export async function verifyBuildrFamilyAppSso(token, audience = "estim8r") {
   return verified;
 }
 
+/**
+ * @param {any} email
+ * @param {any} companyId
+ * @param {Record<string, any>} options
+ */
 export async function fetchBuildrAccountStatus(email, companyId, { ssoToken } = {}) {
   const api = buildrApiUrl();
   if (!api || !email) {
@@ -211,6 +243,9 @@ export async function fetchBuildrAccountStatus(email, companyId, { ssoToken } = 
   }
 }
 
+/**
+ * @param {Record<string, any>} options
+ */
 export async function saveBuildrProjectDocuments({
   email,
   companyId,

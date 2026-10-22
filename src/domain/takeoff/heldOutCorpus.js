@@ -34,6 +34,9 @@ function projectBlockers(project) {
   return blockers;
 }
 
+/**
+ * @param {any} manifest
+ */
 export function summarizeHeldOutCorpus(manifest = {}) {
   const projects = Array.isArray(manifest.projects) ? manifest.projects : [];
   const candidateSources = Array.isArray(manifest.candidateSources) ? manifest.candidateSources : [];
@@ -79,6 +82,9 @@ export function summarizeHeldOutCorpus(manifest = {}) {
   };
 }
 
+/**
+ * @param {any} summary
+ */
 export function formatHeldOutCorpusStatus(summary) {
   const status = summary?.ready ? "READY" : "BLOCKED";
   const blockers = summary?.blockers?.length

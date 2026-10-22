@@ -15,6 +15,9 @@ export const LABEL_AUTHORITY = {
 
 export const MIN_INDEPENDENT_TRUTH = 8;
 
+/**
+ * @param {any} truth
+ */
 export function inspectGroundTruth(truth = []) {
   const rows = Array.isArray(truth) ? truth : [];
   const incomplete = [];
@@ -41,6 +44,9 @@ export function inspectGroundTruth(truth = []) {
   };
 }
 
+/**
+ * @param {any} fixture
+ */
 export function inferLabelAuthority(fixture = {}) {
   if (fixture.labelAuthority) return fixture.labelAuthority;
   if (fixture.source?.labelAuthority) return fixture.source.labelAuthority;
@@ -58,6 +64,10 @@ export function inferLabelAuthority(fixture = {}) {
   return LABEL_AUTHORITY.INCOMPLETE;
 }
 
+/**
+ * @param {any} authority
+ * @param {any} inspect
+ */
 export function canClaimThreshold(authority, inspect) {
   return authority === LABEL_AUTHORITY.INDEPENDENT
     && inspect.ready
@@ -65,6 +75,13 @@ export function canClaimThreshold(authority, inspect) {
     && inspect.withBody === inspect.count;
 }
 
+/**
+ * @param {any} pages
+ * @param {any} allowed
+ * @param {any} "GFI"
+ * @param {any} "GFI/WP"
+ * @param {any} "WP"]
+ */
 export function pottsvilleTokenTruth(pages = [], allowed = new Set(["OS", "GFI", "GFI/WP", "WP"])) {
   const devices = [];
   for (const page of pages || []) {

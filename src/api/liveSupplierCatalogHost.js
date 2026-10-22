@@ -1,6 +1,9 @@
 export const LIVE_CATALOG_DEV_PROXY = "/api/live-supplier-catalog";
 export const LIVE_CATALOG_FUNCTION = "search-supplier-catalog";
 
+/**
+ *  * @param {Record<string, any>} options
+ */
 export function shouldUseLiveCatalogDevProxy({ isDev = false, hostname = "" } = {}) {
   if (isDev) return true;
   const host = String(hostname || "").toLowerCase();
@@ -10,6 +13,10 @@ export function shouldUseLiveCatalogDevProxy({ isDev = false, hostname = "" } = 
     || host.endsWith(".localhost");
 }
 
+/**
+ * @param {any} response
+ * @param {any} bodyText
+ */
 export function isStaticHostCatalogRejection(response, bodyText = "") {
   const status = Number(response?.status) || 0;
   if (status === 404 || status === 405 || status === 501) return true;

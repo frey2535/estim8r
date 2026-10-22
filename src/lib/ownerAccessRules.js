@@ -1,13 +1,22 @@
 import { isBackupAdmin, isCompanyAdmin, isPlatformOwner, isPlatformStaff } from "./platformIdentity.js";
 
+/**
+ * @param {any} user
+ */
 export function canManageEstim8rAccess(user) {
   return isPlatformStaff(user);
 }
 
+/**
+ * @param {any} row
+ */
 export function canRevokeAccess(row) {
   return Boolean(row?.email) && !isPlatformOwner(row.email) && !isBackupAdmin(row.email);
 }
 
+/**
+ * @param {any} row
+ */
 export function accessStatusLabel(row) {
   if (isPlatformOwner(row?.email) || row?.is_platform_owner) return "Platform owner";
   if (isBackupAdmin(row?.email) || row?.is_backup_admin) return "Current Flow backup admin";

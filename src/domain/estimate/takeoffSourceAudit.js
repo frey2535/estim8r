@@ -2,6 +2,10 @@ function sourceKey(category, symbol) {
   return String(category || "").toLowerCase() + "|" + String(symbol || "").toLowerCase();
 }
 
+/**
+ * @param {any} marks
+ * @param {any} runs
+ */
 export function buildTakeoffSourceIndex(marks = [], runs = []) {
   const byKey = new Map();
   for (const mark of marks || []) {
@@ -33,11 +37,19 @@ export function buildTakeoffSourceIndex(marks = [], runs = []) {
   return byKey;
 }
 
+/**
+ * @param {any} row
+ * @param {any} marks
+ * @param {any} runs
+ */
 export function sourcesForRollupRow(row, marks = [], runs = []) {
   const index = buildTakeoffSourceIndex(marks, runs);
   return index.get(sourceKey(row?.category, row?.symbol)) || [];
 }
 
+/**
+ * @param {any} sources
+ */
 export function summarizeLineSources(sources = []) {
   const sheets = [...new Set((sources || []).map((row) => row.sheet).filter(Boolean))].sort((a, b) => a - b);
   const runNumbers = [...new Set((sources || []).map((row) => row.runNumber).filter(Boolean))].sort((a, b) => a - b);

@@ -5,6 +5,9 @@ export const ACCEPT_VISUAL_THRESHOLD = 0.9;
 
 const CIRCUIT_TAG_RE = /^(?:LN|LP|PP|RP|H|L|EM)\d{1,2}$|^P\d{2}$/i;
 
+/**
+ * @param {any} geometry
+ */
 export function pointFromGeometry(geometry) {
   if (!geometry) return null;
   const rawX = geometry.cx ?? geometry.x;
@@ -16,6 +19,9 @@ export function pointFromGeometry(geometry) {
   return { x, y };
 }
 
+/**
+ * @param {any} geometry
+ */
 export function boundsFromGeometry(geometry) {
   if (!geometry) return null;
   const w = Number(geometry.w ?? geometry.outline?.w) || 0;
@@ -34,6 +40,9 @@ export function boundsFromGeometry(geometry) {
   };
 }
 
+/**
+ * @param {any} mark
+ */
 export function isReviewOnlyMark(mark) {
   if (!mark) return false;
   if (mark.layer === "review" || mark.reviewStatus === "rejected") return true;
@@ -41,6 +50,9 @@ export function isReviewOnlyMark(mark) {
   return false;
 }
 
+/**
+ * @param {any} marks
+ */
 export function bidDeviceMarks(marks = []) {
   return (marks || []).filter((mark) => (
     (mark?.type === "count" || mark?.type === "drop")
@@ -48,11 +60,18 @@ export function bidDeviceMarks(marks = []) {
   ));
 }
 
+/**
+ * @param {any} token
+ */
 export function labelLocationFromToken(token) {
   if (!token || !Number.isFinite(Number(token.x)) || !Number.isFinite(Number(token.y))) return null;
   return { x: Number(token.x), y: Number(token.y) };
 }
 
+/**
+ * @param {any} token
+ * @param {any} tokens
+ */
 export function nearbyCircuitTag(token, tokens = []) {
   if (!token) return null;
   let best = null;
@@ -70,6 +89,10 @@ export function nearbyCircuitTag(token, tokens = []) {
   return best;
 }
 
+/**
+ * @param {any} mark
+ * @param {any} fields
+ */
 export function attachDetectionRecord(mark, fields = {}) {
   const body = fields.symbolBodyLocation || pointFromGeometry(fields.geometry) || { x: Number(mark.x) || 0, y: Number(mark.y) || 0 };
   const sources = fields.detectionSources
@@ -117,6 +140,12 @@ export function attachDetectionRecord(mark, fields = {}) {
   };
 }
 
+/**
+ * @param {Record<string, any>} trade
+ */
+/**
+ * @param {Record<string, any>} options
+ */
 export function reviewCandidateMark({
   trade,
   sheet,

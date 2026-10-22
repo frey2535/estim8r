@@ -1,7 +1,15 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/AuthContext";
 
-const ThemeContext = createContext({ theme: "light", toggleTheme: () => {}, appearance: {}, updateAppearance: () => {}, resetAppearance: () => {} });
+/** @typedef {{ theme: string, toggleTheme: () => void, appearance: Record<string, any>, updateAppearance: (next: Record<string, any>) => void, resetAppearance: () => void }} ThemeContextValue */
+/** @type {React.Context<ThemeContextValue>} */
+const ThemeContext = createContext({
+  theme: "light",
+  toggleTheme: () => {},
+  appearance: {},
+  updateAppearance: (_next) => {},
+  resetAppearance: () => {},
+});
 const STORAGE_KEY = "estim8r-theme";
 export const COLOR_TOKENS = ["background", "foreground", "card", "card-foreground", "primary", "primary-foreground", "secondary", "secondary-foreground", "muted", "muted-foreground", "accent", "accent-foreground", "border", "input", "ring", "sidebar-background", "sidebar-foreground", "sidebar-primary", "sidebar-primary-foreground", "sidebar-accent", "sidebar-accent-foreground", "sidebar-border"];
 export const FONT_OPTIONS = ["Plus Jakarta Sans", "Inter", "Arial", "Georgia", "Verdana", "Tahoma", "Trebuchet MS", "Times New Roman", "Courier New", "system-ui"];
@@ -27,9 +35,13 @@ function userKey(user) {
   const id = user?.id || user?.email;
   return id ? `estim8r-appearance:${String(id)}` : null;
 }
+/**
+ *  * @param {Record<string, any>} options
+ */
 export function ThemeProvider({ children }) {
   const { user } = useAuth();
   const key = userKey(user);
+  /** @type {[Record<string, any>, React.Dispatch<React.SetStateAction<Record<string, any>>>]} */
   const [appearance, setAppearance] = useState({});
   const [theme, setTheme] = useState(() => {
     if (typeof window === "undefined") return "light";

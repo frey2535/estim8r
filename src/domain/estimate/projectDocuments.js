@@ -4,20 +4,35 @@ import { estimateLineHours, estimateLineLaborCost } from "./manualLineLabor.js";
 
 export const PROJECT_FOLDER_INDEX_KEY = "estim8r.projectDocs.v1";
 
+/**
+ * @param {any} projectName
+ */
 export function projectFolderKey(projectName) {
   return String(projectName || "").trim().toLowerCase();
 }
 
+/**
+ * @param {any} fileName
+ * @param {any} fileSize
+ */
 export function takeoffStorageKey(fileName, fileSize) {
   return `estim8r.takeoff.v1:${fileName || "drawing"}:${fileSize || 0}`;
 }
 
+/**
+ * @param {any} projects
+ * @param {any} projectName
+ */
 export function matchProjectByName(projects, projectName) {
   const key = projectFolderKey(projectName);
   if (!key) return null;
   return (projects || []).find((project) => projectFolderKey(project.name) === key) || null;
 }
 
+/**
+ * @param {any} projects
+ * @param {Record<string, any>} projectId
+ */
 export function matchCompanyProject(projects, { projectId, projectName, projectAddress } = {}) {
   const rows = projects || [];
   const id = String(projectId || "").trim();
@@ -35,6 +50,9 @@ export function matchCompanyProject(projects, { projectId, projectName, projectA
   return matches.length === 1 ? matches[0] : null;
 }
 
+/**
+ * @param {Record<string, any>} canUseBuildr
+ */
 export function decideSaveDestination({
   canUseBuildr,
   matchingProject,
@@ -66,15 +84,26 @@ export function makeEstimateId() {
   return `est_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/**
+ * @param {any} estimateId
+ * @param {any} extra
+ */
 export function estim8rInvoiceNote(estimateId, extra) {
   return [`${ESTIM8R_ID_NOTE} ${estimateId}`, extra].filter(Boolean).join("\n");
 }
 
+/**
+ * @param {any} notes
+ */
 export function parseEstim8rEstimateId(notes) {
   const match = String(notes || "").match(/Estim8r-id:\s*(\S+)/i);
   return match?.[1] || null;
 }
 
+/**
+ * @param {any} invoices
+ * @param {Record<string, any>} invoiceId
+ */
 export function findInvoiceForEstim8r(invoices, { invoiceId, estimateId, invoiceNumber } = {}) {
   const rows = invoices || [];
   if (invoiceId) {
@@ -91,6 +120,10 @@ export function findInvoiceForEstim8r(invoices, { invoiceId, estimateId, invoice
   return null;
 }
 
+/**
+ * @param {any} docs
+ * @param {Record<string, any>} docType
+ */
 export function findDocumentForEstim8r(docs, { docType, estimateId, title } = {}) {
   const rows = docs || [];
   if (estimateId) {
@@ -103,6 +136,10 @@ export function findDocumentForEstim8r(docs, { docType, estimateId, title } = {}
   return null;
 }
 
+/**
+ * @param {any} estimate
+ * @param {any} takeoff
+ */
 export function estimateContentFingerprint(estimate, takeoff) {
   return JSON.stringify({
     id: estimate?.id || "",
@@ -124,6 +161,10 @@ export function estimateContentFingerprint(estimate, takeoff) {
   });
 }
 
+/**
+ * @param {any} result
+ * @param {any} estimateId
+ */
 export function buildrSyncFromResult(result, estimateId) {
   const documents = {};
   for (const doc of result?.documents || []) {
@@ -137,6 +178,9 @@ export function buildrSyncFromResult(result, estimateId) {
   };
 }
 
+/**
+ * @param {Record<string, any>} fileName
+ */
 export function buildMarkupPages({ fileName, pageCount, marks, calibration, titleBlock, reconciliation, skippedSheets }) {
   const count = Math.max(1, Number(pageCount) || 1);
   const pages = [];
@@ -158,12 +202,20 @@ export function buildMarkupPages({ fileName, pageCount, marks, calibration, titl
   return markup;
 }
 
+/**
+ * @param {any} fileName
+ * @param {any} fileSize
+ * @param {any} session
+ */
 export function writeTakeoffSession(fileName, fileSize, session) {
   const payload = session && typeof session === "object" ? session : {};
   localStorage.setItem(takeoffStorageKey(fileName, fileSize), JSON.stringify(payload));
   return payload;
 }
 
+/**
+ * @param {any} folder
+ */
 export function deleteProjectFolder(folder) {
   const id = folder?.id || projectFolderKey(folder?.projectName);
   const folders = readFolderIndex().filter((item) => item.id !== id);
@@ -171,6 +223,10 @@ export function deleteProjectFolder(folder) {
   return folders;
 }
 
+/**
+ * @param {any} fileName
+ * @param {any} fileSize
+ */
 export function readTakeoffSession(fileName, fileSize) {
   try {
     const raw = localStorage.getItem(takeoffStorageKey(fileName, fileSize));
@@ -201,6 +257,9 @@ export function listProjectFolders() {
     .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
 }
 
+/**
+ * @param {any} folder
+ */
 export function upsertProjectFolder(folder) {
   const key = projectFolderKey(folder.projectName);
   if (!key) throw new Error("A project name is required to save documents.");
@@ -285,6 +344,10 @@ export async function deleteDrawingFile(fileName, fileSize) {
   return drawingRecordKey(fileName, fileSize);
 }
 
+/**
+ * @param {any} blob
+ * @param {any} fileName
+ */
 export function downloadBlob(blob, fileName) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -294,6 +357,9 @@ export function downloadBlob(blob, fileName) {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * @param {any} estimate
+ */
 export function estimateTotals(estimate) {
   const lines = includedLines(estimate);
   return lines.reduce((acc, line) => {
@@ -305,6 +371,9 @@ export function estimateTotals(estimate) {
   }, { material: 0, hours: 0, labor: 0 });
 }
 
+/**
+ * @param {any} estimate
+ */
 export function estimateGrandTotal(estimate) {
   const totals = estimateTotals(estimate);
   const materialMarkup = totals.material * ((Number(estimate?.materialMarkup) || 0) / 100);
@@ -332,26 +401,41 @@ export function estimateGrandTotal(estimate) {
 
 export const STANDALONE_ESTIMATE_PREFIX = "standalone:";
 
+/**
+ * @param {any} fileName
+ */
 export function isDrawingFileName(fileName) {
   const name = String(fileName || "").trim();
   return Boolean(name) && !name.startsWith(STANDALONE_ESTIMATE_PREFIX);
 }
 
+/**
+ * @param {any} projectName
+ */
 export function standaloneEstimateFileName(projectName) {
   const key = projectFolderKey(projectName);
   return key ? `${STANDALONE_ESTIMATE_PREFIX}${key}` : "";
 }
 
-/** Storage identity for an estimate: keep a real drawing name, otherwise key by project. */
+/**
+ * Storage identity for an estimate: keep a real drawing name, otherwise key by project.
+ * @param {Record<string, any>} options
+ */
 export function estimateFileNameForSave({ fileName, projectName } = {}) {
   if (isDrawingFileName(fileName)) return String(fileName).trim();
   return standaloneEstimateFileName(projectName);
 }
 
+/**
+ *  * @param {Record<string, any>} options
+ */
 export function canSaveProjectDocuments({ projectName } = {}) {
   return Boolean(String(projectName || "").trim());
 }
 
+/**
+ *  * @param {Record<string, any>} options
+ */
 export function saveRequiresProjectName({ projectName } = {}) {
   return canSaveProjectDocuments({ projectName }) ? "" : "Enter a project name to save this estimate.";
 }

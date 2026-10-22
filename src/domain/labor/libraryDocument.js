@@ -92,6 +92,9 @@ function scoreItem(item, text, category) {
   return score;
 }
 
+/**
+ * @param {Record<string, any>} category
+ */
 export function assignLaborHours({ category, symbol, unit, items, minScore = 0, allowCategoryFallback = true } = {}) {
   const audited = matchAuditedLaborHours({ category, symbol, unit, items, minScore });
   if (audited) return audited;

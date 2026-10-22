@@ -7,6 +7,10 @@ import { applySavedLineOrder } from "./lineOrder.js";
 import { sourcesForRollupRow, summarizeLineSources } from "./takeoffSourceAudit.js";
 import { liveEstimateSourcesForRow, overlayBidMarks } from "../takeoff/liveLinkedTakeoff.js";
 
+/**
+ * @param {any} fileName
+ * @param {any} fileSize
+ */
 export function estimateStorageKey(fileName, fileSize) {
   return `estim8r.estimate.v1:${fileName || "drawing"}:${fileSize || 0}`;
 }
@@ -66,6 +70,11 @@ function makeLine({ takeoffKey, source, category, description, quantity, unit, r
   };
 }
 
+/**
+ * @param {any} rollup
+ * @param {any} rate
+ * @param {any} sourceContext
+ */
 export function linesFromRollup(rollup, rate, sourceContext = {}) {
   const lines = [];
   for (const row of rollup?.rows || []) {
@@ -94,6 +103,10 @@ export function linesFromRollup(rollup, rate, sourceContext = {}) {
   return lines;
 }
 
+/**
+ * @param {any} drawingDocs
+ * @param {any} rate
+ */
 export function linesFromDrawing(drawingDocs, rate) {
   const items = [...(drawingDocs?.symbols || []), ...(drawingDocs?.scheduleItems || [])];
   return items.map((item) => makeLine({
@@ -107,6 +120,9 @@ export function linesFromDrawing(drawingDocs, rate) {
   }));
 }
 
+/**
+ * @param {Record<string, any>} options
+ */
 export function scopeFromDrawing({ fileName, drawingDocs, pageCount }) {
   const pages = (drawingDocs?.pages || []).filter((page) => page.kind && page.kind !== "drawing");
   const pageBits = pages.slice(0, 8).map((page) => `${page.kind} p${page.page}`);
@@ -129,6 +145,10 @@ function applyRate(line, rate) {
   return { ...line, laborRate: rate };
 }
 
+/**
+ * @param {any} existing
+ * @param {any} incomingLines
+ */
 export function mergeEstimate(existing, incomingLines) {
   const byKey = new Map((existing?.lines || []).map((line) => [line.takeoffKey || line.id, line]));
   const next = [];
@@ -165,7 +185,22 @@ export function mergeEstimate(existing, incomingLines) {
   return applySavedLineOrder(next, (existing?.lines || []).map((line) => line.id));
 }
 
-export function buildEstimateDraft({ fileName, fileSize, drawingDocs, rollup, pageCount, wageBook, markup, marks = [], runs = [], pageKinds = {} }) {
+/**
+ * @param {any} [options]
+ */
+export function buildEstimateDraft(options = {}) {
+  const {
+    fileName,
+    fileSize,
+    drawingDocs = null,
+    rollup,
+    pageCount,
+    wageBook,
+    markup = null,
+    marks = [],
+    runs = [],
+    pageKinds = {},
+  } = options;
   const crew = defaultCrew(wageBook);
   const rate = compositeWage(crew).rate || journeymanWage(crew);
   const bidMarks = overlayBidMarks(marks, pageKinds);
@@ -204,6 +239,10 @@ export function buildEstimateDraft({ fileName, fileSize, drawingDocs, rollup, pa
   };
 }
 
+/**
+ * @param {any} existing
+ * @param {any} input
+ */
 export function syncEstimateDraft(existing, input) {
   const wageBook = input.wageBook || {};
   const crew = existing?.crew?.length ? existing.crew : defaultCrew(wageBook);

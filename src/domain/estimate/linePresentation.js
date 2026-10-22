@@ -1,11 +1,18 @@
 import { laborItemLabel } from "./manualLineLabor.js";
 
+/**
+ * @param {any} row
+ * @param {any} laborItem
+ */
 export function estimateLineTitle(row, laborItem) {
   const pick = laborItemLabel(laborItem);
   const description = String(row?.description || "").trim();
   return pick || description || "New line";
 }
 
+/**
+ * @param {any} row
+ */
 export function estimateLineLaborNotice(row) {
   if (row?.laborMatchStatus === "unmatched") {
     return {

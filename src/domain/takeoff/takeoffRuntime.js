@@ -5,6 +5,9 @@ export const DEFAULT_REGION_ROWS = 2;
 export const DEFAULT_WORKER_CONCURRENCY = 2;
 export const DEFAULT_CACHE_BYTES = 48 * 1024 * 1024;
 
+/**
+ * @param {any} options
+ */
 export function regionalTiles(options = {}) {
   const cols = Math.max(1, Number(options.cols) || DEFAULT_REGION_COLS);
   const rows = Math.max(1, Number(options.rows) || DEFAULT_REGION_ROWS);
@@ -27,6 +30,10 @@ export function regionalTiles(options = {}) {
   return tiles;
 }
 
+/**
+ * @param {any} pages
+ * @param {any} options
+ */
 export function workerJobPlan(pages = [], options = {}) {
   const tiles = regionalTiles(options);
   const concurrency = Math.max(1, Number(options.concurrency) || DEFAULT_WORKER_CONCURRENCY);
@@ -53,6 +60,9 @@ export function workerJobPlan(pages = [], options = {}) {
   };
 }
 
+/**
+ * @param {any} options
+ */
 export function createPageCache(options = {}) {
   const maxBytes = Number(options.maxBytes) > 0 ? Number(options.maxBytes) : DEFAULT_CACHE_BYTES;
   const maxEntries = Number(options.maxEntries) > 0 ? Number(options.maxEntries) : 12;
@@ -99,6 +109,10 @@ export function createPageCache(options = {}) {
   };
 }
 
+/**
+ * @param {any} page
+ * @param {any} options
+ */
 export function largeDrawingNavigable(page = {}, options = {}) {
   const budget = takeoffPerformanceBudget({
     width: Number(page.width) || 2592,

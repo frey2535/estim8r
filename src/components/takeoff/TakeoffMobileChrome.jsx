@@ -12,6 +12,9 @@ import {
 
 const commandBtn = "inline-flex min-h-[48px] items-center justify-center gap-1 rounded-xl px-2.5 text-[14px] font-semibold touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
+/**
+ *  * @param {Record<string, any>} options
+ */
 export function TakeoffMobileCommandBar({
   aiBusy,
   zoom,
@@ -76,6 +79,9 @@ export function TakeoffMobileCommandBar({
   );
 }
 
+/**
+ *  * @param {Record<string, any>} options
+ */
 export function TakeoffMobileDock({
   tool,
   activeToolLabel,
@@ -140,6 +146,9 @@ export function TakeoffMobileDock({
   );
 }
 
+/**
+ *  * @param {Record<string, any>} options
+ */
 export function TakeoffMobileSheet({ open, onOpenChange, title, description, children }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>

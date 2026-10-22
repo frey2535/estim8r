@@ -23,6 +23,9 @@ function typeKey(value) {
   return text;
 }
 
+/**
+ * @param {any} mark
+ */
 export function markTypeKey(mark) {
   return typeKey(mark?.typeCode || mark?.abbr || mark?.symbol || "");
 }
@@ -66,6 +69,10 @@ function markLooksLikeWall(mark) {
   });
 }
 
+/**
+ * @param {any} fixture
+ * @param {any} options
+ */
 export function scoreTakeoffAccuracy(fixture, options = {}) {
   const electrical = paletteForTrade("electrical");
   const result = buildAiMarks({
@@ -210,6 +217,9 @@ export function scoreTakeoffAccuracy(fixture, options = {}) {
   };
 }
 
+/**
+ * @param {any} score
+ */
 export function formatAccuracyReport(score) {
   const types = Object.entries(score.typeRecalls || {})
     .map(([key, row]) => `${key} ${row.found}/${row.truth} (${(row.recall * 100).toFixed(1)}%)`)

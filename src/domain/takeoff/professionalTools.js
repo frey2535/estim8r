@@ -6,10 +6,17 @@ export const QUANTITY_LINK_CHANNEL = "estim8r-quantity-link";
 export const QUANTITY_LINK_STORAGE = "estim8r-quantity-link-latest";
 export const COLLAB_CHANNEL_PREFIX = "estim8r-takeoff-session:";
 
+/**
+ * @param {any} payload
+ * @param {any} storage
+ */
 export function rememberLiveQuantity(payload, storage = globalThis.localStorage) {
   storage?.setItem?.(QUANTITY_LINK_STORAGE, JSON.stringify(payload));
 }
 
+/**
+ * @param {any} storage
+ */
 export function readLiveQuantity(storage = globalThis.localStorage) {
   try {
     const raw = storage?.getItem?.(QUANTITY_LINK_STORAGE);
@@ -35,6 +42,11 @@ function sizeOf(object) {
   return { long: Math.max(w, h), short: Math.min(w, h) };
 }
 
+/**
+ * @param {any} objects
+ * @param {any} seed
+ * @param {any} tolerance
+ */
 export function visualSearchGeometry(objects = [], seed, tolerance = 0.22) {
   const base = sizeOf(seed);
   if (!base.long || !seed) return { total: 0, sheets: [], hits: [] };
@@ -65,6 +77,11 @@ export function visualSearchGeometry(objects = [], seed, tolerance = 0.22) {
   };
 }
 
+/**
+ * @param {any} mark
+ * @param {any} calibration
+ * @param {any} aspect
+ */
 export function measureMark(mark, calibration, aspect = 1) {
   const points = Array.isArray(mark?.points) ? mark.points : [];
   const openLength = polylineLength(points, aspect);
@@ -86,6 +103,10 @@ export function measureMark(mark, calibration, aspect = 1) {
   };
 }
 
+/**
+ * @param {any} quantity
+ * @param {any} wastePercent
+ */
 export function wasteQuantity(quantity, wastePercent) {
   const amount = Number(quantity);
   const waste = Number(wastePercent);
@@ -93,6 +114,10 @@ export function wasteQuantity(quantity, wastePercent) {
   return amount * (1 + waste / 100);
 }
 
+/**
+ * @param {any} expression
+ * @param {any} variables
+ */
 export function evaluateFormula(expression, variables = {}) {
   const source = String(expression || "").replace(/\s+/g, "");
   if (!source) return { ok: false, error: "Enter a formula." };
@@ -162,6 +187,11 @@ export function evaluateFormula(expression, variables = {}) {
   }
 }
 
+/**
+ * @param {any} assembly
+ * @param {any} point
+ * @param {any} sheet
+ */
 export function markFromAssembly(assembly, point, sheet = 1) {
   if (!assembly?.id || !point || !Number.isFinite(Number(point.x)) || !Number.isFinite(Number(point.y))) return null;
   return {
@@ -181,6 +211,10 @@ export function markFromAssembly(assembly, point, sheet = 1) {
   };
 }
 
+/**
+ * @param {any} previous
+ * @param {any} current
+ */
 export function revisionReport(previous = [], current = []) {
   const delta = revisionDelta(previous, current);
   return {
@@ -192,6 +226,9 @@ export function revisionReport(previous = [], current = []) {
   };
 }
 
+/**
+ * @param {Record<string, any>} object
+ */
 export function cropToObject({ object, viewWidth, viewHeight, sheetWidth, sheetHeight } = {}) {
   if (!object || !viewWidth || !viewHeight || !sheetWidth || !sheetHeight) return null;
   const w = Math.max(Number(object.w || object.outline?.w) || 8, 4);
@@ -212,6 +249,10 @@ export function cropToObject({ object, viewWidth, viewHeight, sheetWidth, sheetH
   };
 }
 
+/**
+ * @param {any} a
+ * @param {any} b
+ */
 export function haversineFeet(a, b) {
   if (!Number.isFinite(Number(a?.lat)) || !Number.isFinite(Number(a?.lng)) || !Number.isFinite(Number(b?.lat)) || !Number.isFinite(Number(b?.lng))) return null;
   const toRad = (value) => (Number(value) * Math.PI) / 180;
@@ -225,6 +266,11 @@ export function haversineFeet(a, b) {
   return meters * 3.280839895;
 }
 
+/**
+ * @param {any} a
+ * @param {any} b
+ * @param {any} sheet
+ */
 export function aerialLengthMark(a, b, sheet = 1) {
   const feet = haversineFeet(a, b);
   if (feet == null) return null;
@@ -248,6 +294,10 @@ function xml(value) {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
+/**
+ * @param {any} sheetName
+ * @param {any} rows
+ */
 export function spreadsheetMl(sheetName, rows = []) {
   const table = rows.map((row) => {
     const cells = (row || []).map((cell) => {
@@ -265,6 +315,11 @@ export function spreadsheetMl(sheetName, rows = []) {
 </Workbook>`;
 }
 
+/**
+ * @param {any} marks
+ * @param {any} calibration
+ * @param {any} aspect
+ */
 export function quantityWorkbookRows(marks = [], calibration = null, aspect = 1) {
   const rows = [["Sheet", "Name", "Kind", "Count", "Length LF", "Area SF", "Volume CF", "Circuit", "Assembly"]];
   for (const mark of marks) {
@@ -284,6 +339,10 @@ export function quantityWorkbookRows(marks = [], calibration = null, aspect = 1)
   return rows;
 }
 
+/**
+ * @param {any} marks
+ * @param {any} message
+ */
 export function applyRemoteMark(marks = [], message) {
   if (!message || message.kind !== "estim8r-collab") return marks;
   if (message.op === "upsert" && message.mark?.id) {
@@ -294,6 +353,10 @@ export function applyRemoteMark(marks = [], message) {
   return marks;
 }
 
+/**
+ * @param {any} pageCount
+ * @param {any} slips
+ */
 export function interleavePages(pageCount, slips = []) {
   const rows = [];
   const count = Math.max(0, Number(pageCount) || 0);
@@ -341,6 +404,9 @@ export async function verifyQuantity(publicKey, payload, signature) {
   );
 }
 
+/**
+ * @param {any} marks
+ */
 export function reportLines(marks = []) {
   const rows = new Map();
   for (const mark of marks) {

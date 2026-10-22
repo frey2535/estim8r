@@ -3,6 +3,10 @@ import { deviceTypeKey, isDeviceMark } from "./deviceStyles.js";
 
 export const DETECT_SOURCE_ORIGINAL_PDF = "original-pdf";
 
+/**
+ * @param {any} mark
+ * @param {any} options
+ */
 export function cropWindowForMark(mark, options = {}) {
   if (mark?.type === "coverage" && mark.symbolBodyBounds) {
     const bounds = mark.symbolBodyBounds;
@@ -31,6 +35,10 @@ export function cropWindowForMark(mark, options = {}) {
   };
 }
 
+/**
+ * @param {any} crop
+ * @param {any} viewport
+ */
 export function cropToViewportPixels(crop, viewport) {
   const width = Number(viewport?.width) || 0;
   const height = Number(viewport?.height) || 0;
@@ -42,6 +50,9 @@ export function cropToViewportPixels(crop, viewport) {
   };
 }
 
+/**
+ * @param {any} mark
+ */
 export function isUncertainDetection(mark) {
   if (!isDeviceMark(mark)) return false;
   if (isReviewOnlyMark(mark) || mark.requiresReview === true) return true;
@@ -51,6 +62,10 @@ export function isUncertainDetection(mark) {
   return false;
 }
 
+/**
+ * @param {any} marks
+ * @param {any} sheet
+ */
 export function devicesForAccuracyReview(marks, sheet) {
   return (marks || []).filter((mark) => (
     isDeviceMark(mark)
@@ -58,17 +73,28 @@ export function devicesForAccuracyReview(marks, sheet) {
   ));
 }
 
+/**
+ * @param {any} mark
+ */
 export function reviewStatusForMark(mark) {
   if (mark?.reviewStatus === "accepted" || mark?.reviewStatus === "rejected") return mark.reviewStatus;
   return "pending";
 }
 
+/**
+ * @param {any} marks
+ * @param {any} mark
+ */
 export function typeInstanceCount(marks, mark) {
   const key = deviceTypeKey(mark);
   if (!key) return 1;
   return devicesForAccuracyReview(marks).filter((item) => !isUncertainDetection(item) && deviceTypeKey(item) === key).length;
 }
 
+/**
+ * @param {any} marks
+ * @param {any} sheet
+ */
 export function reviewQueue(marks, sheet) {
   const all = devicesForAccuracyReview(marks);
   const local = devicesForAccuracyReview(marks, sheet);
@@ -93,11 +119,22 @@ export function reviewQueue(marks, sheet) {
   return queue;
 }
 
+/**
+ * @param {any} mark
+ * @param {any} marks
+ * @param {any} sheet
+ */
 export function needsAccuracyReview(mark, marks, sheet) {
   if (!mark) return false;
   return reviewQueue(marks || [mark], sheet ?? mark.sheet).some((item) => item.id === mark.id);
 }
 
+/**
+ * @param {any} marks
+ * @param {any} currentId
+ * @param {any} direction
+ * @param {any} sheet
+ */
 export function neighborReviewId(marks, currentId, direction = 1, sheet) {
   const items = reviewQueue(marks, sheet);
   if (!items.length) return null;
@@ -107,6 +144,11 @@ export function neighborReviewId(marks, currentId, direction = 1, sheet) {
   return items[next].id;
 }
 
+/**
+ * @param {any} marks
+ * @param {any} current
+ * @param {any} status
+ */
 export function applyReviewDecision(marks, current, status) {
   if (!current) return marks || [];
   const type = deviceTypeKey(current);
@@ -120,6 +162,10 @@ export function applyReviewDecision(marks, current, status) {
   });
 }
 
+/**
+ * @param {any} marks
+ * @param {any} sheet
+ */
 export function reviewSummary(marks, sheet) {
   const items = devicesForAccuracyReview(marks, sheet);
   const queue = reviewQueue(marks, sheet);

@@ -4,6 +4,9 @@ import { supabaseAuth } from '@/api/supabaseAuth';
 
 const AuthContext = createContext(null);
 
+/**
+ *  * @param {Record<string, any>} options
+ */
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);

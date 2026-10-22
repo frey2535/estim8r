@@ -1,5 +1,8 @@
 export const CUSTOM_LABOR_KEY = "estim8r.custom-labor.v1";
 
+/**
+ * @param {any} row
+ */
 export function normalizeCustomLabor(row) {
   const normal = row.normal_mh ?? row.normalMh;
   return {
@@ -18,6 +21,10 @@ export function normalizeCustomLabor(row) {
   };
 }
 
+/**
+ * @param {any} rows
+ * @param {Record<string, any>} laborItemId
+ */
 export function findCustomLabor(rows, { laborItemId, itemName, unit } = {}) {
   const list = (rows || []).map(normalizeCustomLabor).filter((row) => row.active);
   if (laborItemId) {
@@ -33,6 +40,10 @@ export function findCustomLabor(rows, { laborItemId, itemName, unit } = {}) {
   return null;
 }
 
+/**
+ * @param {any} rows
+ * @param {any} input
+ */
 export function upsertCustomLabor(rows, input) {
   const next = normalizeCustomLabor({
     id: input.id || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `custom-${Date.now()}`),

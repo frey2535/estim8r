@@ -8,6 +8,9 @@ export function snapOrthogonalPoint(from, to) {
   return { x: Number(from.x), y: Number(to.y) };
 }
 
+/**
+ * @param {any} points
+ */
 export function orthogonalizePolyline(points = []) {
   if (!Array.isArray(points) || points.length < 2) return [...(points || [])];
   const out = [{ x: Number(points[0].x), y: Number(points[0].y) }];
@@ -17,6 +20,10 @@ export function orthogonalizePolyline(points = []) {
   return out;
 }
 
+/**
+ * @param {any} draftPoints
+ * @param {any} hover
+ */
 export function previewOrthogonalSegment(draftPoints = [], hover) {
   if (!hover) return draftPoints;
   if (!draftPoints.length) return [hover];

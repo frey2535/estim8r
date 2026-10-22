@@ -20,14 +20,24 @@ export const TOTAL_OPTIONS = [
   { key: "total", label: "Total" },
 ];
 
+/**
+ * @param {any} estimate
+ */
 export function resolveVisibleTotals(estimate) {
   return { ...DEFAULT_VISIBLE_TOTALS, ...(estimate?.visibleTotals || {}) };
 }
 
+/**
+ * @param {any} estimate
+ */
 export function includeTotalsCard(estimate) {
   return estimate?.includeTotalsCard === true;
 }
 
+/**
+ * @param {any} estimate
+ * @param {any} moneyTotals
+ */
 export function visibleTotalRows(estimate, moneyTotals) {
   const visible = resolveVisibleTotals(estimate);
   return TOTAL_OPTIONS
@@ -39,15 +49,26 @@ export function visibleTotalRows(estimate, moneyTotals) {
     }));
 }
 
+/**
+ * @param {any} line
+ * @param {any} estimate
+ */
 export function lineIncluded(line, estimate) {
   if (!estimate?.itemized) return true;
   return line?.included !== false;
 }
 
+/**
+ * @param {any} estimate
+ */
 export function includedLines(estimate) {
   return (estimate?.lines || []).filter((line) => lineIncluded(line, estimate));
 }
 
+/**
+ * @param {any} lines
+ * @param {any} included
+ */
 export function setAllLinesIncluded(lines, included) {
   return (lines || []).map((line) => ({ ...line, included: Boolean(included) }));
 }

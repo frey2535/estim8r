@@ -1,5 +1,8 @@
 export const MATERIAL_PRICE_SOURCES = ["Supplier quote", "Supplier catalog", "Company history", "Published reference", "Manual", "Other"];
 
+/**
+ * @param {any} input
+ */
 export function normalizeMaterialPriceMeta(input = {}) {
   return {
     sourceType: input.sourceType || "",
@@ -11,6 +14,10 @@ export function normalizeMaterialPriceMeta(input = {}) {
   };
 }
 
+/**
+ * @param {any} meta
+ * @param {any} now
+ */
 export function materialPriceAgeDays(meta, now = new Date()) {
   const raw = meta?.effectiveDate || meta?.capturedAt;
   if (!raw) return null;
@@ -19,6 +26,11 @@ export function materialPriceAgeDays(meta, now = new Date()) {
   return Math.max(0, Math.floor((now.getTime() - date.getTime()) / 86400000));
 }
 
+/**
+ * @param {any} meta
+ * @param {any} staleAfterDays
+ * @param {any} now
+ */
 export function materialPriceStatus(meta, staleAfterDays = 30, now = new Date()) {
   const normalized = normalizeMaterialPriceMeta(meta);
   const ageDays = materialPriceAgeDays(normalized, now);
@@ -28,6 +40,9 @@ export function materialPriceStatus(meta, staleAfterDays = 30, now = new Date())
   return { state: "current", label: "Price verified " + ageDays + " days ago", ageDays };
 }
 
+/**
+ * @param {any} line
+ */
 export function snapshotMaterialPrice(line) {
   return {
     unitCost: Number(line?.materialUnitCost) || 0,
@@ -36,6 +51,11 @@ export function snapshotMaterialPrice(line) {
 }
 
 
+/**
+ * @param {any} history
+ * @param {any} line
+ * @param {any} capturedAt
+ */
 export function appendMaterialPriceHistory(history = [], line, capturedAt = new Date().toISOString()) {
   const snapshot = { ...snapshotMaterialPrice(line), capturedAt };
   if (!(snapshot.unitCost >= 0)) return history;
@@ -49,6 +69,10 @@ export function appendMaterialPriceHistory(history = [], line, capturedAt = new 
   return duplicate ? history : [snapshot, ...history].slice(0, 100);
 }
 
+/**
+ * @param {any} currentUnitCost
+ * @param {any} history
+ */
 export function compareMaterialPrices(currentUnitCost, history = []) {
   const current = Number(currentUnitCost) || 0;
   const valid = history.filter((row) => Number.isFinite(Number(row.unitCost)) && Number(row.unitCost) >= 0);

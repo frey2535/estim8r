@@ -85,6 +85,9 @@ export default function LaborMarketCompare({ comparison }) {
   );
 }
 
+/**
+ *  * @param {Record<string, any>} options
+ */
 export function LineMarketCompare({ comparison }) {
   if (!comparison) return null;
   return (

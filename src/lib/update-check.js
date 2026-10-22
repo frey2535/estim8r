@@ -19,6 +19,10 @@ function readAppliedSha() {
   try { return localStorage.getItem(APPLIED_KEY) || ""; } catch { return ""; }
 }
 
+/**
+ * @param {any} currentSha
+ * @param {any} remoteSha
+ */
 export function shouldPromptForRemoteSha(currentSha, remoteSha) {
   const current = String(currentSha || "").trim();
   const remote = String(remoteSha || "").trim();
@@ -27,6 +31,9 @@ export function shouldPromptForRemoteSha(currentSha, remoteSha) {
   return remote !== current;
 }
 
+/**
+ * @param {Record<string, any>} currentSha
+ */
 export function decideUpdatePrompt({ currentSha, remoteSha, appliedSha, force = false, promptedSha = "" } = {}) {
   const current = String(currentSha || "").trim();
   const remote = String(remoteSha || "").trim();
@@ -41,6 +48,9 @@ export function decideUpdatePrompt({ currentSha, remoteSha, appliedSha, force = 
   return { prompt: false, targetSha: "", reason: "" };
 }
 
+/**
+ * @param {any} now
+ */
 export function buildVersionUrls(now = Date.now(), nonce = Math.random().toString(36).slice(2)) {
   const bust = `t=${now}&n=${nonce}`;
   const origin = typeof window !== "undefined" && window.location?.origin ? window.location.origin : "";
@@ -112,6 +122,9 @@ export async function fetchRemoteBuildSha(fetchImpl = typeof fetch === "function
   return "";
 }
 
+/**
+ * @param {any} targetSha
+ */
 export function markUpdateIntent(targetSha) {
   try {
     sessionStorage.setItem(UPDATE_INTENT_KEY, JSON.stringify({

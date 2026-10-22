@@ -27,11 +27,14 @@ function push(list, item) {
   if (list.length > MAX_EVENTS) list.splice(0, list.length - MAX_EVENTS);
 }
 
+/**
+ * @param {any} value
+ */
 export function redactOwnerDiagnostic(value) {
   return String(value || "")
-    .replace(/(authorization\\s*[:=]\\s*bearer\\s+)\\S+/gi, "$1[REDACTED]")
-    .replace(/(\\b(?:token|secret|api[_-]?key|password|access[_-]?token|refresh[_-]?token)\\b\\s*[:=]\\s*["\x27]?)\\S+/gi, "$1[REDACTED]")
-    .replace(/([?&](?:token|key|access_token|refresh_token|code|secret)=)[^&#\\s]+/gi, "$1[REDACTED]");
+    .replace(/(authorization\s*[:=]\s*bearer\s+)\S+/gi, "$1[REDACTED]")
+    .replace(/(\b(?:token|secret|api[_-]?key|password|access[_-]?token|refresh[_-]?token)\b\s*[:=]\s*["']?)\S+/gi, "$1[REDACTED]")
+    .replace(/([?&](?:token|key|access_token|refresh_token|code|secret)=)[^&#\s]+/gi, "$1[REDACTED]");
 }
 
 function safeRequestUrl(raw) {
@@ -51,6 +54,9 @@ function asText(value) {
   }
 }
 
+/**
+ * @param {any} pathname
+ */
 export function screenForPath(pathname = "/") {
   const path = String(pathname || "/");
   const hit = Object.keys(SCREEN_FILES)
@@ -157,6 +163,9 @@ function snapshotTakeoff() {
 
 const CHROME_LABEL = /^(delete|cancel|save|close|sign out|sign in|access|cursor|edit|open|new estimate|takeoff|labor|production|settings|markup|refresh)$/i;
 
+/**
+ * @param {any} text
+ */
 export function isChromeLabel(text) {
   const value = String(text || "").trim();
   if (!value) return true;
@@ -204,6 +213,9 @@ function snapshotVisible() {
   return { heading, alerts, invalid };
 }
 
+/**
+ * @param {any} pathname
+ */
 export function collectOwnerChatEvidence(pathname = "/") {
   const bag = store() || { console: [], requests: [] };
   const screen = screenForPath(pathname);

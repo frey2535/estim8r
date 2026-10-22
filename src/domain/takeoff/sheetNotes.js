@@ -48,10 +48,17 @@ function skipKeynotePage(page) {
   return false;
 }
 
+/**
+ * @param {any} mark
+ */
 export function isNoteMark(mark) {
   return mark?.type === "note" || mark?.type === "cloud" || mark?.tool === "markup";
 }
 
+/**
+ * @param {any} pages
+ * @param {any} trade
+ */
 export function extractSheetNotes(pages, trade) {
   const notes = [];
   const seen = new Set();
@@ -107,6 +114,10 @@ export function extractSheetNotes(pages, trade) {
   return notes;
 }
 
+/**
+ * @param {any} notes
+ * @param {any} trade
+ */
 export function notesToMarks(notes, trade = "electrical") {
   return (notes || []).map((note) => ({
     id: newId(),
@@ -124,6 +135,11 @@ export function notesToMarks(notes, trade = "electrical") {
   }));
 }
 
+/**
+ * @param {any} marks
+ * @param {any} pages
+ * @param {any} trade
+ */
 export function mergeExtractedNotes(marks, pages, trade) {
   const list = marks || [];
   if (list.some((mark) => isNoteMark(mark) && mark.source === "ai")) return list;

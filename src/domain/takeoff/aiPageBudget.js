@@ -3,6 +3,9 @@ import { tradeFromSheetId } from "./sheetDiscipline.js";
 import { isNonPlanSheetKind } from "./symbolDetection.js";
 import { isScannedOrSparsePage } from "./takeoffQuality.js";
 
+/**
+ * @param {any} recorded
+ */
 export function shouldExtractRaster(recorded) {
   if (!recorded) return false;
   if (looksLikeCoverOrRendering(recorded) || looksLikeIndexPage(recorded)) return false;
@@ -15,6 +18,9 @@ export function shouldExtractRaster(recorded) {
   return isScannedOrSparsePage(recorded) && Boolean(recorded.forceRaster);
 }
 
+/**
+ * @param {any} pages
+ */
 export function persistableAiPages(pages) {
   return (pages || []).map((page) => {
     const { pdfPage, ...rest } = page || {};

@@ -1,10 +1,16 @@
 const SUPABASE_CALLBACK_PATH = "/auth/v1/callback";
 const PRODUCTION_ORIGIN = "https://estim8r.currentflowconsulting.org";
 
+/**
+ * @param {any} value
+ */
 export function trimAuthUrl(value) {
   return String(value || "").trim().replace(/\/+$/, "");
 }
 
+/**
+ * @param {any} supabaseUrl
+ */
 export function supabaseCallbackUrl(supabaseUrl) {
   const base = trimAuthUrl(supabaseUrl);
   return base ? `${base}${SUPABASE_CALLBACK_PATH}` : `https://<project-ref>.supabase.co${SUPABASE_CALLBACK_PATH}`;
@@ -20,6 +26,11 @@ function locationParts(search = "", hash = "") {
   return { query, fragment };
 }
 
+/**
+ * @param {any} path
+ * @param {any} location
+ * @param {any} base
+ */
 export function authRedirectUrl(path = "/", location = globalThis.location, base) {
   const envBase = typeof import.meta !== "undefined" && import.meta.env ? import.meta.env.BASE_URL : "";
   const resolvedBase = base || envBase || "/";
@@ -30,6 +41,10 @@ export function authRedirectUrl(path = "/", location = globalThis.location, base
   return `${root}${suffix.startsWith("/") ? suffix : `/${suffix}`}`;
 }
 
+/**
+ * @param {any} search
+ * @param {any} hash
+ */
 export function readAuthCallbackError(search = "", hash = "") {
   const { query, fragment } = locationParts(search, hash);
   const error = query.get("error") || fragment.get("error") || "";
@@ -39,15 +54,27 @@ export function readAuthCallbackError(search = "", hash = "") {
   return decodeURIComponent((description || code || error).replace(/\+/g, " "));
 }
 
+/**
+ * @param {any} search
+ * @param {any} hash
+ */
 export function hasAuthCode(search = "", hash = "") {
   const { query, fragment } = locationParts(search, hash);
   return Boolean(query.get("code") || fragment.get("code"));
 }
 
+/**
+ * @param {any} search
+ * @param {any} hash
+ */
 export function hasAuthCallbackParams(search = "", hash = "") {
   return Boolean(hasAuthCode(search, hash) || readAuthCallbackError(search, hash));
 }
 
+/**
+ * @param {any} search
+ * @param {any} hash
+ */
 export function authCallbackSearch(search = "", hash = "") {
   const { query, fragment } = locationParts(search, hash);
   const next = new URLSearchParams();
@@ -59,6 +86,10 @@ export function authCallbackSearch(search = "", hash = "") {
   return encoded ? `?${encoded}` : "";
 }
 
+/**
+ * @param {any} error
+ * @param {Record<string, any>} google
+ */
 export function describeAuthError(error, { google = false, supabaseUrl } = {}) {
   const message = String(error?.message || error || "").trim();
   const status = Number(error?.status || error?.code) || null;

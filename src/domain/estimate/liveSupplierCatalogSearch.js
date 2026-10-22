@@ -271,6 +271,9 @@ export async function searchLiveSupplierCatalogs(query, {
   };
 }
 
+/**
+ * @param {any} source
+ */
 export function catalogEnvFromProcess(source) {
   const envSource = source || (typeof process !== "undefined" ? process.env : {});
   const names = [

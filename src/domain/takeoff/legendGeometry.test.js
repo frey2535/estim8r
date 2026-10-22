@@ -13,6 +13,8 @@ import {
   looksLikeOccupancyGlyph,
   looksLikeReceptacleGlyph,
   looksLikeUnlabeledReceptacleGlyph,
+  looksLikeWpCoverGlyph,
+  paintableGlyphOutline,
   resolveGeometryMatch,
   pickInteractiveSymbolGeometry,
   recoverMissedLegendSymbols,
@@ -166,6 +168,41 @@ assert(!looksLikeReceptacleGlyph(hex), "hex keys are not receptacle glyphs");
 assert(looksLikeReceptacleGlyph(box) && looksLikeUnlabeledReceptacleGlyph(box), "duplex box is a receptacle glyph");
 assert(looksLikeReceptacleGlyph(stroke) && looksLikeUnlabeledReceptacleGlyph(stroke), "box-with-strokes is a receptacle glyph");
 assert(findNearbyReceptacleGlyph({ x: 17.214, y: 69.416 }, [hex, box]) === box, "WP/SP fills prefer the box, not the hex");
+// E110 WP@50: letter-stroke scrap (~0.09×0.13) under the tag must not become a
+// vector outline that deviceOutline rejects (extent < 0.14). Prefer the WP cover.
+const wpMicro = part(27.075, 83.207, 0.09, 0.126);
+const wpCover = part(27.251, 83.631, 0.391, 0.503);
+assert(!looksLikeReceptacleGlyph(wpMicro), "WP letter-stroke scraps are not receptacle glyphs");
+assert(looksLikeWpCoverGlyph(wpCover), "WP weatherproof plate is a cover glyph");
+assert(
+  findNearbyReceptacleGlyph({ x: 27.055, y: 83.33 }, [wpMicro, wpCover], { radius: 0.55, allowWpCover: true }) === wpCover,
+  "WP prefers the cover plate over an unpaintable scrap",
+);
+assert(
+  findNearbyReceptacleGlyph({ x: 17.214, y: 69.416 }, [box, wpCover], { radius: 0.55, allowWpCover: true }) === box,
+  "WP still prefers a real duplex box over the cover when both exist",
+);
+// E110 SP@50: hex plates beside SP tags are note keys (not covers). A real
+// weatherproof cover (~0.39×0.50, non-hex) must win over letter-stroke scraps
+// the same way WP does; empty path AABBs promote to paintable rects.
+const spCover = part(33.85, 78.95, 0.391, 0.503, "path");
+const spMicro = part(33.78, 78.85, 0.09, 0.126);
+assert(looksLikeHexNoteGlyph(hex), "0.44×0.62 plate beside SP stays a hex note key");
+assert(!looksLikeWpCoverGlyph(hex), "hex note keys are not WP/SP cover glyphs");
+assert(looksLikeWpCoverGlyph(spCover), "SP weatherproof plate matches the cover glyph");
+assert(
+  findNearbyReceptacleGlyph({ x: 33.78, y: 78.852 }, [spMicro, spCover, hex], { radius: 0.62, allowWpCover: true }) === spCover,
+  "SP prefers the cover plate over an unpaintable scrap",
+);
+assert(
+  findNearbyReceptacleGlyph({ x: 33.78, y: 78.852 }, [spMicro, hex], { radius: 0.62, allowWpCover: true }) == null,
+  "SP with only hex/micro nearby does not claim a vector glyph",
+);
+const spOutline = paintableGlyphOutline(spCover);
+assert(spOutline && spOutline.kind === "rect" && spOutline.source === "vector", "SP cover empty-path AABB promotes to a paintable rect");
+assert((spOutline.points || []).length < 3, "promoted SP cover keeps empty points (AABB fill, not fabricated path)");
+const spPathScrap = part(62.290, 72.591, 0.114, 0.276, "path");
+assert(paintableGlyphOutline(spPathScrap)?.kind === "rect", "empty path receptacle AABB promotes to rect for paint");
 
 const bodyWithNumber = {
   kind: "composite",

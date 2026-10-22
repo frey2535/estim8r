@@ -250,11 +250,11 @@ const pottsvilleLabeled = runCase("pottsville-e210 labeled 1-4/OS", {
   ...pottsville,
   pages: pottsville.pages.filter((page) => page.page === 48 || page.page === 52),
   groundTruth: e210LabeledTruth(e210),
-}, { filterTypes: true, requirePlacement: false });
+}, { filterTypes: true });
 
 assert(soccerFull.truth === 129, "Soccer independent GT stays 129");
 assert(soccerFull.found === 129 && soccerFull.falsePositives === 0, `Phase 2 Soccer baseline is 129/129 FP 0, got ${soccerFull.found}/${soccerFull.truth} FP ${soccerFull.falsePositives}`);
-assert(soccerFull.markerAccuracy >= ACCURACY_THRESHOLD, `Soccer markers are ≥99%, got ${(soccerFull.markerAccuracy * 100).toFixed(2)}%`);
+assert(soccerFull.markerAccuracy === 1, `Soccer markers stay 100%, got ${(soccerFull.markerAccuracy * 100).toFixed(2)}%`);
 assert(soccerFull.canClaimThreshold === true, "independently labeled Soccer 129/129 with ≥99% markers may claim the threshold");
 assert(soccerSite.truth === 2, "Site plan GT stays the two labeled GFI/WP");
 assert(soccerLighting.truth === 95, "Soccer lighting sheet keeps its 95 fixture GT");
@@ -262,7 +262,9 @@ assert(soccerPower.truth === 32, "Soccer power sheet keeps its 32 device GT");
 assert(pottsvilleOsWp.found === 15 && pottsvilleOsWp.truth === 15, "Pottsville OS+WP typed recall stays 15/15");
 assert(pottsvilleOsWp.canClaimThreshold === false, "Pottsville token labels cannot claim 99%");
 assert(pottsvilleCans.truth === 12, "E210 type-2 can GT stays 12");
-assert(pottsvilleLabeled.truth >= 23, "E210 labeled plan types stay at least the previous 23");
+assert(pottsvilleLabeled.truth === 25, `E210 labeled plan types stay 25, got ${pottsvilleLabeled.truth}`);
+assert(pottsvilleLabeled.found === 25, `E210 labeled recall is 25/25, got ${pottsvilleLabeled.found}`);
+assert(pottsvilleLabeled.markerAccuracy === 1, `E210 labeled markers stay 100%, got ${(pottsvilleLabeled.markerAccuracy * 100).toFixed(2)}%`);
 
 const electrical = paletteForTrade("electrical");
 const soccerMarks = buildAiMarks({
@@ -313,7 +315,7 @@ console.log(`\nE111 pump-house documented GT: ${e111Truth.length} printed WP. Re
 assert(e111Truth.length === 1 && e111Truth[0].type === "WP", "E111 only contributes the one printed WP already in Pottsville OS+WP");
 
 console.log("\nCorpus classes with real fixtures:");
-console.log("- lighting: Soccer E1.01 (95) · Pottsville E210 cans 12 / labeled 23");
+console.log("- lighting: Soccer E1.01 (95) · Pottsville E210 cans 12 / labeled 25");
 console.log("- power: Soccer E2.01 (32) · Pottsville E110 glyphs 8");
 console.log("- site: Soccer E0.01 (2 GFI/WP)");
 console.log("- commercial / different firms: Soccer Pavilion vs MCFD Pottsville");

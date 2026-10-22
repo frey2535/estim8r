@@ -9,6 +9,9 @@ const LIGHTING_FIXTURE_CODE_RE = /^(?:[FLX]\d{1,2}[A-Z]?|L\d{1,2}[A-Z]?|OS|[1-4]
 const TAGGED_EQUIP_RE = /^(VF|EF)(?:[- ]?\d+)?$/i;
 const POWER_DEVICE_RE = /^(?:gfi(?:\/wp)?|wp|os|vs|sp|spr|r|p[1-9]|db|doorbell|facp|ef|vf|ts|sw|cam)$/i;
 
+/**
+ * @param {any} text
+ */
 export function normalizeTypeMark(text) {
   return String(text || "")
     .trim()
@@ -18,11 +21,17 @@ export function normalizeTypeMark(text) {
     .replace(/^[()]+/, "");
 }
 
+/**
+ * @param {any} text
+ */
 export function taggedEquipmentCode(text) {
   const match = normalizeTypeMark(text).match(TAGGED_EQUIP_RE);
   return match ? match[1].toUpperCase() : "";
 }
 
+/**
+ * @param {any} text
+ */
 export function isReferenceCallout(text) {
   const raw = String(text || "").trim();
   if (!raw) return false;
@@ -31,10 +40,17 @@ export function isReferenceCallout(text) {
   return false;
 }
 
+/**
+ * @param {any} parts
+ */
 export function isCanDeviceText(...parts) {
   return CAN_RE.test(parts.filter(Boolean).join(" "));
 }
 
+/**
+ * @param {any} token
+ * @param {any} tokens
+ */
 export function isPlotStampToken(token, tokens = []) {
   const x = Number(token?.x);
   const y = Number(token?.y);
@@ -50,6 +66,9 @@ export function isPlotStampToken(token, tokens = []) {
   });
 }
 
+/**
+ * @param {any} token
+ */
 export function isPlanInterior(token) {
   const x = Number(token?.x);
   const y = Number(token?.y);
@@ -57,20 +76,33 @@ export function isPlanInterior(token) {
   return x >= 7 && x <= 76 && y >= 10 && y <= 88;
 }
 
+/**
+ * @param {any} token
+ */
 export function isNotesOrTitleBand(token) {
   const x = Number(token?.x);
   if (!Number.isFinite(x)) return false;
   return x >= 78;
 }
 
+/**
+ * @param {any} text
+ */
 export function isLightingFixtureCode(text) {
   return LIGHTING_FIXTURE_CODE_RE.test(normalizeTypeMark(text));
 }
 
+/**
+ * @param {any} value
+ */
 export function isAbbreviationJunkType(value) {
   return /^(AC|FFE|ELEC|EL|MECH|ARCH|GEN|PNL)$/i.test(normalizeTypeMark(value));
 }
 
+/**
+ * @param {any} token
+ * @param {any} tokens
+ */
 export function isZoneNoteContext(token, tokens = []) {
   if (isQuotedTypeMark(token?.text)) return false;
   if (!isBareTypeCode(token?.text) && !/^\d{1,2}$/.test(normalizeTypeMark(token?.text))) return false;
@@ -83,6 +115,10 @@ export function isZoneNoteContext(token, tokens = []) {
   });
 }
 
+/**
+ * @param {any} token
+ * @param {any} tokens
+ */
 export function isNotesClusterToken(token, tokens = []) {
   return (tokens || []).some((other) => {
     if (other === token) return false;
@@ -93,6 +129,10 @@ export function isNotesClusterToken(token, tokens = []) {
   });
 }
 
+/**
+ * @param {any} token
+ * @param {any} tokens
+ */
 export function hasReferenceNeighbor(token, tokens = []) {
   const self = String(token?.text || "").trim();
   return (tokens || []).some((other) => {
@@ -108,18 +148,31 @@ export function hasReferenceNeighbor(token, tokens = []) {
   });
 }
 
+/**
+ * @param {any} text
+ */
 export function isBareTypeCode(text) {
   return BARE_TYPE_RE.test(normalizeTypeMark(text));
 }
 
+/**
+ * @param {any} text
+ */
 export function isPowerDeviceCode(text) {
   return POWER_DEVICE_RE.test(normalizeTypeMark(text));
 }
 
+/**
+ * @param {any} text
+ */
 export function isQuotedTypeMark(text) {
   return /^['"‘’“”`].+['"‘’“”`]$/.test(String(text || "").trim());
 }
 
+/**
+ * @param {any} token
+ * @param {any} tokens
+ */
 export function isUnquotedCircuitBesideQuotedType(token, tokens = []) {
   if (isQuotedTypeMark(token?.text)) return false;
   const code = normalizeTypeMark(token?.text);
@@ -132,6 +185,10 @@ export function isUnquotedCircuitBesideQuotedType(token, tokens = []) {
   });
 }
 
+/**
+ * @param {any} token
+ * @param {any} tokens
+ */
 export function isFixtureLegendStripToken(token, tokens = []) {
   if (isQuotedTypeMark(token?.text)) return false;
   const code = normalizeTypeMark(token?.text);
@@ -149,15 +206,34 @@ export function isFixtureLegendStripToken(token, tokens = []) {
   return Math.max(...xs) - Math.min(...xs) >= 8;
 }
 
+/**
+ * @param {any} token
+ * @param {any} paths
+ */
 export function hasNearbyFixtureBody(token, paths = []) {
   const x = Number(token?.x) || 0;
   const y = Number(token?.y) || 0;
   return (paths || []).some((path) => {
-    const long = Math.max(Number(path?.w) || 0, Number(path?.h) || 0);
-    const short = Math.min(Number(path?.w) || 0, Number(path?.h) || 0);
+    // Pottsville E210 type-3 strip bars are taller than wide (aspect ~2.7) and
+    // sit just outside the compact-body window below — still real fixture bodies.
+    const w = Number(path?.w) || 0;
+    const h = Number(path?.h) || 0;
+    const long = Math.max(w, h);
+    const short = Math.min(w, h);
     const aspect = long / (short || 1e-9);
+    const dist = Math.hypot((Number(path.cx) || 0) - x, (Number(path.cy) || 0) - y);
+    if (
+      path?.kind === "rect"
+      && h >= w
+      && short >= 0.16 && short <= 0.36
+      && long >= 0.48 && long <= 0.62
+      && aspect >= 1.5 && aspect <= 3.6
+      && dist <= 0.72
+    ) {
+      return true;
+    }
     if (long < 0.45 || long > 1.05 || aspect > 1.55) return false;
-    return Math.hypot((Number(path.cx) || 0) - x, (Number(path.cy) || 0) - y) <= 0.55;
+    return dist <= 0.55;
   });
 }
 
@@ -200,6 +276,11 @@ function looksLikeNearbyKeynoteBody(path) {
   return area >= 0.18 && area <= 0.42 && long >= 0.40 && long <= 0.78 && short >= 0.32 && short <= 0.62 && aspect <= 1.85;
 }
 
+/**
+ * @param {any} token
+ * @param {any} tokens
+ * @param {any} paths
+ */
 export function isOutsideSymbolNumber(token, tokens = [], paths = []) {
   const text = normalizeTypeMark(token?.text);
   if (!text || isQuotedTypeMark(token?.text)) return false;
@@ -214,6 +295,10 @@ export function isOutsideSymbolNumber(token, tokens = [], paths = []) {
   return /^\d{1,2}$/.test(text) && long <= 0.78;
 }
 
+/**
+ * @param {any} token
+ * @param {any} tokens
+ */
 export function isCircuitCalloutToken(token, tokens = []) {
   const text = normalizeTypeMark(token?.text);
   if (!text) return false;
@@ -241,6 +326,9 @@ export function isCircuitCalloutToken(token, tokens = []) {
   });
 }
 
+/**
+ * @param {any} token
+ */
 export function isSheetGridTick(token) {
   const text = normalizeTypeMark(token?.text);
   if (!/^(?:[A-Z]|\d{1,2})$/i.test(text)) return false;
@@ -249,6 +337,9 @@ export function isSheetGridTick(token) {
   return x <= 6.6 || y <= 9.2 || (x >= 64.2 && x <= 68.2 && y <= 56);
 }
 
+/**
+ * @param {any} token
+ */
 export function isTitleBlockLetter(token) {
   const x = Number(token?.x) || 0;
   const y = Number(token?.y) || 0;
@@ -261,10 +352,17 @@ export function isTitleBlockLetter(token) {
     || x >= 93;
 }
 
+/**
+ * @param {any} text
+ */
 export function isLegendHeaderText(text) {
   return LEGEND_HEADER_RE.test(String(text || "").trim());
 }
 
+/**
+ * @param {any} token
+ * @param {any} tokens
+ */
 export function isLegendClusterToken(token, tokens = []) {
   return (tokens || []).some((other) => {
     if (other === token) return false;
@@ -275,6 +373,10 @@ export function isLegendClusterToken(token, tokens = []) {
   });
 }
 
+/**
+ * @param {any} token
+ * @param {any} tokens
+ */
 export function isTypContextToken(token, tokens = []) {
   const self = normalizeTypeMark(token?.text);
   if (isPowerDeviceCode(self)) return false;
@@ -288,6 +390,10 @@ export function isTypContextToken(token, tokens = []) {
   });
 }
 
+/**
+ * @param {any} token
+ * @param {any} tokens
+ */
 export function isDigitCodeNoteToken(token, tokens = []) {
   const self = normalizeTypeMark(token?.text);
   if (/^(digit|code|keynote|hex|keycode)$/i.test(self)) return true;
@@ -301,6 +407,10 @@ export function isDigitCodeNoteToken(token, tokens = []) {
   });
 }
 
+/**
+ * @param {any} token
+ * @param {any} tokens
+ */
 export function isKeyNoteNumberToken(token, tokens = []) {
   const text = normalizeTypeMark(token?.text);
   if (!/^\d{1,2}$/.test(text)) return false;
@@ -320,6 +430,10 @@ export function isKeyNoteNumberToken(token, tokens = []) {
   return (xSpan < 9 && ySpan > 2.4) || (ySpan < 4.2 && xSpan > 5);
 }
 
+/**
+ * @param {any} token
+ * @param {any} tokens
+ */
 export function isScheduleNoteContext(token, tokens = []) {
   if (!isBareTypeCode(token?.text)) return false;
   return (tokens || []).some((other) => {
@@ -331,10 +445,17 @@ export function isScheduleNoteContext(token, tokens = []) {
   });
 }
 
+/**
+ * @param {any} kind
+ */
 export function isNonPlanSheetKind(kind) {
   return NON_PLAN_KIND_RE.test(String(kind || ""));
 }
 
+/**
+ * @param {any} mark
+ * @param {any} pageKinds
+ */
 export function isPersistedPlanDetection(mark, pageKinds = {}) {
   if (!mark) return false;
   if (mark.type !== "count" && mark.type !== "drop") return false;
@@ -344,10 +465,19 @@ export function isPersistedPlanDetection(mark, pageKinds = {}) {
   return true;
 }
 
+/**
+ * @param {any} marks
+ * @param {any} pageKinds
+ */
 export function persistedPlanDeviceCount(marks, pageKinds = {}) {
   return (marks || []).filter((mark) => isPersistedPlanDetection(mark, pageKinds)).length;
 }
 
+/**
+ * @param {any} token
+ * @param {any} tokens
+ * @param {any} options
+ */
 export function shouldAcceptPlanToken(token, tokens = [], options = {}) {
   if (!token) return false;
   const marked = { ...token, text: normalizeTypeMark(token.text) };
@@ -380,7 +510,10 @@ export function shouldAcceptPlanToken(token, tokens = [], options = {}) {
   }
   if (isSheetGridTick(token)) return false;
   if (isNotesClusterToken(token, tokens)) return false;
-  if (isZoneNoteContext(token, tokens)) return false;
+  // Room/corridor labels can share a horizontal band with real type digits
+  // (E210 type 3 @ 69.549 is ~10 units from "CORRIDOR"). Keep the zone-note
+  // reject only when no extracted fixture body sits beside the tag.
+  if (isZoneNoteContext(token, tokens) && !hasNearbyFixtureBody(token, options.paths)) return false;
   if (isTypContextToken(token, tokens) || isTypContextToken(marked, tokens)) return false;
   if (isDigitCodeNoteToken(token, tokens) || isDigitCodeNoteToken(marked, tokens)) return false;
   if (isKeyNoteNumberToken(token, tokens) || isKeyNoteNumberToken(marked, tokens)) return false;
@@ -395,6 +528,9 @@ export function shouldAcceptPlanToken(token, tokens = [], options = {}) {
   return true;
 }
 
+/**
+ * @param {any} symbols
+ */
 export function resolveCanSymbol(symbols) {
   const list = symbols || [];
   return list.find((item) => item.id === "downlight")
@@ -404,6 +540,10 @@ export function resolveCanSymbol(symbols) {
     || null;
 }
 
+/**
+ * @param {any} token
+ * @param {any} kind
+ */
 export function snapFillToDevice(token, kind = "rect") {
   return {
     x: Number(token?.x) || 0,
@@ -412,6 +552,9 @@ export function snapFillToDevice(token, kind = "rect") {
   };
 }
 
+/**
+ * @param {any} text
+ */
 export function fixtureSizeFromWholeToken(text) {
   const compact = String(text || "")
     .toLowerCase()

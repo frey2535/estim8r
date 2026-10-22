@@ -37,6 +37,11 @@ function isPowerEntry(entry) {
   return /recept|outlet|gfi|gfci|usb|floor box|junction|j-?box|disconnect|panel|switchboard|switchgear|mcc|transformer|generator|\bats\b|motor|equipment|power|doorbell|special/i.test(labelBlob(entry));
 }
 
+/**
+ * @param {any} entry
+ * @param {any} trade
+ * @param {any} planType
+ */
 export function legendEntryAppliesToPlan(entry, trade, planType) {
   if (!entry) return false;
   if (trade !== "electrical") return true;
@@ -89,6 +94,9 @@ function rowForEntry(entry, page, marks, trade) {
   };
 }
 
+/**
+ * @param {Record<string, any>} pages
+ */
 export function buildTradeSearchManifest({ pages = [], trade, dictionary, marks = [], shouldScanPage } = {}) {
   const scanPages = (pages || []).filter((page) => (
     typeof shouldScanPage === "function" ? shouldScanPage(page, trade) : true

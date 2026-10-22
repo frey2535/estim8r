@@ -1,3 +1,7 @@
+/**
+ * @param {any} saved
+ * @param {any} pageCount
+ */
 export function normalizePageTakeoff(saved, pageCount = 1) {
   const count = Math.max(1, Number(pageCount) || 1);
   const next = {};
@@ -8,15 +12,28 @@ export function normalizePageTakeoff(saved, pageCount = 1) {
   return next;
 }
 
+/**
+ * @param {any} state
+ * @param {any} page
+ */
 export function isPageTakeoffEnabled(state, page) {
   const value = state?.[page] ?? state?.[String(page)];
   return value !== false;
 }
 
+/**
+ * @param {any} state
+ * @param {any} page
+ * @param {any} enabled
+ */
 export function setPageTakeoff(state, page, enabled) {
   return { ...(state || {}), [Number(page) || 1]: Boolean(enabled) };
 }
 
+/**
+ * @param {any} pages
+ * @param {any} includePage
+ */
 export function pagesIncludedInTakeoff(pages, includePage) {
   return (pages || []).filter((page) => (
     page
@@ -25,6 +42,9 @@ export function pagesIncludedInTakeoff(pages, includePage) {
   ));
 }
 
+/**
+ * @param {any} objects
+ */
 export function countInteractiveObjects(objects = []) {
   let symbols = 0;
   let circuits = 0;
@@ -37,6 +57,11 @@ export function countInteractiveObjects(objects = []) {
   return { symbols, circuits, rooms };
 }
 
+/**
+ * @param {any} fileName
+ * @param {any} counts
+ * @param {any} options
+ */
 export function interactiveOpenMessage(fileName, counts = {}, options = {}) {
   const name = fileName || "Drawing";
   if (options.image) {
@@ -54,6 +79,10 @@ export function interactiveOpenMessage(fileName, counts = {}, options = {}) {
   return `${name} is interactive. Select ${symbolLabel}, ${lineLabel}, and ${roomLabel}. Name a line or room before it is used in the bid. Takeoff can be turned on or off for each page.`;
 }
 
+/**
+ * @param {any} areaSf
+ * @param {any} heightFeet
+ */
 export function volumeCubicFeet(areaSf, heightFeet) {
   const area = Number(areaSf);
   const height = Number(heightFeet);
@@ -67,6 +96,10 @@ function csvCell(value) {
   return text;
 }
 
+/**
+ * @param {any} marks
+ * @param {any} options
+ */
 export function quantityLinkCsv(marks = [], options = {}) {
   const header = ["Sheet", "Kind", "Name", "Circuit", "Count", "Length LF", "Area SF", "Height FT", "Volume CF", "Bid use", "Prediction"];
   const lines = [header.join(",")];
@@ -109,6 +142,10 @@ export async function quantityLinkChecksum(csv) {
   };
 }
 
+/**
+ * @param {any} marks
+ * @param {any} selected
+ */
 export function visualSearchCounts(marks = [], selected) {
   const key = String(selected?.typeCode || selected?.abbr || selected?.symbol || "").trim().toUpperCase();
   if (!key || key === "UNKNOWN" || key === "?") return [];
@@ -125,6 +162,10 @@ export function visualSearchCounts(marks = [], selected) {
     .sort((a, b) => a.sheet - b.sheet);
 }
 
+/**
+ * @param {any} chest
+ * @param {any} item
+ */
 export function addToolChestItem(chest = [], item = {}) {
   const name = String(item.name || "").trim();
   if (!name) return [...chest];
@@ -141,12 +182,21 @@ export function addToolChestItem(chest = [], item = {}) {
   return [...chest.filter((row) => row.id !== next.id && row.name !== next.name), next];
 }
 
+/**
+ * @param {any} slips
+ * @param {any} afterPage
+ * @param {any} title
+ */
 export function addSlipSheet(slips = [], afterPage, title) {
   const page = Number(afterPage) || 1;
   const name = String(title || "").trim() || "Slip sheet";
   return [...slips, { id: `slip-${page}-${slips.length + 1}`, afterPage: page, title: name, kind: "slip-sheet" }];
 }
 
+/**
+ * @param {any} pageCount
+ * @param {any} slips
+ */
 export function interleaveSlipSheets(pageCount, slips = []) {
   const count = Math.max(0, Number(pageCount) || 0);
   const rows = [];
@@ -159,6 +209,9 @@ export function interleaveSlipSheets(pageCount, slips = []) {
   return rows;
 }
 
+/**
+ * @param {any} session
+ */
 export function studioPackage(session = {}) {
   return {
     version: 1,
@@ -172,6 +225,10 @@ export function studioPackage(session = {}) {
   };
 }
 
+/**
+ * @param {any} currentMarks
+ * @param {any} incoming
+ */
 export function mergeStudioPackage(currentMarks = [], incoming) {
   if (!incoming || incoming.kind !== "estim8r-studio-session" || !Array.isArray(incoming.marks)) return currentMarks;
   const byId = new Map(currentMarks.filter((mark) => mark?.id).map((mark) => [mark.id, mark]));

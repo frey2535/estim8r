@@ -31,6 +31,9 @@ export function defaultCompletenessChecklist() {
   }));
 }
 
+/**
+ * @param {any} checklist
+ */
 export function auditEstimateCompleteness(checklist = []) {
   const byCode = new Map((checklist || []).map((item) => [item.code, item]));
   const rows = ESTIMATE_COMPLETENESS_FIELDS.map((definition) => ({
@@ -48,6 +51,9 @@ export function auditEstimateCompleteness(checklist = []) {
   };
 }
 
+/**
+ * @param {Record<string, any>} quantity
+ */
 export function installedCost({
   quantity = 0,
   materialUnitCost = 0,
@@ -70,6 +76,10 @@ export function installedCost({
   };
 }
 
+/**
+ * @param {any} assembly
+ * @param {any} assemblyQuantity
+ */
 export function expandAssembly(assembly, assemblyQuantity = 1) {
   const qty = number(assemblyQuantity);
   return (assembly?.components || []).map((component, index) => ({
@@ -81,6 +91,9 @@ export function expandAssembly(assembly, assemblyQuantity = 1) {
   }));
 }
 
+/**
+ * @param {any} lines
+ */
 export function rollupByDrawing(lines = []) {
   const map = new Map();
   for (const line of lines || []) {

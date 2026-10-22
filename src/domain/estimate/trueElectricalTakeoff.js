@@ -257,6 +257,9 @@ function addIfMissing(lines, seenText, args) {
   lines.push(makeEstimateLine(args));
 }
 
+/**
+ *  * @param {Record<string, any>} options
+ */
 export function analyzeElectricalTakeoff({ drawingDocs, rollup, runs = [], marks = [] } = {}) {
   const text = wholeText(drawingDocs);
   const panels = parsePanels(text);
@@ -331,6 +334,9 @@ export function analyzeElectricalTakeoff({ drawingDocs, rollup, runs = [], marks
   };
 }
 
+/**
+ *  * @param {Record<string, any>} options
+ */
 export function buildTrueElectricalEstimateLines({
   analysis,
   rollup,
@@ -415,6 +421,10 @@ export function buildTrueElectricalEstimateLines({
   return lines;
 }
 
+/**
+ * @param {any} lines
+ * @param {any} settings
+ */
 export function calculateTrueBidSummary(lines, settings = DEFAULT_TRUE_BID_SETTINGS) {
   const totals = (lines || []).reduce((acc, line) => {
     if (line.included === false) return acc;
@@ -446,6 +456,10 @@ export function calculateTrueBidSummary(lines, settings = DEFAULT_TRUE_BID_SETTI
 }
 
 
+/**
+ * @param {any} lines
+ * @param {any} settings
+ */
 export function calculateBidByScope(lines, settings = DEFAULT_TRUE_BID_SETTINGS) {
   const grouped = {};
   for (const line of lines || []) {
@@ -461,6 +475,10 @@ export function calculateBidByScope(lines, settings = DEFAULT_TRUE_BID_SETTINGS)
   );
 }
 
+/**
+ * @param {any} existing
+ * @param {Record<string, any>} fileName
+ */
 export function buildTrueElectricalEstimateDraft(existing, {
   fileName,
   fileSize,
@@ -517,6 +535,11 @@ export function buildTrueElectricalEstimateDraft(existing, {
   };
 }
 
+/**
+ * @param {any} analysis
+ * @param {any} lines
+ * @param {any} summary
+ */
 export function trueTakeoffCsv(analysis, lines, summary) {
   const csv = (value) => {
     const text = String(value ?? "");
@@ -583,6 +606,9 @@ export const WORK_CATEGORY_ORDER = [
   "Other / Review",
 ];
 
+/**
+ * @param {any} line
+ */
 export function workCategoryForEstimateLine(line) {
   if (WORK_CATEGORY_ORDER.includes(line?.workCategory)) return line.workCategory;
   const category = String(line?.category || "").toLowerCase();
@@ -617,6 +643,9 @@ export function workCategoryForEstimateLine(line) {
   return "Other / Review";
 }
 
+/**
+ * @param {any} lines
+ */
 export function calculateWorkCategoryBreakdown(lines) {
   const grouped = Object.fromEntries(WORK_CATEGORY_ORDER.map((name) => [name, {
     category: name,

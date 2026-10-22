@@ -41,14 +41,23 @@ export const ALLOWED_REFERENCE_FAMILIES = [
 
 const PRODUCTION_SOURCES = new Set(["published_reference", "company_history", "manufacturer", "government"]);
 
+/**
+ * @param {any} sourceType
+ */
 export function isExperimentalSource(sourceType) {
   return sourceType === "experimental" || sourceType === "estim8r_standard";
 }
 
+/**
+ * @param {any} sourceType
+ */
 export function isPublishedReferenceType(sourceType) {
   return PUBLISHED_REFERENCE_TYPES.has(sourceType);
 }
 
+/**
+ * @param {Record<string, any>} sourceType
+ */
 export function sourceBadges({ sourceType, verificationStatus } = {}) {
   const verified = verificationStatus === "verified";
   if (isPublishedReferenceType(sourceType)) {
@@ -66,11 +75,18 @@ export function sourceBadges({ sourceType, verificationStatus } = {}) {
   return ["UNVERIFIED"];
 }
 
+/**
+ *  * @param {Record<string, any>} options
+ */
 export function isProductionSafeLabor({ verificationStatus, productionAllowed, sourceType } = {}) {
   if (isExperimentalSource(sourceType)) return false;
   return verificationStatus === "verified" && productionAllowed === true && PRODUCTION_SOURCES.has(sourceType);
 }
 
+/**
+ * @param {any} unit
+ * @param {any} itemId
+ */
 export function asExperimentalLaborUnit(unit, itemId) {
   const id = String(unit.id || `${itemId}-experimental`).replace(/neca/ig, "imported");
   return {
@@ -86,6 +102,9 @@ export function asExperimentalLaborUnit(unit, itemId) {
   };
 }
 
+/**
+ * @param {any} row
+ */
 export function asExperimentalLaborItem(row) {
   return {
     ...row,
@@ -93,6 +112,9 @@ export function asExperimentalLaborItem(row) {
   };
 }
 
+/**
+ * @param {any} unit
+ */
 export function laborUnitSnake(unit) {
   if (!unit) return null;
   if (unit.normal_mh != null || unit.source_type) return unit;
@@ -112,6 +134,10 @@ export function laborUnitSnake(unit) {
   };
 }
 
+/**
+ * @param {any} unit
+ * @param {any} condition
+ */
 export function conditionMh(unit, condition = "normal") {
   const row = laborUnitSnake(unit);
   if (!row) return null;
@@ -130,10 +156,16 @@ export function isLicensedNeca() {
   return LICENSED_NECA;
 }
 
+/**
+ * @param {any} unit
+ */
 export function referenceEdition(unit) {
   return unitText(unit?.source_year || unit?.sourceYear || unit?.edition);
 }
 
+/**
+ * @param {any} unit
+ */
 export function referenceSourceName(unit) {
   return unitText(unit?.source_name || unit?.sourceName);
 }
@@ -158,12 +190,20 @@ export function isVerifiedMarketReference(unit, { licensedNeca = LICENSED_NECA }
   return row.normal_mh != null || row.difficult_mh != null || row.very_difficult_mh != null;
 }
 
+/**
+ * @param {any} laborItem
+ * @param {any} options
+ */
 export function findVerifiedMarketReferences(laborItem, options) {
   return (laborItem?.labor_units || [])
     .map(laborUnitSnake)
     .filter((unit) => isVerifiedMarketReference(unit, options));
 }
 
+/**
+ * @param {any} laborItem
+ * @param {any} options
+ */
 export function findVerifiedMarketReference(laborItem, options) {
   return findVerifiedMarketReferences(laborItem, options)[0] || null;
 }

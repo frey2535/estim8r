@@ -12,6 +12,9 @@ function storage() {
   return null;
 }
 
+/**
+ * @param {any} errorCode
+ */
 export function buildrFamilyAccessCopy(errorCode) {
   const code = String(errorCode || "").trim().toLowerCase();
   if (code === "access_denied") {
@@ -44,6 +47,9 @@ export function buildrFamilyAccessCopy(errorCode) {
   };
 }
 
+/**
+ * @param {any} store
+ */
 export function readBuildrFamilyAccess(store = storage()) {
   if (!store) return null;
   try {
@@ -60,6 +66,9 @@ export function readBuildrFamilyAccess(store = storage()) {
   }
 }
 
+/**
+ * @param {Record<string, any>} email
+ */
 export function writeBuildrFamilyAccess({ email, companyId }, store = storage(), now = Date.now()) {
   const next = {
     email: normalizeEmail(email),
@@ -75,6 +84,9 @@ export function writeBuildrFamilyAccess({ email, companyId }, store = storage(),
   return next;
 }
 
+/**
+ * @param {any} store
+ */
 export function clearBuildrFamilyAccess(store = storage()) {
   try {
     store?.removeItem(BUILDR_FAMILY_ACCESS_KEY);
@@ -83,6 +95,10 @@ export function clearBuildrFamilyAccess(store = storage()) {
   }
 }
 
+/**
+ * @param {any} user
+ * @param {any} store
+ */
 export function hasBuildrCompanyGrant(user, store = storage(), now = Date.now()) {
   const access = readBuildrFamilyAccess(store);
   if (!access) return false;
@@ -93,6 +109,10 @@ export function hasBuildrCompanyGrant(user, store = storage(), now = Date.now())
   return access.email === normalizeEmail(user?.email);
 }
 
+/**
+ * @param {any} search
+ * @param {any} hash
+ */
 export function readBuildrHandoffParams(search = "", hash = "") {
   const query = new URLSearchParams(String(search || "").replace(/^\?/, ""));
   const fragment = new URLSearchParams(String(hash || "").replace(/^#/, ""));
@@ -113,6 +133,9 @@ export function readBuildrHandoffParams(search = "", hash = "") {
   };
 }
 
+/**
+ * @param {Record<string, any>} isAuthenticated
+ */
 export function canEnterCompanyEstim8r({
   isAuthenticated,
   hasProductAccess,

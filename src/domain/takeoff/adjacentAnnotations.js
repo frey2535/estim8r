@@ -4,6 +4,9 @@ const clean = (value) => String(value ?? "").trim();
 const EQUIPMENT = /^(?:EF|F|L|X|AHU|RTU|VFD|M|P|LP|HP|EX|EM|FCU|CU|WP)[- ]?\d+[A-Z]?$/i;
 const CIRCUIT = /^\d{1,3}(?:\s*[,/&-]\s*\d{1,3})*$/;
 const PANEL_CIRCUIT = /^([A-Z][A-Z0-9-]{0,12})\s*[-:]\s*(\d{1,3}(?:\s*[,/&]\s*\d{1,3})*)$/i;
+/**
+ * @param {any} value
+ */
 export function classifyAdjacentAnnotation(value) {
   const text = clean(value);
   if (!text) return { kind: "none", text: "" };
@@ -13,6 +16,9 @@ export function classifyAdjacentAnnotation(value) {
   if (EQUIPMENT.test(text)) return { kind: "equipment", text, equipmentId: text.toUpperCase().replace(/\s+/g, "") };
   return { kind: "unresolved", text };
 }
+/**
+ * @param {any} tokens
+ */
 export function resolveAdjacentAnnotations(tokens = []) {
   const annotations = tokens.map((token) => ({
     ...classifyAdjacentAnnotation(token?.text ?? token),

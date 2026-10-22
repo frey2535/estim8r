@@ -15,6 +15,11 @@ function calibrationForMark(mark, calibration) {
   return calibration || null;
 }
 
+/**
+ * @param {any} mark
+ * @param {any} calibration
+ * @param {any} aspect
+ */
 export function markLengthFeet(mark, calibration, aspect) {
   if (mark?.lengthEdited && mark.storedFeet != null && mark.storedFeet !== "") return Number(mark.storedFeet);
   const resolvedCalibration = calibrationForMark(mark, calibration);
@@ -31,11 +36,22 @@ export function markLengthFeet(mark, calibration, aspect) {
   return feet * Math.max(1, runs);
 }
 
+/**
+ * @param {any} mark
+ * @param {any} calibration
+ * @param {any} aspect
+ */
 export function markAreaFeet(mark, calibration, aspect) {
   if (mark.type !== "area") return null;
   return areaFromPercent(polygonArea(mark.points || [], aspect), calibrationForMark(mark, calibration));
 }
 
+/**
+ * @param {any} marks
+ * @param {any} calibration
+ * @param {any} aspect
+ * @param {any} sheet
+ */
 export function rollupTakeoff(marks, calibration, aspect = 1, sheet = null) {
   const scoped = (marks || []).filter((mark) => sheet == null || mark.sheet === sheet);
   const rows = new Map();
@@ -102,6 +118,10 @@ export function rollupTakeoff(marks, calibration, aspect = 1, sheet = null) {
   };
 }
 
+/**
+ * @param {any} rollup
+ * @param {any} edits
+ */
 export function applyScheduleEdits(rollup, edits = {}) {
   const keys = Object.keys(edits || {});
   if (!keys.length) return rollup;
@@ -131,15 +151,27 @@ export function applyScheduleEdits(rollup, edits = {}) {
   return { ...rollup, rows, totals };
 }
 
+/**
+ * @param {any} marks
+ */
 export function nextConduitRunNumber(marks) {
   const nums = (marks || []).filter(isConduitMark).map((mark) => Number(mark.runNumber) || 0);
   return (nums.length ? Math.max(...nums) : 0) + 1;
 }
 
+/**
+ * @param {any} mark
+ */
 export function isConduitMark(mark) {
   return mark?.tool === "conduit" || (mark?.type === "route" && mark?.tool === "conduit");
 }
 
+/**
+ * @param {any} marks
+ * @param {any} calibration
+ * @param {any} aspect
+ * @param {any} globalLineSize
+ */
 export function conduitRuns(marks, calibration, aspect = 1, globalLineSize = DEFAULT_LINE_SIZE) {
   return (marks || []).filter(isConduitMark).map((mark, index) => {
     const lf = markLengthFeet(mark, calibration, aspect);
@@ -161,10 +193,17 @@ export function conduitRuns(marks, calibration, aspect = 1, globalLineSize = DEF
   });
 }
 
+/**
+ * @param {any} runs
+ */
 export function projectConduitTotal(runs) {
   return (runs || []).reduce((sum, run) => sum + (Number(run.lf) || 0), 0);
 }
 
+/**
+ * @param {any} rollup
+ * @param {any} runs
+ */
 export function quantitiesToCsv(rollup, runs = []) {
   const header = "Category,Symbol,Count,LF,SF";
   const lines = rollup.rows.map((row) => [

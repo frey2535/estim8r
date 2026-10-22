@@ -8,12 +8,18 @@ export function ownerAgentApiUrl() {
   return buildrApiUrl() || (import.meta.env.PROD ? "" : "http://127.0.0.1:3001");
 }
 
+/**
+ * @param {any} api
+ */
 export function ownerAgentBases(api = ownerAgentApiUrl()) {
   const root = String(api || "").replace(/\/$/, "");
   if (!root) return [];
   return [`${root}/estim8r/owner`, `${root}/owner`];
 }
 
+/**
+ * @param {any} text
+ */
 export function wantsAiTakeoff(text) {
   return /\b(empty takeoff|no (?:devices|marks|symbols)|not (?:identifying|counting|marking)|ai assist|ai is not|pottsville|takeoff is empty|run ai|mark (?:the )?(?:symbols|devices)|count (?:the )?symbols)\b/i.test(
     String(text || ""),

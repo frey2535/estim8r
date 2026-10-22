@@ -11,6 +11,9 @@ export async function getProductEntitlement(productKey = ESTIM8R_PRODUCT_KEY) {
   return Array.isArray(data) ? data[0] || null : data;
 }
 
+/**
+ * @param {any} entitlement
+ */
 export function entitlementGrantsAccess(entitlement) {
   if (!entitlement) return false;
   if (!["active", "trial"].includes(entitlement.status)) return false;

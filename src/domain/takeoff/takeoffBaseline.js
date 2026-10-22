@@ -100,6 +100,9 @@ export function collectTakeoffBaseline() {
   };
 }
 
+/**
+ * @param {any} baseline
+ */
 export function formatBaselineMarkdown(baseline) {
   const lines = [
     "# Phase 2 takeoff baseline",

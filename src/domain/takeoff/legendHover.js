@@ -18,6 +18,9 @@ function planAllows(symbol, planType) {
   return true;
 }
 
+/**
+ * @param {any} mark
+ */
 export function isUnclassifiedMark(mark) {
   if (!mark) return true;
   const symbol = clean(mark.symbol).toLowerCase();
@@ -33,6 +36,9 @@ export function isUnclassifiedMark(mark) {
   ) && !clean(mark.legendCode || mark.legendLabel);
 }
 
+/**
+ * @param {any} mark
+ */
 export function paintedIdentity(mark) {
   if (!mark || isUnclassifiedMark(mark)) return null;
   const paintedCode = code(mark.legendCode || mark.typeCode || mark.abbr);
@@ -51,6 +57,11 @@ export function paintedIdentity(mark) {
   };
 }
 
+/**
+ * @param {any} mark
+ * @param {any} drawingSymbols
+ * @param {any} options
+ */
 export function legendEntryForMark(mark, drawingSymbols = [], options = {}) {
   if (!mark) return null;
   const list = (drawingSymbols || []).filter((item) => planAllows(item, options.planType));
@@ -85,6 +96,11 @@ export function legendEntryForMark(mark, drawingSymbols = [], options = {}) {
   return null;
 }
 
+/**
+ * @param {any} mark
+ * @param {any} drawingSymbols
+ * @param {any} options
+ */
 export function legendHoverData(mark, drawingSymbols = [], options = {}) {
   if (isUnclassifiedMark(mark)) {
     return {
@@ -135,6 +151,9 @@ export function legendHoverData(mark, drawingSymbols = [], options = {}) {
   };
 }
 
+/**
+ * @param {any} mark
+ */
 export function shouldShowSymbolHover(mark) {
   if (!mark) return false;
   if (isUnclassifiedMark(mark)) return false;

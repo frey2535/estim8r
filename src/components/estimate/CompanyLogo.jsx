@@ -2,14 +2,18 @@ import React from "react";
 import { cn } from "@/lib/utils";
 import { brandingLayout, resolveLogoBox } from "@/domain/estimate/branding";
 
+/**
+ * @param {{ branding: any; design?: any; className?: string; alt?: string; }} props
+ */
 export default function CompanyLogo({
   branding,
-  design,
-  className,
+  design = {},
+  className = "",
   alt = "Company logo",
 }) {
   const layout = brandingLayout(branding);
   const box = resolveLogoBox(layout, design);
+  /** @type {import("react").CSSProperties} */
   const style = {
     width: `${box.width}px`,
     height: `${box.height}px`,

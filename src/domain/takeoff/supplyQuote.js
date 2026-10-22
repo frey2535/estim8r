@@ -20,6 +20,9 @@ function sameKey(left, right) {
   return String(left || "").trim().toLowerCase() === String(right || "").trim().toLowerCase();
 }
 
+/**
+ * @param {any} docs
+ */
 export function pageKindsFromDocs(docs) {
   const map = {};
   for (const page of docs?.pages || []) {
@@ -28,21 +31,36 @@ export function pageKindsFromDocs(docs) {
   return map;
 }
 
+/**
+ * @param {any} mark
+ */
 export function isQuoteDeviceMark(mark) {
   return mark?.type === "count" || mark?.type === "drop";
 }
 
+/**
+ * @param {any} mark
+ * @param {any} pageKinds
+ */
 export function isLegendQuoteSource(mark, pageKinds = {}) {
   if (mark?.source === "legend") return true;
   return LEGEND_SHEET_KINDS.has(pageKinds[mark?.sheet]);
 }
 
+/**
+ * @param {any} item
+ */
 export function modelFromKnownFields(item) {
   if (!item) return "";
   const raw = item.model ?? item.modelNumber ?? item.catalogNumber ?? item.catalogNo ?? "";
   return String(raw).trim();
 }
 
+/**
+ * @param {any} mark
+ * @param {any} drawingItem
+ * @param {any} catalogItem
+ */
 export function deviceFromKnownFields(mark, drawingItem, catalogItem) {
   const raw = mark?.typeCode
     || mark?.abbr
@@ -73,6 +91,10 @@ function isLegendCatalogRow(item) {
   return item?.source === "legend" || String(item?.id || "").startsWith("legend:");
 }
 
+/**
+ * @param {any} mark
+ * @param {any} list
+ */
 export function findKnownMatch(mark, list = []) {
   return (list || []).find((item) => {
     if (isLegendCatalogRow(item)) return false;
@@ -83,11 +105,17 @@ export function findKnownMatch(mark, list = []) {
   }) || null;
 }
 
+/**
+ * @param {any} fileName
+ */
 export function supplyQuoteFileBase(fileName) {
   const base = String(fileName || "drawing").replace(/\.[^.]+$/, "").replace(/[^\w.-]+/g, "-") || "drawing";
   return `supply-quote-${base}`;
 }
 
+/**
+ * @param {Record<string, any>} marks
+ */
 export function buildSupplyQuote({
   marks = [],
   drawingSymbols = [],
@@ -145,6 +173,9 @@ function quoteExportRows(quote) {
   ];
 }
 
+/**
+ * @param {any} quote
+ */
 export function supplyQuoteToCsv(quote) {
   const lines = [
     QUOTE_HEADERS.map(csvCell).join(","),
@@ -158,6 +189,9 @@ export function supplyQuoteToCsv(quote) {
   return `\uFEFF${lines.join("\n")}\n`;
 }
 
+/**
+ * @param {any} quote
+ */
 export function supplyQuoteToExcel(quote) {
   const headerCells = QUOTE_HEADERS.map((label) => (
     `<Cell><Data ss:Type="String">${xmlText(label)}</Data></Cell>`
@@ -186,6 +220,10 @@ export function supplyQuoteToExcel(quote) {
   ].join("\n");
 }
 
+/**
+ * @param {any} quote
+ * @param {any} branding
+ */
 export function buildSupplyQuotePdf(quote, branding = {}) {
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   const strings = [];
@@ -346,10 +384,16 @@ export function buildSupplyQuotePdf(quote, branding = {}) {
   return { doc, fileName: `${quote.fileBase}.pdf`, strings };
 }
 
+/**
+ * @param {any} quote
+ */
 export function supplyQuoteCsvFileName(quote) {
   return `${quote.fileBase}.csv`;
 }
 
+/**
+ * @param {any} quote
+ */
 export function supplyQuoteExcelFileName(quote) {
   return `${quote.fileBase}.xls`;
 }

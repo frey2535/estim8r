@@ -103,6 +103,9 @@ function circuitKey(device) {
   return circuitText(device).toUpperCase();
 }
 
+/**
+ *  * @param {Record<string, any>} options
+ */
 export function buildConduitWireMakeup({
   marks = [],
   runs = [],
@@ -214,6 +217,9 @@ export function buildConduitWireMakeup({
   return rows.sort((a, b) => (a.sheet - b.sheet) || ((a.runNumber || 0) - (b.runNumber || 0)));
 }
 
+/**
+ * @param {any} makeupRows
+ */
 export function aggregateWirePulling(makeupRows) {
   const totals = new Map();
   for (const row of makeupRows || []) {
@@ -227,6 +233,9 @@ export function aggregateWirePulling(makeupRows) {
     .sort((a, b) => awgRank(a.size.replace(/\s+GND$/i, "")) - awgRank(b.size.replace(/\s+GND$/i, "")));
 }
 
+/**
+ * @param {any} rows
+ */
 export function conduitWireMakeupCsv(rows) {
   const csv = (value) => {
     const text = String(value ?? "");

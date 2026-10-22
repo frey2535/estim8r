@@ -21,6 +21,9 @@ const HVAC_RE = /\bhvac\b|ahu|rtu|vav|condenser|heat\s*pump|furnace|unit\s*heate
 const FIRE_RE = /fire\s*alarm|smoke|strobe|horn|pull\s*station|facp/i;
 const MATCH_RADIUS = 2.5;
 
+/**
+ * @param {any} mark
+ */
 export function reviewCategoryForMark(mark) {
   if (isConduitMark(mark) || mark?.category === "Raceway") return "Conduit";
   const category = String(mark?.category || "").trim();
@@ -30,6 +33,9 @@ export function reviewCategoryForMark(mark) {
   return category || "Uncategorized";
 }
 
+/**
+ * @param {any} markup
+ */
 export function flattenMarkupMarks(markup) {
   if (Array.isArray(markup?.marks)) return markup.marks;
   return (markup?.pages || []).flatMap((page) => (page.marks || []).map((mark) => ({
@@ -38,6 +44,9 @@ export function flattenMarkupMarks(markup) {
   })));
 }
 
+/**
+ * @param {any} marks
+ */
 export function deviceCategoriesInMarks(marks) {
   const found = new Set();
   for (const mark of marks || []) {
@@ -63,6 +72,9 @@ function nearestPointDistance(mark, points) {
   return best;
 }
 
+/**
+ * @param {any} marks
+ */
 export function associateDevicesToConduits(marks) {
   const conduits = (marks || []).filter(isConduitMark);
   const devices = (marks || []).filter((mark) => mark.type === "count" || mark.type === "drop");
@@ -102,6 +114,9 @@ export function associateDevicesToConduits(marks) {
   return groups;
 }
 
+/**
+ * @param {Record<string, any>} marks
+ */
 export function buildReviewMarkupPages({ marks, reconciliation, skippedSheets } = {}) {
   const list = marks || [];
   const sheets = [...new Set(list.map((mark) => Number(mark.sheet) || 1))].sort((a, b) => a - b);
@@ -202,6 +217,11 @@ export function buildReviewMarkupPages({ marks, reconciliation, skippedSheets } 
   return reviewPages;
 }
 
+/**
+ * @param {any} marks
+ * @param {any} deviceId
+ * @param {any} conduitId
+ */
 export function assignDeviceToConduit(marks, deviceId, conduitId) {
   return (marks || []).map((mark) => (
     mark.id === deviceId ? { ...mark, circuitRunId: conduitId || null } : mark
@@ -209,6 +229,9 @@ export function assignDeviceToConduit(marks, deviceId, conduitId) {
 }
 
 
+/**
+ * @param {any} marks
+ */
 export function conduitCircuitSchedule(marks) {
   return associateDevicesToConduits(marks).map((group) => {
     const circuits = [...new Set(
@@ -235,6 +258,9 @@ export function conduitCircuitSchedule(marks) {
   }).sort((a, b) => (a.sheet - b.sheet) || ((a.runNumber || 0) - (b.runNumber || 0)));
 }
 
+/**
+ * @param {any} marks
+ */
 export function conduitCircuitScheduleCsv(marks) {
   const csv = (value) => {
     const text = String(value ?? "");

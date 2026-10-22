@@ -19,12 +19,20 @@ function compactType(value) {
     .replace(/[^A-Z0-9/]+/g, "");
 }
 
+/**
+ * @param {any} mark
+ */
 export function reviewTypeKey(mark) {
   const key = compactType(mark?.typeCode || mark?.abbr || mark?.legendCode);
   if (!key || key === "UNKNOWN" || key === "?") return "";
   return key;
 }
 
+/**
+ * @param {any} marks
+ * @param {any} type
+ * @param {any} options
+ */
 export function marksOfType(marks = [], type, options = {}) {
   const wanted = compactType(type);
   if (!wanted) return [];
@@ -36,6 +44,10 @@ export function marksOfType(marks = [], type, options = {}) {
   });
 }
 
+/**
+ * @param {any} marks
+ * @param {any} options
+ */
 export function inspectTypes(marks = [], options = {}) {
   const counts = new Map();
   for (const mark of marks || []) {
@@ -54,6 +66,10 @@ export function inspectTypes(marks = [], options = {}) {
   return [...counts.values()].sort((left, right) => left.type.localeCompare(right.type));
 }
 
+/**
+ * @param {any} marks
+ * @param {any} inspect
+ */
 export function filterMarksByInspect(marks = [], inspect = {}) {
   const type = compactType(inspect.type);
   const sheet = inspect.sheet;
@@ -65,6 +81,11 @@ export function filterMarksByInspect(marks = [], inspect = {}) {
   });
 }
 
+/**
+ * @param {any} mark
+ * @param {any} drawingSymbols
+ * @param {any} options
+ */
 export function enrichMarkLegendFields(mark, drawingSymbols = [], options = {}) {
   if (!mark) return mark;
   const hover = legendHoverData(mark, drawingSymbols, options);
@@ -81,6 +102,11 @@ export function enrichMarkLegendFields(mark, drawingSymbols = [], options = {}) 
   };
 }
 
+/**
+ * @param {any} mark
+ * @param {any} drawingSymbols
+ * @param {any} options
+ */
 export function hoverBoundToLegend(mark, drawingSymbols = [], options = {}) {
   const enriched = enrichMarkLegendFields(mark, drawingSymbols, options);
   const hover = legendHoverData(enriched, drawingSymbols, options);
@@ -97,6 +123,11 @@ function markIdentity(mark) {
   return mark?.id || mark?.objectId || mark?.sourceObjectId || "";
 }
 
+/**
+ * @param {any} previous
+ * @param {any} current
+ * @param {any} options
+ */
 export function revisionCompare(previous = [], current = [], options = {}) {
   const moveRadius = Number(options.moveRadius) > 0 ? Number(options.moveRadius) : 0.35;
   const moved = [];
@@ -128,6 +159,11 @@ export function revisionCompare(previous = [], current = [], options = {}) {
   };
 }
 
+/**
+ * @param {any} marks
+ * @param {any} command
+ * @param {any} context
+ */
 export function applyReviewCommand(marks, command = {}, context = {}) {
   const action = String(command.action || "").toLowerCase();
   const current = command.mark || (command.id ? (marks || []).find((item) => item.id === command.id) : null);

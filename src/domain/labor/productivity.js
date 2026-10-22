@@ -27,10 +27,16 @@ export function defaultProductivityFactors() {
   }));
 }
 
+/**
+ * @param {any} factors
+ */
 export function activeProductivityFactors(factors = []) {
   return (factors || []).filter((factor) => Number(factor.multiplier) > 0 && Number(factor.multiplier) !== 1);
 }
 
+/**
+ * @param {any} factors
+ */
 export function productivitySummary(factors = []) {
   const list = factors?.length ? factors : defaultProductivityFactors();
   const multiplier = combineProductivityFactors(list);
@@ -41,6 +47,12 @@ export function productivitySummary(factors = []) {
   };
 }
 
+/**
+ * @param {any} factors
+ * @param {any} code
+ * @param {any} multiplier
+ * @param {any} notes
+ */
 export function setFactorMultiplier(factors, code, multiplier, notes = "") {
   const next = (factors?.length ? factors : defaultProductivityFactors()).map((factor) => (
     factor.code === code

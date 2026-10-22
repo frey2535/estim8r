@@ -1,3 +1,8 @@
+/**
+ * @param {any} lines
+ * @param {any} fromIndex
+ * @param {any} toIndex
+ */
 export function moveEstimateLine(lines = [], fromIndex, toIndex) {
   const next = [...lines];
   const from = Number(fromIndex);
@@ -9,6 +14,10 @@ export function moveEstimateLine(lines = [], fromIndex, toIndex) {
   return next;
 }
 
+/**
+ * @param {any} lines
+ * @param {any} orderedIds
+ */
 export function applySavedLineOrder(lines = [], orderedIds = []) {
   if (!orderedIds.length) return [...lines];
   const byId = new Map(lines.map((line) => [line.id, line]));

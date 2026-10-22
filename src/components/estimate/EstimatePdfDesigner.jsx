@@ -87,6 +87,9 @@ export const DEFAULT_PDF_DESIGN = {
   sectionSpacingMode: "custom",
 };
 
+/**
+ * @param {any} value
+ */
 export function normalizePdfDesign(value = {}) {
   const next = { ...DEFAULT_PDF_DESIGN, ...(value && typeof value === "object" ? value : {}) };
   next.documentTitle = normalizeDocumentTitle(next.documentTitle);

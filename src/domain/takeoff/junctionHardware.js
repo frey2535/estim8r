@@ -8,6 +8,9 @@ export const EMT_CONNECTOR_SYMBOL = "emt-connector";
 export const EMT_CONNECTOR_LABEL = "EMT connector";
 export const JUNCTION_HIT = 1.6;
 
+/**
+ * @param {any} mark
+ */
 export function isJunctionBoxMark(mark) {
   return mark?.type === "count" && (
     mark.symbol === JUNCTION_BOX_SYMBOL
@@ -16,6 +19,9 @@ export function isJunctionBoxMark(mark) {
   );
 }
 
+/**
+ * @param {Record<string, any>} options
+ */
 export function createJunctionBoxMark({
   id,
   sheet,
@@ -76,6 +82,9 @@ export function connectorsForJunctionBox(box, marks = []) {
   return count;
 }
 
+/**
+ * @param {any} marks
+ */
 export function junctionHardwareTotals(marks = []) {
   const boxes = (marks || []).filter(isJunctionBoxMark);
   const emtConnectors = boxes.reduce((sum, box) => sum + connectorsForJunctionBox(box, marks), 0);
@@ -119,6 +128,10 @@ export function junctionHardwareRows(marks = []) {
   return { ...totals, rows };
 }
 
+/**
+ * @param {any} conduit
+ * @param {any} box
+ */
 export function attachJunctionToConduit(conduit, box) {
   if (!conduit || !box) return conduit;
   const ids = new Set([...(conduit.junctionBoxIds || []), box.id]);

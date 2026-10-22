@@ -35,6 +35,23 @@ async function renderPageThumb(pdf, pageNumber) {
   return canvas.toDataURL("image/jpeg", 0.72);
 }
 
+function imageMimeFromName(fileName = "") {
+  const lower = String(fileName || "").toLowerCase();
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".png")) return "image/png";
+  return "application/octet-stream";
+}
+
+function dataUrlFromBytes(bytes, fileName) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Unable to read image thumbnail."));
+    reader.readAsDataURL(new Blob([bytes], { type: imageMimeFromName(fileName) }));
+  });
+}
+
 export default function SheetThumbnailPanel({
   fileBytes,
   fileUrl,
@@ -66,7 +83,14 @@ export default function SheetThumbnailPanel({
     async function load() {
       setError("");
       if (!isPdf) {
-        setThumbs(fileUrl ? [{ page: 1, src: fileUrl, label: "Sheet 1" }] : []);
+        if (!fileBytes) {
+          setThumbs([]);
+          return;
+        }
+        setThumbs([{ page: 1, src: "", label: "Sheet 1" }]);
+        const src = await dataUrlFromBytes(fileBytes, fileName);
+        if (cancelled) return;
+        setThumbs([{ page: 1, src: src || fileUrl || "", label: "Sheet 1" }]);
         return;
       }
       if (!fileBytes) {
@@ -100,7 +124,7 @@ export default function SheetThumbnailPanel({
 
     load();
     return () => { cancelled = true; };
-  }, [fileBytes, fileUrl, isPdf]);
+  }, [fileBytes, fileName, fileUrl, isPdf]);
 
   useEffect(() => {
     if (!open || !listRef.current) return;

@@ -60,6 +60,16 @@ export function readBuildrFamilyAccess(store = storage()) {
   }
 }
 
+export function readActiveBuildrFamilyAccess(store = storage(), now = Date.now()) {
+  const access = readBuildrFamilyAccess(store);
+  if (!access) return null;
+  if (access.expiresAt && access.expiresAt <= now) {
+    clearBuildrFamilyAccess(store);
+    return null;
+  }
+  return access;
+}
+
 export function writeBuildrFamilyAccess({ email, companyId }, store = storage(), now = Date.now()) {
   const next = {
     email: normalizeEmail(email),
@@ -84,13 +94,59 @@ export function clearBuildrFamilyAccess(store = storage()) {
 }
 
 export function hasBuildrCompanyGrant(user, store = storage(), now = Date.now()) {
-  const access = readBuildrFamilyAccess(store);
+  const access = readActiveBuildrFamilyAccess(store, now);
   if (!access) return false;
-  if (access.expiresAt && access.expiresAt <= now) {
-    clearBuildrFamilyAccess(store);
-    return false;
-  }
   return access.email === normalizeEmail(user?.email);
+}
+
+export function buildrFamilyStatusGrantsAccess(access, status) {
+  const email = normalizeEmail(access?.email);
+  const companyId = String(access?.companyId || "").trim();
+  if (!email || !companyId || !status?.canUseBuildr) return false;
+  const returnedCompanyId = String(status?.companyId || "").trim();
+  return !returnedCompanyId || returnedCompanyId === companyId;
+}
+
+export function buildrFamilyVerifiedHandoffGrantsAccess(access, verified) {
+  const email = normalizeEmail(access?.email);
+  const companyId = String(access?.companyId || "").trim();
+  if (!email || !companyId || !verified?.valid) return false;
+  const verifiedEmail = normalizeEmail(verified?.email || email);
+  const verifiedCompanyId = String(verified?.company_id || verified?.companyId || companyId).trim();
+  return verifiedEmail === email && verifiedCompanyId === companyId;
+}
+
+export function buildrFamilyUserFromAccess(access, status = {}) {
+  const email = normalizeEmail(access?.email);
+  const companyId = String(access?.companyId || "").trim();
+  if (!email || !companyId) return null;
+  const companyName = String(status?.companyName || status?.company_name || "").trim() || "Buildr company";
+  return {
+    id: `buildr:${companyId}:${email}`,
+    email,
+    full_name: email.split("@")[0],
+    org_id: companyId,
+    org_name: companyName,
+    org_role: "member",
+    access_type: "buildr_family_app",
+    access_status: "active",
+    purchase_source: "buildr",
+    buildr_company_id: companyId,
+    auth_provider: "buildr_family_app",
+    is_platform_owner: false,
+    is_backup_admin: false,
+    is_company_admin: false,
+    is_platform_admin: false,
+  };
+}
+
+export function buildrFamilyEntitlement(access) {
+  const companyId = String(access?.companyId || "").trim();
+  return {
+    status: "buildr_family_access",
+    source: "buildr",
+    companyId,
+  };
 }
 
 export function readBuildrHandoffParams(search = "", hash = "") {

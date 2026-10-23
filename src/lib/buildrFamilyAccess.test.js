@@ -1,8 +1,13 @@
 import {
+  buildrFamilyEntitlement,
   buildrFamilyAccessCopy,
+  buildrFamilyStatusGrantsAccess,
+  buildrFamilyVerifiedHandoffGrantsAccess,
+  buildrFamilyUserFromAccess,
   canEnterCompanyEstim8r,
   clearBuildrFamilyAccess,
   hasBuildrCompanyGrant,
+  readActiveBuildrFamilyAccess,
   readBuildrFamilyAccess,
   readBuildrHandoffParams,
   writeBuildrFamilyAccess,
@@ -34,8 +39,24 @@ assert(saved.companyId === "co_1", "company id is trimmed");
 assert(hasBuildrCompanyGrant({ email: "estimator@example.com" }, memory, 2_000) === true, "matching email is granted");
 assert(hasBuildrCompanyGrant({ email: "other@example.com" }, memory, 2_000) === false, "other email stays blocked");
 assert(hasBuildrCompanyGrant({ email: "estimator@example.com" }, memory, saved.expiresAt + 1) === false, "expired handoff is cleared");
+assert(readActiveBuildrFamilyAccess(memory, saved.expiresAt + 1) === null, "expired active handoff is not reused");
 clearBuildrFamilyAccess(memory);
 assert(readBuildrFamilyAccess(memory) === null, "clear removes the handoff");
+
+const active = writeBuildrFamilyAccess({ email: "matt@dayone.test", companyId: "co_day_one" }, memory, 5_000);
+assert(readActiveBuildrFamilyAccess(memory, 6_000)?.companyId === "co_day_one", "active handoff is readable");
+assert(buildrFamilyStatusGrantsAccess(active, { canUseBuildr: true, companyId: "co_day_one" }) === true, "matching Buildr status grants access");
+assert(buildrFamilyStatusGrantsAccess(active, { canUseBuildr: false, companyId: "co_day_one" }) === false, "Buildr-denied status blocks access");
+assert(buildrFamilyStatusGrantsAccess(active, { canUseBuildr: true, companyId: "co_other" }) === false, "company mismatch blocks access");
+assert(buildrFamilyVerifiedHandoffGrantsAccess(active, { valid: true, email: "matt@dayone.test", company_id: "co_day_one" }) === true, "verified handoff activates access");
+assert(buildrFamilyVerifiedHandoffGrantsAccess(active, { valid: true, email: "other@dayone.test", company_id: "co_day_one" }) === false, "verified handoff email mismatch blocks access");
+const familyUser = buildrFamilyUserFromAccess(active, { companyName: "Day One Electric" });
+assert(familyUser.email === "matt@dayone.test", "Buildr family user keeps verified email");
+assert(familyUser.buildr_company_id === "co_day_one", "Buildr family user is company-scoped");
+assert(familyUser.auth_provider === "buildr_family_app", "Buildr family user records auth provider");
+assert(familyUser.is_platform_admin === false && familyUser.is_company_admin === false, "Buildr family user does not gain admin flags");
+assert(buildrFamilyEntitlement(active).status === "buildr_family_access", "Buildr family entitlement marks source");
+clearBuildrFamilyAccess(memory);
 
 const queryHandoff = readBuildrHandoffParams(
   "?sso_token=tok_1&company_id=co_1&email=Estimator%40Example.com",

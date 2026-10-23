@@ -1,10 +1,19 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { isLocalAuthFallbackEnabled, supabase } from "@/api/supabaseClient";
+import { fetchBuildrAccountStatus } from "@/api/buildrBridge";
 import { entitlementGrantsAccess, getProductEntitlement } from "@/api/entitlementRepository";
 import { applyPlatformIdentity, hasPlatformAccess } from "@/lib/platformIdentity";
 import { persistBuildrCompanyId } from "@/lib/buildrCompany";
-import { clearBuildrFamilyAccess, hasBuildrCompanyGrant, readBuildrFamilyAccess } from "@/lib/buildrFamilyAccess";
+import {
+  buildrFamilyEntitlement,
+  buildrFamilyStatusGrantsAccess,
+  buildrFamilyVerifiedHandoffGrantsAccess,
+  buildrFamilyUserFromAccess,
+  clearBuildrFamilyAccess,
+  hasBuildrCompanyGrant,
+  readActiveBuildrFamilyAccess,
+} from "@/lib/buildrFamilyAccess";
 import { localFallbackIdentity, readLocalEmailOverride } from "@/lib/ownerCursorChat";
 import { describeAuthError, hasAuthCode, readAuthCallbackError, waitForAuthCallbackSession } from "@/lib/authRedirect";
 import { isDrawingPickerOpen } from "@/domain/takeoff/drawingUpload";
@@ -27,6 +36,43 @@ export const AuthProvider = ({ children }) => {
   const [productEntitlement, setProductEntitlement] = useState(null);
   const [hasProductAccess, setHasProductAccess] = useState(false);
   const [entitlementChecked, setEntitlementChecked] = useState(false);
+
+  const applyBuildrFamilySession = useCallback((access, status = {}) => {
+    const buildrUser = buildrFamilyUserFromAccess(access, status);
+    if (!buildrUser) return false;
+    setUser(buildrUser);
+    setIsAuthenticated(true);
+    setHasProductAccess(true);
+    setProductEntitlement(buildrFamilyEntitlement(access));
+    setEntitlementChecked(true);
+    setAuthChecked(true);
+    setIsLoadingAuth(false);
+    setIsLoadingPublicSettings(false);
+    setAuthError(null);
+    return true;
+  }, []);
+
+  const activateBuildrFamilySession = useCallback((access, status = {}) => {
+    if (
+      !buildrFamilyVerifiedHandoffGrantsAccess(access, status)
+      && !buildrFamilyStatusGrantsAccess(access, status)
+    ) {
+      return false;
+    }
+    const applied = applyBuildrFamilySession(access, status);
+    if (applied) {
+      persistBuildrCompanyId(access.companyId, { email: access.email }).catch(() => {});
+    }
+    return applied;
+  }, [applyBuildrFamilySession]);
+
+  const restoreBuildrFamilySession = useCallback(async () => {
+    const access = readActiveBuildrFamilyAccess();
+    if (!access) return false;
+    const status = await fetchBuildrAccountStatus(access.email, access.companyId);
+    if (!buildrFamilyStatusGrantsAccess(access, status)) return false;
+    return activateBuildrFamilySession(access, status);
+  }, [activateBuildrFamilySession]);
 
   const checkAppState = useCallback(async (options) => {
     const silent = Boolean(options?.silent);
@@ -72,7 +118,7 @@ export const AuthProvider = ({ children }) => {
       setUser(current);
       setIsAuthenticated(true);
       if (hasBuildrCompanyGrant(current)) {
-        const companyGrant = readBuildrFamilyAccess();
+        const companyGrant = readActiveBuildrFamilyAccess();
         if (companyGrant?.companyId) {
           persistBuildrCompanyId(companyGrant.companyId, current).catch(() => {});
         }
@@ -98,6 +144,14 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       const signedOut = error?.status === 401;
+      if (signedOut) {
+        try {
+          if (await restoreBuildrFamilySession()) return;
+        } catch (buildrError) {
+          if (!silent) console.error("Buildr family-app session restore failed", buildrError);
+        }
+        if (silent) return;
+      }
       if (silent && !signedOut) {
         console.error("Estim8r silent auth refresh failed", error);
         return;
@@ -115,7 +169,7 @@ export const AuthProvider = ({ children }) => {
       }
       setAuthChecked(true);
     }
-  }, []);
+  }, [restoreBuildrFamilySession]);
 
   useEffect(() => {
     checkAppState();
@@ -161,6 +215,7 @@ export const AuthProvider = ({ children }) => {
     productEntitlement, hasProductAccess, entitlementChecked,
     appPublicSettings: { id: "estim8r", public_settings: { auth_required: true } },
     logout, navigateToLogin: () => { window.location.href = "/login"; },
+    activateBuildrFamilySession,
     checkUserAuth: checkAppState, checkAppState,
   }}>{children}</AuthContext.Provider>;
 };

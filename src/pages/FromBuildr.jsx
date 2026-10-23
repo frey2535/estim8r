@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 export default function FromBuildr() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const { isAuthenticated, isLoadingAuth, user, checkAppState, hasProductAccess } = useAuth();
+  const { isAuthenticated, isLoadingAuth, user, checkAppState, hasProductAccess, activateBuildrFamilySession } = useAuth();
   const [status, setStatus] = useState("checking");
   const [copy, setCopy] = useState(buildrFamilyAccessCopy(""));
 
@@ -73,7 +73,7 @@ export default function FromBuildr() {
       }
 
       const email = normalizeEmail(verified.email || emailHint);
-      const resolvedCompanyId = String(verified.company_id || companyId || "").trim();
+      const resolvedCompanyId = String(verified.company_id || verified.companyId || companyId || "").trim();
       if (!email || !resolvedCompanyId) {
         if (alreadyInCompany && (email || user?.email) && (resolvedCompanyId || companyId)) {
           const fallbackEmail = email || normalizeEmail(user.email);
@@ -88,31 +88,30 @@ export default function FromBuildr() {
         return;
       }
 
-      writeBuildrFamilyAccess({ email, companyId: resolvedCompanyId });
+      const access = writeBuildrFamilyAccess({ email, companyId: resolvedCompanyId });
       if (verified.buildr_token) writeBuildrSessionToken(email, verified.buildr_token);
 
-      if (isLoadingAuth) return;
-
-      if (isAuthenticated && user?.email) {
-        if (normalizeEmail(user.email) !== email && !hasPlatformAccess(user) && !alreadyInCompany) {
-          setCopy(buildrFamilyAccessCopy("email_mismatch"));
-          setStatus("error");
-          return;
-        }
+      if (isAuthenticated && user?.email && (normalizeEmail(user.email) === email || hasPlatformAccess(user))) {
         await persistBuildrCompanyId(resolvedCompanyId, user);
         await checkAppState({ silent: true });
         navigate("/", { replace: true });
         return;
       }
 
-      navigate(`/login?from=buildr&email=${encodeURIComponent(email)}`, { replace: true });
+      if (!access || !activateBuildrFamilySession(access, verified)) {
+        setCopy(buildrFamilyAccessCopy(""));
+        setStatus("error");
+        return;
+      }
+      await persistBuildrCompanyId(resolvedCompanyId, { email });
+      navigate("/", { replace: true });
     }
 
     enterCompanyApp();
     return () => {
       cancelled = true;
     };
-  }, [params, isAuthenticated, isLoadingAuth, user, hasProductAccess, checkAppState, navigate]);
+  }, [params, isAuthenticated, isLoadingAuth, user, hasProductAccess, checkAppState, activateBuildrFamilySession, navigate]);
 
   if (status === "error") {
     return (

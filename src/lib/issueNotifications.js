@@ -26,7 +26,7 @@ export async function createOwnerTestIssue() {
   if (authError || !session?.user?.id) throw new Error("Sign in before testing notifications.");
   const route = "/admin";
   const { data, error } = await supabase.from("estim8r_issue_reports")
-    .insert({ reporter_id: session.user.id, route, category: "owner_test" })
+    .insert({ reporter_id: session.user.id, route, category: "render_crash" })
     .select("id").single();
   if (error) throw error;
   return data.id;

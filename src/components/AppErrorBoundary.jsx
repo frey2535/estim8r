@@ -1,4 +1,5 @@
 import { Component } from "react";
+import { reportEstim8rIssue } from "@/lib/issueNotifications";
 import { RESET_ERRORS_EVENT } from "@/lib/appRefresh";
 import AppRefreshButton from "@/components/AppRefreshButton";
 
@@ -15,6 +16,7 @@ export default class AppErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     console.error("Estim8r screen crashed", error, info);
+    void reportEstim8rIssue("render_crash", window.location.pathname).catch(() => {});
   }
 
   componentDidMount() {

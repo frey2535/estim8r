@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { listEstim8rIssues } from "@/lib/issueNotifications";
 import { Navigate } from "react-router-dom";
 import { Loader2, Shield } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
@@ -29,6 +30,8 @@ export default function OwnerAdmin() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
+  const [incidents, setIncidents] = useState([]);
+  const [incidentError, setIncidentError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -46,6 +49,15 @@ export default function OwnerAdmin() {
   useEffect(() => {
     if (canManageEstim8rAccess(user)) void load();
   }, [load, user?.email]);
+
+  useEffect(() => {
+    if (!isPlatformOwner(user)) return;
+    let active = true;
+    const refresh = () => listEstim8rIssues().then(rows => { if (active) setIncidents(rows); }).catch(() => { if (active) setIncidentError("Unable to load incident notifications."); });
+    refresh();
+    const interval = setInterval(refresh, 60000);
+    return () => { active = false; clearInterval(interval); };
+  }, [user?.email]);
 
   if (!canManageEstim8rAccess(user)) return <Navigate to="/" replace />;
 
@@ -94,6 +106,12 @@ export default function OwnerAdmin() {
         There is one platform owner. Grant or revoke who can use Estim8r.
       </p>
 
+      {isPlatformOwner(user) && <section className="mt-7 max-w-4xl rounded-2xl border border-border bg-card p-6 shadow-sm" aria-label="Issue notifications">
+        <h2 className="font-bold text-foreground">Issue notifications ({incidents.length} recent)</h2>
+        <p className="mt-2 text-sm text-muted-foreground">Automatic crash reports. No AI or Cursor sessions are launched.</p>
+        {incidentError && <p role="alert">{incidentError}</p>}
+        <ul className="mt-3 space-y-2">{incidents.map(item => <li key={item.id} className="rounded border p-3 text-sm">{item.category.replaceAll("_", " ")} · {item.route} · {new Date(item.created_at).toLocaleString()}</li>)}</ul>
+      </section>}
       <div className="mt-7 max-w-3xl rounded-2xl border border-border bg-card p-6 shadow-sm">
         <h2 className="font-bold text-foreground">Grant access</h2>
         <p className="mt-2 text-sm text-muted-foreground">

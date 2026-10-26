@@ -19,6 +19,19 @@ export async function reportEstim8rIssue(category, pathname = "/") {
   return !error;
 }
 
+/** Explicit owner-triggered smoke test. Returns the inserted row ID for verification. */
+export async function createOwnerTestIssue() {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const { data: { session }, error: authError } = await supabase.auth.getSession();
+  if (authError || !session?.user?.id) throw new Error("Sign in before testing notifications.");
+  const route = "/admin";
+  const { data, error } = await supabase.from("estim8r_issue_reports")
+    .insert({ reporter_id: session.user.id, route, category: "render_crash" })
+    .select("id").single();
+  if (error) throw error;
+  return data.id;
+}
+
 export async function listEstim8rIssues() {
   if (!supabase) return [];
   const { data, error } = await supabase.from("estim8r_issue_reports")

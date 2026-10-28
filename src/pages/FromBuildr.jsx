@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { verifyBuildrFamilyAppSso, writeBuildrSessionToken } from "@/api/buildrBridge";
+import { writeBuildrSessionToken } from "@/api/buildrBridge";
+import { autoSignInFromBuildrSidebar } from "@/api/buildrSsoSignIn";
 import { persistBuildrCompanyId } from "@/lib/buildrCompany";
 import {
   buildrFamilyAccessCopy,
@@ -29,7 +30,6 @@ export default function FromBuildr() {
       const handoff = readBuildrHandoffParams(search, hash);
       const token = handoff.token;
       const companyId = handoff.companyId;
-      const emailHint = handoff.email;
       const alreadyInCompany = canEnterCompanyEstim8r({
         isAuthenticated,
         hasProductAccess,
@@ -54,10 +54,28 @@ export default function FromBuildr() {
         return;
       }
 
-      const verified = await verifyBuildrFamilyAppSso(token, "estim8r");
-      if (cancelled) return;
+      // Already signed into Estim8r as this company user — keep the grant and enter.
+      if (!isLoadingAuth && isAuthenticated && user?.email && alreadyInCompany) {
+        const email = normalizeEmail(user.email);
+        const resolvedCompanyId = String(companyId || "").trim();
+        if (resolvedCompanyId) {
+          writeBuildrFamilyAccess({ email, companyId: resolvedCompanyId });
+          await persistBuildrCompanyId(resolvedCompanyId, user);
+        }
+        navigate("/", { replace: true });
+        return;
+      }
 
-      if (!verified?.valid) {
+      try {
+        const signed = await autoSignInFromBuildrSidebar(token, { audience: "estim8r" });
+        if (cancelled) return;
+        writeBuildrFamilyAccess({ email: signed.email, companyId: signed.companyId });
+        if (signed.buildrToken) writeBuildrSessionToken(signed.email, signed.buildrToken);
+        await persistBuildrCompanyId(signed.companyId, { email: signed.email });
+        await checkAppState({ silent: true });
+        navigate("/", { replace: true });
+      } catch (error) {
+        if (cancelled) return;
         if (isLoadingAuth) return;
         if (alreadyInCompany) {
           if (companyId) {
@@ -67,45 +85,10 @@ export default function FromBuildr() {
           navigate("/", { replace: true });
           return;
         }
-        setCopy(buildrFamilyAccessCopy(verified?.error));
+        const code = String(error?.code || error?.message || "").trim();
+        setCopy(buildrFamilyAccessCopy(code));
         setStatus("error");
-        return;
       }
-
-      const email = normalizeEmail(verified.email || emailHint);
-      const resolvedCompanyId = String(verified.company_id || companyId || "").trim();
-      if (!email || !resolvedCompanyId) {
-        if (alreadyInCompany && (email || user?.email) && (resolvedCompanyId || companyId)) {
-          const fallbackEmail = email || normalizeEmail(user.email);
-          const fallbackCompanyId = resolvedCompanyId || companyId;
-          writeBuildrFamilyAccess({ email: fallbackEmail, companyId: fallbackCompanyId });
-          await persistBuildrCompanyId(fallbackCompanyId, user);
-          navigate("/", { replace: true });
-          return;
-        }
-        setCopy(buildrFamilyAccessCopy(""));
-        setStatus("error");
-        return;
-      }
-
-      writeBuildrFamilyAccess({ email, companyId: resolvedCompanyId });
-      if (verified.buildr_token) writeBuildrSessionToken(email, verified.buildr_token);
-
-      if (isLoadingAuth) return;
-
-      if (isAuthenticated && user?.email) {
-        if (normalizeEmail(user.email) !== email && !hasPlatformAccess(user) && !alreadyInCompany) {
-          setCopy(buildrFamilyAccessCopy("email_mismatch"));
-          setStatus("error");
-          return;
-        }
-        await persistBuildrCompanyId(resolvedCompanyId, user);
-        await checkAppState({ silent: true });
-        navigate("/", { replace: true });
-        return;
-      }
-
-      navigate(`/login?from=buildr&email=${encodeURIComponent(email)}`, { replace: true });
     }
 
     enterCompanyApp();
@@ -126,8 +109,10 @@ export default function FromBuildr() {
   }
 
   return (
-    <AuthLayout title="Opening company Estim8r" subtitle="Using your Buildr company access">
-      <p className="text-sm text-muted-foreground">Checking your company purchase and Access Control grant…</p>
+    <AuthLayout title="Opening company Estim8r" subtitle="Signing in with your Buildr login">
+      <p className="text-sm text-muted-foreground">
+        Using your Buildr credentials from the sidebar — no separate Estim8r sign-in.
+      </p>
     </AuthLayout>
   );
 }

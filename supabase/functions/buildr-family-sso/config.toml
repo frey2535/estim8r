@@ -1,0 +1,2 @@
+[functions.buildr-family-sso]
+verify_jwt = false

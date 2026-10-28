@@ -60,7 +60,7 @@ VITE_BUILDR_API_URL=http://localhost:3001
 
 GitHub Pages builds pass `VITE_BUILDR_URL` and `VITE_BUILDR_API_URL` from repository secrets. A production build without those values — or with localhost secrets left over from local README examples — falls back to `https://buildrpm.com` so `/from-buildr` SSO verify and Save can still POST `/functions/verifyFamilyAppSSOToken`, `/estim8r/account-status`, and `/estim8r/save-project-docs`. Local `npm run dev` still uses localhost.
 
-`/from-buildr` is the company landing from the Buildr sidebar. It reuses the existing Buildr SSO verify endpoint plus email / company ID. Employees with an Access Control grant enter the company Estim8r; they do not download or install their own copy. This does not require `supabase db push` of full migration history.
+`/from-buildr` is the company landing from the Buildr sidebar. Buildr issues a short-lived SSO token; Estim8r verifies it, bootstraps the same Buildr email/password (or an edge OTP fallback), and signs the user into the company app automatically. Employees with an Access Control grant enter the company Estim8r; they do not download or install their own copy. Apply only the live-safe SQL helpers (including `ensure_current_flow_profile`) with `supabase db query --linked` — do not `supabase db push` the full Estim8r migration history onto the shared Current Flow project.
 
 Buildr sync sends the signed-in email and, when linked, a Buildr company ID. Set the company ID in **Settings → Buildr company**. If no company ID is linked, Buildr still looks up the account by login email. If a company is linked or an estimate was already synced, a failed Buildr save shows an error instead of a silent local-only save.
 

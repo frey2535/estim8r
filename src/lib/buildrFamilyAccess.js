@@ -41,6 +41,12 @@ export function buildrFamilyAccessCopy(errorCode) {
       body: "Estim8r was opened from Buildr for a different email. Sign out and sign in as that company user.",
     };
   }
+  if (code === "password_handoff_unavailable" || code === "buildr_password_sign_in_failed") {
+    return {
+      title: "Buildr could not complete automatic sign-in",
+      body: "This Buildr account needs an email/password login for family-app SSO. Set a Buildr password (or open Estim8r again from the sidebar after your admin confirms Access Control), then retry from Buildr — do not download a separate copy.",
+    };
+  }
   return {
     title: "Unable to open the company Estim8r",
     body: "Open Estim8r from the Buildr sidebar after your company has purchased it and your admin has granted access. This is not a download or install page.",

@@ -7,6 +7,7 @@ import {
   associateGeometry,
   assignExclusiveGeometry,
   candidatesFromConstructedPaths,
+  circlePaintOutlineFromBody,
   drawOpsExtentPoints,
   classifySymbolGeometry,
   containsPoint,
@@ -14,6 +15,8 @@ import {
   isPlausibleSymbolForHint,
   isSymbolSized,
   isAdjacentThinFixtureBar,
+  looksLikeExtractedCanRect,
+  looksLikeRecessedCanBody,
   looksLikeTextGlyph,
   mergeOverlappingCandidates,
   parseDrawOps,
@@ -336,6 +339,37 @@ assert(tagAdjacentToSymbolBody(soccer3eTag, soccer3eBody), "Soccer 3E side tag i
 assert(
   associateGeometry(soccer3eTag, [soccer3eBody], { shapeHint: "rect" }) === soccer3eBody,
   "Soccer 3E rect-hint binds the side-tagged body",
+);
+
+const soccerCanRect = {
+  kind: "rect",
+  cx: 35.0,
+  cy: 29.11,
+  w: 0.64,
+  h: 0.62,
+  outline: { kind: "rect", source: "vector", w: 0.64, h: 0.62, points: [] },
+};
+const soccerCanTag = { text: "4", x: 35.0, y: 29.11 };
+assert(looksLikeExtractedCanRect(soccerCanRect), "near-square extracted can rects are recognized for paint");
+assert(!looksLikeRecessedCanBody(soccerCanRect), "extracted can rects do not trigger unlabeled circle can recovery");
+const canPerimeter = circlePaintOutlineFromBody(soccerCanRect, "circle");
+assert(canPerimeter?.kind === "circle" && Math.abs(canPerimeter.r - 0.31) < 0.01, "square can rect promotes to a full circle perimeter");
+assert(Math.abs(canPerimeter.w - 0.64) < 1e-9 && Math.abs(canPerimeter.h - 0.62) < 1e-9, "can promotion preserves measured percent extents");
+assert(circlePaintOutlineFromBody({ kind: "rect", cx: 1, cy: 1, w: 0.9, h: 0.3 }, "circle") === null, "forced circle hint cannot oval an elongated rect");
+
+const distantTroffer = {
+  kind: "rect",
+  cx: 29.163 + 1.70,
+  cy: 18.072,
+  w: 1.35,
+  h: 0.70,
+  outline: { kind: "rect", source: "vector", w: 1.35, h: 0.70, points: [] },
+};
+const type1Tag = { text: "1", x: 29.163, y: 18.072 };
+assert(tagAdjacentToSymbolBody(type1Tag, distantTroffer), "side-tagged 2x4 remains edge-adjacent at ~1.7″");
+assert(
+  placeOnSymbolGeometry(type1Tag, [distantTroffer], { shapeHint: "rect", farRadius: 2.05 }) === distantTroffer,
+  "explicit rect farRadius reaches a 2x4 body beyond the primary associate radius",
 );
 
 if (!process.exitCode) console.log("vector symbol checks passed");

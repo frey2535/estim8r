@@ -41,23 +41,36 @@ const clustered = clusterDeviceCallouts([
 assert(clustered.length === 2, "nearby same-type devices share one callout");
 assert(clustered.some((item) => item.text === "1x4 ×3"), "cluster shows count instead of three labels");
 
-const piled = layoutOverlayCallouts({
-  conduits: Array.from({ length: 8 }, (_, index) => ({
-    id: `c${index}`,
-    runNumber: index + 1,
-    homerunCount: 3,
-    conduitSize: '3/4"',
-    points: [{ x: 12 + index, y: 20 }, { x: 70, y: 18 }],
-  })),
-  devices: Array.from({ length: 12 }, (_, index) => ({
-    id: `d${index}`,
-    abbr: "1x4",
-    x: 20 + (index % 4) * 0.6,
-    y: 40 + Math.floor(index / 4) * 0.6,
-  })),
+const conduitBatch = Array.from({ length: 8 }, (_, index) => ({
+  id: `c${index}`,
+  runNumber: index + 1,
+  homerunCount: 3,
+  conduitSize: '3/4"',
+  points: [{ x: 12 + index, y: 20 }, { x: 70, y: 18 }],
+}));
+const deviceBatch = Array.from({ length: 12 }, (_, index) => ({
+  id: `d${index}`,
+  abbr: "1x4",
+  x: 20 + (index % 4) * 0.6,
+  y: 40 + Math.floor(index / 4) * 0.6,
+}));
+assert(
+  layoutOverlayCallouts({ conduits: conduitBatch, devices: deviceBatch }).conduitLabels.length === 0,
+  "idle R-number conduit labels stay off the drawing by default",
+);
+const selectedOnly = layoutOverlayCallouts({
+  conduits: conduitBatch,
+  devices: deviceBatch,
+  selectedId: "c2",
 });
-assert(piled.conduitLabels.every((label) => !/LF/.test(label.text)), "idle conduit labels omit LF");
-assert(piled.conduitLabels.every((label) => label.text.length <= 8), "idle conduit labels stay short");
+assert(selectedOnly.conduitLabels.length === 1 && selectedOnly.conduitLabels[0].id === "c2", "only the selected conduit shows a compact R label");
+const piled = layoutOverlayCallouts({
+  conduits: conduitBatch,
+  devices: deviceBatch,
+  showIdleConduitLabels: true,
+});
+assert(piled.conduitLabels.every((label) => !/LF/.test(label.text)), "idle conduit labels omit LF when explicitly enabled");
+assert(piled.conduitLabels.every((label) => label.text.length <= 8), "idle conduit labels stay short when explicitly enabled");
 assert(piled.deviceLabels.length === 0, "device markers have no type-code text");
 const boxes = [...piled.conduitLabels];
 let overlap = false;

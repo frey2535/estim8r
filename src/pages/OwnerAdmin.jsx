@@ -12,10 +12,14 @@ import {
 } from "@/lib/platformIdentity";
 import {
   accessStatusLabel,
+  canDeleteAccess,
   canManageEstim8rAccess,
+  canReinstateAccess,
   canRevokeAccess,
+  deleteEstim8rAccess,
   grantEstim8rAccess,
   listEstim8rAccess,
+  reinstateEstim8rAccess,
   revokeEstim8rAccess,
 } from "@/api/ownerAccess";
 import { Button } from "@/components/ui/button";
@@ -100,7 +104,7 @@ export default function OwnerAdmin() {
   }
 
   async function revoke(target) {
-    setBusy(target);
+    setBusy(`revoke:${target}`);
     setError("");
     setStatus("");
     try {
@@ -114,6 +118,39 @@ export default function OwnerAdmin() {
     }
   }
 
+  async function removeAccess(target) {
+    if (!window.confirm(`Delete Estim8r access for ${target}? This removes their Estim8r entitlement/invite from access management. It does not delete their Current Flow login.`)) {
+      return;
+    }
+    setBusy(`delete:${target}`);
+    setError("");
+    setStatus("");
+    try {
+      await deleteEstim8rAccess(target);
+      setStatus(`Deleted Estim8r access for ${target}.`);
+      await load();
+    } catch (err) {
+      setError(err?.message || "Could not delete access.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function reinstate(target) {
+    setBusy(`reinstate:${target}`);
+    setError("");
+    setStatus("");
+    try {
+      await reinstateEstim8rAccess(target);
+      setStatus(`Reinstated Estim8r access for ${target}.`);
+      await load();
+    } catch (err) {
+      setError(err?.message || "Could not reinstate access.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   return (
     <div className="py-4 sm:py-6">
       <p className="text-sm font-semibold uppercase tracking-widest text-blue-600 dark:text-orange-500">
@@ -122,7 +159,7 @@ export default function OwnerAdmin() {
       <h1 className="text-3xl font-black text-foreground">Estim8r access</h1>
       <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
         Signed in as {isPlatformOwner(user) ? "the Current Flow platform owner" : "Current Flow backup admin"} ({user?.email}).
-        There is one platform owner. Grant or revoke who can use Estim8r.
+        There is one platform owner. Grant, revoke, reinstate, or delete who can use Estim8r.
       </p>
 
       {isPlatformOwner(user) && <section className="mt-7 max-w-4xl rounded-2xl border border-border bg-card p-6 shadow-sm" aria-label="Issue notifications">
@@ -174,7 +211,7 @@ export default function OwnerAdmin() {
           </p>
         ) : (
           <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[36rem] text-left text-sm">
+            <table className="w-full min-w-[40rem] text-left text-sm">
               <thead>
                 <tr className="border-b border-border text-muted-foreground">
                   <th className="py-2 pr-3 font-semibold">Email</th>
@@ -185,29 +222,61 @@ export default function OwnerAdmin() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
-                  <tr key={`${row.row_kind}-${row.email}-${row.profile_id || "invite"}`} className="border-b border-border/60">
-                    <td className="py-3 pr-3 font-medium text-foreground">{row.email}</td>
-                    <td className="py-3 pr-3 text-muted-foreground">{row.full_name || "—"}</td>
-                    <td className="py-3 pr-3">{accessStatusLabel(row)}</td>
-                    <td className="py-3 pr-3 text-muted-foreground">{row.source || "—"}</td>
-                    <td className="py-3">
-                      {canRevokeAccess(row) ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={Boolean(busy)}
-                          onClick={() => void revoke(row.email)}
-                        >
-                          {busy === row.email ? "Revoking…" : "Revoke"}
-                        </Button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">Protected</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {rows.map((row) => {
+                  const showRevoke = canRevokeAccess(row);
+                  const showReinstate = canReinstateAccess(row);
+                  const showDelete = canDeleteAccess(row);
+                  const protectedRow = !showRevoke && !showReinstate && !showDelete;
+                  return (
+                    <tr key={`${row.row_kind}-${row.email}-${row.profile_id || "invite"}`} className="border-b border-border/60">
+                      <td className="py-3 pr-3 font-medium text-foreground">{row.email}</td>
+                      <td className="py-3 pr-3 text-muted-foreground">{row.full_name || "—"}</td>
+                      <td className="py-3 pr-3">{accessStatusLabel(row)}</td>
+                      <td className="py-3 pr-3 text-muted-foreground">{row.source || "—"}</td>
+                      <td className="py-3">
+                        {protectedRow ? (
+                          <span className="text-xs text-muted-foreground">Protected</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            {showRevoke && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={Boolean(busy)}
+                                onClick={() => void revoke(row.email)}
+                              >
+                                {busy === `revoke:${row.email}` ? "Revoking…" : "Revoke"}
+                              </Button>
+                            )}
+                            {showReinstate && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={Boolean(busy)}
+                                onClick={() => void reinstate(row.email)}
+                              >
+                                {busy === `reinstate:${row.email}` ? "Reinstating…" : "Reinstate"}
+                              </Button>
+                            )}
+                            {showDelete && (
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                disabled={Boolean(busy)}
+                                onClick={() => void removeAccess(row.email)}
+                              >
+                                {busy === `delete:${row.email}` ? "Deleting…" : "Delete"}
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -218,8 +287,9 @@ export default function OwnerAdmin() {
         <Shield className="mt-0.5 h-5 w-5 text-blue-600 dark:text-orange-500" />
         <div className="text-sm text-muted-foreground">
           <p><span className="font-semibold text-foreground">Platform owner:</span> {PLATFORM_OWNER_EMAIL} — the only platform owner ID.</p>
-          <p className="mt-1"><span className="font-semibold text-foreground">Current Flow backup admin:</span> {BACKUP_ADMIN_EMAIL} — can grant and revoke, is not a second platform owner.</p>
+          <p className="mt-1"><span className="font-semibold text-foreground">Current Flow backup admin:</span> {BACKUP_ADMIN_EMAIL} — can grant, revoke, reinstate, and delete access, is not a second platform owner.</p>
           <p className="mt-1"><span className="font-semibold text-foreground">First customer:</span> {FIRST_CUSTOMER_COMPANY}. Company admin is {FIRST_CUSTOMER_ADMIN_EMAIL} — admins that company only, not the platform.</p>
+          <p className="mt-1"><span className="font-semibold text-foreground">Delete</span> removes Estim8r entitlement/invite rows only — not the person’s Current Flow login.</p>
         </div>
       </div>
     </div>

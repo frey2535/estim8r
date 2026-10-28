@@ -57,6 +57,8 @@ Client RPCs (already matching):
 - `list_estim8r_access()`
 - `grant_estim8r_access({ target_email })`
 - `revoke_estim8r_access({ target_email })`
+- `delete_estim8r_access({ target_email })`
+- `reinstate_estim8r_access({ target_email })`
 
 To apply or re-apply only the live-safe functions (idempotent):
 

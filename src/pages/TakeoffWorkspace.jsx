@@ -134,13 +134,13 @@ import {
 import { OVERLAY_FONT_SIZE, layoutOverlayCallouts } from "@/domain/takeoff/overlayLayout";
 import {
   CIRCUIT_COLOR,
-  DEVICE_CHIP_R,
   DEVICE_FILL_OPACITY,
   DEVICE_FILL_STROKE_PX,
   MIN_VISIBLE_FILL,
   applyDeviceTypeColors,
-  displayDeviceOutline,
-  interiorDeviceOutline,
+  paintDeviceOutline,
+  paintOrigin,
+  ellipseRadiiFromOutline,
   deviceFillEnabled,
   hitTestDeviceFill,
   isCircuitMark,
@@ -219,10 +219,11 @@ function loadSession(file) {
 function normalizeRestoredMarks(savedMarks = []) {
   return applyDeviceTypeColors((savedMarks || []).map((mark) => {
     if (mark?.source !== "ai" || !isDeviceMark(mark)) return mark;
+    // Never invent markerSizeOverride. A forced override paints generic chips on
+    // text-only detections instead of filling the measured symbol perimeter.
     return {
       ...mark,
       markerSize: mark.markerSize || 1.35,
-      markerSizeOverride: mark.markerSizeOverride ?? true,
       fillOpacity: mark.fillOpacity ?? DEVICE_FILL_OPACITY,
     };
   }));
@@ -256,6 +257,7 @@ export default function TakeoffWorkspace() {
   const [file, setFile] = useState(null);
   const [fileUrl, setFileUrl] = useState("");
   const [fileBytes, setFileBytes] = useState(null);
+  const [sheetDisplaySize, setSheetDisplaySize] = useState({ width: 0, height: 0 });
   const [loadingDrawing, setLoadingDrawing] = useState(false);
   const [drawingError, setDrawingError] = useState("");
   const [mode, setMode] = useState("manual");
@@ -541,6 +543,16 @@ export default function TakeoffWorkspace() {
   );
 
   useEffect(() => {
+    if (isPdf) return;
+    if (!imageDisplay.width || !imageDisplay.height) return;
+    setSheetDisplaySize((current) => (
+      current.width === imageDisplay.width && current.height === imageDisplay.height
+        ? current
+        : { width: imageDisplay.width, height: imageDisplay.height }
+    ));
+  }, [isPdf, imageDisplay.width, imageDisplay.height]);
+
+  useEffect(() => {
     if (!symbols.some((item) => item.id === symbolId)) {
       setSymbolId(symbols[0]?.id || "");
     }
@@ -568,6 +580,7 @@ export default function TakeoffWorkspace() {
     setZoom(1);
     setPan({ x: 0, y: 0 });
     setImageSize({ width: 0, height: 0 });
+    setSheetDisplaySize({ width: 0, height: 0 });
     setSheetMeta({ page: 1, pageCount: 1 });
     setSelectedId(null);
     setDrawingObjects([]);
@@ -1184,6 +1197,7 @@ export default function TakeoffWorkspace() {
     setZoom(1);
     setPan({ x: 0, y: 0 });
     setImageSize({ width: 0, height: 0 });
+    setSheetDisplaySize({ width: 0, height: 0 });
     setSheetMeta({ page: 1, pageCount: 1 });
     setSelectedId(null);
     setStatus("Drawing closed. Choose another drawing to continue.");
@@ -1592,7 +1606,8 @@ export default function TakeoffWorkspace() {
           trade: mark.trade || trade,
           sheet: mark.sheet || mark.page,
           markerSize: mark.markerSize || Math.max(penSize, 1.35),
-          markerSizeOverride: mark.markerSizeOverride ?? true,
+          // Keep any explicit estimator resize; do not force override chips that
+          // paint circular blobs beside/inside the wrong symbol perimeter.
           reviewStatus: mark.reviewStatus || "pending",
         })),
       );
@@ -2714,7 +2729,16 @@ export default function TakeoffWorkspace() {
                 }}
                 onPointerLeave={() => { setHoverPoint(null); setPointerSheet(null); setHoveredDeviceId(null); setHoveredGeometryInfo(null); }}
                 className={cn("relative bg-white shadow-xl", tool === "pan" ? "cursor-grab" : tool === "select" ? "cursor-default" : "cursor-crosshair")}
-                style={{ transform: `translate(${pan.x}px, ${pan.y}px)`, willChange: tool === "pan" ? "transform" : "auto", touchAction: "none" }}
+                style={{
+                  transform: `translate(${pan.x}px, ${pan.y}px)`,
+                  willChange: tool === "pan" ? "transform" : "auto",
+                  touchAction: "none",
+                  // Lock the pan layer to the fitted sheet pixels so the SVG
+                  // overlay (viewBox 0–100) shares the exact PDF/image box.
+                  ...(sheetDisplaySize.width && sheetDisplaySize.height
+                    ? { width: sheetDisplaySize.width, height: sheetDisplaySize.height }
+                    : {}),
+                }}
               >
                 {isPdf ? (
                   fileBytes ? (
@@ -2726,6 +2750,7 @@ export default function TakeoffWorkspace() {
                       onPageNumber={(page) => setSheetMeta((current) => (current.page === page ? current : { ...current, page }))}
                       viewportWidth={comparePage ? Math.max(160, Math.floor(viewportSize.width / 2)) : viewportSize.width}
                       viewportHeight={viewportSize.height}
+                      onDisplaySize={setSheetDisplaySize}
                       onPageInfo={(info) => {
                         setSheetMeta((current) => (
                           current.page === info.page && current.pageCount === info.pageCount ? current : info
@@ -2780,7 +2805,7 @@ export default function TakeoffWorkspace() {
                   markerSize={penSize}
                   lineSize={penThickness}
                   fontSize={OVERLAY_FONT_SIZE}
-                  showConduitLabels={wideLayout}
+                  showConduitLabels={false}
                   lengthFor={(mark) => markLengthFeet(mark, calibration, aspect)}
                   printedHighlight={printedHighlightGeometry(printedSelection)}
                   hoverHighlight={printedHighlightGeometry(hoveredPrinted && printedSelectionId(hoveredPrinted) !== selectedId ? hoveredPrinted : null)}
@@ -3285,34 +3310,9 @@ function OverlayLabel({ label, fill, fontSize = OVERLAY_FONT_SIZE }) {
   );
 }
 
-function DeviceFill({ mark, selected, markerSize, focus = false }) {
-  const measured = displayDeviceOutline(mark, markerSize, { selected });
-  if (!measured || !deviceFillEnabled(mark)) return null;
-  const outline = interiorDeviceOutline(measured, Number(mark.fillInset) || 0.86);
+function DeviceFillShape({ outline, anchor, color, opacity, stroke, strokeWidth }) {
   if (!outline) return null;
-  const color = readableFillColor(mark.color || "#1e3a8a");
-  const opacity = focus ? 0.5 : Math.max(Number(mark.fillOpacity ?? DEVICE_FILL_OPACITY), mark.source === "ai" ? 0.46 : DEVICE_FILL_OPACITY);
-  // PlanSwift-style marking: paint only inside the detected symbol body.
-  // The original black PDF symbol remains visible on top visually because
-  // the measured fill is inset before we draw the colored perimeter.
-  const stroke = selected || focus ? "#ea580c" : color;
-  const strokeWidth = selected || focus ? DEVICE_FILL_STROKE_PX + 0.35 : (mark.source === "ai" ? 1.15 : 0.75);
-  if (outline.kind === "composite" && outline.parts?.length) {
-    return (
-      <g>
-        {outline.parts.map((part, index) => {
-          if (part.kind === "path" && part.points?.length >= 3) return <polygon key={index} points={part.points.map((point) => `${point.x},${point.y}`).join(" ")} fill={color} fillOpacity={opacity} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />;
-          if (part.kind === "circle") {
-            const r = Number(part.r) || Math.max(part.w || 0, part.h || 0) / 2 || DEVICE_CHIP_R;
-            return <circle key={index} cx={part.cx ?? mark.x} cy={part.cy ?? mark.y} r={r} fill={color} fillOpacity={opacity} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />;
-          }
-          const w = Number(part.w) || MIN_VISIBLE_FILL;
-          const h = Number(part.h) || MIN_VISIBLE_FILL * 0.7;
-          return <rect key={index} x={(part.cx ?? mark.x) - w / 2} y={(part.cy ?? mark.y) - h / 2} width={w} height={h} rx={0.06} fill={color} fillOpacity={opacity} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />;
-        })}
-      </g>
-    );
-  }
+  // Prefer real path points over a collapsed AABB / circle substitute.
   if (outline.kind === "path" && outline.points?.length >= 3) {
     return (
       <polygon
@@ -3325,12 +3325,17 @@ function DeviceFill({ mark, selected, markerSize, focus = false }) {
       />
     );
   }
-  if (outline.kind === "circle") {
+  if (outline.kind === "circle" || outline.kind === "ellipse") {
+    // Page-percent space is anisotropic under preserveAspectRatio="none".
+    // Use ellipse rx/ry from measured w/h so PDF circles stay circular on screen
+    // and never collapse to a fixed-size oval chip.
+    const { rx, ry } = ellipseRadiiFromOutline(outline);
     return (
-      <circle
-        cx={Number.isFinite(outline.cx) ? outline.cx : mark.x}
-        cy={Number.isFinite(outline.cy) ? outline.cy : mark.y}
-        r={Number(outline.r) || DEVICE_CHIP_R}
+      <ellipse
+        cx={Number.isFinite(outline.cx) ? outline.cx : anchor.x}
+        cy={Number.isFinite(outline.cy) ? outline.cy : anchor.y}
+        rx={rx}
+        ry={ry}
         fill={color}
         fillOpacity={opacity}
         stroke={stroke}
@@ -3341,20 +3346,62 @@ function DeviceFill({ mark, selected, markerSize, focus = false }) {
   }
   const width = Number(outline.w) || MIN_VISIBLE_FILL;
   const height = Number(outline.h) || MIN_VISIBLE_FILL * 0.7;
-  const centerX = Number.isFinite(outline.cx) ? outline.cx : mark.x;
-  const centerY = Number.isFinite(outline.cy) ? outline.cy : mark.y;
+  const centerX = Number.isFinite(outline.cx) ? outline.cx : anchor.x;
+  const centerY = Number.isFinite(outline.cy) ? outline.cy : anchor.y;
   return (
     <rect
       x={centerX - width / 2}
       y={centerY - height / 2}
       width={width}
       height={height}
-      rx={0.08}
+      rx={0}
+      ry={0}
       fill={color}
       fillOpacity={opacity}
       stroke={stroke}
       strokeWidth={strokeWidth}
       vectorEffect="non-scaling-stroke"
+    />
+  );
+}
+
+function DeviceFill({ mark, selected, markerSize, focus = false }) {
+  if (!deviceFillEnabled(mark)) return null;
+  const outline = paintDeviceOutline(mark, markerSize, { selected });
+  if (!outline) return null;
+  const anchor = paintOrigin(mark, outline);
+  const color = readableFillColor(mark.color || "#1e3a8a");
+  const opacity = focus ? 0.5 : Math.max(Number(mark.fillOpacity ?? DEVICE_FILL_OPACITY), mark.source === "ai" ? 0.46 : DEVICE_FILL_OPACITY);
+  // PlanSwift-style marking: tint only the interior of the detected body.
+  // Idle AI fills omit stroke so the colored ring cannot bleed past the ink.
+  const showStroke = selected || focus;
+  const stroke = showStroke ? "#ea580c" : "none";
+  const strokeWidth = showStroke ? DEVICE_FILL_STROKE_PX + 0.35 : 0;
+  if (outline.kind === "composite" && outline.parts?.length) {
+    return (
+      <g>
+        {outline.parts.map((part, index) => (
+          <DeviceFillShape
+            key={index}
+            outline={part}
+            anchor={anchor}
+            color={color}
+            opacity={opacity}
+            stroke={stroke}
+            strokeWidth={strokeWidth}
+          />
+        ))}
+      </g>
+    );
+  }
+  return (
+    <DeviceFillShape
+      outline={outline}
+      anchor={anchor}
+      color={color}
+      opacity={opacity}
+      stroke={stroke}
+      strokeWidth={strokeWidth}
     />
   );
 }
@@ -3371,7 +3418,7 @@ function GeometryStroke({ geometry, stroke, width }) {
   return <polyline points={points} fill="none" stroke={stroke} strokeWidth={width} vectorEffect="non-scaling-stroke" />;
 }
 
-function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, lengthFor, markerSize = DEFAULT_MARKER_SIZE, lineSize = DEFAULT_LINE_SIZE, fontSize = OVERLAY_FONT_SIZE, showConduitLabels = true, printedHighlight = null, hoverHighlight = null }) {
+function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, lengthFor, markerSize = DEFAULT_MARKER_SIZE, lineSize = DEFAULT_LINE_SIZE, fontSize = OVERLAY_FONT_SIZE, showConduitLabels = false, printedHighlight = null, hoverHighlight = null }) {
   const otherRoutes = marks.filter((m) => m.points?.length && !isCircuitMark(m));
   const devices = marks.filter((m) => isDeviceMark(m));
   const circuits = marks.filter((m) => isCircuitMark(m) && m.points?.length);
@@ -3380,6 +3427,7 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
     devices,
     selectedId,
     fontSize,
+    showIdleConduitLabels: showConduitLabels,
     lengthTextFor: (mark) => {
       const feet = lengthFor?.(mark);
       return feet == null ? "" : formatFeet(feet);
@@ -3509,15 +3557,17 @@ function MarkupOverlay({ marks, draftPoints, draftFeet, selectedId, tool, length
   );
 }
 
-function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber = null, viewportWidth, viewportHeight, onPageInfo = null, selectedMark = null }) {
+function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber = null, viewportWidth, viewportHeight, onPageInfo = null, onDisplaySize = null, selectedMark = null }) {
   const canvasRef = useRef(null);
   const focusCanvasRef = useRef(null);
   const pdfRef = useRef(null);
   const bytesRef = useRef(null);
   const onPageInfoRef = useRef(onPageInfo);
   const onPageNumberRef = useRef(onPageNumber);
+  const onDisplaySizeRef = useRef(onDisplaySize);
   onPageInfoRef.current = onPageInfo;
   onPageNumberRef.current = onPageNumber;
+  onDisplaySizeRef.current = onDisplaySize;
   const [error, setError] = useState("");
   const [rendering, setRendering] = useState(true);
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 });
@@ -3554,6 +3604,7 @@ function PdfDrawing({ fileBytes, fileName, zoom, pageNumber, onPageNumber = null
         const fitted = fitSheetSize(base.width, base.height, viewportWidth, viewportHeight, zoom);
         if (!fitted.width || !fitted.height) return;
         setDisplaySize(fitted);
+        onDisplaySizeRef.current?.(fitted);
 
         // Keep 8x visual zoom without allocating an 8x full-resolution canvas.
         // Large electrical sheets can otherwise create 100M+ pixel canvases and

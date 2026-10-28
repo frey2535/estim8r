@@ -140,7 +140,13 @@ function tryPlace(anchor, text, occupied, fontSize = OVERLAY_FONT_SIZE) {
 }
 
 /**
- * @param {Record<string, any>} conduits
+ * Overlay callouts for the live sheet.
+ *
+ * Idle conduit R-number labels stay off the drawing by default — they cover
+ * symbol bodies and compete with printed PDF tags (R10-3). Compact identifiers
+ * appear only for the selected run, or when showIdleConduitLabels is explicit.
+ *
+ * @param {Record<string, any>} options
  */
 export function layoutOverlayCallouts({
   conduits = [],
@@ -148,11 +154,13 @@ export function layoutOverlayCallouts({
   selectedId,
   lengthTextFor,
   fontSize = OVERLAY_FONT_SIZE,
+  showIdleConduitLabels = false,
 } = {}) {
   const occupied = [];
   const conduitLabels = [];
   for (const mark of conduits) {
     const selected = mark.id === selectedId;
+    if (!selected && !showIdleConduitLabels) continue;
     const text = compactConduitLabel(mark, {
       selected,
       lengthText: selected ? lengthTextFor?.(mark) : "",

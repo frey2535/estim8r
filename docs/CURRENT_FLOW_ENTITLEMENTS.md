@@ -63,4 +63,7 @@ To apply or re-apply only the live-safe functions (idempotent):
 ```bash
 supabase link --project-ref gqdxvctvufalunaaopyj
 supabase db query --linked --file supabase/migrations/20260920150000_live_shared_estim8r_access_rpcs.sql
+supabase db query --linked --file supabase/migrations/20261022180000_ensure_current_flow_profile.sql
 ```
+
+`ensure_current_flow_profile()` is required for Buildr sidebar company users who already exist in `auth.users` without a `public.profiles` row. Without it, Estim8r shows “Current Flow profile has not been provisioned.” Do not replace the shared `handle_new_user` trigger.

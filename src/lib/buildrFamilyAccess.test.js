@@ -26,6 +26,14 @@ assert(!/app store|install app|view .*access/i.test(buildrFamilyAccessCopy("not_
 assert(!/app store|install app|view .*access/i.test(buildrFamilyAccessCopy("access_denied").body), "grant copy is not an install prompt");
 assert(buildrFamilyAccessCopy("not_purchased").title.includes("not on this company"), "purchase title");
 assert(buildrFamilyAccessCopy("access_denied").title.includes("not granted"), "grant title");
+assert(
+  buildrFamilyAccessCopy("password_handoff_unavailable").title.includes("automatic sign-in"),
+  "password handoff failure title",
+);
+assert(
+  /Buildr password|sidebar/i.test(buildrFamilyAccessCopy("buildr_password_sign_in_failed").body),
+  "password sign-in failure points back to Buildr",
+);
 
 assert(readBuildrFamilyAccess(memory) === null, "empty store");
 const saved = writeBuildrFamilyAccess({ email: " Estimator@Example.com ", companyId: " co_1 " }, memory, 1_000);

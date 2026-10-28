@@ -1,6 +1,13 @@
-import React from 'react';
+import React from "react";
+import { Link } from "react-router-dom";
+import { readBuildrFamilyAccess } from "@/lib/buildrFamilyAccess";
 
 const UserNotRegisteredError = () => {
+  const handoff = typeof window !== "undefined" ? readBuildrFamilyAccess() : null;
+  const fromBuildr = Boolean(handoff?.email) || (
+    typeof window !== "undefined"
+    && /from=buildr/i.test(window.location.search)
+  );
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-white to-slate-50">
       <div className="max-w-md w-full p-8 bg-white rounded-lg shadow-lg border border-slate-100">
@@ -12,16 +19,21 @@ const UserNotRegisteredError = () => {
           </div>
           <h1 className="text-3xl font-bold text-slate-900 mb-4">Access Restricted</h1>
           <p className="text-slate-600 mb-8">
-            You are not registered to use this application. Please contact the app administrator to request access.
+            {fromBuildr
+              ? "Your company granted Estim8r in Buildr, but this account still needs a Current Flow profile. Open Estim8r again from the Buildr sidebar with the same email, or ask your company admin for help."
+              : "You are not registered to use this application. Please contact the app administrator to request access."}
           </p>
           <div className="p-4 bg-slate-50 rounded-md text-sm text-slate-600">
             <p>If you believe this is an error, you can:</p>
-            <ul className="list-disc list-inside mt-2 space-y-1">
-              <li>Verify you are logged in with the correct account</li>
-              <li>Contact the app administrator for access</li>
-              <li>Try logging out and back in again</li>
+            <ul className="list-disc list-inside mt-2 space-y-1 text-left">
+              <li>Verify you are signed in with the email that was granted access</li>
+              <li>{fromBuildr ? "Open Estim8r from the Buildr sidebar again" : "Contact the app administrator for access"}</li>
+              <li>Sign out and sign back in</li>
             </ul>
           </div>
+          <Link to="/login" className="mt-6 inline-flex text-sm font-semibold text-blue-700 hover:underline">
+            Back to sign in
+          </Link>
         </div>
       </div>
     </div>

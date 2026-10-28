@@ -1,6 +1,7 @@
 import { requireSupabase } from "./supabaseClient";
 import { applyPlatformIdentity, normalizeEmail } from "@/lib/platformIdentity";
 import { authRedirectUrl, describeAuthError } from "@/lib/authRedirect";
+import { loadProfileForAuthUser } from "./profileProvisioning";
 
 async function organizationForProfile(client, profile) {
   if (!profile?.org_id) return null;
@@ -34,13 +35,7 @@ function mapProfile(profile, org, authUser) {
 
 async function profileForUser(user) {
   const client = requireSupabase();
-  const { data: profile, error } = await client
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (error) throw error;
-  if (!profile) throw new Error("Your Current Flow profile has not been provisioned yet.");
+  const profile = await loadProfileForAuthUser(client, user);
   const org = await organizationForProfile(client, profile);
   return mapProfile(profile, org, user);
 }

@@ -73,12 +73,11 @@ export async function persistBuildrCompanyId(companyId, user) {
     const client = requireSupabase();
     const { data: { user: authUser } } = await client.auth.getUser();
     if (!authUser) return { ok: true, companyId: value || null, stored: "local" };
+    // Live shared profiles may use updated_date instead of updated_at — only
+    // write the company binding column so company users are not blocked.
     const { error } = await client
       .from("profiles")
-      .update({
-        buildr_company_id: value || null,
-        updated_at: new Date().toISOString(),
-      })
+      .update({ buildr_company_id: value || null })
       .eq("id", authUser.id);
     if (error) return { ok: true, companyId: value || null, stored: "local", warning: error.message };
     return { ok: true, companyId: value || null, stored: "profile" };

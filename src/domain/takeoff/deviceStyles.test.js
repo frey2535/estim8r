@@ -10,7 +10,10 @@ import {
   deviceOutline,
   hitTestDeviceFill,
   interiorDeviceOutline,
+  paintDeviceOutline,
+  paintOrigin,
   deviceFillEnabled,
+  DEVICE_INTERIOR_INSET,
   marksForTrade,
   outlineExtent,
   planOverlayMarks,
@@ -143,8 +146,8 @@ const aiOverrideHit = {
   outlineSource: "text",
   requiresReview: true,
 };
-assert(outlineExtent(displayDeviceOutline(aiOverrideHit, aiOverrideHit.markerSize)) >= 0.55, "AI review chips stay visibly large enough on the live drawing");
-assert(selectMarkAtPoint([aiOverrideHit], { x: 32.42, y: 32 }, { markerSize: () => aiOverrideHit.markerSize })?.id === "ai-os", "AI marker-size overrides are honored during device hit testing");
+assert(displayDeviceOutline(aiOverrideHit, aiOverrideHit.markerSize) === null, "text-only AI never paints a fabricated review chip over the sheet");
+assert(selectMarkAtPoint([aiOverrideHit], { x: 32.42, y: 32 }, { markerSize: () => aiOverrideHit.markerSize })?.id === "ai-os", "uncertain AI stays selectable near the printed tag without a painted body");
 const upper = { id: "upper", type: "route", tool: "conduit", points: [{ x: 0, y: 10 }, { x: 40, y: 10 }] };
 const lower = { id: "lower", type: "route", tool: "conduit", points: [{ x: 0, y: 11.2 }, { x: 40, y: 11.2 }] };
 const routePick = selectMarkAtPoint([lower, upper], { x: 20, y: 10.85 }, {
@@ -255,5 +258,70 @@ const bodyFill = displayDeviceOutline({
 });
 assert(bodyFill, "symbol body still receives a tight interior fill");
 assert(Math.abs((Number(bodyFill.cx) || 50) - 50) < 0.08, "fill stays centered on the symbol, not the outside number");
+
+const offsetTag = {
+  source: "ai",
+  type: "count",
+  x: 41.2,
+  y: 22.4,
+  typeCode: "4",
+  abbr: "4",
+  symbol: "downlight",
+  symbolLabel: "Type 4 recessed downlight",
+  symbolBodyLocation: { x: 40.0, y: 22.0 },
+  outlineSource: "vector",
+  outline: { kind: "circle", source: "vector", cx: 40.0, cy: 22.0, r: 0.34, w: 0.68, h: 0.68 },
+};
+const origin = paintOrigin(offsetTag, offsetTag.outline);
+assert(Math.abs(origin.x - 40) < 1e-9 && Math.abs(origin.y - 22) < 1e-9, "paint origin prefers the measured body center over the type tag");
+const interior = paintDeviceOutline(offsetTag);
+assert(interior && interior.kind === "circle", "can paint uses an interior circle");
+assert(Number(interior.r) <= 0.34 * DEVICE_INTERIOR_INSET + 1e-9, "interior can tint stays inside the detected circle");
+assert(Number(interior.r) >= 0.34 * 0.85, "interior can tint fills most of the circle, not a tiny chip");
+assert(Math.abs((Number(interior.cx) || 0) - 40) < 1e-9, "interior can tint stays centered on the body");
+const rawExtent = outlineExtent(displayDeviceOutline(offsetTag));
+assert(outlineExtent(interior) < rawExtent, "interior tint is strictly smaller than the measured perimeter");
+
+const squareCanRect = {
+  source: "ai",
+  type: "count",
+  x: 22,
+  y: 18,
+  typeCode: "2",
+  abbr: "2",
+  symbol: "downlight",
+  symbolLabel: "Type 2 recessed downlight",
+  symbolBodyLocation: { x: 22, y: 18 },
+  outlineSource: "vector",
+  outline: { kind: "rect", source: "vector", cx: 22, cy: 18, w: 0.68, h: 0.64 },
+};
+const squarePaint = paintDeviceOutline(squareCanRect);
+assert(squarePaint?.kind === "circle", "near-square extracted can rect paints as a full circle interior");
+assert(Number(squarePaint.r) >= 0.28, "can interior fill spans the printed circle, not a corner chip");
+
+const trofferFill = paintDeviceOutline({
+  source: "ai",
+  type: "count",
+  x: 30,
+  y: 24,
+  typeCode: "3",
+  abbr: "3",
+  symbol: "2x4",
+  symbolLabel: "Type 3 2x4 troffer",
+  symbolBodyLocation: { x: 30, y: 24 },
+  outlineSource: "vector",
+  outline: { kind: "rect", source: "vector", cx: 30, cy: 24, w: 1.04, h: 0.62 },
+});
+assert(trofferFill?.kind === "rect", "2x4 fill stays rectangular inside the fixture frame");
+assert(Math.abs((trofferFill.w || 0) - 1.04 * DEVICE_INTERIOR_INSET) < 0.02, "2x4 tint spans the fixture interior like the verified red examples");
+assert(displayDeviceOutline({
+  source: "ai",
+  type: "count",
+  x: 12,
+  y: 12,
+  typeCode: "2",
+  outlineSource: "text",
+  outline: { kind: "circle", source: "text", cx: 12, cy: 12, r: 0.26, w: 0.52, h: 0.52 },
+}) == null, "text-only chips do not paint generic blobs over symbols");
 
 if (!process.exitCode) console.log("device style checks passed");

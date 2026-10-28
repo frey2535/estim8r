@@ -57,7 +57,9 @@ import {
   DEVICE_FILL_OPACITY,
   DEVICE_FILL_STROKE_PX,
   applyDeviceTypeColors,
-  displayDeviceOutline,
+  paintDeviceOutline,
+  paintOrigin,
+  ellipseRadiiFromOutline,
   isCircuitMark,
   isDeviceMark,
 } from "@/domain/takeoff/deviceStyles";
@@ -105,6 +107,7 @@ export default function MarkupPages() {
   panRef.current = pan;
   zoomRef.current = zoom;
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
+  const [sheetDisplaySize, setSheetDisplaySize] = useState({ width: 0, height: 0 });
   const [drawingSymbols, setDrawingSymbols] = useState([]);
   const [pageKinds, setPageKinds] = useState({});
   const [aiPages, setAiPages] = useState([]);
@@ -668,7 +671,12 @@ export default function MarkupPages() {
                 <div
                   ref={viewerRef}
                   onClick={onOverlayClick}
-                  style={{ transform: `translate(${pan.x}px, ${pan.y}px)` }}
+                  style={{
+                    transform: `translate(${pan.x}px, ${pan.y}px)`,
+                    ...(sheetDisplaySize.width && sheetDisplaySize.height
+                      ? { width: sheetDisplaySize.width, height: sheetDisplaySize.height }
+                      : {}),
+                  }}
                   className="relative cursor-grab select-none bg-white shadow-xl"
                 >
                   {fileBytes ? (
@@ -679,6 +687,7 @@ export default function MarkupPages() {
                       pageNumber={activePage?.sourcePage || 1}
                       viewportWidth={viewportSize.width}
                       viewportHeight={viewportSize.height}
+                      onDisplaySize={setSheetDisplaySize}
                     />
                   ) : (
                     <div className="flex h-[22rem] w-full max-w-xl items-center justify-center bg-white px-6 text-center text-sm text-muted-foreground" data-testid="markup-missing-drawing">
@@ -812,6 +821,7 @@ function ReviewOverlay({ marks, selectedId, groups = null }) {
     conduits: circuits.filter((mark) => mark.tool === "conduit"),
     devices,
     selectedId,
+    showIdleConduitLabels: false,
   });
   return (
     <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -827,23 +837,27 @@ function ReviewOverlay({ marks, selectedId, groups = null }) {
       })}
       {devices.map((mark) => {
         const selected = mark.id === selectedId;
-        const outline = displayDeviceOutline(mark, DEFAULT_MARKER_SIZE, { selected });
+        const outline = paintDeviceOutline(mark, DEFAULT_MARKER_SIZE, { selected });
         if (!outline) return null;
+        const anchor = paintOrigin(mark, outline);
         const color = mark.color || "#1e3a8a";
-        const stroke = selected ? "#ea580c" : color;
-        const strokeWidth = selected ? DEVICE_FILL_STROKE_PX + 0.55 : DEVICE_FILL_STROKE_PX;
+        const stroke = selected ? "#ea580c" : "none";
+        const strokeWidth = selected ? DEVICE_FILL_STROKE_PX + 0.55 : 0;
         if (outline.kind === "path" && outline.points?.length >= 3) {
           return (
             <polygon key={mark.id} points={outline.points.map((point) => `${point.x},${point.y}`).join(" ")} fill={color} fillOpacity={DEVICE_FILL_OPACITY} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
           );
         }
-        if (outline.kind === "circle") {
+        if (outline.kind === "circle" || outline.kind === "ellipse") {
+          const { rx, ry } = ellipseRadiiFromOutline(outline);
           return (
-            <circle key={mark.id} cx={outline.cx ?? mark.x} cy={outline.cy ?? mark.y} r={outline.r} fill={color} fillOpacity={DEVICE_FILL_OPACITY} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
+            <ellipse key={mark.id} cx={Number.isFinite(outline.cx) ? outline.cx : anchor.x} cy={Number.isFinite(outline.cy) ? outline.cy : anchor.y} rx={rx} ry={ry} fill={color} fillOpacity={DEVICE_FILL_OPACITY} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
           );
         }
+        const cx = Number.isFinite(outline.cx) ? outline.cx : anchor.x;
+        const cy = Number.isFinite(outline.cy) ? outline.cy : anchor.y;
         return (
-          <rect key={mark.id} x={(outline.cx ?? mark.x) - outline.w / 2} y={(outline.cy ?? mark.y) - outline.h / 2} width={outline.w} height={outline.h} rx={0.08} fill={color} fillOpacity={DEVICE_FILL_OPACITY} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
+          <rect key={mark.id} x={cx - outline.w / 2} y={cy - outline.h / 2} width={outline.w} height={outline.h} rx={0} ry={0} fill={color} fillOpacity={DEVICE_FILL_OPACITY} stroke={stroke} strokeWidth={strokeWidth} vectorEffect="non-scaling-stroke" />
         );
       })}
       {notes.map((mark) => (
@@ -861,7 +875,7 @@ function ReviewOverlay({ marks, selectedId, groups = null }) {
           />
         </g>
       ))}
-      {callouts.conduitLabels.map((label) => (
+      {callouts.conduitLabels.filter((label) => label.selected).map((label) => (
         <text
           key={`${label.id}-${label.text}`}
           x={label.x}
@@ -880,10 +894,12 @@ function ReviewOverlay({ marks, selectedId, groups = null }) {
   );
 }
 
-function PdfSheet({ fileBytes, fileName, zoom, pageNumber, viewportWidth, viewportHeight }) {
+function PdfSheet({ fileBytes, fileName, zoom, pageNumber, viewportWidth, viewportHeight, onDisplaySize = null }) {
   const canvasRef = useRef(null);
   const pdfRef = useRef(null);
   const bytesRef = useRef(null);
+  const onDisplaySizeRef = useRef(onDisplaySize);
+  onDisplaySizeRef.current = onDisplaySize;
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
@@ -909,6 +925,7 @@ function PdfSheet({ fileBytes, fileName, zoom, pageNumber, viewportWidth, viewpo
         const fitted = fitSheetSize(base.width, base.height, viewportWidth, viewportHeight, zoom);
         if (!fitted.width || !fitted.height) return;
         setDisplaySize(fitted);
+        onDisplaySizeRef.current?.(fitted);
         const outputScale = Math.min(2, window.devicePixelRatio || 1);
         const viewport = page.getViewport({ scale: (fitted.width / base.width) * outputScale });
         const canvas = canvasRef.current;

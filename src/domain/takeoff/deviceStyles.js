@@ -1,12 +1,14 @@
 import { isReviewOnlyMark } from "./detectionRecord.js";
 import { symbolBodyOutline } from "./legendGeometry.js";
 import { isCanDeviceText } from "./symbolDetection.js";
-import { pointHitsOutline, scaleOutline } from "./vectorSymbols.js";
+import { circlePaintOutlineFromBody, pointHitsOutline, scaleOutline } from "./vectorSymbols.js";
 
 // Detection color should identify a symbol, not replace the printed symbol
 // with a solid block that hides the drawing underneath.
 export const DEVICE_FILL_OPACITY = 0.34;
-export const DEVICE_INTERIOR_INSET = 0.86;
+// Fill almost to the printed perimeter so the tint reads as the symbol body
+// (PlanSwift-style), while leaving a thin clear ring of black ink outside.
+export const DEVICE_INTERIOR_INSET = 0.92;
 export const MIN_VISIBLE_FILL = 0.28;
 export const MAX_POINT_FILL = 0.55;
 export const MAX_FIXTURE_FILL = 1.65;
@@ -246,6 +248,79 @@ function outlineCenter(outline, origin) {
   };
 }
 
+/**
+ * Paint origin for a mark: prefer the measured outline center, then the
+ * recorded symbol body, then the mark anchor. Never prefer a printed type
+ * tag that sits beside the glyph when body geometry is known.
+ * @param {any} mark
+ * @param {any} outline
+ */
+export function paintOrigin(mark, outline = null) {
+  const fromOutline = outline ? outlineCenter(outline, null) : null;
+  if (fromOutline && Number.isFinite(fromOutline.x) && Number.isFinite(fromOutline.y)) {
+    return fromOutline;
+  }
+  return {
+    x: Number(mark?.symbolBodyLocation?.x ?? mark?.x) || 0,
+    y: Number(mark?.symbolBodyLocation?.y ?? mark?.y) || 0,
+  };
+}
+
+function withPaintCenter(outline, origin) {
+  if (!outline || !origin) return outline;
+  if (Number.isFinite(Number(outline.cx)) && Number.isFinite(Number(outline.cy))) return outline;
+  return { ...outline, cx: origin.x, cy: origin.y };
+}
+
+function looksLikeAxisAlignedRectPoints(points, outline) {
+  const list = (points || []).length === 5 ? points.slice(0, 4) : (points || []);
+  if (list.length !== 4) return false;
+  const xs = list.map((point) => Number(point.x) || 0);
+  const ys = list.map((point) => Number(point.y) || 0);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const tol = 0.03;
+  const onCorners = list.every((point) => (
+    (Math.abs((Number(point.x) || 0) - minX) <= tol || Math.abs((Number(point.x) || 0) - maxX) <= tol)
+    && (Math.abs((Number(point.y) || 0) - minY) <= tol || Math.abs((Number(point.y) || 0) - maxY) <= tol)
+  ));
+  if (!onCorners) return false;
+  const w = maxX - minX;
+  const h = maxY - minY;
+  if (w < 0.04 || h < 0.04) return false;
+  if (Number(outline?.w) > 0 && Math.abs(w - Number(outline.w)) > 0.1) return false;
+  if (Number(outline?.h) > 0 && Math.abs(h - Number(outline.h)) > 0.1) return false;
+  return true;
+}
+
+/**
+ * Prefer the extracted perimeter: real path/polygon when the CAD points are
+ * non-rectangular, circle only for circular geometry, and rect for true
+ * rectangular bodies. Never keep an AABB "rect" kind when the stored points
+ * describe a non-rectangular symbol body.
+ * @param {any} outline
+ */
+export function preferNativeSymbolGeometry(outline) {
+  if (!outline) return null;
+  if (outline.kind === "composite" && outline.parts?.length) {
+    return {
+      ...outline,
+      parts: outline.parts.map((part) => preferNativeSymbolGeometry(part)).filter(Boolean),
+    };
+  }
+  if (outline.kind === "circle" || outline.kind === "ellipse") return outline;
+  const points = outline.points || [];
+  if (points.length >= 3 && outline.kind !== "path") {
+    if (outline.kind === "rect" && looksLikeAxisAlignedRectPoints(points, outline)) {
+      return outline;
+    }
+    return { ...outline, kind: "path" };
+  }
+  return outline;
+}
+
 function isOnSheet(x, y) {
   return Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x <= 100 && y >= 0 && y <= 100;
 }
@@ -280,6 +355,18 @@ export function isFixtureDevice(mark) {
 export function maxFillExtent(mark) {
   if (isFixtureDevice(mark)) return MAX_FIXTURE_FILL;
   if (isPointDevice(mark)) return MAX_POINT_FILL;
+  return MAX_GENERIC_FILL;
+}
+
+/**
+ * Upper bound for measured AI paint. Point devices (cans/OS/GFI) keep their
+ * extracted perimeter up to ~1.05 so the tint fills the printed symbol; larger
+ * scraps still shrink. Fixtures keep the troffer cap.
+ * @param {any} mark
+ */
+export function aiPaintExtentCap(mark) {
+  if (isFixtureDevice(mark)) return MAX_FIXTURE_FILL;
+  if (isPointDevice(mark)) return 1.05;
   return MAX_GENERIC_FILL;
 }
 
@@ -392,14 +479,65 @@ function outlineOnPrintedTag(outline, mark) {
 }
 
 /**
- * @param {any} mark
- * @param {any} markerSize
- * @param {any} _options
+ * Keep circle percent extents for ellipse rendering. Never collapse w/h to a
+ * single radius — that creates universal ovals on landscape sheets.
+ * @param {any} outline
  */
+export function normalizeCirclePaintExtents(outline) {
+  if (!outline || (outline.kind !== "circle" && outline.kind !== "ellipse")) return outline;
+  const w = Number(outline.w);
+  const h = Number(outline.h);
+  const r = Number(outline.r);
+  if (w > 0 && h > 0) {
+    return { ...outline, kind: "circle", w, h, r: r > 0 ? r : Math.max(w, h) / 2 };
+  }
+  if (r > 0) return { ...outline, kind: "circle", r, w: r * 2, h: r * 2 };
+  return outline;
+}
+
+/**
+ * Radii for SVG ellipse fills in page-percent space. Prefer measured w/h so a
+ * PDF circle stays circular on screen under preserveAspectRatio="none".
+ * @param {any} outline
+ */
+export function ellipseRadiiFromOutline(outline) {
+  const w = Number(outline?.w);
+  const h = Number(outline?.h);
+  const r = Number(outline?.r);
+  if (w > 0 && h > 0) return { rx: w / 2, ry: h / 2 };
+  if (r > 0) return { rx: r, ry: r };
+  return { rx: DEVICE_CHIP_R, ry: DEVICE_CHIP_R };
+}
+
+/**
+ * @param {any} mark
+ * @param {any} outline
+ */
+function perimeterForMark(mark, outline) {
+  if (!outline) return null;
+  if (outline.kind === "circle" || outline.kind === "ellipse") {
+    return normalizeCirclePaintExtents(outline);
+  }
+  // Rectangular fixtures keep rect/path fills. Point/can devices may promote
+  // only when the measured body itself looks circular — never a forced oval.
+  if (!isPointDevice(mark) && !isCanDeviceText(deviceFillBlob(mark))) return outline;
+  if (outline.kind === "rect" || outline.kind === "path" || outline.kind === "composite") {
+    const promoted = circlePaintOutlineFromBody({
+      ...outline,
+      cx: outline.cx ?? mark?.symbolBodyLocation?.x ?? mark?.x,
+      cy: outline.cy ?? mark?.symbolBodyLocation?.y ?? mark?.y,
+      source: outline.source || mark?.outlineSource,
+    }, null);
+    return promoted ? normalizeCirclePaintExtents(promoted) : outline;
+  }
+  return outline;
+}
+
 export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
-  const cleaned = mark?.outline
+  const rawCleaned = mark?.outline
     ? symbolBodyOutline({ ...mark.outline, outline: mark.outline, cx: mark.outline.cx ?? mark.x, cy: mark.outline.cy ?? mark.y }, paintTokensForMark(mark))
     : null;
+  const cleaned = preferNativeSymbolGeometry(rawCleaned);
   const origin = {
     x: Number(cleaned?.cx ?? mark?.symbolBodyLocation?.x ?? mark?.x) || 0,
     y: Number(cleaned?.cy ?? mark?.symbolBodyLocation?.y ?? mark?.y) || 0,
@@ -419,16 +557,21 @@ export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
     // AI may paint only a measured vector/raster/mixed perimeter. Never invent
     // a chip for text-only or missing geometry (strictAiSymbolPainting).
     if (!trustedAiSource || !mark?.outline) return null;
+    // Keep the measured perimeter up to aiPaintExtentCap. Shrinking cans to
+    // MAX_POINT_FILL left tiny chips inside the printed symbol.
+    const aiCap = aiPaintExtentCap(mark);
     const core = isTrustedAiBodyOutline(cleaned, origin, mark)
       ? cleaned
-      : coreDeviceOutline(cleaned, origin, mark);
+      : preferNativeSymbolGeometry(coreDeviceOutline(cleaned, origin, mark));
     if (core && !outlineOnPrintedTag(core, mark) && isTrustedAiBodyOutline(core, origin, mark)) {
-      const extent = outlineExtent(core);
-      return extent > maxExtent ? scaleOutline(core, maxExtent / extent, origin) : scaleOutline(core, 1, origin);
+      const painted = perimeterForMark(mark, core);
+      const extent = outlineExtent(painted);
+      return extent > aiCap ? scaleOutline(painted, aiCap / extent, origin) : scaleOutline(painted, 1, origin);
     }
     if (usable) {
-      const extent = outlineExtent(cleaned);
-      return extent > maxExtent ? scaleOutline(cleaned, maxExtent / extent, origin) : scaleOutline(cleaned, 1, origin);
+      const painted = perimeterForMark(mark, cleaned);
+      const extent = outlineExtent(painted);
+      return extent > aiCap ? scaleOutline(painted, aiCap / extent, origin) : scaleOutline(painted, 1, origin);
     }
     return null;
   }
@@ -454,26 +597,54 @@ export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
 export function displayDeviceOutline(mark, markerSize = 0.55, options = {}) {
   const outline = deviceOutline(mark, markerSize, options);
   if (!outline) {
-    // Strict AI paint forbids inventing bid fills for text-only detections.
-    // An explicit marker-size override (review chip resized by the estimator)
-    // still needs a live hit target on the drawing.
-    if (mark?.source === "ai" && mark?.markerSizeOverride && isDeviceMark(mark)) {
-      return genericDeviceOutline(mark, markerSize);
-    }
+    // Never invent a generic chip for AI — uncertain boundaries stay unpainted
+    // and go to review. Hit-testing uses a separate locator radius.
     return null;
+  }
+  const extent = outlineExtent(outline);
+  const origin = paintOrigin(mark, outline);
+  const centered = withPaintCenter(outline, origin);
+  if (!extent) return centered;
+  // Measured AI geometry must stay at or under the detected perimeter. Inflating
+  // tiny glyphs past the CAD ink was painting purple/green fills outside cans.
+  if (mark?.source === "ai") {
+    const aiMax = aiPaintExtentCap(mark);
+    if (extent <= aiMax) return centered;
+    return withPaintCenter(scaleOutline(centered, aiMax / extent, origin), origin);
   }
   const displayMax = isFixtureDevice(mark)
     ? MAX_DISPLAY_FIXTURE_FILL
-    : isPointDevice(mark) ? (mark?.source === "ai" ? 1.05 : MAX_DISPLAY_POINT_FILL) : MAX_DISPLAY_GENERIC_FILL;
-  const extent = outlineExtent(outline);
-  const origin = {
-    x: Number(mark?.symbolBodyLocation?.x ?? mark?.x) || 0,
-    y: Number(mark?.symbolBodyLocation?.y ?? mark?.y) || 0,
-  };
-  if (!extent) return outline;
-  if (extent < MIN_VISIBLE_FILL) return scaleOutline(outline, MIN_VISIBLE_FILL / extent, origin);
-  if (extent <= displayMax) return outline;
-  return scaleOutline(outline, displayMax / extent, origin);
+    : isPointDevice(mark) ? MAX_DISPLAY_POINT_FILL : MAX_DISPLAY_GENERIC_FILL;
+  if (extent < MIN_VISIBLE_FILL) return withPaintCenter(scaleOutline(centered, MIN_VISIBLE_FILL / extent, origin), origin);
+  if (extent <= displayMax) return centered;
+  return withPaintCenter(scaleOutline(centered, displayMax / extent, origin), origin);
+}
+
+/**
+ * Interior tint used on the live plan. Always inset from the measured body so
+ * color sits inside the black symbol boundary, never on or past the ink.
+ * @param {any} mark
+ * @param {any} markerSize
+ * @param {any} options
+ */
+export function paintDeviceOutline(mark, markerSize = 0.55, options = {}) {
+  const measured = displayDeviceOutline(mark, markerSize, options);
+  if (!measured) return null;
+  const inset = Number(mark?.fillInset);
+  const factor = Number.isFinite(inset) && inset > 0
+    ? inset
+    : (mark?.source === "ai" ? DEVICE_INTERIOR_INSET : Math.max(DEVICE_INTERIOR_INSET, 0.86));
+  return interiorDeviceOutline(measured, factor);
+}
+
+/**
+ * True when an AI device has no trustworthy paint perimeter and must be
+ * reviewed rather than filled with a fabricated chip.
+ * @param {any} mark
+ */
+export function markHasUncertainPaintBoundary(mark) {
+  if (!isDeviceMark(mark) || mark?.source !== "ai") return false;
+  return !paintDeviceOutline(mark);
 }
 
 function pointerDistance(mark, point) {
@@ -506,11 +677,21 @@ function routePointerDistance(mark, point) {
 export function hitTestDeviceFill(mark, point, markerSize = 0.55) {
   if (!mark || !point) return false;
   const outline = displayDeviceOutline(mark, markerSize);
-  if (!outline) return false;
-  const tolerance = mark?.source === "ai"
-    ? Math.max(0.45, (Number(markerSize) || 0.55) * 0.7)
-    : 0.28;
-  return pointHitsOutline(outline, { x: mark.symbolBodyLocation?.x ?? mark.x, y: mark.symbolBodyLocation?.y ?? mark.y }, point, tolerance);
+  if (outline) {
+    const tolerance = mark?.source === "ai"
+      ? Math.max(0.45, (Number(markerSize) || 0.55) * 0.7)
+      : 0.28;
+    return pointHitsOutline(outline, { x: mark.symbolBodyLocation?.x ?? mark.x, y: mark.symbolBodyLocation?.y ?? mark.y }, point, tolerance);
+  }
+  // Text-located / uncertain AI stays selectable near the printed tag without
+  // painting a fabricated body over the sheet.
+  if (mark?.source === "ai" && isDeviceMark(mark)) {
+    const radius = Math.max(0.35, (Number(markerSize) || 0.55) * 0.55);
+    const x = Number(mark?.x) || 0;
+    const y = Number(mark?.y) || 0;
+    return Math.hypot((Number(point.x) || 0) - x, (Number(point.y) || 0) - y) <= radius;
+  }
+  return false;
 }
 
 /**
@@ -587,8 +768,17 @@ export function interiorDeviceOutline(outline, factor = DEVICE_INTERIOR_INSET) {
         .filter(Boolean),
     };
   }
-  if (outline.kind === "circle") {
-    return { ...outline, r: Math.max(0.02, (Number(outline.r) || Math.max(Number(outline.w) || 0, Number(outline.h) || 0) / 2) * f) };
+  if (outline.kind === "circle" || outline.kind === "ellipse") {
+    const r0 = Number(outline.r) || Math.max(Number(outline.w) || 0, Number(outline.h) || 0) / 2;
+    const w0 = Number(outline.w) > 0 ? Number(outline.w) : r0 * 2;
+    const h0 = Number(outline.h) > 0 ? Number(outline.h) : r0 * 2;
+    return {
+      ...outline,
+      kind: "circle",
+      r: Math.max(0.02, r0 * f),
+      w: Math.max(0.04, w0 * f),
+      h: Math.max(0.04, h0 * f),
+    };
   }
   if (outline.kind === "path" && outline.points?.length >= 3) {
     const cx = Number.isFinite(outline.cx)

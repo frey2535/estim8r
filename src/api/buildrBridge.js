@@ -151,17 +151,17 @@ async function readJson(response) {
   }
 }
 
-async function postFamilyAppSsoVerify(api, token, audience) {
+async function postFamilyAppJson(api, path, body) {
   try {
-    const response = await fetch(`${api}/functions/verifyFamilyAppSSOToken`, {
+    const response = await fetch(`${api}${path}`, {
       method: "POST",
       credentials: "omit",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, audience }),
+      body: JSON.stringify(body),
     });
     const data = await readJson(response);
     if (!response.ok) {
-      return { valid: false, error: data.error || "verify_failed", ...data };
+      return { valid: false, error: data.error || "request_failed", status: response.status, ...data };
     }
     return data;
   } catch (error) {
@@ -169,30 +169,42 @@ async function postFamilyAppSsoVerify(api, token, audience) {
   }
 }
 
-export async function verifyBuildrFamilyAppSso(token, audience = "estim8r") {
+async function withBuildrApiFallback(run) {
   const api = buildrApiUrl();
-  if (!api) {
-    return { valid: false, error: "buildr_not_configured" };
-  }
-  if (!token) {
-    return { valid: false, error: "token_required" };
-  }
-  const verified = await postFamilyAppSsoVerify(api, token, audience);
-  if (verified?.valid) {
-    persistReturnedBuildrToken(verified.email, verified);
-    return verified;
-  }
+  if (!api) return { valid: false, error: "buildr_not_configured" };
+  const primary = await run(api);
+  if (primary?.valid) return primary;
   const production = DEFAULT_BUILDR_PRODUCTION_URL;
   if (
-    import.meta.env.PROD &&
-    api !== production &&
-    (verified?.error === "buildr_unavailable" || isLoopbackBuildrUrl(api))
+    import.meta.env.PROD
+    && api !== production
+    && (primary?.error === "buildr_unavailable" || isLoopbackBuildrUrl(api))
   ) {
-    const fallback = await postFamilyAppSsoVerify(production, token, audience);
-    if (fallback?.valid) persistReturnedBuildrToken(fallback.email, fallback);
-    return fallback;
+    return run(production);
   }
+  return primary;
+}
+
+export async function verifyBuildrFamilyAppSso(token, audience = "estim8r") {
+  if (!token) return { valid: false, error: "token_required" };
+  const verified = await withBuildrApiFallback((api) => (
+    postFamilyAppJson(api, "/functions/verifyFamilyAppSSOToken", { token, audience })
+  ));
+  if (verified?.valid) persistReturnedBuildrToken(verified.email, verified);
   return verified;
+}
+
+/**
+ * Exchange a short-lived sidebar SSO token for Buildr identity + password so
+ * Estim8r can sign the user in automatically (same credentials as Buildr).
+ * @param {any} token
+ * @param {any} audience
+ */
+export async function bootstrapBuildrFamilyAppSso(token, audience = "estim8r") {
+  if (!token) return { valid: false, error: "token_required" };
+  return withBuildrApiFallback((api) => (
+    postFamilyAppJson(api, "/functions/bootstrapFamilyAppSSO", { token, audience })
+  ));
 }
 
 /**

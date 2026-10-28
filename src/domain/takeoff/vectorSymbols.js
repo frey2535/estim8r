@@ -667,6 +667,64 @@ export function looksLikeRecessedCanBody(candidate) {
 }
 
 /**
+ * Near-square CAD rect that stands in for a recessed-can circle (Soccer extracts
+ * cans as rects with no circle paths). Paint promotion only — not unlabeled recovery.
+ * @param {any} candidate
+ */
+export function looksLikeExtractedCanRect(candidate) {
+  if (!candidate || isJunkGeometry(candidate)) return false;
+  if (candidate.kind !== "rect") return false;
+  const long = Math.max(Number(candidate.w) || 0, Number(candidate.h) || 0);
+  const short = Math.min(Number(candidate.w) || 0, Number(candidate.h) || 0);
+  const aspect = long / (short || 1e-9);
+  return long >= 0.45 && long <= 0.86 && short >= 0.42 && aspect <= 1.25;
+}
+
+/**
+ * Promote a near-square extracted rect into a circle paint perimeter so can /
+ * OS fills occupy the full interior of the printed round symbol.
+ * @param {any} geometry
+ * @param {any} hint
+ */
+export function circlePaintOutlineFromBody(geometry, hint = null) {
+  if (!geometry) return null;
+  // hint === "circle" alone must NOT force promotion — that painted universal
+  // ovals over rectangular / irregular bodies. Only promote when the measured
+  // geometry itself looks circular (or is already a circle).
+  const wantsCircle = geometry.kind === "circle"
+    || geometry.kind === "ellipse"
+    || looksLikeRecessedCanBody(geometry)
+    || looksLikeExtractedCanRect(geometry)
+    || (hint === "circle" && (looksLikeRecessedCanBody(geometry) || looksLikeExtractedCanRect(geometry)));
+  if (!wantsCircle) return null;
+  const cx = Number(geometry.cx);
+  const cy = Number(geometry.cy);
+  if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null;
+  // Preserve asymmetric percent extents (w ≠ h). On a non-square page a true
+  // PDF circle has unequal x/y percentages; collapsing to w=h=2r made every
+  // fill render as the same screen oval under preserveAspectRatio="none".
+  const w = Number(geometry.w) || (Number(geometry.r) || 0) * 2;
+  const h = Number(geometry.h) || (Number(geometry.r) || 0) * 2;
+  if (!(w >= 0.28 && h >= 0.28)) return null;
+  const r = Number(geometry.r) > 0
+    ? Number(geometry.r)
+    : Math.min(w, h) / 2;
+  if (!(r >= 0.14 && r <= 0.65)) return null;
+  const aspect = Math.max(w, h) / Math.max(0.001, Math.min(w, h));
+  if (geometry.kind !== "circle" && geometry.kind !== "ellipse" && aspect > 1.45) return null;
+  return {
+    kind: "circle",
+    source: geometry.source === "text" ? "text" : (geometry.outline?.source || geometry.source || "vector"),
+    cx,
+    cy,
+    r,
+    w,
+    h,
+    points: Array.isArray(geometry.points) ? geometry.points : [],
+  };
+}
+
+/**
  * @param {any} candidate
  */
 export function looksLikeTrofferShard(candidate) {
@@ -987,8 +1045,16 @@ export function scaleOutline(outline, factor, origin) {
     x: ox + (point.x - ox) * scale,
     y: oy + (point.y - oy) * scale,
   }));
+  const cx = outline.cx != null && Number.isFinite(Number(outline.cx))
+    ? ox + (Number(outline.cx) - ox) * scale
+    : outline.cx;
+  const cy = outline.cy != null && Number.isFinite(Number(outline.cy))
+    ? oy + (Number(outline.cy) - oy) * scale
+    : outline.cy;
   return {
     ...outline,
+    cx,
+    cy,
     r: outline.r != null ? outline.r * scale : outline.r,
     w: outline.w != null ? outline.w * scale : outline.w,
     h: outline.h != null ? outline.h * scale : outline.h,

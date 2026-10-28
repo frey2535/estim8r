@@ -1,4 +1,4 @@
-import { deviceOutline, displayDeviceOutline, outlineExtent, planOverlayMarks } from "./deviceStyles.js";
+import { deviceOutline, displayDeviceOutline, outlineExtent, paintDeviceOutline, planOverlayMarks } from "./deviceStyles.js";
 
 function assert(condition, message) {
   if (!condition) {
@@ -90,7 +90,9 @@ const oversizedWp = {
 };
 const paintedWp = displayDeviceOutline(oversizedWp);
 assert(paintedWp, "a slightly oversized receptacle body still gets an in-symbol fill");
-assert(outlineExtent(paintedWp) <= 0.55, "oversized receptacle fill is scaled into the symbol, not dropped");
+assert(outlineExtent(paintedWp) >= 0.64 && outlineExtent(paintedWp) <= 0.72 + 1e-9, "measured receptacle perimeter is kept, not shrunk to a chip");
+const interiorWp = paintDeviceOutline(oversizedWp);
+assert(interiorWp && outlineExtent(interiorWp) < outlineExtent(paintedWp), "receptacle tint stays inside the measured perimeter");
 
 const tinyWp = {
   ...oversizedWp,
@@ -99,7 +101,7 @@ const tinyWp = {
 };
 const paintedTiny = displayDeviceOutline(tinyWp);
 assert(paintedTiny, "a tiny CAD glyph still gets a visible in-symbol fill");
-assert(outlineExtent(paintedTiny) >= 0.2, "tiny glyph fills are scaled up enough to see");
+assert(outlineExtent(paintedTiny) <= 0.12 + 1e-9, "tiny AI glyph fills are not inflated past the measured perimeter");
 
 const roomSized = {
   ...oversizedWp,
@@ -107,5 +109,44 @@ const roomSized = {
   outline: { source: "vector", kind: "rect", cx: 32, cy: 32, w: 8.4, h: 6.2 },
 };
 assert(deviceOutline(roomSized) === null, "room-sized junk is not painted as a device");
+
+const canBody = {
+  id: "ai-can",
+  source: "ai",
+  type: "count",
+  symbol: "downlight",
+  typeCode: "4",
+  abbr: "4",
+  symbolLabel: "Type 4 recessed downlight",
+  x: 40.2,
+  y: 22.1,
+  symbolBodyLocation: { x: 40.0, y: 22.0 },
+  outlineSource: "vector",
+  outline: { source: "vector", kind: "circle", cx: 40.0, cy: 22.0, r: 0.36, w: 0.72, h: 0.72 },
+};
+const measuredCan = displayDeviceOutline(canBody);
+const paintedCan = paintDeviceOutline(canBody);
+assert(measuredCan && Math.abs((measuredCan.cx || 0) - 40) < 1e-9, "can fill centers on the symbol body, not the type tag");
+assert(paintedCan && outlineExtent(paintedCan) < outlineExtent(measuredCan), "interior tint is smaller than the measured can perimeter");
+assert(outlineExtent(paintedCan) <= 0.72 * 0.92 + 1e-9, "painted can tint stays inside the black circle");
+assert(outlineExtent(paintedCan) >= 0.72 * 0.85, "painted can tint still fills most of the symbol interior");
+
+const trofferBody = {
+  id: "ai-1",
+  source: "ai",
+  type: "count",
+  symbol: "2x4",
+  typeCode: "1",
+  abbr: "1",
+  symbolLabel: "2x4 recessed troffer",
+  x: 55,
+  y: 30,
+  symbolBodyLocation: { x: 55, y: 30 },
+  outlineSource: "vector",
+  outline: { source: "vector", kind: "rect", cx: 55, cy: 30, w: 1.1, h: 0.55 },
+};
+const measuredTroffer = displayDeviceOutline(trofferBody);
+const paintedTroffer = paintDeviceOutline(trofferBody);
+assert(paintedTroffer && outlineExtent(paintedTroffer) < outlineExtent(measuredTroffer), "troffer tint stays inside the fixture frame");
 
 if (!process.exitCode) console.log("strict AI symbol perimeter painting checks passed");

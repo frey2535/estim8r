@@ -4,11 +4,11 @@ import { fileURLToPath } from "node:url";
 import { buildAiMarks } from "./aiTakeoff.js";
 import {
   MAX_FIXTURE_FILL,
+  aiPaintExtentCap,
   applyDeviceTypeColors,
   displayDeviceOutline,
   isCircuitMark,
   isDeviceMark,
-  maxFillExtent,
   outlineExtent,
   planOverlayMarks,
   readableFillColor,
@@ -66,10 +66,13 @@ for (const mark of devices) {
   }
   painted += 1;
   const extent = outlineExtent(outline);
-  const cap = maxFillExtent(mark);
+  const cap = aiPaintExtentCap(mark);
   assert(extent <= cap + 0.001, `${mark.abbr || mark.typeCode} @${mark.sheet} fill ${extent.toFixed(3)} exceeds glyph cap ${cap}`);
   assert(extent <= MAX_FIXTURE_FILL, `${mark.abbr || mark.typeCode} fill must not cover a room (${extent.toFixed(3)})`);
-  assert(extent >= 0.2, `${mark.abbr || mark.typeCode} fill vanished (${extent.toFixed(3)})`);
+  // Measured AI fills must stay inside the CAD perimeter. Tiny power glyphs
+  // (SPR/OS covers ~0.16–0.20) stay at their extracted size instead of being
+  // inflated past the printed symbol.
+  assert(extent >= 0.12, `${mark.abbr || mark.typeCode} fill vanished (${extent.toFixed(3)})`);
 }
 assert(painted >= 8, `Pottsville AI must paint in-symbol fills, got ${painted}`);
 assert(painted >= Math.floor(devices.length * 0.9), `at least 90% of counted devices must keep a visible fill (${painted}/${devices.length})`);

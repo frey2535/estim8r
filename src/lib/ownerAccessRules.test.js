@@ -60,4 +60,13 @@ assert(accessStatusLabel({ entitlement_status: "revoked", email: "old@example.co
 assert(accessStatusLabel({ access_status: "disabled", email: "off@example.com" }) === "Disabled", "disabled status");
 assert(accessStatusLabel({ entitlement_status: "active", email: "ok@example.com" }) === "Active", "active status");
 
+assert(
+  canReinstateAccess({ email: "old@example.com", entitlement_status: "revoked", access_status: "disabled" }) === true,
+  "revoked+disabled row can be reinstated",
+);
+assert(
+  canDeleteAccess({ email: "old@example.com", entitlement_status: "revoked" }) === true,
+  "revoked row can be deleted from the access list",
+);
+
 if (!process.exitCode) console.log("owner access checks passed");

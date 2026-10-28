@@ -559,7 +559,9 @@ export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
     if (!trustedAiSource || !mark?.outline) return null;
     // Keep the measured perimeter up to aiPaintExtentCap. Shrinking cans to
     // MAX_POINT_FILL left tiny chips inside the printed symbol.
-    // Native vector/raster perimeter is authoritative once it passes the trusted\n    // symbol-body bounds. Do not shrink every valid fixture into a small chip.\n    const aiCap = trustedAiBodyMax(mark);
+    // Native vector/raster perimeter is authoritative once it passes trusted bounds.
+    // Do not shrink valid fixture bodies into a small generic marker.
+    const aiCap = trustedAiBodyMax(mark);
     const core = isTrustedAiBodyOutline(cleaned, origin, mark)
       ? cleaned
       : preferNativeSymbolGeometry(coreDeviceOutline(cleaned, origin, mark));

@@ -8,7 +8,7 @@ import { circlePaintOutlineFromBody, pointHitsOutline, scaleOutline } from "./ve
 export const DEVICE_FILL_OPACITY = 0.34;
 // Fill almost to the printed perimeter so the tint reads as the symbol body
 // (PlanSwift-style), while leaving a thin clear ring of black ink outside.
-export const DEVICE_INTERIOR_INSET = 0.92;
+export const DEVICE_INTERIOR_INSET = 0.985;
 export const MIN_VISIBLE_FILL = 0.28;
 export const MAX_POINT_FILL = 0.55;
 export const MAX_FIXTURE_FILL = 1.65;
@@ -559,7 +559,7 @@ export function deviceOutline(mark, markerSize = 0.55, _options = {}) {
     if (!trustedAiSource || !mark?.outline) return null;
     // Keep the measured perimeter up to aiPaintExtentCap. Shrinking cans to
     // MAX_POINT_FILL left tiny chips inside the printed symbol.
-    const aiCap = aiPaintExtentCap(mark);
+    // Native vector/raster perimeter is authoritative once it passes the trusted\n    // symbol-body bounds. Do not shrink every valid fixture into a small chip.\n    const aiCap = trustedAiBodyMax(mark);
     const core = isTrustedAiBodyOutline(cleaned, origin, mark)
       ? cleaned
       : preferNativeSymbolGeometry(coreDeviceOutline(cleaned, origin, mark));
@@ -608,7 +608,7 @@ export function displayDeviceOutline(mark, markerSize = 0.55, options = {}) {
   // Measured AI geometry must stay at or under the detected perimeter. Inflating
   // tiny glyphs past the CAD ink was painting purple/green fills outside cans.
   if (mark?.source === "ai") {
-    const aiMax = aiPaintExtentCap(mark);
+    const aiMax = trustedAiBodyMax(mark);
     if (extent <= aiMax) return centered;
     return withPaintCenter(scaleOutline(centered, aiMax / extent, origin), origin);
   }

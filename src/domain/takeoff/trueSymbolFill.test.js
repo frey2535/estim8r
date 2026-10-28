@@ -187,4 +187,17 @@ assert(paintCan && ellipseRadiiFromOutline(paintCan).rx > DEVICE_CHIP_R,
 assert(!(paintTroffer.w === paintCan.w && paintTroffer.h === paintCan.h),
   "troffer and can fills do not share identical dimensions");
 
+
+const wideMeasuredFixture = {
+  ...troffer,
+  id: "wide-native",
+  outline: { kind: "rect", source: "vector", cx: 55, cy: 30, w: 2.4, h: 0.7, points: [] },
+};
+const fullNativeFill = paintDeviceOutline(wideMeasuredFixture);
+assert(fullNativeFill?.kind === "rect", "large trusted fixture keeps its rectangular CAD perimeter");
+assert(fullNativeFill?.w > 2.3 && fullNativeFill?.h > 0.65,
+  "trusted fixture is not reduced to the legacy 1.65-percent chip");
+const unsafeRoomSized = { ...wideMeasuredFixture, outline: { kind: "rect", source: "vector", cx: 55, cy: 30, w: 12, h: 8, points: [] } };
+assert(paintDeviceOutline(unsafeRoomSized) === null, "room-sized geometry must never be painted as a symbol");
+
 if (!process.exitCode) console.log("true symbol fill checks passed");

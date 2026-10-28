@@ -129,7 +129,7 @@ export default function OwnerAdmin() {
         <h2 className="font-bold text-foreground">Issue notifications ({incidents.length} recent)</h2>
         <p className="mt-2 text-sm text-muted-foreground">Automatic crash reports. No AI or Cursor sessions are launched.</p>
         <Button type="button" variant="outline" className="mt-3" disabled={testBusy} onClick={() => void testNotifications()}>{testBusy ? "Testing…" : "Test notification"}</Button>
-        {testStatus && <p role="status" className="mt-2 text-sm">{testStatus}</p>
+        {testStatus && <p role="status" className="mt-2 text-sm">{testStatus}</p>}
         {incidentError && <p role="alert">{incidentError}</p>}
         <ul className="mt-3 space-y-2">{incidents.map(item => <li key={item.id} className="rounded border p-3 text-sm">{item.category.replaceAll("_", " ")} · {item.route} · {new Date(item.created_at).toLocaleString()}</li>)}</ul>
       </section>}

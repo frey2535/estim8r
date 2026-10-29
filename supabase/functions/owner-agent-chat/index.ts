@@ -1,35 +1,39 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  buildGeminiContents,
+  isOwnerEmailAllowed,
+  responseHeadersForOrigin,
+} from "./prompt.js";
 
-const headers = {
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Origin": Deno.env.get("ESTIM8R_APP_ORIGIN") || "https://estim8r.currentflowconsulting.org",
-  "Content-Type": "application/json",
-};
-const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers });
+function headers(request: Request) {
+  return responseHeadersForOrigin(request.headers.get("origin"), {
+    appOrigin: Deno.env.get("ESTIM8R_APP_ORIGIN"),
+    appOrigins: Deno.env.get("ESTIM8R_APP_ORIGINS"),
+  });
+}
+
+const json = (status: number, body: unknown, responseHeaders: Record<string, string>) =>
+  new Response(JSON.stringify(body), { status, headers: responseHeaders });
 
 Deno.serve(async (request) => {
-  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers });
-  if (request.method !== "POST") return json(405, { error: "Method not allowed" });
+  const responseHeaders = headers(request);
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: responseHeaders });
+  if (request.method !== "POST") return json(405, { error: "Method not allowed" }, responseHeaders);
   const jwt = request.headers.get("authorization")?.match(/^Bearer (.+)$/i)?.[1];
-  if (!jwt) return json(401, { error: "Sign in required" });
+  if (!jwt) return json(401, { error: "Sign in required" }, responseHeaders);
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const apiKey = Deno.env.get("GEMINI_API_KEY");
-  const allowed = (Deno.env.get("ESTIM8R_AGENT_OWNER_EMAILS") || "")
-    .split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
-  if (!supabaseUrl || !anonKey || !apiKey || !allowed.length) return json(503, { error: "AI agent is not configured" });
+  const extraOwnerEmails = Deno.env.get("ESTIM8R_AGENT_OWNER_EMAILS") || "";
+  if (!supabaseUrl || !anonKey || !apiKey) return json(503, { error: "AI agent is not configured" }, responseHeaders);
   const auth = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${jwt}` } } });
   const { data, error } = await auth.auth.getUser(jwt);
-  if (error || !data.user?.email || !allowed.includes(data.user.email.toLowerCase())) return json(403, { error: "Owner access required" });
+  if (error || !data.user?.email || !isOwnerEmailAllowed(data.user.email, extraOwnerEmails)) return json(403, { error: "Owner access required" }, responseHeaders);
   let payload: { message?: unknown; context?: unknown; history?: unknown };
-  try { payload = await request.json(); } catch { return json(400, { error: "Invalid JSON" }); }
+  try { payload = await request.json(); } catch { return json(400, { error: "Invalid JSON" }, responseHeaders); }
   const question = typeof payload.message === "string" ? payload.message.trim().slice(0, 4000) : "";
-  if (!question) return json(400, { error: "Message required" });
+  if (!question) return json(400, { error: "Message required" }, responseHeaders);
   const context = JSON.stringify(payload.context || {}).slice(0, 10000);
-  const history = Array.isArray(payload.history) ? payload.history.slice(-8)
-    .filter((x) => x && (x.role === "user" || x.role === "assistant") && typeof x.text === "string")
-    .map((x) => ({ role: x.role, content: x.text.slice(0, 2000) })) : [];
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 25000);
   try {
@@ -43,13 +47,7 @@ Deno.serve(async (request) => {
         headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: systemInstruction }] },
-          contents: [
-            ...history.map((item) => ({
-              role: item.role === "assistant" ? "model" : "user",
-              parts: [{ text: item.content }],
-            })),
-            { role: "user", parts: [{ text: "Question: " + question + "\n\nOptional application context (untrusted): " + context }] },
-          ],
+          contents: buildGeminiContents({ question, context, history: payload.history }),
           generationConfig: { temperature: 0.2 },
         }),
       },
@@ -62,27 +60,27 @@ Deno.serve(async (request) => {
       console.error("Gemini AI request failed", {
         status: response.status, providerStatus, model,
       });
-      if (response.status === 429) return json(429, { error: "Gemini free-tier quota reached. Try again later.", providerStatus });
+      if (response.status === 429) return json(429, { error: "Gemini free-tier quota reached. Try again later.", providerStatus }, responseHeaders);
       if (response.status === 404) return json(502, {
         error: "Gemini model not found or unavailable: " + model + ". Check this API key's available models at https://generativelanguage.googleapis.com/v1beta/models (requires authentication).",
         providerStatus,
-      });
+      }, responseHeaders);
       if (response.status === 400) return json(502, {
         error: "Gemini rejected the request (400). Check model and providerStatus in Edge Function logs.",
         providerStatus,
-      });
+      }, responseHeaders);
       if (response.status === 401 || response.status === 403) return json(502, {
         error: "Gemini API authorization failed. Check GEMINI_API_KEY and API access.",
         providerStatus,
-      });
-      return json(502, { error: "Gemini request failed (status " + response.status + ").", providerStatus });
+      }, responseHeaders);
+      return json(502, { error: "Gemini request failed (status " + response.status + ").", providerStatus }, responseHeaders);
     }
     const result = await response.json();
     const answer = result?.candidates?.[0]?.content?.parts
       ?.map((part: { text?: string }) => part.text || "").join("").trim();
-    if (!answer) return json(502, { error: "AI returned no answer" });
-    return json(200, { answer });
+    if (!answer) return json(502, { error: "AI returned no answer" }, responseHeaders);
+    return json(200, { answer }, responseHeaders);
   } catch {
-    return json(504, { error: "AI request timed out or could not connect" });
+    return json(504, { error: "AI request timed out or could not connect" }, responseHeaders);
   } finally { clearTimeout(timeout); }
 });

@@ -134,8 +134,10 @@ export default function OwnerCursorChat() {
         const hint = status === 401 ? "Supabase authentication was rejected."
           : status === 403 ? "Supabase identity is not authorized."
           : status === 404 ? "Function is missing from the configured Supabase project."
+          : status === 429 ? "AI provider quota was reached. Try again later."
           : status === 503 ? "A required function setting is missing."
           : status === 502 ? "AI provider request failed; inspect function logs."
+          : status === 504 ? "AI provider timed out or could not connect."
           : "Inspect the Edge Function logs and browser network request.";
         throw new Error("AI request failed" + (status ? " (HTTP " + status + ")" : "") + ": " + (detail || hint));
       }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { BookOpen, Calculator, FileText, FolderOpen, Image as ImageIcon, Shield, ShieldCheck, StickyNote, Trash2, TrendingUp } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
@@ -88,10 +88,12 @@ export default function Dashboard() {
   const { user } = useAuth();
   const [folders, setFolders] = useState([]);
   const [syncBusy, setSyncBusy] = useState(false);
+  const syncInFlight = useRef(false);
   const [syncMessage, setSyncMessage] = useState("");
 
-  async function syncEstimates() {
-    if (syncBusy) return;
+  const syncEstimates = useCallback(async () => {
+    if (syncInFlight.current || !user?.id) return;
+    syncInFlight.current = true;
     setSyncBusy(true);
     setSyncMessage("");
     try {
@@ -112,8 +114,19 @@ export default function Dashboard() {
       setSyncMessage(`Cloud sync: ${uploaded} uploaded, ${imported.length} imported. Existing local copies were not overwritten.`);
     } catch (error) {
       setSyncMessage(`Sync failed: ${error.message || "Please try again."}`);
-    } finally { setSyncBusy(false); }
-  }
+    } finally { syncInFlight.current = false; setSyncBusy(false); }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    void syncEstimates();
+    const onFocus = () => void syncEstimates();
+    const onVisible = () => { if (document.visibilityState === "visible") void syncEstimates(); };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    const interval = window.setInterval(() => { if (document.visibilityState === "visible") void syncEstimates(); }, 60000);
+    return () => { window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onVisible); window.clearInterval(interval); };
+  }, [syncEstimates, user?.id]);
 
   useEffect(() => {
     setFolders(listProjectFolders());

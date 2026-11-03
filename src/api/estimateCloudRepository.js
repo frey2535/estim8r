@@ -19,6 +19,15 @@ export async function listCloudEstimates() {
   return data || [];
 }
 
+export async function getCloudEstimate(id) {
+  const client = requireSupabase();
+  const orgId = await currentOrg();
+  const { data, error } = await client.from("estim8r_estimate_snapshots")
+    .select("id,payload,revision,updated_at").eq("org_id", orgId).eq("id", id).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 export async function saveCloudEstimate(estimate, expectedRevision = null) {
   if (!estimate?.id) throw new Error("Estimate must have an ID.");
   await currentOrg();

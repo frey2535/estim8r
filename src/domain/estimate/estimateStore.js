@@ -117,7 +117,40 @@ export function writeEstimate(draft) {
   const key = estimateStorageKey(next.fileName, next.fileSize);
   localStorage.setItem(key, JSON.stringify(next));
   localStorage.setItem(ACTIVE_ESTIMATE_KEY, key);
+  queueCloudEstimate(next);
   return next;
+}
+
+// Debounced best-effort cloud persistence. Local writes always remain available.
+const cloudTimers = new Map();
+const cloudRevisions = new Map();
+function queueCloudEstimate(estimate) {
+  if (!estimate?.id || typeof window === "undefined") return;
+  const id = estimate.id;
+  window.clearTimeout(cloudTimers.get(id));
+  cloudTimers.set(id, window.setTimeout(async () => {
+    cloudTimers.delete(id);
+    try {
+      const { saveCloudEstimate, getCloudEstimate } = await import("@/api/estimateCloudRepository");
+      let revision = cloudRevisions.get(id);
+      if (revision === undefined) {
+        const remote = await getCloudEstimate(id);
+        if (remote) {
+          // Never overwrite another device's data without first reconciling it.
+          if (JSON.stringify(remote.payload) !== JSON.stringify(estimate)) {
+            window.dispatchEvent(new CustomEvent("estim8r-cloud-sync-conflict", { detail: { estimateId: id } }));
+            return;
+          }
+          revision = remote.revision;
+        } else revision = null;
+      }
+      const saved = await saveCloudEstimate(estimate, revision);
+      cloudRevisions.set(id, saved.revision);
+      window.dispatchEvent(new CustomEvent("estim8r-cloud-sync-saved", { detail: { estimateId: id } }));
+    } catch (error) {
+      window.dispatchEvent(new CustomEvent("estim8r-cloud-sync-error", { detail: { estimateId: id, message: error?.message || "Cloud unavailable" } }));
+    }
+  }, 1500));
 }
 
 export const LIVE_ESTIMATE_KEY = "estim8r.liveEstimate.v1";

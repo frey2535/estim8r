@@ -512,8 +512,10 @@ export default function EstimateBuilder() {
         </p>
         <Link to="/takeoff" className="mt-2 inline-flex min-h-[44px] items-center text-base font-bold text-blue-700 dark:text-orange-400">Back to takeoff</Link>
         <div className="mt-3">
-          {ready && <EstimatePhotosPanel estimateId={storedEstimateId} />
-            <SaveProjectDocuments estimate={draft} onProjectName={(name) => setHeaderField("projectName", name)} />}
+          {ready && <>
+            <EstimatePhotosPanel estimateId={storedEstimateId} />
+            <SaveProjectDocuments estimate={draft} onProjectName={(name) => setHeaderField("projectName", name)} />
+          </>}
         </div>
         </div>
         <details className="group w-full rounded-2xl border border-border bg-card p-3 shadow-sm lg:max-w-xs">

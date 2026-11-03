@@ -10,8 +10,10 @@ import {
   getDrawingFile,
   isDrawingFileName,
   listProjectFolders,
+  upsertProjectFolder,
 } from "@/domain/estimate/projectDocuments";
 import { activateEstimate, deleteStoredEstimate, readEstimate } from "@/domain/estimate/estimateStore";
+import { listCloudEstimates, importCloudEstimates, saveCloudEstimate } from "@/api/estimateCloudRepository";
 import { readCompanyBranding } from "@/domain/estimate/branding";
 import { estimatePdfBlob } from "@/domain/estimate/estimatePdf";
 
@@ -85,6 +87,33 @@ function FolderDocs({ folder }) {
 export default function Dashboard() {
   const { user } = useAuth();
   const [folders, setFolders] = useState([]);
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
+
+  async function syncEstimates() {
+    if (syncBusy) return;
+    setSyncBusy(true);
+    setSyncMessage("");
+    try {
+      const remote = await listCloudEstimates();
+      const remoteIds = new Set(remote.map((row) => row.id));
+      const local = listProjectFolders().map((folder) => readEstimate(folder.fileName, folder.fileSize)).filter(Boolean);
+      let uploaded = 0;
+      for (const estimate of local) {
+        if (!estimate.id || remoteIds.has(estimate.id)) continue;
+        await saveCloudEstimate(estimate);
+        uploaded += 1;
+      }
+      const imported = await importCloudEstimates(remote);
+      for (const estimate of imported) {
+        upsertProjectFolder({ projectName: estimate.header?.projectName || estimate.fileName, projectAddress: estimate.header?.projectAddress || "", fileName: estimate.fileName, fileSize: estimate.fileSize || 0 });
+      }
+      setFolders(listProjectFolders());
+      setSyncMessage(`Cloud sync: ${uploaded} uploaded, ${imported.length} imported. Existing local copies were not overwritten.`);
+    } catch (error) {
+      setSyncMessage(`Sync failed: ${error.message || "Please try again."}`);
+    } finally { setSyncBusy(false); }
+  }
 
   useEffect(() => {
     setFolders(listProjectFolders());
@@ -120,6 +149,8 @@ export default function Dashboard() {
           </div>
         </Link>
       )}
+
+      <div className="mt-4 flex flex-wrap items-center gap-3"><button type="button" disabled={syncBusy} onClick={() => void syncEstimates()} className="rounded-md border border-border bg-card px-4 py-2 text-sm font-semibold disabled:opacity-50">{syncBusy ? "Syncing..." : "Sync estimates across devices"}</button>{syncMessage && <p role="status" className="text-sm text-muted-foreground">{syncMessage}</p>}</div>
 
       <section className="mt-6">
         <div className="mb-3 flex items-baseline justify-between gap-3">

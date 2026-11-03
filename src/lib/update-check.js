@@ -187,6 +187,8 @@ export function startUpdateChecks() {
   let promptedSha = "";
   let inFlight = false;
   let cleared = false;
+  let pendingSha = "";
+  let consecutiveMatches = 0;
 
   const check = async () => {
     if (inFlight) return;
@@ -199,7 +201,15 @@ export function startUpdateChecks() {
         promptedSha,
         fetchImpl: fetch,
       });
-      if (decision.prompt) {
+      // Require two consecutive remote reads before interrupting active work.
+      if (decision.prompt && decision.reason === "newer-build") {
+        if (pendingSha === decision.targetSha) consecutiveMatches += 1;
+        else { pendingSha = decision.targetSha; consecutiveMatches = 1; }
+      } else if (!decision.prompt) {
+        pendingSha = "";
+        consecutiveMatches = 0;
+      }
+      if (decision.prompt && (decision.reason !== "newer-build" || consecutiveMatches >= 2)) {
         promptedSha = decision.targetSha;
         promptUpdate({
           targetSha: decision.targetSha,
@@ -222,6 +232,8 @@ export function startUpdateChecks() {
 
   void check();
   window.setInterval(check, UPDATE_CHECK_INTERVAL_MS);
+  // Re-check when the service worker activates a new app shell.
+  if (navigator.serviceWorker) navigator.serviceWorker.addEventListener("controllerchange", check);
   window.addEventListener("focus", check);
   window.addEventListener("online", check);
   window.addEventListener("pageshow", check);

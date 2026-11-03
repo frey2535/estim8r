@@ -5,6 +5,7 @@ import { refreshCurrentFlowApp } from "@/lib/appRefresh";
 export default function UpdateAvailablePrompt() {
   const [update, setUpdate] = useState(null);
   const [applying, setApplying] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const onUpdateAvailable = (event) => {
@@ -25,11 +26,9 @@ export default function UpdateAvailablePrompt() {
     setApplying(true);
     try {
       await refreshCurrentFlowApp({ targetSha: update?.targetSha || "" });
-    } catch {
-      const next = new URL(window.location.href);
-      next.searchParams.set("t", String(Date.now()));
-      if (update?.targetSha) next.searchParams.set("build", update.targetSha);
-      window.location.replace(next.toString());
+    } catch (cause) {
+      setError(cause?.message || "Unable to apply the update. Check your connection and try again.");
+      setApplying(false);
     }
   }, [applying, update]);
 
@@ -53,6 +52,7 @@ export default function UpdateAvailablePrompt() {
             <p className="text-sm text-muted-foreground mt-1">
               A newer version of Estim8r is ready. Your active work is saved before the update and restored when Estim8r reloads.
             </p>
+            {error && <p role="alert" className="mt-3 text-sm text-red-600">{error}</p>}
             <button
               type="button"
               onClick={applyUpdate}

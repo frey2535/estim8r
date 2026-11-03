@@ -89,11 +89,13 @@ export default function Dashboard() {
   const [folders, setFolders] = useState([]);
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
+  const [syncFailed, setSyncFailed] = useState(false);
 
   async function syncEstimates() {
     if (syncBusy) return;
     setSyncBusy(true);
     setSyncMessage("");
+    setSyncFailed(false);
     try {
       const remote = await listCloudEstimates();
       const remoteIds = new Set(remote.map((row) => row.id));
@@ -111,7 +113,13 @@ export default function Dashboard() {
       setFolders(listProjectFolders());
       setSyncMessage(`Cloud sync: ${uploaded} uploaded, ${imported.length} imported. Existing local copies were not overwritten.`);
     } catch (error) {
-      setSyncMessage(`Sync failed: ${error.message || "Please try again."}`);
+      const code = String(error?.code || "");
+      const detail = String(error?.message || "Cloud service unavailable.");
+      const missingSchema = code === "42P01" || code === "PGRST205" || code === "PGRST202" || /estim8r_estimate_snapshots|estim8r_save_snapshot|schema cache|does not exist/i.test(detail);
+      setSyncFailed(true);
+      setSyncMessage(missingSchema
+        ? "Cloud sync is not configured on the server. Your estimates are still saved on this device. You can open and export PDFs below; do not clear browser data."
+        : `Cloud sync unavailable (${code || "connection"}): ${detail}. Your local estimates remain accessible for PDF submission.`);
     } finally { setSyncBusy(false); }
   }
 
@@ -150,7 +158,7 @@ export default function Dashboard() {
         </Link>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center gap-3"><button type="button" disabled={syncBusy} onClick={() => void syncEstimates()} className="rounded-md border border-border bg-card px-4 py-2 text-sm font-semibold disabled:opacity-50">{syncBusy ? "Syncing..." : "Sync estimates across devices"}</button>{syncMessage && <p role="status" className="text-sm text-muted-foreground">{syncMessage}</p>}</div>
+      <div className="mt-4 flex flex-wrap items-center gap-3"><button type="button" disabled={syncBusy} onClick={() => void syncEstimates()} className="rounded-md border border-border bg-card px-4 py-2 text-sm font-semibold disabled:opacity-50">{syncBusy ? "Syncing..." : "Sync estimates across devices"}</button>{syncMessage && <p role={syncFailed ? "alert" : "status"} className={`text-sm ${syncFailed ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground"}`}>{syncMessage}</p>}</div>
 
       <section className="mt-6">
         <div className="mb-3 flex items-baseline justify-between gap-3">

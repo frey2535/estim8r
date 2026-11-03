@@ -6,6 +6,7 @@ import { compositeWage, defaultCrew, SHOP_HOURLY_RATE } from "@/domain/labor/emp
 import { clearLiveEstimateDraft, consumeRestoreJobRoute, openEstimateSession, persistShopWageBook, readActiveEstimate, readEstimate, readLiveEstimateDraft, readShopWageBook, writeEstimate, writeLiveEstimateDraft } from "@/domain/estimate/estimateStore";
 import { estimateFileNameForSave, estimateGrandTotal, isDrawingFileName } from "@/domain/estimate/projectDocuments";
 import SaveProjectDocuments from "@/components/estimate/SaveProjectDocuments";
+import EstimatePhotosPanel from "@/components/estimate/EstimatePhotosPanel";
 import EstimatePdfActions from "@/components/estimate/EstimatePdfActions";
 import EstimatePdfDesigner, { DEFAULT_PDF_DESIGN, normalizePdfDesign } from "@/components/estimate/EstimatePdfDesigner";
 import { listCompanyLaborUnits, listCustomLabor, listLaborLibrary, listLaborRates, listNamedCrews, saveLaborRates, saveNamedCrew } from "@/api/laborRepository";
@@ -511,7 +512,8 @@ export default function EstimateBuilder() {
         </p>
         <Link to="/takeoff" className="mt-2 inline-flex min-h-[44px] items-center text-base font-bold text-blue-700 dark:text-orange-400">Back to takeoff</Link>
         <div className="mt-3">
-          {ready && <SaveProjectDocuments estimate={draft} onProjectName={(name) => setHeaderField("projectName", name)} />}
+          {ready && <EstimatePhotosPanel estimateId={storedEstimateId} />
+            <SaveProjectDocuments estimate={draft} onProjectName={(name) => setHeaderField("projectName", name)} />}
         </div>
         </div>
         <details className="group w-full rounded-2xl border border-border bg-card p-3 shadow-sm lg:max-w-xs">

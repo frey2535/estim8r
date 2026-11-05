@@ -1,3 +1,4 @@
+import { sheetWheelIntent } from "./sheetViewport.js";
 import {
   isSheetPanDrag,
   pinchMidpoint,
@@ -81,3 +82,10 @@ assertClose(pinchMove.pan.x, 30, "pinch midpoint travel pans x");
 assertClose(pinchMove.pan.y, 20, "pinch midpoint travel pans y");
 
 if (!process.exitCode) console.log("sheetViewport ok");
+
+const wheel = sheetWheelIntent({ deltaY: -120, deltaMode: 0 });
+if (wheel.kind !== "zoom" || wheel.smooth) throw new Error("Mouse wheel must zoom discretely");
+const trackpad = sheetWheelIntent({ deltaX: 8, deltaY: 16, deltaMode: 0 });
+if (trackpad.kind !== "pan" || trackpad.x !== 8 || trackpad.y !== 16) throw new Error("Mac two-finger scroll must pan");
+const pinch = sheetWheelIntent({ deltaY: -5, ctrlKey: true });
+if (pinch.kind !== "zoom" || !pinch.smooth) throw new Error("Mac pinch must zoom smoothly");

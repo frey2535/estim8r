@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { platformRoleLabel } from "@/lib/platformIdentity";
 import { canManageEstim8rAccess } from "@/lib/ownerAccessRules";
 import { readLinkedBuildrCompanyId } from "@/lib/buildrCompany";
+import CompanyEmployees from "@/components/settings/CompanyEmployees";
 import AppearanceSettings from "@/components/settings/AppearanceSettings";
 import CompanyBrandingForm from "@/components/estimate/CompanyBrandingForm";
 import BuildrCompanyForm from "@/components/platform/BuildrCompanyForm";
@@ -43,6 +44,7 @@ export default function Settings() {
           <Button type="button" variant="outline" onClick={() => void logout()}>Sign out</Button>
         </div>
       </div>
+      <CompanyEmployees />
       <AppearanceSettings />
       <BuildrCompanyForm />
       <div id="estimate-pdf" className="mt-7 max-w-4xl scroll-mt-20">

@@ -123,6 +123,41 @@ export default function Dashboard() {
     } finally { setSyncBusy(false); }
   }
 
+  // Load shared company estimates automatically on sign-in, not only when a
+  // user manually clicks Sync. Do not upload arbitrary device-local drafts here:
+  // local browser data may belong to a previously signed-in account.
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    const loadCompanyEstimates = async () => {
+      try {
+        const remote = await listCloudEstimates();
+        if (cancelled) return;
+        const imported = await importCloudEstimates(remote);
+        if (cancelled) return;
+        for (const estimate of imported) {
+          upsertProjectFolder({
+            projectName: estimate.header?.projectName || estimate.fileName,
+            projectAddress: estimate.header?.projectAddress || "",
+            fileName: estimate.fileName,
+            fileSize: estimate.fileSize || 0,
+          });
+        }
+        setFolders(listProjectFolders());
+        setSyncFailed(false);
+        setSyncMessage(`Company estimates loaded: ${remote.length} available in cloud, ${imported.length} added to this device.`);
+      } catch (error) {
+        if (cancelled) return;
+        setSyncFailed(true);
+        setSyncMessage(`Unable to load company estimates: ${error?.message || "Cloud unavailable"}. Verify your account's company assignment and cloud database setup.`);
+      }
+    };
+    void loadCompanyEstimates();
+    const onFocus = () => { void loadCompanyEstimates(); };
+    window.addEventListener("focus", onFocus);
+    return () => { cancelled = true; window.removeEventListener("focus", onFocus); };
+  }, [user?.id]);
+
   useEffect(() => {
     setFolders(listProjectFolders());
     const refresh = () => setFolders(listProjectFolders());

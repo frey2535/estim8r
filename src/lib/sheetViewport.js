@@ -119,3 +119,20 @@ export function sheetPinchViewport({
     },
   });
 }
+
+/**
+ * macOS trackpads send high-frequency pixel wheel events for two-finger scroll,
+ * and ctrl+wheel for pinch-to-zoom. Traditional mouse wheels generally emit
+ * line-mode or large discrete vertical deltas. Preserve natural trackpad panning
+ * while keeping the mouse wheel zoom shortcut.
+ */
+export function sheetWheelIntent({ deltaX = 0, deltaY = 0, deltaMode = 0, ctrlKey = false, metaKey = false, shiftKey = false } = {}) {
+  const x = Number(deltaX) || 0;
+  const y = Number(deltaY) || 0;
+  const unit = deltaMode === 1 ? 16 : deltaMode === 2 ? 640 : 1;
+  if (ctrlKey || metaKey) return { kind: "zoom", delta: y * unit, smooth: true };
+  if (shiftKey || Math.abs(x) > 0.01 || (deltaMode === 0 && Math.abs(y) < 35)) {
+    return { kind: "pan", x: (x || (shiftKey ? y : 0)) * unit, y: shiftKey && !x ? 0 : y * unit };
+  }
+  return { kind: "zoom", delta: y * unit, smooth: false };
+}

@@ -167,6 +167,7 @@ import {
   pointerDistance,
   sheetPinchViewport,
   sheetZoomAboutPoint,
+  sheetWheelIntent,
 } from "@/lib/sheetViewport";
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -1262,17 +1263,23 @@ export default function TakeoffWorkspace() {
     const viewport = viewportRef.current?.getBoundingClientRect();
     if (!viewport?.width || !viewport?.height) return;
 
-    // Normal mouse wheel / trackpad: wheel up zooms in, wheel down zooms out.
-    // Keep the drawing point under the cursor in approximately the same screen
-    // position by compensating pan as the centered drawing grows/shrinks.
-    const direction = event.deltaY < 0 ? 1 : -1;
-    const step = event.ctrlKey ? 0.1 : 0.15;
+    const intent = sheetWheelIntent(event);
+    if (intent.kind === "pan") {
+      commitSheetViewport(zoomRef.current, {
+        x: panRef.current.x - intent.x,
+        y: panRef.current.y - intent.y,
+      });
+      return;
+    }
+    // Smooth pinch zoom is proportional to gesture magnitude; mouse wheel
+    // keeps predictable discrete zoom steps, anchored beneath the cursor.
     const currentZoom = zoomRef.current;
-    const nextZoom = Math.min(
-      TAKEOFF_MAX_ZOOM,
-      Math.max(TAKEOFF_MIN_ZOOM, Number((currentZoom + direction * step).toFixed(2))),
-    );
-    if (nextZoom === currentZoom) return;
+    const nextZoom = Math.min(TAKEOFF_MAX_ZOOM, Math.max(TAKEOFF_MIN_ZOOM,
+      intent.smooth
+        ? Number((currentZoom * Math.exp(-intent.delta * 0.008)).toFixed(3))
+        : Number((currentZoom + (intent.delta < 0 ? 0.15 : -0.15)).toFixed(3)),
+    ));
+    if (!intent.delta || nextZoom === currentZoom) return;
 
     const next = sheetZoomAboutPoint({
       zoom: currentZoom,

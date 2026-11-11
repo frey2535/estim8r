@@ -42,3 +42,26 @@ revoke all on function public.estim8r_company_employees() from public;
 revoke all on function public.estim8r_invite_company_employee(text) from public;
 grant execute on function public.estim8r_company_employees() to authenticated;
 grant execute on function public.estim8r_invite_company_employee(text) to authenticated;
+
+-- A pending invitation is not a membership. Acceptance requires a signed-in,
+-- email-confirmed account matching the invitation exactly.
+create or replace function public.estim8r_accept_company_invitation()
+returns boolean language plpgsql security definer set search_path=public as $$
+declare v_email text; v_confirmed timestamptz; v_org uuid; v_existing uuid; v_matches integer;
+begin
+ if auth.uid() is null then raise exception 'Sign in first'; end if;
+ select lower(u.email),u.email_confirmed_at into v_email,v_confirmed
+ from auth.users u where u.id=auth.uid();
+ if v_confirmed is null then raise exception 'Verify your email before joining a company'; end if;
+ select p.org_id into v_existing from public.profiles p where p.id=auth.uid();
+ if v_existing is not null then raise exception 'Account already belongs to an organization'; end if;
+ select count(*),min(i.org_id) into v_matches,v_org
+ from public.estim8r_company_invitations i where i.email=v_email;
+ if v_matches <> 1 then raise exception 'Exactly one company invitation is required'; end if;
+ update public.profiles p set org_id=v_org where p.id=auth.uid() and p.org_id is null;
+ if not found then raise exception 'Account profile missing or company already assigned'; end if;
+ delete from public.estim8r_company_invitations i where i.org_id=v_org and i.email=v_email;
+ return true;
+end $$;
+revoke all on function public.estim8r_accept_company_invitation() from public;
+grant execute on function public.estim8r_accept_company_invitation() to authenticated;

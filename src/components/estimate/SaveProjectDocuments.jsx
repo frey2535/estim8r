@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,7 +15,6 @@ import { readLinkedBuildrCompanyId } from "@/lib/buildrCompany";
 import { readEstimate, writeEstimate } from "@/domain/estimate/estimateStore";
 import {
   buildMarkupPages,
-  listProjectFolders,
   makeEstimateId,
   buildrSyncFromResult,
   canSaveProjectDocuments,
@@ -45,7 +44,7 @@ function storedEstimate(estimate, storageName, fileSize) {
 }
 
 export default function SaveProjectDocuments({ estimate, onProjectName }) {
-  const { user, authChecked } = useAuth();
+  const { user } = useAuth();
   const fileName = estimate?.fileName || "";
   const fileSize = estimate?.fileSize || 0;
   const projectName = estimate?.header?.projectName || "";

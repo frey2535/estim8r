@@ -9,7 +9,7 @@ export default function CompanyEmployees() {
 
   async function load() {
     try {
-      const { data, error } = await requireSupabase().rpc("estim8r_company_employees");
+      // Claim a pending invitation automatically for the signed-in, verified email.\n      const { error: activationError } = await requireSupabase().rpc("estim8r_activate_invited_employee");\n      if (activationError) throw activationError;\n      const { data, error } = await requireSupabase().rpc("estim8r_company_employees");
       if (error) throw error;
       setEmployees(data || []);
       setMessage("");
@@ -20,18 +20,6 @@ export default function CompanyEmployees() {
 
   useEffect(() => { void load(); }, []);
 
-  async function acceptInvitation() {
-    setBusy(true);
-    try {
-      const { error } = await requireSupabase().rpc("estim8r_accept_company_invitation");
-      if (error) throw error;
-      setMessage("Company membership activated. Refresh Estim8r to load company estimates.");
-      await load();
-    } catch (error) {
-      setMessage(error.message || "Unable to accept invitation.");
-    } finally { setBusy(false); }
-  }
-
   async function invite(event) {
     event.preventDefault();
     setBusy(true);
@@ -39,7 +27,7 @@ export default function CompanyEmployees() {
       const { error } = await requireSupabase().rpc("estim8r_invite_company_employee", { p_email: email.trim().toLowerCase() });
       if (error) throw error;
       setEmail("");
-      setMessage("Invitation recorded. Ask the employee to sign in with a verified email and select Accept my company invitation. No invitation email has been sent.");
+      setMessage("Employee added. They will join the company automatically after signing in with their verified email. No invitation email has been sent.");
       await load();
     } catch (error) {
       setMessage(error.message || "Unable to invite employee.");

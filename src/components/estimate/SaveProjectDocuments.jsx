@@ -15,6 +15,8 @@ import { readLinkedBuildrCompanyId } from "@/lib/buildrCompany";
 import { readEstimate, writeEstimate } from "@/domain/estimate/estimateStore";
 import {
   buildMarkupPages,
+  listProjectFolders,
+  makeEstimateId,
   buildrSyncFromResult,
   canSaveProjectDocuments,
   decideSaveDestination,
@@ -160,7 +162,7 @@ export default function SaveProjectDocuments({ estimate, onProjectName }) {
   /**
    * @param {{ forceLocal?: boolean; force?: boolean; nameOverride?: string; }} [options]
    */
-  async function runSave({ forceLocal = false, force = false, nameOverride } = {}) {
+  async function runSave({ forceLocal = true, force = false, nameOverride } = {}) {
     const name = String(nameOverride || projectName || "").trim();
     if (!estimate) return;
     if (!canSaveProjectDocuments({ projectName: name })) {
@@ -260,12 +262,8 @@ export default function SaveProjectDocuments({ estimate, onProjectName }) {
     }
   }
 
-  useEffect(() => {
-    if (!authChecked) return undefined;
-    if (!canSaveProjectDocuments({ projectName })) return undefined;
-    const timer = window.setTimeout(() => { void runSave(); }, 800);
-    return () => window.clearTimeout(timer);
-  }, [fingerprint, user?.email, user?.buildr_company_id, authChecked]);
+  // Editing an estimate must not create additional folder entries or Buildr
+  // projects. Save and Buildr transfer are explicit user actions only.
 
   async function acceptCreate() {
     setPromptOpen(false);
@@ -291,6 +289,33 @@ export default function SaveProjectDocuments({ estimate, onProjectName }) {
     setOk("Saved in the Estimates folder under this project name.");
   }
 
+  async function saveAnotherCopy() {
+    if (!canSaveProjectDocuments({ projectName })) {
+      requestSave();
+      return;
+    }
+    setBusy(true);
+    try {
+      const name = `${projectName} (copy ${new Date().toISOString().replace(/[:.]/g, "-")})`;
+      const copyName = estimateFileNameForSave({ fileName: "", projectName: name });
+      const copy = writeEstimate({
+        ...estimate,
+        id: makeEstimateId(),
+        fileName: copyName,
+        fileSize: 0,
+        buildrSync: null,
+        header: { ...estimate.header, projectName: name },
+      });
+      upsertProjectFolder({
+        projectName: name, projectAddress, fileName: copy.fileName,
+        fileSize: copy.fileSize, savedTo: "estim8r",
+      });
+      setOk(`Created a separate estimate copy named "${name}". The original remains unchanged.`);
+    } catch (error) {
+      setErrorStatus(error?.message || "Unable to create estimate copy.");
+    } finally { setBusy(false); }
+  }
+
   function requestSave() {
     if (!canSaveProjectDocuments({ projectName })) {
       setDraftName(projectName);
@@ -299,7 +324,7 @@ export default function SaveProjectDocuments({ estimate, onProjectName }) {
       setErrorStatus(saveRequiresProjectName({ projectName }));
       return;
     }
-    void runSave({ force: true });
+    void runSave({ force: true, forceLocal: true });
   }
 
   function acceptName(event) {
@@ -314,7 +339,7 @@ export default function SaveProjectDocuments({ estimate, onProjectName }) {
     setNameError("");
     setNameOpen(false);
     onProjectName?.(name);
-    void runSave({ force: true, nameOverride: name });
+    void runSave({ force: true, forceLocal: true, nameOverride: name });
   }
 
   const nameMessage = saveRequiresProjectName({ projectName });
@@ -328,6 +353,14 @@ export default function SaveProjectDocuments({ estimate, onProjectName }) {
         className="w-fit rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-60 dark:bg-orange-500"
       >
         {busy ? "Saving…" : "Save estimate"}
+      </button>
+      <button type="button" disabled={busy} onClick={() => void saveAnotherCopy()}
+        className="w-fit rounded-lg border border-border px-4 py-2 text-sm font-semibold disabled:opacity-60">
+        Save another copy
+      </button>
+      <button type="button" disabled={busy} onClick={() => void runSave({ force: true, forceLocal: false })}
+        className="w-fit rounded-lg border border-border px-4 py-2 text-sm font-semibold disabled:opacity-60">
+        Send to Buildr
       </button>
       <p
         className={`text-sm ${statusKind === "error" ? "text-destructive" : "text-muted-foreground"}`}

@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { requireSupabase } from "@/api/supabaseClient";
+import { base44 } from "@/api/base44Client";
 
 export default function CompanyEmployees() {
   const [employees, setEmployees] = useState([]);
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [resettingEmail, setResettingEmail] = useState("");
   const [isCompanyAdmin, setIsCompanyAdmin] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
 
@@ -35,13 +37,11 @@ export default function CompanyEmployees() {
     if (!isCompanyAdmin) return;
     if (action === "delete" && !window.confirm(`Remove ${employeeEmail} from this company's access list? Their login account will be preserved.`)) return;
     setBusy(true);
+    if (action === "reset") { setResettingEmail(employeeEmail); setMessage(`Requesting password reset for ${employeeEmail}…`); }
     try {
       if (action === "reset") {
-        const { error } = await requireSupabase().auth.resetPasswordForEmail(employeeEmail, {
-          redirectTo: window.location.origin + "/",
-        });
-        if (error) throw error;
-        setMessage("Password reset requested. If the account exists, an email will be sent.");
+        await base44.auth.resetPasswordRequest(employeeEmail);
+        setMessage(`Password reset requested for ${employeeEmail}. Check that employee's inbox and spam folder. The link opens Estim8r's New Password page. If no email arrives, verify Supabase email delivery and redirect settings.`);
       } else {
         const { error } = await requireSupabase().rpc("estim8r_manage_company_employee", {
           p_email: employeeEmail, p_action: action,
@@ -52,7 +52,7 @@ export default function CompanyEmployees() {
       }
     } catch (error) {
       setMessage(error.message || "Unable to update company access.");
-    } finally { setBusy(false); }
+    } finally { setBusy(false); setResettingEmail(""); }
   }
 
   async function invite(event) {
@@ -83,7 +83,7 @@ export default function CompanyEmployees() {
       <div><span className="font-medium">{row.email}</span><span className="ml-3 text-muted-foreground">{row.status} · {row.role}</span></div>
       {isCompanyAdmin && row.role !== "owner" && row.role !== "admin" && row.role !== "company_admin" && <div className="flex flex-wrap gap-2">
         {row.status === "revoked" ? <button type="button" disabled={busy} onClick={() => void manageEmployee(row.email, "grant")} className="rounded border px-2 py-1">Restore access</button> : <button type="button" disabled={busy} onClick={() => void manageEmployee(row.email, "revoke")} className="rounded border px-2 py-1">Revoke</button>}
-        <button type="button" disabled={busy} onClick={() => void manageEmployee(row.email, "reset")} className="rounded border px-2 py-1">Reset password</button>
+        <button type="button" disabled={busy} onClick={() => void manageEmployee(row.email, "reset")} className="rounded border px-2 py-1">{resettingEmail === row.email ? "Sending reset…" : "Reset password"}</button>
         <button type="button" disabled={busy} onClick={() => void manageEmployee(row.email, "delete")} className="rounded border px-2 py-1 text-destructive">Remove</button>
       </div>}
     </div>)}</div>

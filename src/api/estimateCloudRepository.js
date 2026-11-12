@@ -5,6 +5,9 @@ async function currentOrg() {
   const client = requireSupabase();
   const { data: auth, error: authError } = await client.auth.getUser();
   if (authError || !auth?.user) throw new Error("Sign in to synchronize estimates.");
+  // Activate a preapproved, verified employee before resolving company data.
+  const { error: activationError } = await client.rpc("estim8r_activate_invited_employee");
+  if (activationError) throw activationError;
   const { data, error } = await client.from("profiles").select("org_id").eq("id", auth.user.id).single();
   if (error || !data?.org_id) throw new Error("No company linked to this account.");
   return data.org_id;

@@ -38,8 +38,12 @@ begin
     raise exception 'Cannot change another company administrator';
   end if;
   if p_action in ('revoke','delete') then
-    insert into public.estim8r_company_access_blocks(org_id,email)
-    values(v_org,v_email) on conflict do nothing;
+    if p_action = 'revoke' then
+      insert into public.estim8r_company_access_blocks(org_id,email)
+      values(v_org,v_email) on conflict do nothing;
+    else
+      delete from public.estim8r_company_access_blocks where org_id=v_org and email=v_email;
+    end if;
     delete from public.estim8r_company_invitations
     where org_id=v_org and lower(email)=v_email;
     -- Remove tenant membership. Do not delete the shared auth account.
@@ -63,8 +67,7 @@ revoke all on function public.estim8r_manage_company_employee(text,text) from pu
 grant execute on function public.estim8r_manage_company_employee(text,text) to authenticated;
 
 -- The directory includes blocked accounts and reflects their actual state.
-drop function if exists public.estim8r_company_employees();
-create function public.estim8r_company_employees()
+create or replace function public.estim8r_company_employees()
 returns table(email text,role text,status text)
 language plpgsql security definer set search_path=public as $$
 declare v_org uuid;

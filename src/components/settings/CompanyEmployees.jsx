@@ -23,6 +23,29 @@ export default function CompanyEmployees() {
 
   useEffect(() => { void load(); }, []);
 
+  async function manageEmployee(employeeEmail, action) {
+    if (action === "delete" && !window.confirm(`Remove ${employeeEmail} from this company's access list? Their login account will be preserved.`)) return;
+    setBusy(true);
+    try {
+      if (action === "reset") {
+        const { error } = await requireSupabase().auth.resetPasswordForEmail(employeeEmail, {
+          redirectTo: window.location.origin + "/",
+        });
+        if (error) throw error;
+        setMessage("Password reset requested. If the account exists, an email will be sent.");
+      } else {
+        const { error } = await requireSupabase().rpc("estim8r_manage_company_employee", {
+          p_email: employeeEmail, p_action: action,
+        });
+        if (error) throw error;
+        await load();
+        setMessage(`Company access ${action === "grant" ? "granted" : action === "revoke" ? "revoked" : "removed"} for ${employeeEmail}.`);
+      }
+    } catch (error) {
+      setMessage(error.message || "Unable to update company access.");
+    } finally { setBusy(false); }
+  }
+
   async function invite(event) {
     event.preventDefault();
     setBusy(true);
@@ -45,6 +68,13 @@ export default function CompanyEmployees() {
       <button type="submit" disabled={busy} className="rounded-md bg-primary px-4 py-2 text-primary-foreground">{busy ? "Adding…" : "Add employee"}</button>
     </form>
     {message && <p role="status" className="mt-3 text-sm">{message}</p>}
-    <div className="mt-4 space-y-2">{employees.map(row => <div key={row.email} className="flex flex-wrap justify-between gap-2 rounded-md border border-border p-3 text-sm"><span>{row.email}</span><span>{row.status} · {row.role}</span></div>)}</div>
+    <div className="mt-4 space-y-2">{employees.map(row => <div key={row.email} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-3 text-sm">
+      <div><span className="font-medium">{row.email}</span><span className="ml-3 text-muted-foreground">{row.status} · {row.role}</span></div>
+      {row.role !== "owner" && row.role !== "admin" && row.role !== "company_admin" && <div className="flex flex-wrap gap-2">
+        {row.status === "revoked" ? <button type="button" disabled={busy} onClick={() => void manageEmployee(row.email, "grant")} className="rounded border px-2 py-1">Restore access</button> : <button type="button" disabled={busy} onClick={() => void manageEmployee(row.email, "revoke")} className="rounded border px-2 py-1">Revoke</button>}
+        {row.status === "active" && <button type="button" disabled={busy} onClick={() => void manageEmployee(row.email, "reset")} className="rounded border px-2 py-1">Reset password</button>}
+        <button type="button" disabled={busy} onClick={() => void manageEmployee(row.email, "delete")} className="rounded border px-2 py-1 text-destructive">Remove</button>
+      </div>}
+    </div>)}</div>
   </section>;
 }

@@ -31,10 +31,9 @@ begin
  delete from public.estim8r_company_access_blocks
  where org_id=v_org and email=v_email;
  if v_uid is not null and v_confirmed is not null then
-   insert into public.profiles(id,org_id)
-   values(v_uid,v_org)
-   on conflict(id) do update set org_id=excluded.org_id
-   where public.profiles.org_id is null;
+   -- Existing accounts must have a profile; do not synthesize one without required fields.
+   update public.profiles set org_id=v_org
+   where id=v_uid and org_id is null;
    if not exists(select 1 from public.profiles where id=v_uid and org_id=v_org) then
      raise exception 'Unable to associate employee account';
    end if;

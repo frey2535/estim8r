@@ -63,7 +63,7 @@ export default function CompanyEmployees() {
       const { error } = await requireSupabase().rpc("estim8r_invite_company_employee", { p_email: email.trim().toLowerCase() });
       if (error) throw error;
       setEmail("");
-      setMessage("Employee added. They will join the company automatically after signing in with their verified email. No invitation email has been sent.");
+      setMessage("Email preauthorized. Access becomes active automatically when the employee signs in with a verified matching account. No invitation email was sent.");
       await load();
     } catch (error) {
       setMessage(error.message || "Unable to invite employee.");

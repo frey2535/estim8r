@@ -8,6 +8,7 @@ export default function CompanyEmployees() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [resettingEmail, setResettingEmail] = useState("");
+  const [changingEmail, setChangingEmail] = useState("");
   const [isCompanyAdmin, setIsCompanyAdmin] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
 
@@ -37,7 +38,11 @@ export default function CompanyEmployees() {
     if (!isCompanyAdmin) return;
     if (action === "delete" && !window.confirm(`Remove ${employeeEmail} from this company's access list? Their login account will be preserved.`)) return;
     setBusy(true);
-    if (action === "reset") { setResettingEmail(employeeEmail); setMessage(`Requesting password reset for ${employeeEmail}…`); }
+    if (action === "reset" || action === "change") {
+      if (action === "reset") setResettingEmail(employeeEmail);
+      else setChangingEmail(employeeEmail);
+      setMessage(`Requesting secure password ${action === "change" ? "change" : "reset"} for ${employeeEmail}…`);
+    }
     try {
       if (action === "reset") {
         await base44.auth.resetPasswordRequest(employeeEmail);
@@ -52,7 +57,7 @@ export default function CompanyEmployees() {
       }
     } catch (error) {
       setMessage(error.message || "Unable to update company access.");
-    } finally { setBusy(false); setResettingEmail(""); }
+    } finally { setBusy(false); setResettingEmail(""); setChangingEmail(""); }
   }
 
   async function invite(event) {
@@ -84,6 +89,7 @@ export default function CompanyEmployees() {
       {isCompanyAdmin && row.role !== "owner" && row.role !== "admin" && row.role !== "company_admin" && <div className="flex flex-wrap gap-2">
         {row.status === "revoked" ? <button type="button" disabled={busy} onClick={() => void manageEmployee(row.email, "grant")} className="rounded border px-2 py-1">Restore access</button> : <button type="button" disabled={busy} onClick={() => void manageEmployee(row.email, "revoke")} className="rounded border px-2 py-1">Revoke</button>}
         <button type="button" disabled={busy} onClick={() => void manageEmployee(row.email, "reset")} className="rounded border px-2 py-1">{resettingEmail === row.email ? "Sending reset…" : "Reset password"}</button>
+        <button type="button" disabled={busy} onClick={() => void manageEmployee(row.email, "change")} className="rounded border px-2 py-1">{changingEmail === row.email ? "Sending change link…" : "Change password"}</button>
         <button type="button" disabled={busy} onClick={() => void manageEmployee(row.email, "delete")} className="rounded border px-2 py-1 text-destructive">Remove</button>
       </div>}
     </div>)}</div>

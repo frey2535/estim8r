@@ -9,7 +9,10 @@ export default function CompanyEmployees() {
 
   async function load() {
     try {
-      // Claim a pending invitation automatically for the signed-in, verified email.\n      const { error: activationError } = await requireSupabase().rpc("estim8r_activate_invited_employee");\n      if (activationError) throw activationError;\n      const { data, error } = await requireSupabase().rpc("estim8r_company_employees");
+      // Claim a pending invitation automatically for the signed-in, verified email.
+      const { error: activationError } = await requireSupabase().rpc("estim8r_activate_invited_employee");
+      if (activationError) throw activationError;
+      const { data, error } = await requireSupabase().rpc("estim8r_company_employees");
       if (error) throw error;
       setEmployees(data || []);
       setMessage("");
@@ -37,7 +40,6 @@ export default function CompanyEmployees() {
   return <section id="company-employees" className="mt-7 max-w-4xl rounded-2xl border border-border bg-card p-6">
     <h2 className="text-lg font-bold">Company Employees</h2>
     <p className="mt-2 text-sm text-muted-foreground">Company administrators can add employees to their organization. Employee access is enforced by the server.</p>
-    <button type="button" disabled={busy} onClick={() => void acceptInvitation()} className="mt-3 rounded-md border border-border px-3 py-2 text-sm">Accept my company invitation</button>
     <form onSubmit={invite} className="mt-4 flex flex-wrap gap-2">
       <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="employee@company.com" aria-label="Employee email" className="min-h-10 min-w-60 flex-1 rounded-md border border-border bg-background px-3" />
       <button type="submit" disabled={busy} className="rounded-md bg-primary px-4 py-2 text-primary-foreground">{busy ? "Adding…" : "Add employee"}</button>

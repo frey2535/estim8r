@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { DragDropContext, Draggable, Droppable } from "@hello-pangea/dnd";
 import { Plus } from "lucide-react";
 import { compositeWage, defaultCrew, SHOP_HOURLY_RATE } from "@/domain/labor/employeeClasses";
-import { clearLiveEstimateDraft, consumeRestoreJobRoute, openEstimateSession, persistShopWageBook, readActiveEstimate, readEstimate, readLiveEstimateDraft, readShopWageBook, writeEstimate, writeLiveEstimateDraft } from "@/domain/estimate/estimateStore";
+import { clearLiveEstimateDraft, consumeRestoreJobRoute, openEstimateSession, persistShopWageBook, readActiveEstimate, readEstimate, readLiveEstimateDraft, readShopWageBook, writeLiveEstimateDraft } from "@/domain/estimate/estimateStore";
 import { estimateFileNameForSave, estimateGrandTotal, isDrawingFileName } from "@/domain/estimate/projectDocuments";
 import SaveProjectDocuments from "@/components/estimate/SaveProjectDocuments";
 import EstimatePhotosPanel from "@/components/estimate/EstimatePhotosPanel";
@@ -218,42 +218,8 @@ export default function EstimateBuilder() {
   const storedBuildrProjectId = storedEstimate?.buildrSync?.projectId || "";
   const storedBuildrInvoiceId = storedEstimate?.buildrSync?.invoiceId || "";
 
-  useEffect(() => {
-    if (!ready) return;
-    if (!storageFileName) return;
-    writeEstimate({
-      version: 1,
-      id: storedEstimate?.id,
-      buildrSync: storedEstimate?.buildrSync || null,
-      fileName: storageFileName,
-      fileSize: meta.fileSize || 0,
-      header,
-      crew,
-      factors,
-      namedCrewId,
-      contingency: Number(contingency) || 0,
-      materialMarkup: Number(materialMarkup) || 0,
-      overhead: Number(overhead) || 0,
-      profit: Number(profit) || 0,
-      bondInsurance: Number(bondInsurance) || 0,
-      lines,
-      itemized,
-      includeTotalsCard,
-      visibleTotals,
-      separateFromTakeoff: true,
-      scopeEdited: meta.scopeEdited,
-      trueTakeoff,
-      completenessChecklist,
-      assemblies,
-      installationConditions,
-      supplierPriceBooks,
-      pdfDesign,
-    });
-  }, [ready, header, crew, lines, contingency, materialMarkup, overhead, profit, bondInsurance, itemized, includeTotalsCard, visibleTotals, meta, factors, namedCrewId, trueTakeoff, completenessChecklist, assemblies, installationConditions, supplierPriceBooks, pdfDesign, storageFileName, storedEstimateId, storedBuildrProjectId, storedBuildrInvoiceId]);
 
   const draftRef = useRef(null);
-  const storageFileNameRef = useRef(storageFileName);
-  storageFileNameRef.current = storageFileName;
 
   const draft = useMemo(() => ({
     version: 1,
@@ -286,12 +252,17 @@ export default function EstimateBuilder() {
 
   draftRef.current = draft;
 
+  // In-progress edits are crash-recovery drafts, not new saved estimates.
+  useEffect(() => {
+    if (ready) writeLiveEstimateDraft(draft);
+  }, [ready, draft]);
+
   useEffect(() => {
     const preserve = () => {
       const current = draftRef.current;
       if (!current) return;
       writeLiveEstimateDraft(current);
-      if (storageFileNameRef.current) writeEstimate(current);
+      // Do not publish a saved estimate or cloud snapshot on refresh.
     };
     window.addEventListener("estim8r-before-update", preserve);
     return () => window.removeEventListener("estim8r-before-update", preserve);

@@ -99,6 +99,12 @@ export function activateEstimate(fileName, fileSize) {
  */
 export function deleteStoredEstimate(fileName, fileSize) {
   const key = estimateStorageKey(fileName, fileSize);
+  const existing = readJson(key);
+  if (existing?.id) {
+    window.clearTimeout(cloudTimers.get(existing.id));
+    cloudTimers.delete(existing.id);
+    cloudRevisions.delete(existing.id);
+  }
   localStorage.removeItem(key);
   if (localStorage.getItem(ACTIVE_ESTIMATE_KEY) === key) localStorage.removeItem(ACTIVE_ESTIMATE_KEY);
 }

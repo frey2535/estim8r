@@ -13,7 +13,7 @@ import {
   upsertProjectFolder,
 } from "@/domain/estimate/projectDocuments";
 import { activateEstimate, deleteStoredEstimate, readEstimate } from "@/domain/estimate/estimateStore";
-import { listCloudEstimates, importCloudEstimates, saveCloudEstimate } from "@/api/estimateCloudRepository";
+import { listCloudEstimates, importCloudEstimates, saveCloudEstimate, deleteCloudEstimate } from "@/api/estimateCloudRepository";
 import { readCompanyBranding } from "@/domain/estimate/branding";
 import { estimatePdfBlob } from "@/domain/estimate/estimatePdf";
 
@@ -88,8 +88,31 @@ export default function Dashboard() {
   const { user } = useAuth();
   const [folders, setFolders] = useState([]);
   const [syncBusy, setSyncBusy] = useState(false);
+  const [deletingFolderId, setDeletingFolderId] = useState(null);
   const [syncMessage, setSyncMessage] = useState("");
   const [syncFailed, setSyncFailed] = useState(false);
+
+  async function deleteEstimateFolder(folder) {
+    if (!window.confirm(`Permanently delete "${folder.projectName || "this estimate"}" from the Estimates folder and company cloud?`)) return;
+    setDeletingFolderId(folder.id);
+    setSyncMessage("");
+    try {
+      const saved = readEstimate(folder.fileName, folder.fileSize);
+      if (saved?.id) await deleteCloudEstimate(saved.id);
+      deleteStoredEstimate(folder.fileName, folder.fileSize);
+      deleteProjectFolder(folder);
+      await deleteDrawingFile(folder.fileName, folder.fileSize);
+      setFolders(listProjectFolders());
+      setSyncFailed(false);
+      setSyncMessage("Estimate deleted from this device and company cloud.");
+    } catch (error) {
+      setSyncFailed(true);
+      setSyncMessage(`Delete was not completed: ${error?.message || "Unknown error"}. The estimate has been preserved where possible. Verify cloud delete permissions and try again.`);
+      setFolders(listProjectFolders());
+    } finally {
+      setDeletingFolderId(null);
+    }
+  }
 
   async function syncEstimates() {
     if (syncBusy) return;
@@ -222,13 +245,8 @@ export default function Dashboard() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      if (!window.confirm(`Delete ${folder.projectName || "this project"} from the Estimates folder?`)) return;
-                      deleteStoredEstimate(folder.fileName, folder.fileSize);
-                      deleteProjectFolder(folder);
-                      void deleteDrawingFile(folder.fileName, folder.fileSize).catch(() => {});
-                      setFolders(listProjectFolders());
-                    }}
+                    disabled={deletingFolderId !== null}
+                    onClick={() => void deleteEstimateFolder(folder)}
                     className="inline-flex min-h-[44px] items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                     aria-label={`Delete ${folder.projectName || "project"}`}
                   >

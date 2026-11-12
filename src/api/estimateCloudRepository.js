@@ -44,6 +44,15 @@ export async function saveCloudEstimate(estimate, expectedRevision = null) {
   return data;
 }
 
+export async function deleteCloudEstimate(id) {
+  if (!id) throw new Error("Estimate ID required for deletion.");
+  const client = requireSupabase();
+  const orgId = await currentOrg();
+  const { error } = await client.from("estim8r_estimate_snapshots")
+    .delete().eq("id", id).eq("org_id", orgId);
+  if (error) throw error;
+}
+
 /** Import only records that do not already exist locally. Never overwrite unsaved device work. */
 export async function importCloudEstimates(rows) {
   const imported = [];

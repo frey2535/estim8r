@@ -53,7 +53,7 @@ export default function CompanyEmployees() {
       const { error } = await requireSupabase().rpc("estim8r_invite_company_employee", { p_email: email.trim().toLowerCase() });
       if (error) throw error;
       setEmail("");
-      setMessage("Employee added. They will join the company automatically after signing in with their verified email. No invitation email has been sent.");
+      setMessage("Email preauthorized. Access becomes active automatically when the employee signs in with a verified matching account. No invitation email was sent.");
       await load();
     } catch (error) {
       setMessage(error.message || "Unable to invite employee.");
@@ -69,7 +69,7 @@ export default function CompanyEmployees() {
     </form>
     {message && <p role="status" className="mt-3 text-sm">{message}</p>}
     <div className="mt-4 space-y-2">{employees.map(row => <div key={row.email} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-3 text-sm">
-      <div><span className="font-medium">{row.email}</span><span className="ml-3 text-muted-foreground">{row.status} · {row.role}</span></div>
+      <div><span className="font-medium">{row.email}</span><span className="ml-3 text-muted-foreground">{row.status === "preauthorized" ? "Preauthorized — awaiting verified account" : row.status === "active" ? "Active" : row.status === "revoked" ? "Revoked" : row.status === "pending_verification" ? "Pending email verification" : row.status} · {row.role}</span></div>
       {row.role !== "owner" && row.role !== "admin" && row.role !== "company_admin" && <div className="flex flex-wrap gap-2">
         {row.status === "revoked" ? <button type="button" disabled={busy} onClick={() => void manageEmployee(row.email, "grant")} className="rounded border px-2 py-1">Restore access</button> : <button type="button" disabled={busy} onClick={() => void manageEmployee(row.email, "revoke")} className="rounded border px-2 py-1">Revoke</button>}
         {row.status === "active" && <button type="button" disabled={busy} onClick={() => void manageEmployee(row.email, "reset")} className="rounded border px-2 py-1">Reset password</button>}

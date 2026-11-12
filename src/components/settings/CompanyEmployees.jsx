@@ -83,7 +83,7 @@ export default function CompanyEmployees() {
       <div><span className="font-medium">{row.email}</span><span className="ml-3 text-muted-foreground">{row.status} · {row.role}</span></div>
       {isCompanyAdmin && row.role !== "owner" && row.role !== "admin" && row.role !== "company_admin" && <div className="flex flex-wrap gap-2">
         {row.status === "revoked" ? <button type="button" disabled={busy} onClick={() => void manageEmployee(row.email, "grant")} className="rounded border px-2 py-1">Restore access</button> : <button type="button" disabled={busy} onClick={() => void manageEmployee(row.email, "revoke")} className="rounded border px-2 py-1">Revoke</button>}
-        {row.status === "active" && <button type="button" disabled={busy} onClick={() => void manageEmployee(row.email, "reset")} className="rounded border px-2 py-1">Reset password</button>}
+        <button type="button" disabled={busy} onClick={() => void manageEmployee(row.email, "reset")} className="rounded border px-2 py-1">Reset password</button>
         <button type="button" disabled={busy} onClick={() => void manageEmployee(row.email, "delete")} className="rounded border px-2 py-1 text-destructive">Remove</button>
       </div>}
     </div>)}</div>

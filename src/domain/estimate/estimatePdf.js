@@ -274,14 +274,14 @@ export function buildEstimatePdf(estimate, brandingInput) {
   const headerBg = rgbTuple(design.headerFillColor || branding.headerColor, [17, 24, 39]);
   const darkHeader = isDarkRgb(headerBg);
   /** @type {[number, number, number]} */
-  const headerText = darkHeader ? [255, 255, 255] : [17, 24, 39];
+  const headerText = rgbTuple(branding.headerTextColor, darkHeader ? [255, 255, 255] : [17, 24, 39]);
   /** @type {[number, number, number]} */
   const headerSub = darkHeader ? [209, 213, 219] : [55, 65, 81];
   /** @type {[number, number, number]} */
-  const headerAccent = darkHeader ? [249, 115, 22] : [234, 88, 12];
+  const headerAccent = rgbTuple(branding.accentColor, darkHeader ? [249, 115, 22] : [234, 88, 12]);
   const docBg = rgbTuple(branding.pageColor, [255, 255, 255]);
   const docText = rgbTuple(branding.textColor, [17, 24, 39]);
-  const border = rgbTuple(design.cardBorderColor || "#e5e7eb", [229, 231, 235]);
+  const border = rgbTuple(design.cardBorderColor || branding.secondaryColor, [229, 231, 235]);
   /** @type {[number, number, number]} */
   const stripe = [249, 250, 251];
   const cardFill = rgbTuple(design.cardFillColor || branding.cardColor || "#f8fafc", [248, 250, 252]);
@@ -310,9 +310,9 @@ export function buildEstimatePdf(estimate, brandingInput) {
     logoH *= scale;
   }
   const reservedLogoH = branding.logoDataUrl ? logoH : 52;
-  const headerPad = Math.max(0, Math.min(40, Number(design.headerPaddingPt) || 10));
+  const headerPad = Math.max(0, Math.min(40, Number(design.headerPaddingPt ?? 10)));
   const showHeader = design.showHeader !== false;
-  const autoHeaderH = headerPad * 2 + reservedLogoH + 42;
+  const autoHeaderH = Math.max(branding.headerHeight, headerPad * 2 + reservedLogoH + 42);
   const headerH = showHeader
     ? Math.max(36, Math.min(220, Number(design.headerHeightPt) > 0 ? Number(design.headerHeightPt) : autoHeaderH))
     : 0;
@@ -436,7 +436,7 @@ export function buildEstimatePdf(estimate, brandingInput) {
 
   const titleBlockH = 40;
   const cardH = Math.max(36, Math.min(140, Number(design.cardHeightPt) || 60));
-  const cardPad = Math.max(2, Math.min(30, Number(design.cardPaddingPt) || 12));
+  const cardPad = Math.max(2, Math.min(30, Number(design.cardPaddingPt ?? branding.cardPad)));
   const cardRadius = Math.max(0, Math.min(24, Number(design.cardRadiusPt) || 5));
   const scopeLineH = 11;
   const scopeH = scopeLines.length ? scopeLines.length * scopeLineH + Math.max(18, cardPad * 2 + 8) : 0;

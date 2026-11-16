@@ -271,7 +271,7 @@ export function buildEstimatePdf(estimate, brandingInput) {
   };
   design.documentTitle = normalizeDocumentTitle(design.documentTitle);
 
-  const headerBg = rgbTuple(design.headerFillColor || branding.headerColor, [17, 24, 39]);
+  const headerBg = rgbTuple(branding.headerColor, [17, 24, 39]);
   const darkHeader = isDarkRgb(headerBg);
   /** @type {[number, number, number]} */
   const headerText = rgbTuple(branding.headerTextColor, darkHeader ? [255, 255, 255] : [17, 24, 39]);
@@ -281,10 +281,10 @@ export function buildEstimatePdf(estimate, brandingInput) {
   const headerAccent = rgbTuple(branding.accentColor, darkHeader ? [249, 115, 22] : [234, 88, 12]);
   const docBg = rgbTuple(branding.pageColor, [255, 255, 255]);
   const docText = rgbTuple(branding.textColor, [17, 24, 39]);
-  const border = rgbTuple(design.cardBorderColor || branding.secondaryColor, [229, 231, 235]);
+  const border = rgbTuple(branding.secondaryColor, [229, 231, 235]);
   /** @type {[number, number, number]} */
   const stripe = [249, 250, 251];
-  const cardFill = rgbTuple(design.cardFillColor || branding.cardColor || "#f8fafc", [248, 250, 252]);
+  const cardFill = rgbTuple(branding.cardColor, [248, 250, 252]);
   const pageBorder = rgbTuple(design.pageBorderColor || "#111827", [17, 24, 39]);
   const headerBorder = rgbTuple(design.headerBorderColor || "#111827", [17, 24, 39]);
   const font = branding.font;
@@ -312,9 +312,9 @@ export function buildEstimatePdf(estimate, brandingInput) {
   const reservedLogoH = branding.logoDataUrl ? logoH : 52;
   const headerPad = Math.max(0, Math.min(40, Number(design.headerPaddingPt ?? 10)));
   const showHeader = design.showHeader !== false;
-  const autoHeaderH = Math.max(branding.headerHeight, headerPad * 2 + reservedLogoH + 42);
+  const autoHeaderH = Math.max(branding.headerHeight, headerPad * 2 + (branding.logoDataUrl ? logoH : 26) + 12);
   const headerH = showHeader
-    ? Math.max(36, Math.min(220, Number(design.headerHeightPt) > 0 ? Number(design.headerHeightPt) : autoHeaderH))
+    ? Math.max(36, Math.min(220, autoHeaderH))
     : 0;
 
   function write(text, x, y, options) {
@@ -403,7 +403,7 @@ export function buildEstimatePdf(estimate, brandingInput) {
     }
     y += Math.max(4, Number(design.headerBottomGapPt) || 10);
 
-    const contacts = estimateContacts(branding, design);
+    const contacts = []; // Company contacts are rendered in the document body, never outside the branded header.
     const colW = contentW / Math.max(contacts.length, 1);
     contacts.forEach((contact, index) => {
       const cx = margin + colW * index + colW / 2;
@@ -436,7 +436,7 @@ export function buildEstimatePdf(estimate, brandingInput) {
 
   const titleBlockH = 40;
   const cardH = Math.max(36, Math.min(140, Number(design.cardHeightPt) || 60));
-  const cardPad = Math.max(2, Math.min(30, Number(design.cardPaddingPt ?? branding.cardPad)));
+  const cardPad = Math.max(2, Math.min(30, branding.cardPad));
   const cardRadius = Math.max(0, Math.min(24, Number(design.cardRadiusPt) || 5));
   const scopeLineH = 11;
   const scopeH = scopeLines.length ? scopeLines.length * scopeLineH + Math.max(18, cardPad * 2 + 8) : 0;

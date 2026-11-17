@@ -113,7 +113,6 @@ export default function EstimateBuilder() {
   const [installationConditions, setInstallationConditions] = useState(() => defaultInstallationConditions());
   const [supplierPriceBooks, setSupplierPriceBooks] = useState([]);
   const [pdfDesign, setPdfDesign] = useState(DEFAULT_PDF_DESIGN);
-  const [laborRefreshReport, setLaborRefreshReport] = useState(null);
   const [branding, setBranding] = useState(() => readCompanyBranding());
   const wage = compositeWage(crew);
 
@@ -360,34 +359,6 @@ export default function EstimateBuilder() {
     }));
   }
 
-  function refreshEstimateLabor() {
-    if (!library.length) return;
-    let updated = 0;
-    let preservedOverrides = 0;
-    let unmatched = 0;
-    setLines((current) => current.map((line) => {
-      if (line.laborMhEdited || line.laborMatchStatus === "overridden") {
-        preservedOverrides += 1;
-        return line;
-      }
-      let item = library.find((row) => row.id === line.laborItemId);
-      if (!item) {
-        const candidates = library.filter((row) => laborItemMatchesLine(row, line));
-        const description = String(line.description || "").toLowerCase();
-        item = candidates.find((row) => description && String(row.item_name || "").toLowerCase() === description)
-          || candidates.find((row) => description && description.includes(String(row.item_name || "").toLowerCase()))
-          || (candidates.length === 1 ? candidates[0] : null);
-      }
-      if (!item) {
-        unmatched += 1;
-        return line;
-      }
-      updated += 1;
-      return applyLibraryItemToLine(line, item, { factors, rate: wage.rate });
-    }));
-    setLaborRefreshReport({ updated, preservedOverrides, unmatched });
-  }
-
   function pickLaborItem(line, item) {
     setLines((current) => current.map((row) => (
       row.id === line.id ? applyLibraryItemToLine(row, item, { factors, rate: wage.rate }) : row
@@ -514,16 +485,6 @@ export default function EstimateBuilder() {
         </TabsList>
 
         <TabsContent value="estimate" className="mt-4 space-y-5">
-      <section className="rounded-2xl border border-blue-500/30 bg-blue-50/40 p-4 dark:bg-blue-500/5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="font-bold">Existing estimate labor</h2>
-            <p className="text-base text-foreground/80">Keep every estimate line and quantity, but re-apply the current labor library to matched lines. Manual labor overrides are preserved.</p>
-          </div>
-          <button type="button" onClick={refreshEstimateLabor} disabled={!library.length} className="min-h-[44px] rounded-lg bg-blue-600 px-4 py-2 text-base font-bold text-white disabled:opacity-50">Apply updated labor</button>
-        </div>
-        {laborRefreshReport ? <p className="mt-2 text-xs font-semibold">{laborRefreshReport.updated} lines updated · {laborRefreshReport.preservedOverrides} manual overrides preserved · {laborRefreshReport.unmatched} unmatched lines left unchanged.</p> : null}
-      </section>
       <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
         <h2 className="mb-4 text-lg font-bold">Project &amp; Customer</h2>
         <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">

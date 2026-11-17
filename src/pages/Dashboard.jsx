@@ -13,7 +13,7 @@ import {
   upsertProjectFolder,
 } from "@/domain/estimate/projectDocuments";
 import { activateEstimate, deleteStoredEstimate, readEstimate } from "@/domain/estimate/estimateStore";
-import { listCloudEstimates, importCloudEstimates, saveCloudEstimate, deleteCloudEstimate } from "@/api/estimateCloudRepository";
+import { listCloudEstimates, importCloudEstimates, saveCloudEstimate, deleteCloudEstimate, subscribeCompanyEstimates } from "@/api/estimateCloudRepository";
 import { readCompanyBranding } from "@/domain/estimate/branding";
 import { estimatePdfBlob } from "@/domain/estimate/estimatePdf";
 
@@ -178,7 +178,12 @@ export default function Dashboard() {
     void loadCompanyEstimates();
     const onFocus = () => { void loadCompanyEstimates(); };
     window.addEventListener("focus", onFocus);
-    return () => { cancelled = true; window.removeEventListener("focus", onFocus); };
+    let unsubscribe = null;
+    void subscribeCompanyEstimates(loadCompanyEstimates).then((stop) => {
+      if (cancelled) stop();
+      else unsubscribe = stop;
+    }).catch((error) => console.warn("Company realtime unavailable; focus refresh remains active", error));
+    return () => { cancelled = true; window.removeEventListener("focus", onFocus); unsubscribe?.(); };
   }, [user?.id]);
 
   useEffect(() => {

@@ -475,7 +475,7 @@ export default function EstimateBuilder() {
           </>}
         </div>
         </div>
-        <details className="group w-full rounded-2xl border border-border bg-card p-3 shadow-sm lg:max-w-xs">
+        <details className="group w-full rounded-2xl border border-border border-t-4 border-t-cyan-500 bg-card p-3 shadow-sm lg:max-w-xs">
           <summary className="min-h-[44px] cursor-pointer list-none text-base font-bold lg:hidden">Company logo</summary>
           <p className="hidden text-sm font-bold lg:block">Company logo</p>
           <div className="mt-3 hidden space-y-2 group-open:block lg:block">
@@ -490,7 +490,7 @@ export default function EstimateBuilder() {
       </div>
 
       <Tabs defaultValue="estimate" className="w-full min-w-0">
-        <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto bg-muted/70 p-1">
+        <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto bg-muted/70 p-1 [&_[data-state=active]]:bg-blue-100 [&_[data-state=active]]:text-blue-900 dark:[&_[data-state=active]]:bg-blue-900/40 dark:[&_[data-state=active]]:text-blue-100">
           <TabsTrigger value="estimate" className="min-h-[44px] px-4 text-base">Estimate</TabsTrigger>
           <TabsTrigger value="labor-markup" className="min-h-[44px] px-4 text-base">Labor</TabsTrigger>
           <TabsTrigger value="assemblies" className="min-h-[44px] px-4 text-base">Assemblies</TabsTrigger>
@@ -500,8 +500,8 @@ export default function EstimateBuilder() {
         </TabsList>
 
         <TabsContent value="estimate" className="mt-4 space-y-5">
-      <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-        <h2 className="mb-4 text-lg font-bold">Project &amp; Customer</h2>
+      <section className="rounded-2xl border border-border border-t-4 border-t-blue-500 bg-card p-5 shadow-sm">
+        <h2 className="mb-4 text-lg font-bold text-blue-700 dark:text-blue-300">Project &amp; Customer</h2>
         <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           <Field label="Project name" value={header.projectName} set={(v) => setHeaderField("projectName", v)} required hint="Required to save" />
           <Field label="Estimate #" value={header.estimateNumber} set={(v) => setHeaderField("estimateNumber", v)} />
@@ -529,10 +529,10 @@ export default function EstimateBuilder() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border bg-card shadow-sm">
+      <section className="rounded-2xl border border-border border-t-4 border-t-emerald-500 bg-card shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
           <div className="min-w-0">
-            <h2 className="text-lg font-bold">Estimate Lines</h2>
+            <h2 className="text-lg font-bold text-emerald-700 dark:text-emerald-300">Estimate Lines</h2>
             <p className="text-base text-foreground/80">Choose Type and Category first. Labor item, MH/unit, and Hours follow the picked row. Conduit qty is stick count (× 10') unless the unit is LF. The supply-house sheet updates as you type.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">

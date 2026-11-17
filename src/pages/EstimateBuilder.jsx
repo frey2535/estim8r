@@ -21,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DEFAULT_VISIBLE_TOTALS, includeTotalsCard as totalsCardIncluded, resolveVisibleTotals, setAllLinesIncluded, TOTAL_OPTIONS, visibleTotalRows } from "@/domain/estimate/presentation";
 import { calculateBidByScope, calculateWorkCategoryBreakdown } from "@/domain/estimate/trueElectricalTakeoff";
 import { applyLibraryItemToLine, applyManualLineLabor, clearLaborPick, hydrateManualLineLabor, laborPickStillMatches, shouldHydrateManualLabor } from "@/domain/estimate/manualLineLabor";
-import { categoriesForType, laborItemMatchesLine } from "@/domain/estimate/lineLaborCatalog";
+import { categoriesForType } from "@/domain/estimate/lineLaborCatalog";
 import EstimateLineCard from "@/components/estimate/EstimateLineCard";
 import EstimateSupplyQuote from "@/components/estimate/EstimateSupplyQuote";
 import LaborMarketCompare from "@/components/labor/LaborMarketCompare";
@@ -83,11 +83,26 @@ const emptyHeader = {
   scopeNotes: "",
 };
 
+function missingScopeQuestions(scope) {
+  const text = String(scope || "").trim().toLowerCase();
+  if (text.length < 12) return [];
+  const questions = [];
+  const conduit = /\\b(emt|conduit|raceway|rigid|rmc|pvc|mc cable)\\b/.test(text);
+  const outlets = /\\b(receptacles?|outlets?)\\b/.test(text);
+  if (!conduit && !outlets) return [];
+  if (conduit && !/\\d+\\s*(?:ft|feet|foot|lf)\\b/.test(text)) questions.push("What is the total cable or raceway route length?");
+  if (conduit && !/(?:1\\/2|3\\/4|1-1\\/4|1-1\\/2|2-1\\/2|2|3|4)\\s*(?:inches|inch|in\\b|["″])/.test(text)) questions.push("What is the raceway or cable size?");
+  if (outlets && !/\\b(surface|flush|recessed|concealed)\\b/.test(text)) questions.push("Will the devices be surface or flush mounted?");
+  if (outlets && !/\\b(new circuit|existing circuit|branch circuit|extend circuit)\\b/.test(text)) questions.push("Will the devices use a new or existing circuit?");
+  return questions;
+}
+
 export default function EstimateBuilder() {
   const [params] = useSearchParams();
   const openFile = params.get("file") || "";
   const openSize = Number(params.get("size") || 0);
   const [header, setHeader] = useState(emptyHeader);
+  const scopeQuestions = useMemo(() => missingScopeQuestions(header.scopeNotes), [header.scopeNotes]);
   const [crew, setCrew] = useState(() => defaultCrew(readShopWageBook()));
   const [lines, setLines] = useState(() => [blankLine(compositeWage(defaultCrew(readShopWageBook())).rate || SHOP_HOURLY_RATE)]);
   const [contingency, setContingency] = useState(0);
@@ -502,27 +517,14 @@ export default function EstimateBuilder() {
           <label className="min-w-0">
             <span className="mb-1 block text-xs font-bold text-muted-foreground">Scope notes</span>
             <textarea value={header.scopeNotes} onChange={(e) => { setMeta((current) => ({ ...current, scopeEdited: true })); setHeaderField("scopeNotes", e.target.value); }} rows={4} className="w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2.5" placeholder="Describe the work once. Add installation details as you learn them." />
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-500/20 bg-blue-50/40 p-3 dark:bg-blue-950/20">
-              <div>
-                <p className="text-sm font-semibold text-foreground">Installation intent checklist</p>
-                <p className="text-xs text-muted-foreground">Add a reusable prompt to your scope notes for wiring method, circuit, routing, and purchasing assumptions. Your existing notes are preserved.</p>
+            {scopeQuestions.length > 0 && (
+              <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-50/50 p-3 dark:bg-amber-950/20" role="status">
+                <p className="text-sm font-semibold text-foreground">Details to confirm</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-foreground">
+                  {scopeQuestions.map((question) => <li key={question}>{question}</li>)}
+                </ul>
               </div>
-              <button type="button" className="min-h-[44px] rounded-md border border-blue-500/30 bg-card px-3 text-sm font-semibold text-foreground hover:bg-muted" onClick={() => {
-                const marker = "Installation details to confirm:";
-                if (header.scopeNotes.includes(marker)) return;
-                const questions = [
-                  marker,
-                  "- Work intent (new, replace, relocate, or extend): ",
-                  "- Wiring method and size (EMT, PVC, rigid, MC, etc.): ",
-                  "- Surface or concealed; mounting height and conditions: ",
-                  "- Circuit voltage, load, panel and protection: ",
-                  "- Raceway/cable route and estimated length: ",
-                  "- Material purchasing (full package, used quantity, or stock): ",
-                ].join("\\n");
-                setMeta((current) => ({ ...current, scopeEdited: true }));
-                setHeaderField("scopeNotes", [header.scopeNotes.trim(), questions].filter(Boolean).join("\\n\\n"));
-              }}>Add questions to scope</button>
-            </div>
+            )}
           </label>
         </div>
       </section>

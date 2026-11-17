@@ -540,7 +540,28 @@ export default function EstimateBuilder() {
           <Field label="Project address" value={header.projectAddress} set={(v) => setHeaderField("projectAddress", v)} />
           <label className="min-w-0">
             <span className="mb-1 block text-xs font-bold text-muted-foreground">Scope notes</span>
-            <textarea value={header.scopeNotes} onChange={(e) => { setMeta((current) => ({ ...current, scopeEdited: true })); setHeaderField("scopeNotes", e.target.value); }} rows={4} className="w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2.5" />
+            <textarea value={header.scopeNotes} onChange={(e) => { setMeta((current) => ({ ...current, scopeEdited: true })); setHeaderField("scopeNotes", e.target.value); }} rows={4} className="w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2.5" placeholder="Describe the work once. Add installation details as you learn them." />
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-500/20 bg-blue-50/40 p-3 dark:bg-blue-950/20">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Installation intent checklist</p>
+                <p className="text-xs text-muted-foreground">Add a reusable prompt to your scope notes for wiring method, circuit, routing, and purchasing assumptions. Your existing notes are preserved.</p>
+              </div>
+              <button type="button" className="min-h-[44px] rounded-md border border-blue-500/30 bg-card px-3 text-sm font-semibold text-foreground hover:bg-muted" onClick={() => {
+                const marker = "Installation details to confirm:";
+                if (header.scopeNotes.includes(marker)) return;
+                const questions = [
+                  marker,
+                  "- Work intent (new, replace, relocate, or extend): ",
+                  "- Wiring method and size (EMT, PVC, rigid, MC, etc.): ",
+                  "- Surface or concealed; mounting height and conditions: ",
+                  "- Circuit voltage, load, panel and protection: ",
+                  "- Raceway/cable route and estimated length: ",
+                  "- Material purchasing (full package, used quantity, or stock): ",
+                ].join("\\n");
+                setMeta((current) => ({ ...current, scopeEdited: true }));
+                setHeaderField("scopeNotes", [header.scopeNotes.trim(), questions].filter(Boolean).join("\\n\\n"));
+              }}>Add questions to scope</button>
+            </div>
           </label>
         </div>
       </section>

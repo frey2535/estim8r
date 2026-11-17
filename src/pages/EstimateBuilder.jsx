@@ -21,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DEFAULT_VISIBLE_TOTALS, includeTotalsCard as totalsCardIncluded, resolveVisibleTotals, setAllLinesIncluded, TOTAL_OPTIONS, visibleTotalRows } from "@/domain/estimate/presentation";
 import { calculateBidByScope, calculateWorkCategoryBreakdown } from "@/domain/estimate/trueElectricalTakeoff";
 import { applyLibraryItemToLine, applyManualLineLabor, clearLaborPick, hydrateManualLineLabor, laborPickStillMatches, shouldHydrateManualLabor } from "@/domain/estimate/manualLineLabor";
-import { categoriesForType, laborItemMatchesLine } from "@/domain/estimate/lineLaborCatalog";
+import { categoriesForType } from "@/domain/estimate/lineLaborCatalog";
 import EstimateLineCard from "@/components/estimate/EstimateLineCard";
 import EstimateSupplyQuote from "@/components/estimate/EstimateSupplyQuote";
 import LaborMarketCompare from "@/components/labor/LaborMarketCompare";

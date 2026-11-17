@@ -87,13 +87,13 @@ function missingScopeQuestions(scope) {
   const text = String(scope || "").trim().toLowerCase();
   if (text.length < 12) return [];
   const questions = [];
-  const conduit = /\\b(emt|conduit|raceway|rigid|rmc|pvc|mc cable)\\b/.test(text);
-  const outlets = /\\b(receptacles?|outlets?)\\b/.test(text);
+  const conduit = /\b(emt|conduit|raceway|rigid|rmc|pvc|mc cable)\b/.test(text);
+  const outlets = /\b(receptacles?|outlets?)\b/.test(text);
   if (!conduit && !outlets) return [];
-  if (conduit && !/\\d+\\s*(?:ft|feet|foot|lf)\\b/.test(text)) questions.push("What is the total cable or raceway route length?");
-  if (conduit && !/(?:1\\/2|3\\/4|1-1\\/4|1-1\\/2|2-1\\/2|2|3|4)\\s*(?:inches|inch|in\\b|["″])/.test(text)) questions.push("What is the raceway or cable size?");
-  if (outlets && !/\\b(surface|flush|recessed|concealed)\\b/.test(text)) questions.push("Will the devices be surface or flush mounted?");
-  if (outlets && !/\\b(new circuit|existing circuit|branch circuit|extend circuit)\\b/.test(text)) questions.push("Will the devices use a new or existing circuit?");
+  if (conduit && !/\d+\s*(?:ft|feet|foot|lf)\b/.test(text)) questions.push("What is the total cable or raceway route length?");
+  if (conduit && !/(?:1\/2|3\/4|1-1\/4|1-1\/2|2-1\/2|2|3|4)\s*(?:inches|inch|in\b|["″])/.test(text)) questions.push("What is the raceway or cable size?");
+  if (outlets && !/\b(surface|flush|recessed|concealed)\b/.test(text)) questions.push("Will the devices be surface or flush mounted?");
+  if (outlets && !/\b(new circuit|existing circuit|branch circuit|extend circuit)\b/.test(text)) questions.push("Will the devices use a new or existing circuit?");
   return questions;
 }
 

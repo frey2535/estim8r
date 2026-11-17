@@ -83,11 +83,35 @@ const emptyHeader = {
   scopeNotes: "",
 };
 
+// Conservative hints only: never infer a missing specification or create bid quantities.
+function findScopeClarifications(scope) {
+  const text = String(scope || "").trim().toLowerCase();
+  if (text.length < 12) return [];
+  const questions = [];
+  const raceway = /\\b(emt|conduit|raceway|rigid|rmc|pvc|mc cable|metal clad)\\b/.test(text);
+  const receptacle = /\\b(receptacle|receptacles|outlet|outlets)\\b/.test(text);
+  if (!raceway && !receptacle) return [];
+  if (raceway && !/\\b(\\d+(?:\\.\\d+)?\\s*(?:ft|feet|foot|lf)|\\d+\\s*['′])\\b/.test(text)) {
+    questions.push("What is the total raceway or cable route length?");
+  }
+  if (raceway && !/\\b(1\\/2|3\\/4|1-1\\/4|1-1\\/2|2|2-1\\/2|3|4)\\s*(?:inch|in|[\\"″])\\b/.test(text)) {
+    questions.push("What size raceway or cable is specified?");
+  }
+  if (receptacle && !/\\b(surface|flush|recessed|concealed)\\b/.test(text)) {
+    questions.push("Are the devices surface-mounted or flush-mounted?");
+  }
+  if (receptacle && !/\\b(existing circuit|new circuit|new branch circuit|extend(?:ing)? (?:the )?circuit)\\b/.test(text)) {
+    questions.push("Are these devices on a new, existing, or extended branch circuit?");
+  }
+  return questions;
+}
+
 export default function EstimateBuilder() {
   const [params] = useSearchParams();
   const openFile = params.get("file") || "";
   const openSize = Number(params.get("size") || 0);
   const [header, setHeader] = useState(emptyHeader);
+  const scopeClarifications = useMemo(() => findScopeClarifications(header.scopeNotes), [header.scopeNotes]);
   const [crew, setCrew] = useState(() => defaultCrew(readShopWageBook()));
   const [lines, setLines] = useState(() => [blankLine(compositeWage(defaultCrew(readShopWageBook())).rate || SHOP_HOURLY_RATE)]);
   const [contingency, setContingency] = useState(0);
@@ -502,27 +526,15 @@ export default function EstimateBuilder() {
           <label className="min-w-0">
             <span className="mb-1 block text-xs font-bold text-muted-foreground">Scope notes</span>
             <textarea value={header.scopeNotes} onChange={(e) => { setMeta((current) => ({ ...current, scopeEdited: true })); setHeaderField("scopeNotes", e.target.value); }} rows={4} className="w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2.5" placeholder="Describe the work once. Add installation details as you learn them." />
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-500/20 bg-blue-50/40 p-3 dark:bg-blue-950/20">
-              <div>
-                <p className="text-sm font-semibold text-foreground">Installation intent checklist</p>
-                <p className="text-xs text-muted-foreground">Add a reusable prompt to your scope notes for wiring method, circuit, routing, and purchasing assumptions. Your existing notes are preserved.</p>
+            {scopeClarifications.length > 0 && (
+              <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-50/50 p-3 dark:bg-amber-950/20" role="status" aria-live="polite">
+                <p className="text-sm font-semibold text-foreground">A few installation details may still be needed</p>
+                <p className="mt-1 text-xs text-muted-foreground">These suggestions update as you describe the work. Answer in your scope notes; no separate checklist is required.</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-foreground">
+                  {scopeClarifications.map((question) => <li key={question}>{question}</li>)}
+                </ul>
               </div>
-              <button type="button" className="min-h-[44px] rounded-md border border-blue-500/30 bg-card px-3 text-sm font-semibold text-foreground hover:bg-muted" onClick={() => {
-                const marker = "Installation details to confirm:";
-                if (header.scopeNotes.includes(marker)) return;
-                const questions = [
-                  marker,
-                  "- Work intent (new, replace, relocate, or extend): ",
-                  "- Wiring method and size (EMT, PVC, rigid, MC, etc.): ",
-                  "- Surface or concealed; mounting height and conditions: ",
-                  "- Circuit voltage, load, panel and protection: ",
-                  "- Raceway/cable route and estimated length: ",
-                  "- Material purchasing (full package, used quantity, or stock): ",
-                ].join("\\n");
-                setMeta((current) => ({ ...current, scopeEdited: true }));
-                setHeaderField("scopeNotes", [header.scopeNotes.trim(), questions].filter(Boolean).join("\\n\\n"));
-              }}>Add questions to scope</button>
-            </div>
+            )}
           </label>
         </div>
       </section>

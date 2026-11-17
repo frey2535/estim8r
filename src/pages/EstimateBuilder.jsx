@@ -91,10 +91,7 @@ function findScopeClarifications(scope) {
   const raceway = /\\b(emt|conduit|raceway|rigid|rmc|pvc|mc cable|metal clad)\\b/.test(text);
   const receptacle = /\\b(receptacle|receptacles|outlet|outlets)\\b/.test(text);
   if (!raceway && !receptacle) return [];
-  if (raceway && !/\\b(\\d+(?:\\.\\d+)?\\s*(?:ft|feet|foot|lf)|\\d+\\s*['′])\\b/.test(text)) {
-    questions.push("What is the total raceway or cable route length?");
-  }
-  if (raceway && !/\\b(1\\/2|3\\/4|1-1\\/4|1-1\\/2|2|2-1\\/2|3|4)\\s*(?:inch|in|[\\"″])\\b/.test(text)) {
+  if (raceway && !/\\b(?:1\\/2|3\\/4|1-1\\/4|1-1\\/2|2-1\\/2|2|3|4)\\s*(?:inch|inches|in\\b|["″])/.test(text)) {
     questions.push("What size raceway or cable is specified?");
   }
   if (receptacle && !/\\b(surface|flush|recessed|concealed)\\b/.test(text)) {

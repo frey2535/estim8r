@@ -19,9 +19,9 @@ import { estimatePdfBlob } from "@/domain/estimate/estimatePdf";
 
 /** @type {[string, string, string, import("react").ComponentType<{ className?: string }>][]} */
 const cards = [
-  ["Create Estimate", "Build a bid using verified labor, company history and transparent productivity factors.", "/estimates/new", Calculator],
-  ["Labor Library", "Search the master electrical trade labor taxonomy and inspect source verification.", "/labor", BookOpen],
-  ["Production History", "Turn actual field production into company-specific labor intelligence.", "/production", TrendingUp],
+  ["Create Estimate", "Build a bid using verified labor, company history and transparent productivity factors.", "/estimates/new", Calculator, "border-t-blue-500", "text-blue-600 dark:text-blue-400", "bg-blue-50 dark:bg-blue-950/30"],
+  ["Labor Library", "Search the master electrical trade labor taxonomy and inspect source verification.", "/labor", BookOpen, "border-t-violet-500", "text-violet-600 dark:text-violet-400", "bg-violet-50 dark:bg-violet-950/30"],
+  ["Production History", "Turn actual field production into company-specific labor intelligence.", "/production", TrendingUp, "border-t-emerald-500", "text-emerald-600 dark:text-emerald-400", "bg-emerald-50 dark:bg-emerald-950/30"],
 ];
 
 function markupPath(folder) {
@@ -234,7 +234,7 @@ export default function Dashboard() {
         ) : (
           <div className="grid gap-2">
             {folders.map((folder) => (
-              <article key={folder.id} className="rounded-lg border border-border bg-card px-4 py-4">
+              <article key={folder.id} className="rounded-lg border border-border border-l-4 border-l-cyan-500 bg-card px-4 py-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h3 className="truncate text-base font-semibold text-foreground">{folder.projectName}</h3>
@@ -263,10 +263,10 @@ export default function Dashboard() {
       <section className="mt-8">
         <h2 className="mb-3 text-sm font-semibold text-foreground">Tools</h2>
         <div className="grid gap-2 md:grid-cols-3">
-          {cards.map(([title, text, to, Icon]) => (
-            <Link key={title} to={to} className="rounded-lg border border-border bg-card p-4 transition-colors hover:bg-muted/40">
+          {cards.map(([title, text, to, Icon, accent, iconColor, iconBackground]) => (
+            <Link key={title} to={to} className={`rounded-lg border border-border border-t-4 bg-card p-4 transition-colors hover:bg-muted/40 ${accent}`}>
               <div className="flex items-center gap-2">
-                <Icon className="h-4 w-4 text-muted-foreground" />
+                <span className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconBackground}`}><Icon className={`h-5 w-5 ${iconColor}`} /></span>
                 <h3 className="text-sm font-semibold text-foreground">{title}</h3>
               </div>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">{text}</p>

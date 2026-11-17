@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { BookOpen, Calculator, FileText, FolderOpen, Image as ImageIcon, Shield, ShieldCheck, StickyNote, Trash2, TrendingUp } from "lucide-react";
+import { BookOpen, Calculator, FileText, FolderOpen, Camera, ScanSearch, ArrowRight, Image as ImageIcon, Shield, ShieldCheck, StickyNote, Trash2, TrendingUp } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { canManageEstim8rAccess } from "@/lib/ownerAccessRules";
 import {
@@ -198,13 +198,40 @@ export default function Dashboard() {
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Current Flow Consulting</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Estim8r Command Center</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Estimate electrical work with traceable labor sources, company production history and estimator-controlled adjustments.</p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Start with a field walkthrough or a blueprint. Keep your scope, quantities, labor and documents together in one estimate.</p>
         </div>
         <Link to="/estimates/new" className="inline-flex min-h-[44px] items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">
           <Calculator className="h-4 w-4" />
           New estimate
         </Link>
       </div>
+
+      <section className="mt-6" aria-labelledby="estimating-workflow-title">
+        <div className="mb-3">
+          <h2 id="estimating-workflow-title" className="text-base font-semibold text-foreground">How are you estimating this project?</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Choose how to begin. Drawings are optional, and you can continue an existing estimate below.</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Link to="/estimates/new" className="group rounded-xl border border-border border-t-4 border-t-blue-500 bg-card p-4 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <div className="flex items-start justify-between gap-3">
+              <span className="inline-flex h-11 w-11 items-center justify-center rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"><Camera className="h-6 w-6" aria-hidden="true" /></span>
+              <ArrowRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1" aria-hidden="true" />
+            </div>
+            <h3 className="mt-3 text-base font-semibold text-foreground">Field Walkthrough</h3>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">Start an estimate from your onsite scope and material quantities. No blueprint upload required.</p>
+            <span className="mt-3 inline-block text-xs font-medium text-blue-700 dark:text-blue-300">Start without drawings</span>
+          </Link>
+          <Link to="/takeoff" className="group rounded-xl border border-border border-t-4 border-t-cyan-500 bg-card p-4 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <div className="flex items-start justify-between gap-3">
+              <span className="inline-flex h-11 w-11 items-center justify-center rounded-lg bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300"><ScanSearch className="h-6 w-6" aria-hidden="true" /></span>
+              <ArrowRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1" aria-hidden="true" />
+            </div>
+            <h3 className="mt-3 text-base font-semibold text-foreground">Blueprint Takeoff</h3>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">Open the drawing workspace for measurements, devices and takeoff quantities.</p>
+            <span className="mt-3 inline-block text-xs font-medium text-cyan-700 dark:text-cyan-300">Open takeoff workspace</span>
+          </Link>
+        </div>
+      </section>
 
       {canManageEstim8rAccess(user) && (
         <Link to="/admin" className="mt-5 flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">

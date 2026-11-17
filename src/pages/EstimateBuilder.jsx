@@ -21,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DEFAULT_VISIBLE_TOTALS, includeTotalsCard as totalsCardIncluded, resolveVisibleTotals, setAllLinesIncluded, TOTAL_OPTIONS, visibleTotalRows } from "@/domain/estimate/presentation";
 import { calculateBidByScope, calculateWorkCategoryBreakdown } from "@/domain/estimate/trueElectricalTakeoff";
 import { applyLibraryItemToLine, applyManualLineLabor, clearLaborPick, hydrateManualLineLabor, laborPickStillMatches, shouldHydrateManualLabor } from "@/domain/estimate/manualLineLabor";
-import { categoriesForType, laborItemMatchesLine } from "@/domain/estimate/lineLaborCatalog";
+import { categoriesForType } from "@/domain/estimate/lineLaborCatalog";
 import EstimateLineCard from "@/components/estimate/EstimateLineCard";
 import EstimateSupplyQuote from "@/components/estimate/EstimateSupplyQuote";
 import LaborMarketCompare from "@/components/labor/LaborMarketCompare";
@@ -83,23 +83,17 @@ const emptyHeader = {
   scopeNotes: "",
 };
 
-// Conservative hints only: never infer a missing specification or create bid quantities.
-function findScopeClarifications(scope) {
+function missingScopeQuestions(scope) {
   const text = String(scope || "").trim().toLowerCase();
   if (text.length < 12) return [];
   const questions = [];
-  const raceway = /\\b(emt|conduit|raceway|rigid|rmc|pvc|mc cable|metal clad)\\b/.test(text);
-  const receptacle = /\\b(receptacle|receptacles|outlet|outlets)\\b/.test(text);
-  if (!raceway && !receptacle) return [];
-  if (raceway && !/\\b(?:1\\/2|3\\/4|1-1\\/4|1-1\\/2|2-1\\/2|2|3|4)\\s*(?:inch|inches|in\\b|["″])/.test(text)) {
-    questions.push("What size raceway or cable is specified?");
-  }
-  if (receptacle && !/\\b(surface|flush|recessed|concealed)\\b/.test(text)) {
-    questions.push("Are the devices surface-mounted or flush-mounted?");
-  }
-  if (receptacle && !/\\b(existing circuit|new circuit|new branch circuit|extend(?:ing)? (?:the )?circuit)\\b/.test(text)) {
-    questions.push("Are these devices on a new, existing, or extended branch circuit?");
-  }
+  const conduit = /\\b(emt|conduit|raceway|rigid|rmc|pvc|mc cable)\\b/.test(text);
+  const outlets = /\\b(receptacles?|outlets?)\\b/.test(text);
+  if (!conduit && !outlets) return [];
+  if (conduit && !/\\d+\\s*(?:ft|feet|foot|lf)\\b/.test(text)) questions.push("What is the total cable or raceway route length?");
+  if (conduit && !/(?:1\\/2|3\\/4|1-1\\/4|1-1\\/2|2-1\\/2|2|3|4)\\s*(?:inches|inch|in\\b|["″])/.test(text)) questions.push("What is the raceway or cable size?");
+  if (outlets && !/\\b(surface|flush|recessed|concealed)\\b/.test(text)) questions.push("Will the devices be surface or flush mounted?");
+  if (outlets && !/\\b(new circuit|existing circuit|branch circuit|extend circuit)\\b/.test(text)) questions.push("Will the devices use a new or existing circuit?");
   return questions;
 }
 
@@ -108,7 +102,7 @@ export default function EstimateBuilder() {
   const openFile = params.get("file") || "";
   const openSize = Number(params.get("size") || 0);
   const [header, setHeader] = useState(emptyHeader);
-  const scopeClarifications = useMemo(() => findScopeClarifications(header.scopeNotes), [header.scopeNotes]);
+  const scopeQuestions = useMemo(() => missingScopeQuestions(header.scopeNotes), [header.scopeNotes]);
   const [crew, setCrew] = useState(() => defaultCrew(readShopWageBook()));
   const [lines, setLines] = useState(() => [blankLine(compositeWage(defaultCrew(readShopWageBook())).rate || SHOP_HOURLY_RATE)]);
   const [contingency, setContingency] = useState(0);
@@ -523,12 +517,11 @@ export default function EstimateBuilder() {
           <label className="min-w-0">
             <span className="mb-1 block text-xs font-bold text-muted-foreground">Scope notes</span>
             <textarea value={header.scopeNotes} onChange={(e) => { setMeta((current) => ({ ...current, scopeEdited: true })); setHeaderField("scopeNotes", e.target.value); }} rows={4} className="w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2.5" placeholder="Describe the work once. Add installation details as you learn them." />
-            {scopeClarifications.length > 0 && (
-              <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-50/50 p-3 dark:bg-amber-950/20" role="status" aria-live="polite">
-                <p className="text-sm font-semibold text-foreground">A few installation details may still be needed</p>
-                <p className="mt-1 text-xs text-muted-foreground">These suggestions update as you describe the work. Answer in your scope notes; no separate checklist is required.</p>
+            {scopeQuestions.length > 0 && (
+              <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-50/50 p-3 dark:bg-amber-950/20" role="status">
+                <p className="text-sm font-semibold text-foreground">Details to confirm</p>
                 <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-foreground">
-                  {scopeClarifications.map((question) => <li key={question}>{question}</li>)}
+                  {scopeQuestions.map((question) => <li key={question}>{question}</li>)}
                 </ul>
               </div>
             )}

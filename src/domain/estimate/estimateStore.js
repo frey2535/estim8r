@@ -112,7 +112,7 @@ export function deleteStoredEstimate(fileName, fileSize) {
 /**
  * @param {any} draft
  */
-export function writeEstimate(draft) {
+export function writeEstimate(draft, { skipCloud = false } = {}) {
   const existing = readEstimate(draft.fileName, draft.fileSize) || {};
   const next = {
     ...existing,
@@ -123,7 +123,7 @@ export function writeEstimate(draft) {
   const key = estimateStorageKey(next.fileName, next.fileSize);
   localStorage.setItem(key, JSON.stringify(next));
   localStorage.setItem(ACTIVE_ESTIMATE_KEY, key);
-  queueCloudEstimate(next);
+  if (!skipCloud) queueCloudEstimate(next);
   return next;
 }
 

@@ -1,5 +1,5 @@
 import { requireSupabase } from "@/api/supabaseClient";
-import { writeEstimate } from "@/domain/estimate/estimateStore";
+import { writeEstimate, readEstimate } from "@/domain/estimate/estimateStore";
 
 async function currentOrg() {
   const client = requireSupabase();
@@ -59,10 +59,20 @@ export async function importCloudEstimates(rows) {
   for (const row of rows) {
     const estimate = row.payload;
     if (!estimate?.fileName || !estimate?.id) continue;
-    const { readEstimate } = await import("@/domain/estimate/estimateStore");
+    // Preserve local edits instead of silently overwriting an existing draft.
     if (readEstimate(estimate.fileName, estimate.fileSize)) continue;
-    writeEstimate(estimate);
+    writeEstimate(estimate, { skipCloud: true });
     imported.push(estimate);
   }
   return imported;
+}
+
+/** Subscribe to company snapshot changes; RLS restricts payload access to the signed-in company. */
+export async function subscribeCompanyEstimates(onChange) {
+  const client = requireSupabase();
+  const orgId = await currentOrg();
+  const channel = client.channel(`estim8r-company-estimates-${orgId}-${Math.random().toString(36).slice(2)}`)
+    .on("postgres_changes", { event: "*", schema: "public", table: "estim8r_estimate_snapshots", filter: `org_id=eq.${orgId}` }, () => onChange())
+    .subscribe();
+  return () => { void client.removeChannel(channel); };
 }

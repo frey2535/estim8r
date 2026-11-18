@@ -12,7 +12,7 @@ import {
   listProjectFolders,
   upsertProjectFolder,
 } from "@/domain/estimate/projectDocuments";
-import { activateEstimate, deleteStoredEstimate, readEstimate } from "@/domain/estimate/estimateStore";
+import { activateEstimate, deleteStoredEstimate, readEstimate, writeEstimate } from "@/domain/estimate/estimateStore";
 import { listCloudEstimates, importCloudEstimates, saveCloudEstimate, deleteCloudEstimate, subscribeCompanyEstimates } from "@/api/estimateCloudRepository";
 import { readCompanyBranding } from "@/domain/estimate/branding";
 import { estimatePdfBlob } from "@/domain/estimate/estimatePdf";
@@ -32,7 +32,7 @@ function markupPath(folder) {
   return `/markup?${params.toString()}`;
 }
 
-function FolderDocs({ folder }) {
+function FolderDocs({ folder, cloudEstimate = null }) {
   const navigate = useNavigate();
   const hasDrawing = isDrawingFileName(folder.fileName);
 
@@ -43,13 +43,26 @@ function FolderDocs({ folder }) {
   }
 
   function downloadEstimate() {
-    const estimate = readEstimate(folder.fileName, folder.fileSize);
+    const estimate = cloudEstimate || readEstimate(folder.fileName, folder.fileSize);
     if (!estimate) return;
     const { blob, fileName } = estimatePdfBlob(estimate, readCompanyBranding());
     downloadBlob(blob, fileName);
   }
 
   function openEstimate() {
+    if (cloudEstimate) {
+      const local = readEstimate(cloudEstimate.fileName, cloudEstimate.fileSize);
+      if (local && JSON.stringify(local) !== JSON.stringify(cloudEstimate)) {
+        // Keep a recoverable copy of any different device-local work before opening the shared version.
+        try {
+          localStorage.setItem(`estim8r.local-recovery:${local.id || Date.now()}:${Date.now()}`, JSON.stringify(local));
+        } catch {
+          window.alert("Cannot protect this device's different estimate. Free storage space before opening the company version.");
+          return;
+        }
+      }
+      writeEstimate(cloudEstimate, { skipCloud: true });
+    }
     const params = new URLSearchParams({
       file: folder.fileName || "",
       size: String(folder.fileSize || 0),
@@ -87,6 +100,7 @@ function FolderDocs({ folder }) {
 export default function Dashboard() {
   const { user } = useAuth();
   const [folders, setFolders] = useState([]);
+  const [companyRows, setCompanyRows] = useState(null);
   const [syncBusy, setSyncBusy] = useState(false);
   const [deletingFolderId, setDeletingFolderId] = useState(null);
   const [syncMessage, setSyncMessage] = useState("");
@@ -97,11 +111,14 @@ export default function Dashboard() {
     setDeletingFolderId(folder.id);
     setSyncMessage("");
     try {
-      const saved = readEstimate(folder.fileName, folder.fileSize);
+      const saved = folder.cloudEstimate || readEstimate(folder.fileName, folder.fileSize);
       if (saved?.id) await deleteCloudEstimate(saved.id);
-      deleteStoredEstimate(folder.fileName, folder.fileSize);
-      deleteProjectFolder(folder);
-      await deleteDrawingFile(folder.fileName, folder.fileSize);
+      if (!folder.cloudEstimate) {
+        deleteStoredEstimate(folder.fileName, folder.fileSize);
+        deleteProjectFolder(folder);
+        await deleteDrawingFile(folder.fileName, folder.fileSize);
+      }
+      setCompanyRows((rows) => rows?.filter((row) => row.id !== saved?.id) || rows);
       setFolders(listProjectFolders());
       setSyncFailed(false);
       setSyncMessage("Estimate deleted from this device and company cloud.");
@@ -133,6 +150,7 @@ export default function Dashboard() {
       for (const estimate of imported) {
         upsertProjectFolder({ projectName: estimate.header?.projectName || estimate.fileName, projectAddress: estimate.header?.projectAddress || "", fileName: estimate.fileName, fileSize: estimate.fileSize || 0 });
       }
+      setCompanyRows(await listCloudEstimates());
       setFolders(listProjectFolders());
       setSyncMessage(`Cloud sync: ${uploaded} uploaded, ${imported.length} imported. Existing local copies were not overwritten.`);
     } catch (error) {
@@ -156,6 +174,8 @@ export default function Dashboard() {
       try {
         const remote = await listCloudEstimates();
         if (cancelled) return;
+        if (cancelled) return;
+        setCompanyRows(remote);
         const imported = await importCloudEstimates(remote);
         if (cancelled) return;
         for (const estimate of imported) {
@@ -196,6 +216,15 @@ export default function Dashboard() {
       window.removeEventListener("storage", refresh);
     };
   }, []);
+
+  const displayedFolders = companyRows === null ? folders : companyRows.map((row) => ({
+    id: row.id,
+    projectName: row.payload?.header?.projectName || row.payload?.fileName || "Untitled estimate",
+    projectAddress: row.payload?.header?.projectAddress || "",
+    fileName: row.payload?.fileName || "",
+    fileSize: row.payload?.fileSize || 0,
+    cloudEstimate: row.payload,
+  }));
 
   return (
     <div className="mx-auto w-full max-w-6xl py-2 sm:py-4">
@@ -255,7 +284,7 @@ export default function Dashboard() {
           <h2 className="text-sm font-semibold text-foreground">Estimates folder</h2>
           <p className="hidden text-xs text-muted-foreground sm:block">Saved under the project name. Drawings and takeoff are optional.</p>
         </div>
-        {folders.length === 0 ? (
+        {displayedFolders.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border bg-card px-4 py-10 text-center">
             <FolderOpen className="mx-auto h-5 w-5 text-muted-foreground" />
             <p className="mt-3 text-sm font-medium text-foreground">No saved estimates yet</p>
@@ -265,7 +294,7 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="grid gap-2">
-            {folders.map((folder) => (
+            {displayedFolders.map((folder) => (
               <article key={folder.id} className="rounded-lg border border-border border-l-4 border-l-cyan-500 bg-card px-4 py-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -285,7 +314,7 @@ export default function Dashboard() {
                     <Trash2 className="h-3.5 w-3.5" /> Delete
                   </button>
                 </div>
-                <FolderDocs folder={folder} />
+                <FolderDocs folder={folder} cloudEstimate={folder.cloudEstimate} />
               </article>
             ))}
           </div>

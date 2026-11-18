@@ -174,6 +174,7 @@ export default function Dashboard() {
       try {
         const remote = await listCloudEstimates();
         if (cancelled) return;
+        if (cancelled) return;
         setCompanyRows(remote);
         const imported = await importCloudEstimates(remote);
         if (cancelled) return;
@@ -215,6 +216,15 @@ export default function Dashboard() {
       window.removeEventListener("storage", refresh);
     };
   }, []);
+
+  const displayedFolders = companyRows === null ? folders : companyRows.map((row) => ({
+    id: row.id,
+    projectName: row.payload?.header?.projectName || row.payload?.fileName || "Untitled estimate",
+    projectAddress: row.payload?.header?.projectAddress || "",
+    fileName: row.payload?.fileName || "",
+    fileSize: row.payload?.fileSize || 0,
+    cloudEstimate: row.payload,
+  }));
 
   return (
     <div className="mx-auto w-full max-w-6xl py-2 sm:py-4">
@@ -274,7 +284,7 @@ export default function Dashboard() {
           <h2 className="text-sm font-semibold text-foreground">Estimates folder</h2>
           <p className="hidden text-xs text-muted-foreground sm:block">Saved under the project name. Drawings and takeoff are optional.</p>
         </div>
-        {folders.length === 0 ? (
+        {displayedFolders.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border bg-card px-4 py-10 text-center">
             <FolderOpen className="mx-auto h-5 w-5 text-muted-foreground" />
             <p className="mt-3 text-sm font-medium text-foreground">No saved estimates yet</p>
@@ -284,7 +294,7 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="grid gap-2">
-            {folders.map((folder) => (
+            {displayedFolders.map((folder) => (
               <article key={folder.id} className="rounded-lg border border-border border-l-4 border-l-cyan-500 bg-card px-4 py-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -304,7 +314,7 @@ export default function Dashboard() {
                     <Trash2 className="h-3.5 w-3.5" /> Delete
                   </button>
                 </div>
-                <FolderDocs folder={folder} />
+                <FolderDocs folder={folder} cloudEstimate={folder.cloudEstimate} />
               </article>
             ))}
           </div>

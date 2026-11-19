@@ -63,6 +63,14 @@ function readBaseline(key) {
   catch { return null; }
 }
 
+export function decideCloudRefresh(local, baseline, remote) {
+  if (!local) return "import";
+  if (local.id !== remote.id) return "conflict";
+  if (JSON.stringify(local) === JSON.stringify(remote)) return "unchanged";
+  if (!baseline || JSON.stringify(local) !== JSON.stringify(baseline)) return "conflict";
+  return "refresh";
+}
+
 /**
  * Refresh unchanged local copies from the shared company database.
  * If a device has edited a copy since its last cloud import, preserve it
@@ -78,15 +86,10 @@ export async function importCloudEstimates(rows) {
     const key = baselineKey(orgId, estimate.id);
     const local = readEstimate(estimate.fileName, estimate.fileSize);
     const baseline = readBaseline(key);
-    if (local && local.id !== estimate.id) {
+    const decision = decideCloudRefresh(local, baseline, estimate);
+    if (decision === "conflict") {
       conflicts.push(estimate.id);
       continue;
-    }
-    if (local && JSON.stringify(local) !== JSON.stringify(estimate)) {
-      if (!baseline || JSON.stringify(local) !== JSON.stringify(baseline)) {
-        conflicts.push(estimate.id);
-        continue;
-      }
     }
     if (!local || JSON.stringify(local) !== JSON.stringify(estimate)) {
       writeEstimate(estimate, { skipCloud: true });

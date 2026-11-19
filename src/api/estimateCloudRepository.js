@@ -13,6 +13,18 @@ async function currentOrg() {
   return data.org_id;
 }
 
+/** Diagnostic metadata only; does not expose another company's records. */
+export async function getCompanySyncDiagnostics() {
+  const client = requireSupabase();
+  const { data: auth, error: authError } = await client.auth.getUser();
+  if (authError || !auth?.user) throw new Error("Sign in to inspect company synchronization.");
+  const orgId = await currentOrg();
+  const { data, error } = await client.from("estim8r_estimate_snapshots")
+    .select("id,updated_at").eq("org_id", orgId);
+  if (error) throw error;
+  return { userId: auth.user.id, orgId, cloudCount: (data || []).length };
+}
+
 export async function listCloudEstimates() {
   const client = requireSupabase();
   const orgId = await currentOrg();

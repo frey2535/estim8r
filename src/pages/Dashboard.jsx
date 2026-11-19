@@ -13,7 +13,7 @@ import {
   upsertProjectFolder,
 } from "@/domain/estimate/projectDocuments";
 import { activateEstimate, deleteStoredEstimate, readEstimate, writeEstimate } from "@/domain/estimate/estimateStore";
-import { listCloudEstimates, importCloudEstimates, saveCloudEstimate, deleteCloudEstimate, subscribeCompanyEstimates } from "@/api/estimateCloudRepository";
+import { listCloudEstimates, importCloudEstimates, deleteCloudEstimate, subscribeCompanyEstimates } from "@/api/estimateCloudRepository";
 import { readCompanyBranding } from "@/domain/estimate/branding";
 import { estimatePdfBlob } from "@/domain/estimate/estimatePdf";
 
@@ -138,21 +138,15 @@ export default function Dashboard() {
     setSyncFailed(false);
     try {
       const remote = await listCloudEstimates();
-      const remoteIds = new Set(remote.map((row) => row.id));
-      const local = listProjectFolders().map((folder) => readEstimate(folder.fileName, folder.fileSize)).filter(Boolean);
-      let uploaded = 0;
-      for (const estimate of local) {
-        if (!estimate.id || remoteIds.has(estimate.id)) continue;
-        await saveCloudEstimate(estimate);
-        uploaded += 1;
-      }
+      // Never upload arbitrary browser-local records into the signed-in company.
+      // A shared device may contain drafts from another employee or organization.
       const imported = await importCloudEstimates(remote);
       for (const estimate of imported) {
         upsertProjectFolder({ projectName: estimate.header?.projectName || estimate.fileName, projectAddress: estimate.header?.projectAddress || "", fileName: estimate.fileName, fileSize: estimate.fileSize || 0 });
       }
       setCompanyRows(await listCloudEstimates());
       setFolders(listProjectFolders());
-      setSyncMessage(`Cloud sync: ${uploaded} uploaded, ${imported.length} imported. Existing local copies were not overwritten.`);
+      setSyncMessage(`Company cloud refreshed: ${remote.length} available, ${imported.length} added or updated. Local conflicts are preserved.`);
     } catch (error) {
       const code = String(error?.code || "");
       const detail = String(error?.message || "Cloud service unavailable.");

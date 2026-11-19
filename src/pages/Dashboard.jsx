@@ -13,7 +13,7 @@ import {
   upsertProjectFolder,
 } from "@/domain/estimate/projectDocuments";
 import { activateEstimate, deleteStoredEstimate, readEstimate, writeEstimate } from "@/domain/estimate/estimateStore";
-import { listCloudEstimates, importCloudEstimates, deleteCloudEstimate, getCloudEstimate, saveCloudEstimate, subscribeCompanyEstimates } from "@/api/estimateCloudRepository";
+import { listCloudEstimates, importCloudEstimates, deleteCloudEstimate, getCloudEstimate, saveCloudEstimate, getCompanySyncDiagnostics, subscribeCompanyEstimates } from "@/api/estimateCloudRepository";
 import { readCompanyBranding } from "@/domain/estimate/branding";
 import { estimatePdfBlob } from "@/domain/estimate/estimatePdf";
 
@@ -102,6 +102,7 @@ export default function Dashboard() {
   const [folders, setFolders] = useState([]);
   const [companyRows, setCompanyRows] = useState(null);
   const [showDeviceOnly, setShowDeviceOnly] = useState(false);
+  const [syncDiagnostics, setSyncDiagnostics] = useState(null);
   const [syncBusy, setSyncBusy] = useState(false);
   const [publishingId, setPublishingId] = useState(null);
   const [deletingFolderId, setDeletingFolderId] = useState(null);
@@ -169,6 +170,7 @@ export default function Dashboard() {
     setSyncFailed(false);
     try {
       const remote = await listCloudEstimates();
+      setSyncDiagnostics(await getCompanySyncDiagnostics());
       // A shared browser can hold another organization's local drafts.
       // Never promote those drafts to the signed-in company's cloud on Sync.
       const imported = await importCloudEstimates(remote);
@@ -198,7 +200,9 @@ export default function Dashboard() {
     const loadCompanyEstimates = async () => {
       try {
         const remote = await listCloudEstimates();
+        const diagnostics = await getCompanySyncDiagnostics();
         if (cancelled) return;
+        setSyncDiagnostics(diagnostics);
         if (cancelled) return;
         setCompanyRows(remote);
         const imported = await importCloudEstimates(remote);
@@ -310,6 +314,15 @@ export default function Dashboard() {
       )}
 
       <div className="mt-4 flex flex-wrap items-center gap-3"><button type="button" disabled={syncBusy} onClick={() => void syncEstimates()} className="rounded-md border border-border bg-card px-4 py-2 text-sm font-semibold disabled:opacity-50">{syncBusy ? "Syncing..." : "Sync estimates across devices"}</button>{syncMessage && <p role={syncFailed ? "alert" : "status"} className={`text-sm ${syncFailed ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground"}`}>{syncMessage}</p>}</div>
+
+      {syncDiagnostics && <details className="mt-3 rounded-lg border border-border p-3 text-xs">
+        <summary className="cursor-pointer font-medium">Company sync diagnostics</summary>
+        <p className="mt-2">Signed-in user ID: <code>{syncDiagnostics.userId}</code></p>
+        <p>Company ID: <code>{syncDiagnostics.orgId}</code></p>
+        <p>Shared cloud estimates: {syncDiagnostics.cloudCount}</p>
+        <p>Device-only estimates: {localOnlyFolders.length}</p>
+        <p className="mt-2 text-muted-foreground">Compare the Company ID and shared estimate count between the administrator and employee accounts. Different Company IDs indicate incorrect membership. Matching IDs but different counts indicate a retrieval or deployment problem.</p>
+      </details>}
 
       <section className="mt-6">
         <div className="mb-3 flex items-baseline justify-between gap-3">

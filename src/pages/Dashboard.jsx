@@ -13,7 +13,7 @@ import {
   upsertProjectFolder,
 } from "@/domain/estimate/projectDocuments";
 import { activateEstimate, deleteStoredEstimate, readEstimate, writeEstimate } from "@/domain/estimate/estimateStore";
-import { listCloudEstimates, importCloudEstimates, deleteCloudEstimate, subscribeCompanyEstimates } from "@/api/estimateCloudRepository";
+import { listCloudEstimates, importCloudEstimates, deleteCloudEstimate, getCloudEstimate, saveCloudEstimate, subscribeCompanyEstimates } from "@/api/estimateCloudRepository";
 import { readCompanyBranding } from "@/domain/estimate/branding";
 import { estimatePdfBlob } from "@/domain/estimate/estimatePdf";
 
@@ -102,6 +102,7 @@ export default function Dashboard() {
   const [folders, setFolders] = useState([]);
   const [companyRows, setCompanyRows] = useState(null);
   const [syncBusy, setSyncBusy] = useState(false);
+  const [publishingId, setPublishingId] = useState(null);
   const [deletingFolderId, setDeletingFolderId] = useState(null);
   const [syncMessage, setSyncMessage] = useState("");
   const [syncFailed, setSyncFailed] = useState(false);
@@ -128,6 +129,35 @@ export default function Dashboard() {
       setFolders(listProjectFolders());
     } finally {
       setDeletingFolderId(null);
+    }
+  }
+
+  async function publishLocalEstimate(folder) {
+    const draft = readEstimate(folder.fileName, folder.fileSize);
+    if (!draft?.id) {
+      setSyncFailed(true);
+      setSyncMessage("This local estimate has no ID. Open and save it before publishing.");
+      return;
+    }
+    if (!window.confirm(`Publish "${folder.projectName}" to the signed-in company? All authorized company employees will be able to view it. Verify you are signed into the correct company.`)) return;
+    setPublishingId(draft.id);
+    try {
+      const existing = await getCloudEstimate(draft.id);
+      if (existing) {
+        throw new Error("An estimate with this ID already exists in the company cloud. No data was overwritten.");
+      }
+      await saveCloudEstimate(draft, null);
+      const remote = await listCloudEstimates();
+      await importCloudEstimates(remote);
+      setCompanyRows(remote);
+      setFolders(listProjectFolders());
+      setSyncFailed(false);
+      setSyncMessage(`Published "${folder.projectName}" to the company. Other employees can now refresh their Estimates folder.`);
+    } catch (error) {
+      setSyncFailed(true);
+      setSyncMessage(`Publish failed: ${error?.message || "Cloud unavailable"}. Your local estimate remains intact.`);
+    } finally {
+      setPublishingId(null);
     }
   }
 
@@ -219,6 +249,12 @@ export default function Dashboard() {
     fileSize: row.payload?.fileSize || 0,
     cloudEstimate: row.payload,
   }));
+
+  const cloudIds = new Set((companyRows || []).map((row) => row.id));
+  const localOnlyFolders = companyRows === null ? [] : folders.filter((folder) => {
+    const draft = readEstimate(folder.fileName, folder.fileSize);
+    return draft?.id && !cloudIds.has(draft.id);
+  });
 
   return (
     <div className="mx-auto w-full max-w-6xl py-2 sm:py-4">
@@ -314,6 +350,24 @@ export default function Dashboard() {
           </div>
         )}
       </section>
+
+      {localOnlyFolders.length > 0 && (
+        <section className="mt-6" aria-label="Unpublished device estimates">
+          <h2 className="text-sm font-semibold text-foreground">Saved on this device only</h2>
+          <p className="mt-1 text-sm text-muted-foreground">These estimates are not in the shared company database. Publish each one explicitly after confirming the company account. Nothing is uploaded automatically.</p>
+          <div className="mt-3 grid gap-2">
+            {localOnlyFolders.map((folder) => {
+              const draft = readEstimate(folder.fileName, folder.fileSize);
+              return <div key={folder.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-3">
+                <span className="text-sm font-medium">{folder.projectName}</span>
+                <button type="button" disabled={publishingId !== null || syncBusy} onClick={() => void publishLocalEstimate(folder)} className="rounded-md border border-border px-3 py-2 text-sm font-semibold disabled:opacity-50">
+                  {publishingId === draft?.id ? "Publishing..." : "Publish to company"}
+                </button>
+              </div>;
+            })}
+          </div>
+        </section>
+      )}
 
       <section className="mt-8">
         <h2 className="mb-3 text-sm font-semibold text-foreground">Tools</h2>

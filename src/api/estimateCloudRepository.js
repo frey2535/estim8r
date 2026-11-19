@@ -53,16 +53,54 @@ export async function deleteCloudEstimate(id) {
   if (error) throw error;
 }
 
-/** Import only records that do not already exist locally. Never overwrite unsaved device work. */
+/** A per-company, per-estimate last-imported baseline, never a source of truth. */
+function baselineKey(orgId, id) {
+  return `estim8r.cloudBaseline.v1:${orgId}:${id}`;
+}
+
+function readBaseline(key) {
+  try { return JSON.parse(localStorage.getItem(key) || "null"); }
+  catch { return null; }
+}
+
+export function decideCloudRefresh(local, baseline, remote) {
+  if (!local) return "import";
+  if (local.id !== remote.id) return "conflict";
+  if (JSON.stringify(local) === JSON.stringify(remote)) return "unchanged";
+  if (!baseline || JSON.stringify(local) !== JSON.stringify(baseline)) return "conflict";
+  return "refresh";
+}
+
+/**
+ * Refresh unchanged local copies from the shared company database.
+ * If a device has edited a copy since its last cloud import, preserve it
+ * and report a conflict rather than silently discarding work.
+ */
 export async function importCloudEstimates(rows) {
+  const orgId = await currentOrg();
   const imported = [];
-  for (const row of rows) {
+  const conflicts = [];
+  for (const row of rows || []) {
     const estimate = row.payload;
     if (!estimate?.fileName || !estimate?.id) continue;
-    // Preserve local edits instead of silently overwriting an existing draft.
-    if (readEstimate(estimate.fileName, estimate.fileSize)) continue;
-    writeEstimate(estimate, { skipCloud: true });
-    imported.push(estimate);
+    const key = baselineKey(orgId, estimate.id);
+    const local = readEstimate(estimate.fileName, estimate.fileSize);
+    const baseline = readBaseline(key);
+    const decision = decideCloudRefresh(local, baseline, estimate);
+    if (decision === "conflict") {
+      conflicts.push(estimate.id);
+      continue;
+    }
+    if (!local || JSON.stringify(local) !== JSON.stringify(estimate)) {
+      writeEstimate(estimate, { skipCloud: true });
+      imported.push(estimate);
+    }
+    localStorage.setItem(key, JSON.stringify(estimate));
+  }
+  if (conflicts.length && typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("estim8r-cloud-sync-conflict", {
+      detail: { estimateIds: conflicts },
+    }));
   }
   return imported;
 }

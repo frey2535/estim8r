@@ -1,5 +1,5 @@
 import { requireSupabase } from "@/api/supabaseClient";
-import { writeEstimate, readEstimate } from "@/domain/estimate/estimateStore";
+import { writeEstimate, readEstimate, registerCloudEstimateSnapshot } from "@/domain/estimate/estimateStore";
 
 async function currentOrg() {
   const client = requireSupabase();
@@ -96,6 +96,7 @@ export async function importCloudEstimates(rows) {
       imported.push(estimate);
     }
     localStorage.setItem(key, JSON.stringify(estimate));
+    registerCloudEstimateSnapshot(estimate, row.revision);
   }
   if (conflicts.length && typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("estim8r-cloud-sync-conflict", {

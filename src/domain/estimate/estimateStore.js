@@ -104,6 +104,7 @@ export function deleteStoredEstimate(fileName, fileSize) {
     window.clearTimeout(cloudTimers.get(existing.id));
     cloudTimers.delete(existing.id);
     cloudRevisions.delete(existing.id);
+    cloudBaselines.delete(existing.id);
   }
   localStorage.removeItem(key);
   if (localStorage.getItem(ACTIVE_ESTIMATE_KEY) === key) localStorage.removeItem(ACTIVE_ESTIMATE_KEY);
@@ -123,27 +124,40 @@ export function writeEstimate(draft, { skipCloud = false } = {}) {
   const key = estimateStorageKey(next.fileName, next.fileSize);
   localStorage.setItem(key, JSON.stringify(next));
   localStorage.setItem(ACTIVE_ESTIMATE_KEY, key);
-  if (!skipCloud) queueCloudEstimate(next);
+  if (!skipCloud) queueCloudEstimate(next, existing);
   return next;
 }
 
 // Debounced best-effort cloud persistence. Local writes always remain available.
 const cloudTimers = new Map();
 const cloudRevisions = new Map();
-function queueCloudEstimate(estimate) {
+const cloudBaselines = new Map();
+
+/** Seed the optimistic-concurrency baseline from an authenticated company snapshot. */
+export function registerCloudEstimateSnapshot(estimate, revision) {
+  if (!estimate?.id) return;
+  cloudBaselines.set(estimate.id, estimate);
+  if (revision !== undefined && revision !== null) cloudRevisions.set(estimate.id, revision);
+}
+
+function queueCloudEstimate(estimate, previous = {}) {
   if (!estimate?.id || typeof window === "undefined") return;
   const id = estimate.id;
   window.clearTimeout(cloudTimers.get(id));
+  const baseline = cloudBaselines.has(id) ? cloudBaselines.get(id) : previous;
+  if (!cloudBaselines.has(id)) cloudBaselines.set(id, baseline);
   cloudTimers.set(id, window.setTimeout(async () => {
     cloudTimers.delete(id);
     try {
       const { saveCloudEstimate, getCloudEstimate } = await import("@/api/estimateCloudRepository");
-      let revision = cloudRevisions.get(id);
-      if (revision === undefined) {
+      // Always read the current server revision before writing; a cached revision
+      // alone cannot detect another employee's intervening update.
+      let revision;
+      {
         const remote = await getCloudEstimate(id);
         if (remote) {
           // Never overwrite another device's data without first reconciling it.
-          if (JSON.stringify(remote.payload) !== JSON.stringify(estimate)) {
+          if (JSON.stringify(remote.payload) !== JSON.stringify(baseline)) {
             window.dispatchEvent(new CustomEvent("estim8r-cloud-sync-conflict", { detail: { estimateId: id } }));
             return;
           }
@@ -152,6 +166,7 @@ function queueCloudEstimate(estimate) {
       }
       const saved = await saveCloudEstimate(estimate, revision);
       cloudRevisions.set(id, saved.revision);
+      cloudBaselines.set(id, estimate);
       window.dispatchEvent(new CustomEvent("estim8r-cloud-sync-saved", { detail: { estimateId: id } }));
     } catch (error) {
       window.dispatchEvent(new CustomEvent("estim8r-cloud-sync-error", { detail: { estimateId: id, message: error?.message || "Cloud unavailable" } }));

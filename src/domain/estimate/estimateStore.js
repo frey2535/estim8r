@@ -104,6 +104,7 @@ export function deleteStoredEstimate(fileName, fileSize) {
     window.clearTimeout(cloudTimers.get(existing.id));
     cloudTimers.delete(existing.id);
     cloudRevisions.delete(existing.id);
+    cloudBaselines.delete(existing.id);
   }
   localStorage.removeItem(key);
   if (localStorage.getItem(ACTIVE_ESTIMATE_KEY) === key) localStorage.removeItem(ACTIVE_ESTIMATE_KEY);
@@ -123,17 +124,22 @@ export function writeEstimate(draft, { skipCloud = false } = {}) {
   const key = estimateStorageKey(next.fileName, next.fileSize);
   localStorage.setItem(key, JSON.stringify(next));
   localStorage.setItem(ACTIVE_ESTIMATE_KEY, key);
-  if (!skipCloud) queueCloudEstimate(next);
+  if (!skipCloud) queueCloudEstimate(next, existing);
   return next;
 }
 
 // Debounced best-effort cloud persistence. Local writes always remain available.
 const cloudTimers = new Map();
 const cloudRevisions = new Map();
-function queueCloudEstimate(estimate) {
+const cloudBaselines = new Map();
+function queueCloudEstimate(estimate, previous = {}) {
   if (!estimate?.id || typeof window === "undefined") return;
   const id = estimate.id;
   window.clearTimeout(cloudTimers.get(id));
+  // Keep the last known local baseline for optimistic concurrency. A new edit
+  // must compare against the version it actually started from, not itself.
+  const baseline = cloudBaselines.has(id) ? cloudBaselines.get(id) : previous;
+  if (!cloudBaselines.has(id)) cloudBaselines.set(id, baseline);
   cloudTimers.set(id, window.setTimeout(async () => {
     cloudTimers.delete(id);
     try {
@@ -143,7 +149,7 @@ function queueCloudEstimate(estimate) {
         const remote = await getCloudEstimate(id);
         if (remote) {
           // Never overwrite another device's data without first reconciling it.
-          if (JSON.stringify(remote.payload) !== JSON.stringify(estimate)) {
+          if (JSON.stringify(remote.payload) !== JSON.stringify(baseline)) {
             window.dispatchEvent(new CustomEvent("estim8r-cloud-sync-conflict", { detail: { estimateId: id } }));
             return;
           }
@@ -152,6 +158,7 @@ function queueCloudEstimate(estimate) {
       }
       const saved = await saveCloudEstimate(estimate, revision);
       cloudRevisions.set(id, saved.revision);
+      cloudBaselines.set(id, estimate);
       window.dispatchEvent(new CustomEvent("estim8r-cloud-sync-saved", { detail: { estimateId: id } }));
     } catch (error) {
       window.dispatchEvent(new CustomEvent("estim8r-cloud-sync-error", { detail: { estimateId: id, message: error?.message || "Cloud unavailable" } }));

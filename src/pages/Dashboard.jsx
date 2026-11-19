@@ -101,6 +101,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const [folders, setFolders] = useState([]);
   const [companyRows, setCompanyRows] = useState(null);
+  const [showDeviceOnly, setShowDeviceOnly] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
   const [publishingId, setPublishingId] = useState(null);
   const [deletingFolderId, setDeletingFolderId] = useState(null);
@@ -241,7 +242,8 @@ export default function Dashboard() {
     };
   }, []);
 
-  const displayedFolders = companyRows === null ? folders : companyRows.map((row) => ({
+  // Only authenticated company cloud records belong in the shared folder.
+  const displayedFolders = (companyRows || []).map((row) => ({
     id: row.id,
     projectName: row.payload?.header?.projectName || row.payload?.fileName || "Untitled estimate",
     projectAddress: row.payload?.header?.projectAddress || "",
@@ -317,7 +319,7 @@ export default function Dashboard() {
         {displayedFolders.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border bg-card px-4 py-10 text-center">
             <FolderOpen className="mx-auto h-5 w-5 text-muted-foreground" />
-            <p className="mt-3 text-sm font-medium text-foreground">No saved estimates yet</p>
+            <p className="mt-3 text-sm font-medium text-foreground">{companyRows === null ? "Loading company estimates..." : "No company estimates yet"}</p>
             <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
               Open New Estimate to write one. If a Buildr company is linked, the estimate also syncs to that project’s Estimate tab.
             </p>
@@ -355,7 +357,8 @@ export default function Dashboard() {
         <section className="mt-6" aria-label="Unpublished device estimates">
           <h2 className="text-sm font-semibold text-foreground">Saved on this device only</h2>
           <p className="mt-1 text-sm text-muted-foreground">These estimates are not in the shared company database. Publish each one explicitly after confirming the company account. Nothing is uploaded automatically.</p>
-          <div className="mt-3 grid gap-2">
+          <button type="button" onClick={() => setShowDeviceOnly((value) => !value)} className="mt-3 rounded-md border border-border px-3 py-2 text-sm font-medium">{showDeviceOnly ? "Hide device-only estimates" : `Review ${localOnlyFolders.length} device-only estimates`}</button>
+          {showDeviceOnly && <div className="mt-3 grid gap-2">
             {localOnlyFolders.map((folder) => {
               const draft = readEstimate(folder.fileName, folder.fileSize);
               return <div key={folder.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-3">
@@ -365,7 +368,7 @@ export default function Dashboard() {
                 </button>
               </div>;
             })}
-          </div>
+          </div>}
         </section>
       )}
 

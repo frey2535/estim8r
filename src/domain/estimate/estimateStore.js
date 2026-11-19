@@ -132,6 +132,14 @@ export function writeEstimate(draft, { skipCloud = false } = {}) {
 const cloudTimers = new Map();
 const cloudRevisions = new Map();
 const cloudBaselines = new Map();
+
+/** Seed the optimistic-concurrency baseline from an authenticated company snapshot. */
+export function registerCloudEstimateSnapshot(estimate, revision) {
+  if (!estimate?.id) return;
+  cloudBaselines.set(estimate.id, estimate);
+  if (revision !== undefined && revision !== null) cloudRevisions.set(estimate.id, revision);
+}
+
 function queueCloudEstimate(estimate, previous = {}) {
   if (!estimate?.id || typeof window === "undefined") return;
   const id = estimate.id;
@@ -142,8 +150,10 @@ function queueCloudEstimate(estimate, previous = {}) {
     cloudTimers.delete(id);
     try {
       const { saveCloudEstimate, getCloudEstimate } = await import("@/api/estimateCloudRepository");
-      let revision = cloudRevisions.get(id);
-      if (revision === undefined) {
+      // Always read the current server revision before writing; a cached revision
+      // alone cannot detect another employee's intervening update.
+      let revision;
+      {
         const remote = await getCloudEstimate(id);
         if (remote) {
           // Never overwrite another device's data without first reconciling it.

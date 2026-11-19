@@ -1,13 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-/** Model the safety decision for a remote snapshot refresh. */
-function reconcile(local, baseline, remote) {
-  if (!local) return "import";
-  if (local.id !== remote.id) return "conflict";
-  if (JSON.stringify(local) === JSON.stringify(remote)) return "unchanged";
-  if (!baseline || JSON.stringify(local) !== JSON.stringify(baseline)) return "conflict";
-  return "refresh";
-}
+import { decideCloudRefresh as reconcile } from "./estimateCloudRepository";
 
 describe("company snapshot reconciliation safety", () => {
   const old = { id: "estimate-1", fileName: "drawing.pdf", lines: [1] };

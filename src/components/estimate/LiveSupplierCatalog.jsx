@@ -24,6 +24,7 @@ export default function LiveSupplierCatalog({ lines = [], onApplyPrice }) {
   const searchable = lines.filter((line) => catalogQueryForLine(line));
   // Keep a short-lived lookup cache to avoid duplicate supplier requests for unchanged items.
   const lookupCache = React.useRef(new Map());
+  const attempted = React.useRef(new Map());
   async function lookup(line) {
     const query = catalogQueryForLine(line);
     const quantity = Number(line.quantity) || 1;
@@ -41,14 +42,17 @@ export default function LiveSupplierCatalog({ lines = [], onApplyPrice }) {
       for (const line of searchable) {
         if (cancelled) break;
         const query = catalogQueryForLine(line);
-        if (!query || line.onlineCatalogOffer?.query === query) continue;
+        const lookupKey = JSON.stringify([line.id, query, Number(line.quantity) || 1]);
+        if (!query || line.onlineCatalogOffer?.query === query || attempted.current.get(lookupKey) > Date.now() - 15 * 60 * 1000) continue;
+        attempted.current.set(lookupKey, Date.now());
         try {
           const result = await lookup(line);
           if (cancelled) break;
           const match = pickAutoApplyOffer(line, result.results || []);
           if (match && /^https:\/\//i.test(match.url || "")) onApplyPrice?.(line, { ...match, catalogQuery: query });
         } catch {
-          // Supplier outages must not interrupt estimating or replace existing prices.
+          // Retry transient supplier outages later without interrupting editing.
+          attempted.current.delete(lookupKey);
         }
       }
     }, 1000);

@@ -674,7 +674,7 @@ export default function EstimateBuilder() {
           <EstimatePdfDesigner estimate={draft} design={pdfDesign} onChange={setPdfDesign} />
         </TabsContent>
 
-        <TabsContent value="supplier-prices" className="mt-4 space-y-5">
+        <TabsContent value="supplier-prices" forceMount className="mt-4 space-y-5 data-[state=inactive]:hidden">
           <LiveSupplierCatalog
             lines={lines}
             onApplyPrice={(line, match) => setLines((current) => current.map((row) => (

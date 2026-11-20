@@ -181,12 +181,19 @@ export function applySupplierOfferToLine(line, offer, {
   if (!line || unitCost == null) return line;
   const capturedAt = now.toISOString();
   const effectiveDate = clean(offer?.effectiveDate) || capturedAt.slice(0, 10);
+  const isCatalog = sourceType === LIVE_CATALOG_SOURCE_TYPE;
   const next = {
     ...line,
-    materialUnitCost: unitCost,
+    onlineCatalogPrice: isCatalog ? unitCost : line.onlineCatalogPrice,
+    onlineCatalogOffer: isCatalog ? { supplier: clean(offer?.supplier), sku: clean(offer?.sku), mpn: clean(offer?.mpn), url: clean(offer?.url), fetchedAt: clean(offer?.fetchedAt) || capturedAt, query: clean(offer?.catalogQuery), unit: clean(offer?.unit) || "EA" } : line.onlineCatalogOffer,
+    supplierQuotedPrice: isCatalog ? line.supplierQuotedPrice : unitCost,
+    supplierQuoteOffer: isCatalog ? line.supplierQuoteOffer : { supplier: clean(offer?.supplier), reference: clean(offer?.reference), effectiveDate },
+    materialUnitCost: isCatalog
+      ? (line.supplierQuotedPrice != null || line.materialPriceMeta?.sourceType === "Manual" ? line.materialUnitCost : unitCost)
+      : unitCost,
     materialCostEdited: true,
     model: clean(line.model) || clean(offer?.mpn) || clean(offer?.sku) || clean(line.model),
-    materialPriceMeta: {
+    materialPriceMeta: isCatalog && (line.supplierQuotedPrice != null || line.materialPriceMeta?.sourceType === "Manual") ? line.materialPriceMeta : {
       sourceType,
       supplier: clean(offer?.supplier),
       reference: clean(offer?.reference) || clean(offer?.sku) || clean(offer?.url),

@@ -263,6 +263,7 @@ export function buildEstimatePdf(estimate, brandingInput) {
   const presentation = estimatePresentation(estimate);
   const design = {
     showHeader: true,
+    headerFillEnabled: false,
     showProjectCard: true,
     showScope: true,
     showSignatures: true,
@@ -271,10 +272,14 @@ export function buildEstimatePdf(estimate, brandingInput) {
   };
   design.documentTitle = normalizeDocumentTitle(design.documentTitle);
 
-  const headerBg = rgbTuple(design.headerFillColor || branding.headerColor, [17, 24, 39]);
+  const headerBg = design.headerFillEnabled === true
+    ? rgbTuple(design.headerFillColor || branding.headerColor, [17, 24, 39])
+    : rgbTuple(branding.pageColor, [255, 255, 255]);
   const darkHeader = isDarkRgb(headerBg);
   /** @type {[number, number, number]} */
-  const headerText = rgbTuple(branding.headerTextColor, darkHeader ? [255, 255, 255] : [17, 24, 39]);
+  const headerText = design.headerFillEnabled === true
+    ? rgbTuple(branding.headerTextColor, darkHeader ? [255, 255, 255] : [17, 24, 39])
+    : rgbTuple(branding.textColor, [17, 24, 39]);
   /** @type {[number, number, number]} */
   const headerSub = darkHeader ? [209, 213, 219] : [55, 65, 81];
   /** @type {[number, number, number]} */
@@ -358,8 +363,10 @@ export function buildEstimatePdf(estimate, brandingInput) {
   }
 
   if (showHeader) {
-    doc.setFillColor(...headerBg);
-    doc.rect(0, 0, pageW, headerH, "F");
+    if (design.headerFillEnabled === true) {
+      doc.setFillColor(...headerBg);
+      doc.rect(0, 0, pageW, headerH, "F");
+    }
     if (design.headerBorderEnabled) {
       const lineWidth = Math.max(0.25, Number(design.headerBorderWidth) || 1);
       doc.setDrawColor(...headerBorder);

@@ -22,6 +22,40 @@ export default function LiveSupplierCatalog({ lines = [], onApplyPrice }) {
   }, [lines, targetId]);
 
   const searchable = lines.filter((line) => catalogQueryForLine(line));
+  // Keep a short-lived lookup cache to avoid duplicate supplier requests for unchanged items.
+  const lookupCache = React.useRef(new Map());
+  async function lookup(line) {
+    const query = catalogQueryForLine(line);
+    const quantity = Number(line.quantity) || 1;
+    const cacheKey = JSON.stringify([query, quantity]);
+    const cached = lookupCache.current.get(cacheKey);
+    if (cached && Date.now() - cached.at < 15 * 60 * 1000) return cached.data;
+    const data = await searchLiveSupplierCatalog({ query, quantity });
+    lookupCache.current.set(cacheKey, { at: Date.now(), data });
+    return data;
+  }
+  // Background lookup never blocks editing; only exact high-confidence offers are applied.
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      for (const line of searchable) {
+        if (cancelled) break;
+        const query = catalogQueryForLine(line);
+        if (!query || line.onlineCatalogOffer?.query === query) continue;
+        try {
+          const result = await lookup(line);
+          if (cancelled) break;
+          const match = pickAutoApplyOffer(line, result.results || []);
+          if (match && /^https:\/\//i.test(match.url || "")) onApplyPrice?.(line, { ...match, catalogQuery: query });
+        } catch {
+          // Supplier outages must not interrupt estimating or replace existing prices.
+        }
+      }
+    }, 1000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  // Depend on material identity rather than price updates to prevent refresh loops.
+  }, [searchable.map((line) => [line.id, catalogQueryForLine(line), line.quantity].join(":")).join("|")]);
+
 
   async function runSearch(nextQuery = query) {
     const cleaned = String(nextQuery || "").trim();

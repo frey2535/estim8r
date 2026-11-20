@@ -211,6 +211,30 @@ export default function EstimateLineCard({
                 <Field label="Labor $/hr">
                   <Cell type="number" value={row.laborRate} set={(v) => onPatch?.(row.id, "laborRate", v)} />
                 </Field>
+                <div className="col-span-2 sm:col-span-4 rounded-lg border border-border bg-background/70 p-3" data-testid="material-price-comparison">
+                  <div className="mb-2 text-sm font-bold">Supplier price comparison</div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <div className="text-xs font-semibold">Online catalog price / unit</div>
+                      <div className="text-base font-bold">{row.onlineCatalogPrice == null ? "Not verified" : `${Number(row.onlineCatalogPrice).toFixed(2)}`}</div>
+                      {row.onlineCatalogOffer?.supplier ? <div className="text-xs text-muted-foreground">{row.onlineCatalogOffer.supplier} · {row.onlineCatalogOffer.mpn || row.onlineCatalogOffer.sku || "Part not specified"}</div> : null}
+                      {/^https:\/\//i.test(row.onlineCatalogOffer?.url || "") ? <a className="text-xs font-semibold text-blue-700 underline dark:text-orange-400" href={row.onlineCatalogOffer.url} target="_blank" rel="noopener noreferrer">View exact supplier product</a> : <div className="text-xs text-muted-foreground">Direct product link unavailable</div>}
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold">Supplier quoted price / unit</div>
+                      <input aria-label="Supplier quoted price per unit" type="number" min="0" step="0.01" className="mt-1 w-full rounded-md border border-input bg-background px-2 py-2 text-base" value={row.supplierQuotedPrice ?? ""} placeholder="Awaiting quote" onChange={(e) => {
+                        const value = e.target.value;
+                        onPatch?.(row.id, "supplierQuotedPrice", value === "" ? null : Number(value));
+                        if (value !== "") onPatch?.(row.id, "materialUnitCost", Number(value));
+                      }} />
+                      {row.supplierQuoteOffer?.supplier ? <div className="text-xs text-muted-foreground">{row.supplierQuoteOffer.supplier} · {row.supplierQuoteOffer.reference || "Quote"}</div> : null}
+                    </div>
+                  </div>
+                  {row.onlineCatalogPrice != null && row.supplierQuotedPrice != null ? <div className={`mt-2 text-xs font-bold ${Number(row.supplierQuotedPrice) <= Number(row.onlineCatalogPrice) ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}>
+                    {Number(row.supplierQuotedPrice) <= Number(row.onlineCatalogPrice) ? "Quoted savings" : "Quote above online"}: ${Math.abs(Number(row.onlineCatalogPrice) - Number(row.supplierQuotedPrice)).toFixed(2)} / unit · ${(Math.abs(Number(row.onlineCatalogPrice) - Number(row.supplierQuotedPrice)) * qty).toFixed(2)} for this line
+                  </div> : null}
+                  <div className="mt-2 text-xs text-muted-foreground">Estimate calculations use Material $/unit below. Online pricing remains available for comparison.</div>
+                </div>
                 <Field label="Material $/unit">
                   <Cell type="number" value={row.materialUnitCost} set={(v) => onPatch?.(row.id, "materialUnitCost", v)} />
                 </Field>

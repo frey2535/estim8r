@@ -59,6 +59,7 @@ export const DEFAULT_PDF_DESIGN = {
   headerHeightPt: 0,
   headerPaddingPt: 10,
   headerBottomGapPt: 10,
+  headerFillEnabled: false,
   headerFillColor: "#111827",
   headerBorderEnabled: false,
   headerBorderColor: "#111827",
@@ -181,7 +182,8 @@ export default function EstimatePdfDesigner({ estimate, design, onChange }) {
             <Range label={"Header height · "+(value.headerHeightPt || "Auto")+" pt"} min={0} max={220} value={value.headerHeightPt} set={(v)=>patch("headerHeightPt",Number(v))} />
             <Range label={"Header inner padding · "+value.headerPaddingPt+" pt"} min={0} max={40} value={value.headerPaddingPt} set={(v)=>patch("headerPaddingPt",Number(v))} />
             <Range label={"Space below header · "+value.headerBottomGapPt+" pt"} min={0} max={60} value={value.headerBottomGapPt} set={(v)=>patch("headerBottomGapPt",Number(v))} />
-            <Color label="Header fill color" value={value.headerFillColor} set={(v)=>patch("headerFillColor",v)} />
+            <Toggle label="Fill header background" value={value.headerFillEnabled === true} set={(v)=>patch("headerFillEnabled",v)} />
+            {value.headerFillEnabled === true && <Color label="Header fill color" value={value.headerFillColor} set={(v)=>patch("headerFillColor",v)} />}
             <Toggle label="Header outline" value={value.headerBorderEnabled} set={(v)=>patch("headerBorderEnabled",v)} />
             <Color label="Header outline color" value={value.headerBorderColor} set={(v)=>patch("headerBorderColor",v)} />
             <Range label={"Header outline width · "+value.headerBorderWidth+" pt"} min={0} max={8} step={0.25} value={value.headerBorderWidth} set={(v)=>patch("headerBorderWidth",Number(v))} />

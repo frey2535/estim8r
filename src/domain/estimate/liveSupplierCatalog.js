@@ -185,7 +185,7 @@ export function applySupplierOfferToLine(line, offer, {
   const next = {
     ...line,
     onlineCatalogPrice: isCatalog ? unitCost : line.onlineCatalogPrice,
-    onlineCatalogOffer: isCatalog ? { supplier: clean(offer?.supplier), sku: clean(offer?.sku), mpn: clean(offer?.mpn), url: clean(offer?.url), fetchedAt: clean(offer?.fetchedAt) || capturedAt, unit: clean(offer?.unit) || "EA" } : line.onlineCatalogOffer,
+    onlineCatalogOffer: isCatalog ? { supplier: clean(offer?.supplier), sku: clean(offer?.sku), mpn: clean(offer?.mpn), url: clean(offer?.url), fetchedAt: clean(offer?.fetchedAt) || capturedAt, query: clean(offer?.catalogQuery), unit: clean(offer?.unit) || "EA" } : line.onlineCatalogOffer,
     supplierQuotedPrice: isCatalog ? line.supplierQuotedPrice : unitCost,
     supplierQuoteOffer: isCatalog ? line.supplierQuoteOffer : { supplier: clean(offer?.supplier), reference: clean(offer?.reference), effectiveDate },
     materialUnitCost: isCatalog

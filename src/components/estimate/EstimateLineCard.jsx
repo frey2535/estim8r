@@ -44,6 +44,7 @@ export default function EstimateLineCard({
   onAcknowledge,
 }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [editingOpen, setEditingOpen] = useState(() => !String(row.description || row.laborItemId || "").trim());
   const laborItem = findLibraryItem(library, row);
   const qty = Number(row.quantity) || 0;
   const material = qty * (Number(row.materialUnitCost) || 0);
@@ -60,9 +61,10 @@ export default function EstimateLineCard({
   const includeLabel = title === "New line" ? "line" : title;
   const showNoticeText = notice && (notice.tone === "unmatched" || detailsOpen);
   const priceStatus = materialPriceStatus(row.materialPriceMeta);
+  const tone = index % 2 === 0 ? "border-sky-200 bg-sky-50/80 dark:border-sky-900 dark:bg-sky-950/25" : "border-emerald-200 bg-emerald-50/70 dark:border-emerald-900 dark:bg-emerald-950/25";
 
   return (
-    <Card data-testid="estimate-line-card" className={`overflow-hidden shadow-sm ${omitted ? "opacity-60" : ""}`}>
+    <Card data-testid="estimate-line-card" className={`overflow-hidden border-l-4 shadow-sm ${tone} ${omitted ? "opacity-60" : ""}`}>
       <div className="flex">
         <div className="flex shrink-0 flex-col items-center gap-0.5 self-stretch bg-blue-600/10 px-0.5 py-1 dark:bg-orange-500/10">
           <button
@@ -150,7 +152,7 @@ export default function EstimateLineCard({
             </p>
           ) : null}
 
-          <div className="mt-2 grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-7 lg:gap-2">
+          <button type="button" aria-expanded={editingOpen} aria-label={`${editingOpen ? "Collapse" : "Edit"} line ${index + 1}`} onClick={() => setEditingOpen((open) => !open)} className="mt-2 flex min-h-[44px] w-full items-center justify-between rounded-md border border-current/10 bg-background/75 px-3 py-2 text-left text-sm font-semibold hover:bg-background">\n            <span>{editingOpen ? "Done editing" : "Edit item"}</span>\n            <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">${material.toFixed(2)} material · ${(material + labor).toFixed(2)} total {editingOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</span>\n          </button>\n          {editingOpen ? <div className="mt-2 grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-7 lg:gap-2">
             <Field label="Type">
               <Sel value={row.itemType} vals={LINE_TYPES} set={(v) => onPatch?.(row.id, "itemType", v)} placeholder="Type" />
             </Field>
@@ -182,13 +184,11 @@ export default function EstimateLineCard({
             <Field label="MH/unit">
               <Cell type="number" value={row.laborMhPerUnit} set={(v) => onPatch?.(row.id, "laborMhPerUnit", v)} />
             </Field>
-          </div>
-          {qtyHint ? <p className="mt-1 text-[11px] text-muted-foreground">{qtyHint}</p> : null}
-          <div className="mt-2">
-            <LineMarketCompare comparison={market} />
-          </div>
+          </div> : null}
+          {editingOpen && qtyHint ? <p className="mt-1 text-[11px] text-muted-foreground">{qtyHint}</p> : null}
+          {editingOpen ? <div className="mt-2"><LineMarketCompare comparison={market} /></div> : null}
 
-          <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen} className="mt-2">
+          {editingOpen ? <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen} className="mt-2">
             <CollapsibleTrigger className="flex min-h-[44px] items-center gap-1 text-base font-bold text-foreground">
               <ChevronDown className={`h-3.5 w-3.5 transition-transform ${detailsOpen ? "rotate-180" : ""}`} />
               {detailsOpen ? "Hide details" : "Details"}
@@ -258,7 +258,7 @@ export default function EstimateLineCard({
                 />
               ) : null}
             </CollapsibleContent>
-          </Collapsible>
+          </Collapsible> : null}
         </div>
       </div>
     </Card>

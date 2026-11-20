@@ -30,7 +30,7 @@ export const DEFAULT_PDF_DESIGN = {
   showPageNumbers: true,
   showHeader: true,
   headerCompanyAlign: "left",
-  logoPosition: "left",
+  logoPosition: "center",
   logoOffsetX: 0,
   logoOffsetY: 0,
   logoSizePt: 0,

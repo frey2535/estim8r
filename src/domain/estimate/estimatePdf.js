@@ -382,8 +382,10 @@ export function buildEstimatePdf(estimate, brandingInput) {
         doc.addImage(
           branding.logoDataUrl,
           logoFormat(branding.logoDataUrl),
-          (pageW - logoW) / 2,
-          y,
+          Math.max(0, Math.min(pageW - logoW,
+            (design.logoPosition === "right" ? pageW - margin - logoW : design.logoPosition === "left" ? margin : (pageW - logoW) / 2)
+            + (Number(design.logoOffsetX) || 0))),
+          y + (Number(design.logoOffsetY) || 0),
           logoW,
           logoH,
         );

@@ -461,13 +461,10 @@ export default function EstimateBuilder() {
     <div className="w-full min-w-0 space-y-5 py-2">
       <div className="flex flex-col items-stretch gap-4 lg:flex-row lg:flex-wrap lg:items-start">
         <div className="min-w-0 flex-1">
-        <p className="text-sm font-bold uppercase tracking-widest text-blue-600 dark:text-orange-500">Estimate Builder</p>
-        <h1 className="text-3xl font-black">{pdfDesign.documentTitle || "Electrical"}</h1>
-        <p className="text-base text-foreground/80">
-          Add items, quantities, labor, and markup here. Drawings and takeoff are optional and do not have to be started to save.
-          {isDrawingFileName(meta.fileName) ? ` Drawing: ${meta.fileName}.` : ""}
-        </p>
-        <Link to="/takeoff" className="mt-2 inline-flex min-h-[44px] items-center text-base font-bold text-blue-700 dark:text-orange-400">Back to takeoff</Link>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Estimate</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{header.projectName || "New estimate"}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Add items and quantities, review the total, then save or export.{isDrawingFileName(meta.fileName) ? ` Drawing: ${meta.fileName}.` : ""}</p>
+        <Link to="/takeoff" className="mt-2 inline-flex min-h-[40px] items-center text-sm font-medium text-primary">Back to drawing</Link>
         <div className="mt-3">
           {ready && <>
             <EstimatePhotosPanel estimateId={storedEstimateId} />
@@ -491,11 +488,11 @@ export default function EstimateBuilder() {
 
       <Tabs defaultValue="estimate" className="w-full min-w-0">
         <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto bg-muted/70 p-1 [&_[data-state=active]]:bg-blue-100 [&_[data-state=active]]:text-blue-900 dark:[&_[data-state=active]]:bg-blue-900/40 dark:[&_[data-state=active]]:text-blue-100">
-          <TabsTrigger value="estimate" className="min-h-[44px] px-4 text-base">Estimate</TabsTrigger>
-          <TabsTrigger value="labor-markup" className="min-h-[44px] px-4 text-base">Labor</TabsTrigger>
-          <TabsTrigger value="assemblies" className="min-h-[44px] px-4 text-base">Assemblies</TabsTrigger>
-          <TabsTrigger value="supplier-prices" className="min-h-[44px] px-4 text-base">Prices</TabsTrigger>
-          <TabsTrigger value="pdf-designer" className="min-h-[44px] px-4 text-base">PDF</TabsTrigger>
+          <TabsTrigger value="estimate" className="min-h-[44px] px-3 text-sm">Estimate</TabsTrigger>
+          <TabsTrigger value="labor-markup" className="min-h-[44px] px-3 text-sm">Labor &amp; rates</TabsTrigger>
+          <TabsTrigger value="assemblies" className="min-h-[44px] px-3 text-sm">Assemblies</TabsTrigger>
+          <TabsTrigger value="supplier-prices" className="min-h-[44px] px-3 text-sm">Prices</TabsTrigger>
+          <TabsTrigger value="pdf-designer" className="min-h-[44px] px-3 text-sm">PDF design</TabsTrigger>
           {draft.trueTakeoff?.analysis ? <TabsTrigger value="audit" className="min-h-[44px] px-4 text-base">Audit</TabsTrigger> : null}
         </TabsList>
 
@@ -614,9 +611,13 @@ export default function EstimateBuilder() {
         ) : null}
       </section>
 
-      <EstimateReadinessPanel checklist={completenessChecklist} onChange={setCompletenessChecklist} />
-
-      <EstimateQualityGate lines={lines} checklist={completenessChecklist} itemized={itemized} trueTakeoff={trueTakeoff} />
+      <details className="rounded-xl border border-border bg-card p-4">
+        <summary className="cursor-pointer text-sm font-semibold">Review estimate checks</summary>
+        <div className="mt-4 space-y-4">
+          <EstimateReadinessPanel checklist={completenessChecklist} onChange={setCompletenessChecklist} />
+          <EstimateQualityGate lines={lines} checklist={completenessChecklist} itemized={itemized} trueTakeoff={trueTakeoff} />
+        </div>
+      </details>
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,22rem)]">
         <div className="min-w-0 rounded-2xl border border-border bg-card p-4">

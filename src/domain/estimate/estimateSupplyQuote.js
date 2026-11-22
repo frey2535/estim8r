@@ -121,7 +121,15 @@ export function isLaborOnlySupplyQuoteLine(line, laborItem) {
  */
 export function estimateLineBelongsOnSupplyQuote(line, laborItem) {
   if (!estimateLineHasQuoteData(line)) return false;
-  return !isLaborOnlySupplyQuoteLine(line, laborItem);
+  if (isLaborOnlySupplyQuoteLine(line, laborItem)) return false;
+  const type = String(line?.itemType || "").trim().toLowerCase();
+  // A labor catalog selection describes work to install a product, not a
+  // purchase order for that product. Require a material/equipment line type.
+  if (["labor", "subcontract", "allowance", "service"].includes(type)) return false;
+  const materialTypes = new Set([...BUY_LIST_LINE_TYPES].map((value) => value.toLowerCase()));
+  if (materialTypes.has(type)) return true;
+  // Explicit material-only lines may come from integrations without a type.
+  return line?.isMaterial === true || line?.lineKind === "material";
 }
 
 /**

@@ -17,7 +17,7 @@ import { listCloudEstimates, importCloudEstimates, deleteCloudEstimate, getCloud
 import { readCompanyBranding } from "@/domain/estimate/branding";
 import { estimatePdfBlob } from "@/domain/estimate/estimatePdf";
 
-/** @type {[string, string, string, import("react").ComponentType<{ className?: string }>][]} */
+/** @type {[string, string, string, import("react").ComponentType<{ className?: string }>, string, string, string][]} */
 const cards = [
   ["Create Estimate", "Build a bid using verified labor, company history and transparent productivity factors.", "/estimates/new", Calculator, "border-t-blue-500", "text-blue-600 dark:text-blue-400", "bg-blue-50 dark:bg-blue-950/30"],
   ["Labor Library", "Search the master electrical trade labor taxonomy and inspect source verification.", "/labor", BookOpen, "border-t-violet-500", "text-violet-600 dark:text-violet-400", "bg-violet-50 dark:bg-violet-950/30"],

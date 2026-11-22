@@ -125,9 +125,9 @@ export function estimateLineBelongsOnSupplyQuote(line, laborItem) {
   // Estimate lines can be assigned a material-like type while their actual
   // description is an installation task. Never send such work to a supplier.
   const description = String(line?.description || laborItem?.item_name || laborItem?.itemName || "").trim();
-  const workDescription = /^(?:install(?:ation)?|remove|replace|relocate|terminate|connect|disconnect|test|commission|troubleshoot|pull(?:ing)?|route|rough[- ]?in|mount|set up|configure|program|inspect|repair|service|labor|work)\\b/i;
+  const workDescription = /^(?:install(?:ation)?|remove|replace|relocate|terminate|connect|disconnect|test|commission|troubleshoot|pull(?:ing)?|route|rough[- ]?in|mount|set up|configure|program|inspect|repair|service|labor|work)\b/i;
   if (workDescription.test(description)) return false;
-  const activityCategory = /^(?:device install|generator installation|equipment termination|wire\\/?cable pulling|project labor|installation labor|testing(?:\\s*&\\s*commissioning)?)$/i;
+  const activityCategory = /^(?:device install|generator installation|equipment termination|wire\/?cable pulling|project labor|installation labor|testing(?:\s*&\s*commissioning)?)$/i;
   const category = String(line?.category || "").trim();
   // A labor activity category is not a material category. Only an explicit
   // purchasable-material classification can override it.

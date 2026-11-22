@@ -1,5 +1,5 @@
 import { requireSupabase } from "@/api/supabaseClient";
-import { writeEstimate, readEstimate } from "@/domain/estimate/estimateStore";
+import { writeEstimate, readEstimate, registerCloudEstimateSnapshot } from "@/domain/estimate/estimateStore";
 
 async function currentOrg() {
   const client = requireSupabase();
@@ -11,6 +11,18 @@ async function currentOrg() {
   const { data, error } = await client.from("profiles").select("org_id").eq("id", auth.user.id).single();
   if (error || !data?.org_id) throw new Error("No company linked to this account.");
   return data.org_id;
+}
+
+/** Diagnostic metadata only; does not expose another company's records. */
+export async function getCompanySyncDiagnostics() {
+  const client = requireSupabase();
+  const { data: auth, error: authError } = await client.auth.getUser();
+  if (authError || !auth?.user) throw new Error("Sign in to inspect company synchronization.");
+  const orgId = await currentOrg();
+  const { data, error } = await client.from("estim8r_estimate_snapshots")
+    .select("id,updated_at").eq("org_id", orgId);
+  if (error) throw error;
+  return { userId: auth.user.id, orgId, cloudCount: (data || []).length };
 }
 
 export async function listCloudEstimates() {
@@ -53,16 +65,55 @@ export async function deleteCloudEstimate(id) {
   if (error) throw error;
 }
 
-/** Import only records that do not already exist locally. Never overwrite unsaved device work. */
+/** A per-company, per-estimate last-imported baseline, never a source of truth. */
+function baselineKey(orgId, id) {
+  return `estim8r.cloudBaseline.v1:${orgId}:${id}`;
+}
+
+function readBaseline(key) {
+  try { return JSON.parse(localStorage.getItem(key) || "null"); }
+  catch { return null; }
+}
+
+export function decideCloudRefresh(local, baseline, remote) {
+  if (!local) return "import";
+  if (local.id !== remote.id) return "conflict";
+  if (JSON.stringify(local) === JSON.stringify(remote)) return "unchanged";
+  if (!baseline || JSON.stringify(local) !== JSON.stringify(baseline)) return "conflict";
+  return "refresh";
+}
+
+/**
+ * Refresh unchanged local copies from the shared company database.
+ * If a device has edited a copy since its last cloud import, preserve it
+ * and report a conflict rather than silently discarding work.
+ */
 export async function importCloudEstimates(rows) {
+  const orgId = await currentOrg();
   const imported = [];
-  for (const row of rows) {
+  const conflicts = [];
+  for (const row of rows || []) {
     const estimate = row.payload;
     if (!estimate?.fileName || !estimate?.id) continue;
-    // Preserve local edits instead of silently overwriting an existing draft.
-    if (readEstimate(estimate.fileName, estimate.fileSize)) continue;
-    writeEstimate(estimate, { skipCloud: true });
-    imported.push(estimate);
+    const key = baselineKey(orgId, estimate.id);
+    const local = readEstimate(estimate.fileName, estimate.fileSize);
+    const baseline = readBaseline(key);
+    const decision = decideCloudRefresh(local, baseline, estimate);
+    if (decision === "conflict") {
+      conflicts.push(estimate.id);
+      continue;
+    }
+    if (!local || JSON.stringify(local) !== JSON.stringify(estimate)) {
+      writeEstimate(estimate, { skipCloud: true });
+      imported.push(estimate);
+    }
+    localStorage.setItem(key, JSON.stringify(estimate));
+    registerCloudEstimateSnapshot(estimate, row.revision);
+  }
+  if (conflicts.length && typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("estim8r-cloud-sync-conflict", {
+      detail: { estimateIds: conflicts },
+    }));
   }
   return imported;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Camera, ImagePlus, Trash2 } from "lucide-react";
-import { addEstimatePhoto, deleteEstimatePhoto, listEstimatePhotos, updateEstimatePhoto } from "@/domain/estimate/estimatePhotos";
+import { addAndSyncEstimatePhoto, deleteSyncedEstimatePhoto, listEstimatePhotos, syncEstimatePhotos, updateEstimatePhoto } from "@/domain/estimate/estimatePhotos";
 
 export default function EstimatePhotosPanel({ estimateId }) {
   const galleryRef = useRef(null);
@@ -10,11 +10,11 @@ export default function EstimatePhotosPanel({ estimateId }) {
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     let active = true;
-    listEstimatePhotos(estimateId).then((rows) => { if (active) setPhotos(rows); }).catch((err) => { if (active) setError(err.message); });
+    syncEstimatePhotos(estimateId).then((rows) => { if (active) setPhotos(rows); }).catch((err) => { if (active) { setError(err.message); listEstimatePhotos(estimateId).then(setPhotos).catch(() => {}); } });
     return () => { active = false; };
   }, [estimateId]);
 
-  async function refresh() { setPhotos(await listEstimatePhotos(estimateId)); }
+  async function refresh() { setPhotos(await syncEstimatePhotos(estimateId)); }
 
   async function upload(event) {
     const files = Array.from(event.target.files || []);
@@ -23,7 +23,7 @@ export default function EstimatePhotosPanel({ estimateId }) {
     setBusy(true);
     setError("");
     try {
-      for (const file of files) await addEstimatePhoto(estimateId, file);
+      for (const file of files) await addAndSyncEstimatePhoto(estimateId, file);
       await refresh();
     } catch (err) { setError(err.message || "Unable to save photo."); }
     finally { setBusy(false); }
@@ -31,14 +31,14 @@ export default function EstimatePhotosPanel({ estimateId }) {
 
   async function remove(photo) {
     if (!window.confirm("Delete this photo from this estimate?")) return;
-    try { await deleteEstimatePhoto(photo.id); await refresh(); }
+    try { await deleteSyncedEstimatePhoto(photo); await refresh(); }
     catch (err) { setError(err.message); }
   }
 
   return (
     <section className="rounded-xl border border-border bg-card p-4 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h3 className="font-bold">Estimate Photos & Attachments</h3><p className="text-xs text-muted-foreground">Photos are stored on this device. Buildr transfer is not yet available.</p></div>
+        <div><h3 className="font-bold">Estimate Photos & Attachments</h3><p className="text-xs text-muted-foreground">Photos synchronize across signed-in company devices. Existing device photos are uploaded when opened; Buildr transfer is not yet available.</p></div>
         <div className="flex gap-2">
           <input ref={galleryRef} className="hidden" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple onChange={upload} aria-label="Upload estimate photos" />
           <input ref={cameraRef} className="hidden" type="file" accept="image/*" capture="environment" onChange={upload} aria-label="Take estimate photo" />

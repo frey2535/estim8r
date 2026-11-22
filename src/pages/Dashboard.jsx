@@ -13,7 +13,7 @@ import {
   upsertProjectFolder,
 } from "@/domain/estimate/projectDocuments";
 import { activateEstimate, deleteStoredEstimate, readEstimate, writeEstimate } from "@/domain/estimate/estimateStore";
-import { listCloudEstimates, importCloudEstimates, saveCloudEstimate, deleteCloudEstimate, subscribeCompanyEstimates } from "@/api/estimateCloudRepository";
+import { listCloudEstimates, importCloudEstimates, deleteCloudEstimate, getCloudEstimate, saveCloudEstimate, getCompanySyncDiagnostics, subscribeCompanyEstimates } from "@/api/estimateCloudRepository";
 import { readCompanyBranding } from "@/domain/estimate/branding";
 import { estimatePdfBlob } from "@/domain/estimate/estimatePdf";
 
@@ -101,7 +101,10 @@ export default function Dashboard() {
   const { user } = useAuth();
   const [folders, setFolders] = useState([]);
   const [companyRows, setCompanyRows] = useState(null);
+  const [showDeviceOnly, setShowDeviceOnly] = useState(false);
+  const [syncDiagnostics, setSyncDiagnostics] = useState(null);
   const [syncBusy, setSyncBusy] = useState(false);
+  const [publishingId, setPublishingId] = useState(null);
   const [deletingFolderId, setDeletingFolderId] = useState(null);
   const [syncMessage, setSyncMessage] = useState("");
   const [syncFailed, setSyncFailed] = useState(false);
@@ -131,6 +134,35 @@ export default function Dashboard() {
     }
   }
 
+  async function publishLocalEstimate(folder) {
+    const draft = readEstimate(folder.fileName, folder.fileSize);
+    if (!draft?.id) {
+      setSyncFailed(true);
+      setSyncMessage("This local estimate has no ID. Open and save it before publishing.");
+      return;
+    }
+    if (!window.confirm(`Publish "${folder.projectName}" to the signed-in company? All authorized company employees will be able to view it. Verify you are signed into the correct company.`)) return;
+    setPublishingId(draft.id);
+    try {
+      const existing = await getCloudEstimate(draft.id);
+      if (existing) {
+        throw new Error("An estimate with this ID already exists in the company cloud. No data was overwritten.");
+      }
+      await saveCloudEstimate(draft, null);
+      const remote = await listCloudEstimates();
+      await importCloudEstimates(remote);
+      setCompanyRows(remote);
+      setFolders(listProjectFolders());
+      setSyncFailed(false);
+      setSyncMessage(`Published "${folder.projectName}" to the company. Other employees can now refresh their Estimates folder.`);
+    } catch (error) {
+      setSyncFailed(true);
+      setSyncMessage(`Publish failed: ${error?.message || "Cloud unavailable"}. Your local estimate remains intact.`);
+    } finally {
+      setPublishingId(null);
+    }
+  }
+
   async function syncEstimates() {
     if (syncBusy) return;
     setSyncBusy(true);
@@ -138,21 +170,16 @@ export default function Dashboard() {
     setSyncFailed(false);
     try {
       const remote = await listCloudEstimates();
-      const remoteIds = new Set(remote.map((row) => row.id));
-      const local = listProjectFolders().map((folder) => readEstimate(folder.fileName, folder.fileSize)).filter(Boolean);
-      let uploaded = 0;
-      for (const estimate of local) {
-        if (!estimate.id || remoteIds.has(estimate.id)) continue;
-        await saveCloudEstimate(estimate);
-        uploaded += 1;
-      }
+      setSyncDiagnostics(await getCompanySyncDiagnostics());
+      // A shared browser can hold another organization's local drafts.
+      // Never promote those drafts to the signed-in company's cloud on Sync.
       const imported = await importCloudEstimates(remote);
       for (const estimate of imported) {
         upsertProjectFolder({ projectName: estimate.header?.projectName || estimate.fileName, projectAddress: estimate.header?.projectAddress || "", fileName: estimate.fileName, fileSize: estimate.fileSize || 0 });
       }
       setCompanyRows(await listCloudEstimates());
       setFolders(listProjectFolders());
-      setSyncMessage(`Cloud sync: ${uploaded} uploaded, ${imported.length} imported. Existing local copies were not overwritten.`);
+      setSyncMessage(`Company cloud refreshed: ${remote.length} available, ${imported.length} added or updated. Local conflicts are preserved.`);
     } catch (error) {
       const code = String(error?.code || "");
       const detail = String(error?.message || "Cloud service unavailable.");
@@ -173,7 +200,9 @@ export default function Dashboard() {
     const loadCompanyEstimates = async () => {
       try {
         const remote = await listCloudEstimates();
+        const diagnostics = await getCompanySyncDiagnostics();
         if (cancelled) return;
+        setSyncDiagnostics(diagnostics);
         if (cancelled) return;
         setCompanyRows(remote);
         const imported = await importCloudEstimates(remote);
@@ -217,7 +246,8 @@ export default function Dashboard() {
     };
   }, []);
 
-  const displayedFolders = companyRows === null ? folders : companyRows.map((row) => ({
+  // Only authenticated company cloud records belong in the shared folder.
+  const displayedFolders = (companyRows || []).map((row) => ({
     id: row.id,
     projectName: row.payload?.header?.projectName || row.payload?.fileName || "Untitled estimate",
     projectAddress: row.payload?.header?.projectAddress || "",
@@ -225,6 +255,12 @@ export default function Dashboard() {
     fileSize: row.payload?.fileSize || 0,
     cloudEstimate: row.payload,
   }));
+
+  const cloudIds = new Set((companyRows || []).map((row) => row.id));
+  const localOnlyFolders = companyRows === null ? [] : folders.filter((folder) => {
+    const draft = readEstimate(folder.fileName, folder.fileSize);
+    return draft?.id && !cloudIds.has(draft.id);
+  });
 
   return (
     <div className="mx-auto w-full max-w-6xl py-2 sm:py-4">
@@ -279,6 +315,15 @@ export default function Dashboard() {
 
       <div className="mt-4 flex flex-wrap items-center gap-3"><button type="button" disabled={syncBusy} onClick={() => void syncEstimates()} className="rounded-md border border-border bg-card px-4 py-2 text-sm font-semibold disabled:opacity-50">{syncBusy ? "Syncing..." : "Sync estimates across devices"}</button>{syncMessage && <p role={syncFailed ? "alert" : "status"} className={`text-sm ${syncFailed ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground"}`}>{syncMessage}</p>}</div>
 
+      {syncDiagnostics && <details className="mt-3 rounded-lg border border-border p-3 text-xs">
+        <summary className="cursor-pointer font-medium">Company sync diagnostics</summary>
+        <p className="mt-2">Signed-in user ID: <code>{syncDiagnostics.userId}</code></p>
+        <p>Company ID: <code>{syncDiagnostics.orgId}</code></p>
+        <p>Shared cloud estimates: {syncDiagnostics.cloudCount}</p>
+        <p>Device-only estimates: {localOnlyFolders.length}</p>
+        <p className="mt-2 text-muted-foreground">Compare the Company ID and shared estimate count between the administrator and employee accounts. Different Company IDs indicate incorrect membership. Matching IDs but different counts indicate a retrieval or deployment problem.</p>
+      </details>}
+
       <section className="mt-6">
         <div className="mb-3 flex items-baseline justify-between gap-3">
           <h2 className="text-sm font-semibold text-foreground">Estimates folder</h2>
@@ -287,7 +332,7 @@ export default function Dashboard() {
         {displayedFolders.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border bg-card px-4 py-10 text-center">
             <FolderOpen className="mx-auto h-5 w-5 text-muted-foreground" />
-            <p className="mt-3 text-sm font-medium text-foreground">No saved estimates yet</p>
+            <p className="mt-3 text-sm font-medium text-foreground">{companyRows === null ? "Loading company estimates..." : "No company estimates yet"}</p>
             <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
               Open New Estimate to write one. If a Buildr company is linked, the estimate also syncs to that project’s Estimate tab.
             </p>
@@ -320,6 +365,25 @@ export default function Dashboard() {
           </div>
         )}
       </section>
+
+      {localOnlyFolders.length > 0 && (
+        <section className="mt-6" aria-label="Unpublished device estimates">
+          <h2 className="text-sm font-semibold text-foreground">Saved on this device only</h2>
+          <p className="mt-1 text-sm text-muted-foreground">These estimates are not in the shared company database. Publish each one explicitly after confirming the company account. Nothing is uploaded automatically.</p>
+          <button type="button" onClick={() => setShowDeviceOnly((value) => !value)} className="mt-3 rounded-md border border-border px-3 py-2 text-sm font-medium">{showDeviceOnly ? "Hide device-only estimates" : `Review ${localOnlyFolders.length} device-only estimates`}</button>
+          {showDeviceOnly && <div className="mt-3 grid gap-2">
+            {localOnlyFolders.map((folder) => {
+              const draft = readEstimate(folder.fileName, folder.fileSize);
+              return <div key={folder.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-3">
+                <span className="text-sm font-medium">{folder.projectName}</span>
+                <button type="button" disabled={publishingId !== null || syncBusy} onClick={() => void publishLocalEstimate(folder)} className="rounded-md border border-border px-3 py-2 text-sm font-semibold disabled:opacity-50">
+                  {publishingId === draft?.id ? "Publishing..." : "Publish to company"}
+                </button>
+              </div>;
+            })}
+          </div>}
+        </section>
+      )}
 
       <section className="mt-8">
         <h2 className="mb-3 text-sm font-semibold text-foreground">Tools</h2>

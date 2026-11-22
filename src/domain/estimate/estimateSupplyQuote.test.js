@@ -95,8 +95,12 @@ assert.equal(isLaborOnlySupplyQuoteLine(sawcut, null), true);
 assert.equal(isLaborOnlySupplyQuoteLine(excavation, library[1]), true);
 assert.equal(isLaborOnlySupplyQuoteLine(allowance, null), true);
 assert.equal(isLaborOnlySupplyQuoteLine(emt, null), false);
-assert.equal(estimateLineBelongsOnSupplyQuote(groundRod, library[3]), true, "ground rods are a buy-list item");
-assert.equal(estimateLineBelongsOnSupplyQuote(meterBase, library[4]), true, "meter bases are a buy-list item");
+assert.equal(estimateLineBelongsOnSupplyQuote(groundRod, library[3]), false, "installation labor is not a material purchase");
+assert.equal(estimateLineBelongsOnSupplyQuote(meterBase, library[4]), false, "installation labor is not a material purchase");
+
+assert.equal(estimateLineBelongsOnSupplyQuote({ itemType: "Labor", category: "Grounding", description: "Install grounding electrode", materialUnitCost: 12 }, null), false);
+assert.equal(estimateLineBelongsOnSupplyQuote({ itemType: "Other", description: "General site cleanup" }, null), false);
+assert.equal(estimateLineBelongsOnSupplyQuote({ itemType: "Material", description: "Ground rod" }, null), true);
 
 const quote = buildEstimateSupplyQuote({
   lines: [emt, lights, blank, omitted, trench, sawcut, excavation, allowance, groundRod, meterBase],
@@ -105,19 +109,17 @@ const quote = buildEstimateSupplyQuote({
   projectName: "Roadside sign",
 });
 
-assert.equal(quote.rows.length, 4, "labor-only and omitted lines stay off the quote");
+assert.equal(quote.rows.length, 2, "only explicit material/equipment lines stay on the quote");
 assert.deepEqual(quote.rows.map((row) => row.description), [
   '1/2" EMT',
   "Lights that shone upon a roadside sign",
-  "Install Ground rod",
-  "Install Meter base",
 ]);
 assert.equal(quote.rows[0].device, "EMT conduit");
 assert.equal(quote.rows[0].quantity, 10, "qty is the entered stick count, not labor feet");
 assert.equal(quote.rows[0].model, "", "no model is invented for conduit");
 assert.equal(quote.rows[1].device, "Lighting");
 assert.equal(quote.rows[1].quantity, 2);
-assert.equal(quote.totals.quantity, 17);
+assert.equal(quote.totals.quantity, 12);
 assert(!quote.rows.some((row) => /trench|sawcut|excav|allowance/i.test(row.description)), "labor-only copy stays off the quote");
 assert.equal(knownEstimateModel({ description: "Lithonia 2GTL4 flood" }), "", "description text is not a model");
 assert.equal(knownEstimateModel({ model: "2GTL4" }), "2GTL4");

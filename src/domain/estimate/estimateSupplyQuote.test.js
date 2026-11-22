@@ -102,6 +102,22 @@ assert.equal(estimateLineBelongsOnSupplyQuote({ itemType: "Labor", category: "Gr
 assert.equal(estimateLineBelongsOnSupplyQuote({ itemType: "Other", description: "General site cleanup" }, null), false);
 assert.equal(estimateLineBelongsOnSupplyQuote({ itemType: "Material", description: "Ground rod" }, null), true);
 
+const mixedInstall = [
+  { id: "work-generator", itemType: "Equipment", category: "Generator installation", description: "Install standby generator set", quantity: 1 },
+  { id: "work-ats", itemType: "Gear", category: "Equipment Termination", description: "Install automatic transfer switch", quantity: 1 },
+  { id: "work-wire", itemType: "Wire", category: "Wire/Cable Pulling", description: "Pull generator feeder conductors", quantity: 1 },
+  { id: "work-device", itemType: "Device", category: "Device Install", description: "Install wall switch", quantity: 1 },
+  { id: "material-switch", itemType: "Device", category: "Devices", description: "Wall switch", quantity: 2 },
+  { id: "material-box", itemType: "Box", category: "Boxes", description: "Switch box", quantity: 2 },
+];
+const mixedQuote = buildEstimateSupplyQuote({ lines: mixedInstall, projectName: "Generator" });
+assert.deepEqual(mixedQuote.rows.map((row) => row.description), ["Wall switch", "Switch box"], "installation tasks are not supplier material lines");
+const mixedPdf = buildSupplyQuotePdf(mixedQuote);
+for (const description of ["Install standby generator set", "Install automatic transfer switch", "Pull generator feeder conductors", "Install wall switch"]) {
+  assert(!mixedPdf.strings.includes(description), `PDF must exclude labor task: ${description}`);
+  assert(!supplyQuoteToExcel(mixedQuote).includes(description), `Excel must exclude labor task: ${description}`);
+}
+
 const quote = buildEstimateSupplyQuote({
   lines: [emt, lights, blank, omitted, trench, sawcut, excavation, allowance, groundRod, meterBase],
   itemized: true,

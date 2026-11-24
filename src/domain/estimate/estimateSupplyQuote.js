@@ -127,6 +127,11 @@ export function estimateLineBelongsOnSupplyQuote(line, laborItem) {
   const explicitLabor = line?.lineKind === "labor" || line?.isMaterial === false;
   const lineType = String(line?.itemType || "").trim().toLowerCase();
   if (explicitLabor || ["subcontract", "allowance", "service"].includes(lineType)) return false;
+  // Hard exclusions must precede all material evidence, including stale prices.
+  if (isLaborOnlyCatalogItem(laborItem) || LABOR_ONLY_LIBRARY_CATEGORIES.has(catalogCategory(line, laborItem)) || LABOR_ONLY_LIBRARY_CATEGORIES.has(String(line?.category || "").trim())) return false;
+  if (LABOR_ONLY_TEXT.test(laborOnlyBlob(line, laborItem))) return false;
+  const activity = String(line?.description || laborItem?.item_name || "").trim();
+  if (/^(?:(?:hand|machine|mechanical)\s+)?(?:trench(?:ing)?|excavat(?:e|ion|ing)|backfill(?:ing)?|sawcut(?:ting)?|demolition|supervision|testing|commissioning|labor|mobilization)\b/i.test(activity)) return false;
   if (explicitMaterial) return true;
   if (isLaborOnlySupplyQuoteLine(line, laborItem)) return false;
   // Estimate lines can be assigned a material-like type while their actual

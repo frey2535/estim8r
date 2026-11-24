@@ -124,4 +124,20 @@ assert(hydrateManualLineLabor(line({
   laborMatchStatus: "overridden",
 }), { items: AUDITED_LABOR_ITEMS }).laborMhPerUnit === 0.2, "explicit MH override is kept");
 
+
+// Purchasing quantities must never change the selected library labor basis.
+const installed = applyLibraryItemToLine(line({
+  quantity: 120, unit: "LF", materialQuantity: 1000, materialUnitCost: 1.5,
+}), emtItem);
+const purchased = estimateGrandTotal({ lines: [installed] });
+const linked = estimateGrandTotal({ lines: [{ ...installed, materialQuantity: null }] });
+assert(purchased.hours === linked.hours, "purchasing 1000 LF does not increase installation hours");
+assert(purchased.labor === linked.labor, "purchasing 1000 LF does not increase installation labor cost");
+assert(Math.abs(purchased.hours - 120 * installed.laborMhPerUnit) < 0.0001, "labor uses selected library rate and 120 installed LF");
+assert(purchased.material === 1500, "full 1000 LF purchase is charged");
+assert(linked.material === 180, "linked quantity charges only 120 LF");
+const revised = estimateGrandTotal({ lines: [{ ...installed, quantity: 240 }] });
+assert(Math.abs(revised.hours - purchased.hours * 2) < 0.0001, "changing installed length recalculates labor");
+assert(revised.material === purchased.material, "changing installed length preserves independent purchase cost");
+
 if (!process.exitCode) console.log("manual estimate line labor checks passed");

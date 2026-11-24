@@ -1,3 +1,4 @@
+import { materialQuantity } from "@/domain/estimate/materialQuantity";
 import { formatMoney } from "@/domain/estimate/formatMoney";
 import React, { useState } from "react";
 import { ChevronDown, ChevronUp, GripVertical, Trash2 } from "lucide-react";
@@ -48,7 +49,7 @@ export default function EstimateLineCard({
   const [editingOpen, setEditingOpen] = useState(() => !String(row.description || row.laborItemId || "").trim());
   const laborItem = findLibraryItem(library, row);
   const qty = Number(row.quantity) || 0;
-  const material = qty * (Number(row.materialUnitCost) || 0);
+  const material = materialQuantity(row) * (Number(row.materialUnitCost) || 0);
   const hours = estimateLineHours(row, laborItem);
   const labor = estimateLineLaborCost(row, laborItem);
   const qtyHint = conduitQtyHint(row, laborItem);
@@ -56,7 +57,8 @@ export default function EstimateLineCard({
   const pickLabel = laborItemLabel(laborItem);
   const description = String(row.description || "").trim();
   const subtitle = pickLabel && description && description !== pickLabel ? description : "";
-  const notice = estimateLineLaborNotice(row);
+  const laborNotice = estimateLineLaborNotice(row);
+  const notice = laborNotice?.tone === "unverified" && !detailsOpen ? null : laborNotice;
   const market = compareLineToMarket(row, laborItem);
   const omitted = itemized && row.included === false;
   const includeLabel = title === "New line" ? "line" : title;
@@ -115,7 +117,7 @@ export default function EstimateLineCard({
                     {notice.badge}
                   </Badge>
                 ) : null}
-                <SourceBadges badges={market.source.badges} />
+                {detailsOpen ? <SourceBadges badges={market.source.badges} /> : null}
               </div>
             </div>
             <div className="flex shrink-0 items-start gap-2">
@@ -176,7 +178,7 @@ export default function EstimateLineCard({
                 onSelect={(item) => onPickLabor?.(row, item)}
               />
             </div>
-            <Field label="Qty">
+            <Field label="Installation quantity">
               <Cell type="number" value={row.quantity} set={(v) => onPatch?.(row.id, "quantity", v)} />
             </Field>
             <Field label="Unit">
@@ -185,6 +187,16 @@ export default function EstimateLineCard({
             <Field label="MH/unit">
               <Cell type="number" value={row.laborMhPerUnit} set={(v) => onPatch?.(row.id, "laborMhPerUnit", v)} />
             </Field>
+          </div> : null}
+          {editingOpen ? <div className="mt-2 rounded-md border border-border p-3 space-y-2">
+            <label className="flex items-center gap-2 text-sm font-semibold">
+              <input type="checkbox" checked={row.materialQuantity != null && row.materialQuantity !== ""} onChange={(e) => onPatch?.(row.id, "materialQuantity", e.target.checked ? qty : null)} />
+              Separate material purchasing quantity
+            </label>
+            {row.materialQuantity != null && row.materialQuantity !== "" ? <Field label={`Material quantity (${row.unit || "EA"})`}>
+              <Cell type="number" value={row.materialQuantity} set={(v) => onPatch?.(row.id, "materialQuantity", v === "" ? 0 : Math.max(0, Number(v) || 0))} />
+            </Field> : null}
+            <p className="text-xs text-muted-foreground">Material cost uses purchased quantity × material cost per unit. Labor uses installation quantity only. For a reel, divide reel price by its length to enter cost per foot.</p>
           </div> : null}
           {editingOpen && qtyHint ? <p className="mt-1 text-[11px] text-muted-foreground">{qtyHint}</p> : null}
           {editingOpen ? <div className="mt-2"><LineMarketCompare comparison={market} /></div> : null}

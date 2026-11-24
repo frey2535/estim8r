@@ -1,3 +1,4 @@
+import { materialQuantity } from "./materialQuantity.js";
 import { findLibraryItem, laborItemLabel } from "./manualLineLabor.js";
 import { buildSupplyQuotePdf, supplyQuoteFileBase } from "../takeoff/supplyQuote.js";
 import { readCompanyBranding } from "./branding.js";
@@ -157,12 +158,13 @@ export function buildEstimateSupplyQuote({
     if (itemized && line.included === false) continue;
     const laborItem = findLibraryItem(library, line);
     if (!estimateLineBelongsOnSupplyQuote(line, laborItem)) continue;
+    if (materialQuantity(line) <= 0) continue;
     rows.push({
       id: line.id,
       device: estimateQuoteDevice(line),
       model: knownEstimateModel(line),
       description: estimateQuoteDescription(line, laborItem),
-      quantity: Number(line.quantity) || 0,
+      quantity: materialQuantity(line),
       unit: line.unit || "",
     });
   }

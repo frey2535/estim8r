@@ -98,7 +98,7 @@ assert.equal(isLaborOnlySupplyQuoteLine(emt, null), false);
 assert.equal(estimateLineBelongsOnSupplyQuote(groundRod, library[3]), false, "installation labor is not a material purchase");
 assert.equal(estimateLineBelongsOnSupplyQuote(meterBase, library[4]), false, "installation labor is not a material purchase");
 
-assert.equal(estimateLineBelongsOnSupplyQuote({ itemType: "Labor", category: "Grounding", description: "Install grounding electrode", materialUnitCost: 12 }, null), false);
+assert.equal(estimateLineBelongsOnSupplyQuote({ itemType: "Labor", category: "Grounding", description: "Install grounding electrode", materialUnitCost: 12 }, null), true);
 assert.equal(estimateLineBelongsOnSupplyQuote({ itemType: "Other", description: "General site cleanup" }, null), false);
 assert.equal(estimateLineBelongsOnSupplyQuote({ itemType: "Material", description: "Ground rod" }, null), true);
 
@@ -182,3 +182,14 @@ assert(preview.blob instanceof Blob, "ready preview exposes the download blob");
 assert(supplyQuotePreviewKey(quote) !== supplyQuotePreviewKey(empty), "preview key follows filtered rows");
 
 console.log("estimate supply quote tests passed");
+
+const purchasedQuote = buildEstimateSupplyQuote({ lines: [
+  { ...mixedInstall[0], materialUnitCost: 5000 },
+  { ...mixedInstall[2], quantity: 120, materialQuantity: 1000, unit: "LF", materialUnitCost: 1.5 },
+  { ...mixedInstall[3], isMaterial: true },
+  { ...mixedInstall[1], lineKind: "labor" },
+  { id: "unpriced", itemType: "Material", description: "Conduit coupling", quantity: 4 },
+] });
+assert.deepEqual(purchasedQuote.rows.map(row => row.id), ["work-generator", "work-wire", "work-device", "unpriced"]);
+assert.equal(purchasedQuote.rows[1].quantity, 1000);
+assert.equal(purchasedQuote.rows[0].description, "standby generator set");

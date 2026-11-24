@@ -1,4 +1,4 @@
-import { materialQuantity } from "@/domain/estimate/materialQuantity";
+import { materialQuantity, purchasePackage } from "@/domain/estimate/materialQuantity";
 import { formatMoney } from "@/domain/estimate/formatMoney";
 import React, { useState } from "react";
 import { ChevronDown, ChevronUp, GripVertical, Trash2 } from "lucide-react";
@@ -193,6 +193,19 @@ export default function EstimateLineCard({
               <input type="checkbox" checked={row.materialQuantity != null && row.materialQuantity !== ""} onChange={(e) => onPatch?.(row.id, "materialQuantity", e.target.checked ? qty : null)} />
               Separate material purchasing quantity
             </label>
+            <Field label="Purchasing method">
+              <select className="w-full rounded border border-input bg-background p-2" value={row.purchasePackage?.unit || "exact"} onChange={(e) => onPatch?.(row.id, "purchasePackage", e.target.value === "exact" ? null : { unit: e.target.value, size: "" })}>
+                <option value="exact">Exact quantity ({row.unit || "EA"})</option>
+                {["REEL", "BOX", "BUNDLE", "STICK"].map(unit => <option key={unit} value={unit}>{unit}</option>)}
+              </select>
+            </Field>
+            {row.purchasePackage ? <>
+              <Field label={`Quantity per ${row.purchasePackage.unit.toLowerCase()} (${row.unit || "EA"})`}>
+                <Cell type="number" value={row.purchasePackage.size} set={(v) => onPatch?.(row.id, "purchasePackage", { ...row.purchasePackage, size: v })} />
+              </Field>
+              {purchasePackage(row) ? <p className="text-xs">Purchase {materialQuantity(row) / purchasePackage(row).size} {purchasePackage(row).unit} — {materialQuantity(row)} {row.unit || "EA"} total. Material price remains per {row.unit || "EA"}.</p> : <p className="text-xs text-destructive">Enter a positive package size. Until then exact quantity pricing applies.</p>}
+            </> : null}
+
             {row.materialQuantity != null && row.materialQuantity !== "" ? <Field label={`Material quantity (${row.unit || "EA"})`}>
               <Cell type="number" value={row.materialQuantity} set={(v) => onPatch?.(row.id, "materialQuantity", v === "" ? 0 : Math.max(0, Number(v) || 0))} />
             </Field> : null}

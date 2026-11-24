@@ -57,7 +57,8 @@ export default function EstimateLineCard({
   const pickLabel = laborItemLabel(laborItem);
   const description = String(row.description || "").trim();
   const subtitle = pickLabel && description && description !== pickLabel ? description : "";
-  const notice = estimateLineLaborNotice(row);
+  const laborNotice = estimateLineLaborNotice(row);
+  const notice = laborNotice?.tone === "unverified" && !detailsOpen ? null : laborNotice;
   const market = compareLineToMarket(row, laborItem);
   const omitted = itemized && row.included === false;
   const includeLabel = title === "New line" ? "line" : title;
@@ -116,7 +117,7 @@ export default function EstimateLineCard({
                     {notice.badge}
                   </Badge>
                 ) : null}
-                <SourceBadges badges={market.source.badges} />
+                {detailsOpen ? <SourceBadges badges={market.source.badges} /> : null}
               </div>
             </div>
             <div className="flex shrink-0 items-start gap-2">

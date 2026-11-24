@@ -67,7 +67,8 @@ export function estimateQuoteDevice(line) {
  * @param {any} laborItem
  */
 export function estimateQuoteDescription(line, laborItem) {
-  return String(line?.description || "").trim() || laborItemLabel(laborItem) || "Line";
+  const description = String(line?.description || "").trim() || laborItemLabel(laborItem) || "Line";
+  return description.replace(/^(?:install|replace|mount|pull|connect)\s+/i, "");
 }
 
 function catalogCategory(line, laborItem) {
@@ -122,6 +123,11 @@ export function isLaborOnlySupplyQuoteLine(line, laborItem) {
  */
 export function estimateLineBelongsOnSupplyQuote(line, laborItem) {
   if (!estimateLineHasQuoteData(line)) return false;
+  const explicitMaterial = line?.isMaterial === true || line?.lineKind === "material" || Number(line?.materialUnitCost) > 0;
+  const explicitLabor = line?.lineKind === "labor" || line?.isMaterial === false;
+  const lineType = String(line?.itemType || "").trim().toLowerCase();
+  if (explicitLabor || ["subcontract", "allowance", "service"].includes(lineType)) return false;
+  if (explicitMaterial) return true;
   if (isLaborOnlySupplyQuoteLine(line, laborItem)) return false;
   // Estimate lines can be assigned a material-like type while their actual
   // description is an installation task. Never send such work to a supplier.

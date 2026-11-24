@@ -1,3 +1,4 @@
+import { scopeLaborMatches } from "@/domain/estimate/scopeLaborMatches";
 import { formatMoney } from "@/domain/estimate/formatMoney";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -84,26 +85,11 @@ const emptyHeader = {
   scopeNotes: "",
 };
 
-function missingScopeQuestions(scope) {
-  const text = String(scope || "").trim().toLowerCase();
-  if (text.length < 12) return [];
-  const questions = [];
-  const conduit = /\b(emt|conduit|raceway|rigid|rmc|pvc|mc cable)\b/.test(text);
-  const outlets = /\b(receptacles?|outlets?)\b/.test(text);
-  if (!conduit && !outlets) return [];
-  if (conduit && !/\d+\s*(?:ft|feet|foot|lf)\b/.test(text)) questions.push("What is the total cable or raceway route length?");
-  if (conduit && !/(?:1\/2|3\/4|1-1\/4|1-1\/2|2-1\/2|2|3|4)\s*(?:inches|inch|in\b|["″])/.test(text)) questions.push("What is the raceway or cable size?");
-  if (outlets && !/\b(surface|flush|recessed|concealed)\b/.test(text)) questions.push("Will the devices be surface or flush mounted?");
-  if (outlets && !/\b(new circuit|existing circuit|branch circuit|extend circuit)\b/.test(text)) questions.push("Will the devices use a new or existing circuit?");
-  return questions;
-}
-
 export default function EstimateBuilder() {
   const [params] = useSearchParams();
   const openFile = params.get("file") || "";
   const openSize = Number(params.get("size") || 0);
   const [header, setHeader] = useState(emptyHeader);
-  const scopeQuestions = useMemo(() => missingScopeQuestions(header.scopeNotes), [header.scopeNotes]);
   const [crew, setCrew] = useState(() => defaultCrew(readShopWageBook()));
   const [lines, setLines] = useState(() => [blankLine(compositeWage(defaultCrew(readShopWageBook())).rate || SHOP_HOURLY_RATE)]);
   const [contingency, setContingency] = useState(0);
@@ -375,6 +361,17 @@ export default function EstimateBuilder() {
     }));
   }
 
+  function applyScopeLabor() {
+    const matches = scopeLaborMatches(header.scopeNotes, library);
+    setLines((current) => {
+      const additions = matches.filter(({ item, quantity }) => !current.some((row) => row.laborItemId === item.id && Number(row.quantity) === quantity)).map(({ item, quantity }) => applyLibraryItemToLine({
+        ...blankLine(wage.rate), quantity, unit: item.unit === "100 LF" || item.unit === "1000 LF" ? "LF" : item.unit,
+      }, item, { factors, rate: wage.rate }));
+      if (!additions.length) return current;
+      return [...current.filter((row) => row.description || row.laborItemId || row.itemType || Number(row.materialUnitCost) || Number(row.laborMhPerUnit)), ...additions];
+    });
+  }
+
   function pickLaborItem(line, item) {
     setLines((current) => current.map((row) => (
       row.id === line.id ? applyLibraryItemToLine(row, item, { factors, rate: wage.rate }) : row
@@ -515,14 +512,7 @@ export default function EstimateBuilder() {
           <label className="min-w-0">
             <span className="mb-1 block text-xs font-bold text-muted-foreground">Scope notes</span>
             <textarea value={header.scopeNotes} onChange={(e) => { setMeta((current) => ({ ...current, scopeEdited: true })); setHeaderField("scopeNotes", e.target.value); }} rows={4} className="w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2.5" placeholder="Describe the work once. Add installation details as you learn them." />
-            {scopeQuestions.length > 0 && (
-              <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-50/50 p-3 dark:bg-amber-950/20" role="status">
-                <p className="text-sm font-semibold text-foreground">Details to confirm</p>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-foreground">
-                  {scopeQuestions.map((question) => <li key={question}>{question}</li>)}
-                </ul>
-              </div>
-           )}
+            <button type="button" disabled={!scopeLaborMatches(header.scopeNotes, library).length} onClick={applyScopeLabor} className="mt-2 rounded-lg border border-border px-3 py-2 text-sm font-semibold disabled:opacity-50">Apply matched scope labor</button>
           </label>
         </div>
       </section>

@@ -1,4 +1,4 @@
-import { materialQuantity } from "./materialQuantity.js";
+import { materialQuantity, materialQuoteQuantity, purchasePackage } from "./materialQuantity.js";
 import { findLibraryItem, laborItemLabel } from "./manualLineLabor.js";
 import { buildSupplyQuotePdf, supplyQuoteFileBase } from "../takeoff/supplyQuote.js";
 import { readCompanyBranding } from "./branding.js";
@@ -169,9 +169,9 @@ export function buildEstimateSupplyQuote({
       id: line.id,
       device: estimateQuoteDevice(line),
       model: knownEstimateModel(line),
-      description: estimateQuoteDescription(line, laborItem),
-      quantity: materialQuantity(line),
-      unit: line.unit || "",
+      description: estimateQuoteDescription(line, laborItem) + (purchasePackage(line) ? ` (${purchasePackage(line).size} ${line.unit || "EA"} per ${purchasePackage(line).unit.toLowerCase()})` : ""),
+      quantity: materialQuoteQuantity(line),
+      unit: purchasePackage(line)?.unit || line.unit || "",
     });
   }
   const quantity = rows.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);

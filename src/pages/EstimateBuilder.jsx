@@ -522,7 +522,7 @@ export default function EstimateBuilder() {
                   {scopeQuestions.map((question) => <li key={question}>{question}</li>)}
                 </ul>
               </div>
-            )}
+           )}
           </label>
         </div>
       </section>
@@ -584,12 +584,12 @@ export default function EstimateBuilder() {
                             onAcknowledge={(value) => acknowledgeLine(row, value)}
                           />
                         </div>
-                      )}
+                     )}
                     </Draggable>
                   ))}
                   {provided.placeholder}
                 </div>
-              )}
+             )}
             </Droppable>
           </DragDropContext>
         </div>
@@ -856,7 +856,7 @@ export default function EstimateBuilder() {
                 </div>
                 <div className="rounded-xl border border-emerald-500/30 bg-emerald-50 px-4 py-3 text-right dark:bg-emerald-500/5">
                   <div className="text-xs font-bold text-muted-foreground">Calculated bid</div>
-                  <div className="text-2xl font-black text-emerald-700 dark:text-emerald-300">{`${grand.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}</div>
+                  <div className="text-2xl font-black text-emerald-700 dark:text-emerald-300">{`${grand.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
                 </div>
               </div>
               <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -872,7 +872,7 @@ export default function EstimateBuilder() {
                     {Object.entries(scopeTotals).map(([scope, value]) => (
                       <div key={scope} className="rounded-lg border border-border bg-background p-3">
                         <div className="text-xs font-bold text-muted-foreground">{scope}</div>
-                        <div className="mt-1 text-lg font-black">{`${value.total.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}</div>
+                        <div className="mt-1 text-lg font-black">{`${value.total.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
                       </div>
                     ))}
                   </div>
@@ -1000,10 +1000,10 @@ export default function EstimateBuilder() {
                       <tr key={row.category} className={`border-b border-border ${row.category === "Other / Review" && row.lineCount ? "bg-amber-50/70 dark:bg-amber-500/5" : ""}`}>
                         <td className="p-2 font-bold">{row.category}</td>
                         <td className="p-2 text-right">{row.lineCount}</td>
-                        <td className="p-2 text-right">{`{formatMoney(row.material)}`}</td>
+                        <td className="p-2 text-right">{formatMoney(row.material)}</td>
                         <td className="p-2 text-right font-bold">{row.hours.toFixed(2)}</td>
-                        <td className="p-2 text-right font-bold">{`{formatMoney(row.labor)}`}</td>
-                        <td className="p-2 text-right">{`{formatMoney(row.direct)}`}</td>
+                        <td className="p-2 text-right font-bold">{formatMoney(row.labor)}</td>
+                        <td className="p-2 text-right">{formatMoney(row.direct)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1040,9 +1040,9 @@ export default function EstimateBuilder() {
                         <td className="p-2">{line.unit}</td>
                         <td className="p-2 text-right">{Number(lines.find((row) => row.id === line.id)?.laborMhPerUnit || 0).toFixed(3)}</td>
                         <td className="p-2 text-right font-semibold">{line.hours.toFixed(2)}</td>
-                        <td className="p-2 text-right">{`{formatMoney(Number(lines.find((row) => row.id === line.id)?.laborRate || 0))}`}</td>
-                        <td className="p-2 text-right">{`{formatMoney(line.labor)}`}</td>
-                        <td className="p-2 text-right">{`{formatMoney(line.material)}`}</td>
+                        <td className="p-2 text-right">{formatMoney(Number(lines.find((row) => row.id === line.id)?.laborRate || 0))}</td>
+                        <td className="p-2 text-right">{formatMoney(line.labor)}</td>
+                        <td className="p-2 text-right">{formatMoney(line.material)}</td>
                       </tr>
                     )))}
                   </tbody>

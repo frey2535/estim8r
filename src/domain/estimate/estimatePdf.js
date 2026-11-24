@@ -1,3 +1,4 @@
+import { materialQuantity } from "./materialQuantity.js";
 import { formatMoney } from "./formatMoney.js";
 import { jsPDF } from "jspdf";
 import { brandingLayout, normalizeBranding, resolveLogoBox } from "./branding.js";
@@ -114,7 +115,7 @@ export function estimatePresentation(estimate) {
   const lines = itemized
     ? sourceLines.map((line) => {
         const qty = Number(line.quantity) || 0;
-        const material = qty * (Number(line.materialUnitCost) || 0);
+        const material = materialQuantity(line) * (Number(line.materialUnitCost) || 0);
         const labor = estimateLineLaborCost(line);
         const amount = material + labor;
         return {
@@ -185,7 +186,7 @@ export function estimateHasPdfLines(estimate) {
   return includedLines(estimate).some((line) => {
     const label = String(line?.description || line?.itemType || line?.category || line?.notes || "").trim();
     const qty = Number(line?.quantity) || 0;
-    const material = qty * (Number(line.materialUnitCost) || 0);
+    const material = materialQuantity(line) * (Number(line.materialUnitCost) || 0);
     const labor = estimateLineLaborCost(line);
     return Boolean(label || material || labor);
   });

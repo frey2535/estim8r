@@ -213,6 +213,30 @@ export default function EstimateBuilder() {
     });
   }, [ready, library]);
 
+  useEffect(() => {
+    if (!ready || !library.length) return;
+    const matches = scopeLaborMatches(header.scopeNotes, library);
+    setLines((current) => {
+      let changed = false;
+      const next = current.map(row => {
+        if (!row.scopeGenerated || row.scopeManuallyEdited) return row;
+        const match = matches.find(entry => entry.item.id === row.laborItemId);
+        if (!match || Number(row.quantity) === match.quantity) return row;
+        changed = true;
+        return { ...row, quantity: match.quantity };
+      });
+      for (const { item, quantity } of matches) {
+        if (next.some(row => row.laborItemId === item.id)) continue;
+        next.push(applyLibraryItemToLine({
+          ...blankLine(wage.rate), scopeGenerated: true, quantity,
+          unit: ["100 LF", "1000 LF"].includes(item.unit) ? "LF" : item.unit,
+        }, item, { factors, rate: wage.rate }));
+        changed = true;
+      }
+      return changed ? next : current;
+    });
+  }, [ready, library, header.scopeNotes, factors, wage.rate]);
+
   const storageFileName = estimateFileNameForSave({ fileName: meta.fileName, projectName: header.projectName });
   const storedEstimate = storageFileName ? readEstimate(storageFileName, meta.fileSize || 0) : null;
   const storedEstimateId = storedEstimate?.id || "";
@@ -326,7 +350,7 @@ export default function EstimateBuilder() {
   function patchLine(id, key, value) {
     setLines((current) => current.map((line) => {
       if (line.id !== id) return line;
-      const next = { ...line, [key]: value };
+      const next = { ...line, [key]: value, ...(line.scopeGenerated ? { scopeManuallyEdited: true } : {}) };
       if (key === "quantity" || key === "unit") next.quantityEdited = true;
       if (key === "laborMhPerUnit") {
         next.laborMhEdited = true;
@@ -359,17 +383,6 @@ export default function EstimateBuilder() {
       }
       return next;
     }));
-  }
-
-  function applyScopeLabor() {
-    const matches = scopeLaborMatches(header.scopeNotes, library);
-    setLines((current) => {
-      const additions = matches.filter(({ item, quantity }) => !current.some((row) => row.laborItemId === item.id && Number(row.quantity) === quantity)).map(({ item, quantity }) => applyLibraryItemToLine({
-        ...blankLine(wage.rate), quantity, unit: item.unit === "100 LF" || item.unit === "1000 LF" ? "LF" : item.unit,
-      }, item, { factors, rate: wage.rate }));
-      if (!additions.length) return current;
-      return [...current.filter((row) => row.description || row.laborItemId || row.itemType || Number(row.materialUnitCost) || Number(row.laborMhPerUnit)), ...additions];
-    });
   }
 
   function pickLaborItem(line, item) {
@@ -512,7 +525,6 @@ export default function EstimateBuilder() {
           <label className="min-w-0">
             <span className="mb-1 block text-xs font-bold text-muted-foreground">Scope notes</span>
             <textarea value={header.scopeNotes} onChange={(e) => { setMeta((current) => ({ ...current, scopeEdited: true })); setHeaderField("scopeNotes", e.target.value); }} rows={4} className="w-full min-w-0 rounded-lg border border-input bg-background px-3 py-2.5" placeholder="Describe the work once. Add installation details as you learn them." />
-            <button type="button" disabled={!scopeLaborMatches(header.scopeNotes, library).length} onClick={applyScopeLabor} className="mt-2 rounded-lg border border-border px-3 py-2 text-sm font-semibold disabled:opacity-50">Apply matched scope labor</button>
           </label>
         </div>
       </section>

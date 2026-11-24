@@ -856,7 +856,7 @@ export default function EstimateBuilder() {
                 </div>
                 <div className="rounded-xl border border-emerald-500/30 bg-emerald-50 px-4 py-3 text-right dark:bg-emerald-500/5">
                   <div className="text-xs font-bold text-muted-foreground">Calculated bid</div>
-                  <div className="text-2xl font-black text-emerald-700 dark:text-emerald-300">{`${grand.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                  <div className="text-2xl font-black text-emerald-700 dark:text-emerald-300">{formatMoney(grand)}</div>
                 </div>
               </div>
               <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -872,7 +872,7 @@ export default function EstimateBuilder() {
                     {Object.entries(scopeTotals).map(([scope, value]) => (
                       <div key={scope} className="rounded-lg border border-border bg-background p-3">
                         <div className="text-xs font-bold text-muted-foreground">{scope}</div>
-                        <div className="mt-1 text-lg font-black">{`${value.total.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                        <div className="mt-1 text-lg font-black">{formatMoney(value.total)}</div>
                       </div>
                     ))}
                   </div>

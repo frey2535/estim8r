@@ -1,3 +1,4 @@
+import { formatMoney } from "@/domain/estimate/formatMoney";
 import React, { useEffect, useMemo, useState } from "react";
 import { searchLiveSupplierCatalog } from "@/api/liveSupplierCatalog";
 import { catalogQueryForLine, pickAutoApplyOffer } from "@/domain/estimate/liveSupplierCatalog";
@@ -230,5 +231,5 @@ export default function LiveSupplierCatalog({ lines = [], onApplyPrice }) {
 }
 
 function money(value) {
-  return `$${Number(value || 0).toFixed(2)}`;
+  return formatMoney(value);
 }

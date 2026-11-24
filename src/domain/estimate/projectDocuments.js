@@ -1,3 +1,4 @@
+import { materialQuantity } from "./materialQuantity.js";
 import { buildReviewMarkupPages } from "../takeoff/markupPages.js";
 import { includedLines } from "./presentation.js";
 import { estimateLineHours, estimateLineLaborCost } from "./manualLineLabor.js";
@@ -363,8 +364,7 @@ export function downloadBlob(blob, fileName) {
 export function estimateTotals(estimate) {
   const lines = includedLines(estimate);
   return lines.reduce((acc, line) => {
-    const qty = Number(line.quantity) || 0;
-    acc.material += qty * (Number(line.materialUnitCost) || 0);
+    acc.material += materialQuantity(line) * (Number(line.materialUnitCost) || 0);
     acc.hours += estimateLineHours(line);
     acc.labor += estimateLineLaborCost(line);
     return acc;

@@ -1,3 +1,4 @@
+import { formatMoney } from "@/domain/estimate/formatMoney";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { DragDropContext, Draggable, Droppable } from "@hello-pangea/dnd";
@@ -521,7 +522,7 @@ export default function EstimateBuilder() {
                   {scopeQuestions.map((question) => <li key={question}>{question}</li>)}
                 </ul>
               </div>
-            )}
+           )}
           </label>
         </div>
       </section>
@@ -583,12 +584,12 @@ export default function EstimateBuilder() {
                             onAcknowledge={(value) => acknowledgeLine(row, value)}
                           />
                         </div>
-                      )}
+                     )}
                     </Draggable>
                   ))}
                   {provided.placeholder}
                 </div>
-              )}
+             )}
             </Droppable>
           </DragDropContext>
         </div>
@@ -600,7 +601,7 @@ export default function EstimateBuilder() {
                 row.key === "total" ? (
                   <div key={row.key} className="mt-3 flex justify-between border-t border-border pt-4 text-xl font-black">
                     <span>Total</span>
-                    <span className="text-blue-600 dark:text-orange-500">${row.value.toFixed(2)}</span>
+                    <span className="text-blue-600 dark:text-orange-500">{formatMoney(row.value)}</span>
                   </div>
                 ) : (
                   <Sum key={row.key} label={row.label} value={row.value} />
@@ -660,7 +661,7 @@ export default function EstimateBuilder() {
             {visibleTotals.total ? (
               <div className="mt-3 flex justify-between border-t border-border pt-4 text-xl font-black">
                 <span>Total</span>
-                <span className="text-blue-600 dark:text-orange-500">${grand.toFixed(2)}</span>
+                <span className="text-blue-600 dark:text-orange-500">{formatMoney(grand)}</span>
               </div>
             ) : null}
           </div>
@@ -714,7 +715,7 @@ export default function EstimateBuilder() {
             <h2 className="text-lg font-bold">Employee class &amp; wage</h2>
             <p className="text-xs text-muted-foreground">Select one or more classes. Default is Journeyman at the shop rate ($95/MH until you change it). A changed wage stays saved until you edit it again. These values stay off the estimate and the PDF.</p>
           </div>
-          <p className="text-sm font-bold">Crew rate ${wage.rate.toFixed(2)}/MH · {wage.label}</p>
+          <p className="text-sm font-bold">Crew rate {formatMoney(wage.rate)}/MH · {wage.label}</p>
         </div>
         <div className="mb-4">
           <NamedCrewPicker crews={namedCrews} selectedId={namedCrewId} onLoad={loadCrew} onSave={saveCrew} />
@@ -827,14 +828,14 @@ export default function EstimateBuilder() {
         </div>
         <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
           <Sum label="Material" value={totals.material} />
-          <Sum label={`Labor (${totals.hours.toFixed(2)} hrs @ $${wage.rate.toFixed(2)})`} value={totals.labor} />
+          <Sum label={`Labor (${totals.hours.toFixed(2)} hrs @ ${formatMoney(wage.rate)})`} value={totals.labor} />
           <Sum label={`Contingency (${Number(contingency) || 0}%)`} value={cont} />
           <Sum label={`Overhead (${Number(overhead) || 0}%)`} value={oh} />
           <Sum label={`Profit (${Number(profit) || 0}%)`} value={prof} />
           <Sum label={`Bond / insurance (${Number(bondInsurance) || 0}%)`} value={bond} />
           <div className="mt-3 flex justify-between border-t border-border pt-4 text-xl font-black">
             <span>Estimate Total</span>
-            <span className="text-blue-600 dark:text-orange-500">${grand.toFixed(2)}</span>
+            <span className="text-blue-600 dark:text-orange-500">{formatMoney(grand)}</span>
           </div>
         </div>
         <div className="lg:col-span-2">
@@ -855,7 +856,7 @@ export default function EstimateBuilder() {
                 </div>
                 <div className="rounded-xl border border-emerald-500/30 bg-emerald-50 px-4 py-3 text-right dark:bg-emerald-500/5">
                   <div className="text-xs font-bold text-muted-foreground">Calculated bid</div>
-                  <div className="text-2xl font-black text-emerald-700 dark:text-emerald-300">{`${grand.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}</div>
+                  <div className="text-2xl font-black text-emerald-700 dark:text-emerald-300">{formatMoney(grand)}</div>
                 </div>
               </div>
               <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -871,7 +872,7 @@ export default function EstimateBuilder() {
                     {Object.entries(scopeTotals).map(([scope, value]) => (
                       <div key={scope} className="rounded-lg border border-border bg-background p-3">
                         <div className="text-xs font-bold text-muted-foreground">{scope}</div>
-                        <div className="mt-1 text-lg font-black">{`${value.total.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}</div>
+                        <div className="mt-1 text-lg font-black">{formatMoney(value.total)}</div>
                       </div>
                     ))}
                   </div>
@@ -999,10 +1000,10 @@ export default function EstimateBuilder() {
                       <tr key={row.category} className={`border-b border-border ${row.category === "Other / Review" && row.lineCount ? "bg-amber-50/70 dark:bg-amber-500/5" : ""}`}>
                         <td className="p-2 font-bold">{row.category}</td>
                         <td className="p-2 text-right">{row.lineCount}</td>
-                        <td className="p-2 text-right">{`${row.material.toFixed(2)}`}</td>
+                        <td className="p-2 text-right">{formatMoney(row.material)}</td>
                         <td className="p-2 text-right font-bold">{row.hours.toFixed(2)}</td>
-                        <td className="p-2 text-right font-bold">{`${row.labor.toFixed(2)}`}</td>
-                        <td className="p-2 text-right">{`${row.direct.toFixed(2)}`}</td>
+                        <td className="p-2 text-right font-bold">{formatMoney(row.labor)}</td>
+                        <td className="p-2 text-right">{formatMoney(row.direct)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1039,9 +1040,9 @@ export default function EstimateBuilder() {
                         <td className="p-2">{line.unit}</td>
                         <td className="p-2 text-right">{Number(lines.find((row) => row.id === line.id)?.laborMhPerUnit || 0).toFixed(3)}</td>
                         <td className="p-2 text-right font-semibold">{line.hours.toFixed(2)}</td>
-                        <td className="p-2 text-right">{`${Number(lines.find((row) => row.id === line.id)?.laborRate || 0).toFixed(2)}`}</td>
-                        <td className="p-2 text-right">{`${line.labor.toFixed(2)}`}</td>
-                        <td className="p-2 text-right">{`${line.material.toFixed(2)}`}</td>
+                        <td className="p-2 text-right">{formatMoney(Number(lines.find((row) => row.id === line.id)?.laborRate || 0))}</td>
+                        <td className="p-2 text-right">{formatMoney(line.labor)}</td>
+                        <td className="p-2 text-right">{formatMoney(line.material)}</td>
                       </tr>
                     )))}
                   </tbody>
@@ -1093,7 +1094,7 @@ function Sel({ value, vals, set, placeholder = "" }) {
 }
 
 function Sum({ label, value }) {
-  return <div className="flex justify-between border-b border-border py-2 text-sm"><span className="text-muted-foreground">{label}</span><strong>${value.toFixed(2)}</strong></div>;
+  return <div className="flex justify-between border-b border-border py-2 text-sm"><span className="text-muted-foreground">{label}</span><strong>{formatMoney(value)}</strong></div>;
 }
 
 

@@ -1,3 +1,4 @@
+import { formatMoney } from "@/domain/estimate/formatMoney";
 import React, { useState } from "react";
 import { ChevronDown, ChevronUp, GripVertical, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -121,7 +122,7 @@ export default function EstimateLineCard({
               <div className="text-right text-sm">
                 <p className="font-bold">{qty} {row.unit || "EA"}</p>
                 <p className="font-semibold text-foreground/80">{hours.toFixed(2)} hrs</p>
-                <p className="font-bold">${labor.toFixed(2)} lab</p>
+                <p className="font-bold">{formatMoney(labor)} lab</p>
               </div>
               {itemized ? (
                 <label className="flex items-center gap-1 text-[10px] font-semibold">
@@ -152,7 +153,7 @@ export default function EstimateLineCard({
             </p>
           ) : null}
 
-          <button type="button" aria-expanded={editingOpen} aria-label={`${editingOpen ? "Collapse" : "Edit"} line ${index + 1}`} onClick={() => setEditingOpen((open) => !open)} className="mt-2 flex min-h-[44px] w-full items-center justify-between rounded-md border border-current/10 bg-background/75 px-3 py-2 text-left text-sm font-semibold hover:bg-background">\n            <span>{editingOpen ? "Done editing" : "Edit item"}</span>\n            <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">${material.toFixed(2)} material · ${(material + labor).toFixed(2)} total {editingOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</span>\n          </button>\n          {editingOpen ? <div className="mt-2 grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-7 lg:gap-2">
+          <button type="button" aria-expanded={editingOpen} aria-label={`${editingOpen ? "Collapse" : "Edit"} line ${index + 1}`} onClick={() => setEditingOpen((open) => !open)} className="mt-2 flex min-h-[44px] w-full items-center justify-between rounded-md border border-current/10 bg-background/75 px-3 py-2 text-left text-sm font-semibold hover:bg-background">\n            <span>{editingOpen ? "Done editing" : "Edit item"}</span>\n            <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">{formatMoney(material)} material · {formatMoney(material + labor)} total {editingOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</span>\n          </button>\n          {editingOpen ? <div className="mt-2 grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-7 lg:gap-2">
             <Field label="Type">
               <Sel value={row.itemType} vals={LINE_TYPES} set={(v) => onPatch?.(row.id, "itemType", v)} placeholder="Type" />
             </Field>
@@ -235,8 +236,8 @@ export default function EstimateLineCard({
                   <span className={priceStatus.state === "current" ? "font-semibold text-emerald-700" : priceStatus.state === "stale" ? "font-semibold text-amber-700" : "font-semibold text-muted-foreground"}>{priceStatus.label}</span>
                 </div>
                 <Readout label="Hours" value={hours.toFixed(2)} />
-                <Readout label="Material" value={`$${material.toFixed(2)}`} />
-                <Readout label="Labor" value={`$${labor.toFixed(2)}`} />
+                <Readout label="Material" value={`${formatMoney(material)}`} />
+                <Readout label="Labor" value={`${formatMoney(labor)}`} />
                 <Field label="Notes" className="col-span-2 sm:col-span-4">
                   <Cell value={row.notes} set={(v) => onPatch?.(row.id, "notes", v)} />
                 </Field>

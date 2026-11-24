@@ -1,3 +1,4 @@
+import { formatMoney } from "@/domain/estimate/formatMoney";
 import React, { useState } from "react";
 import { parseSupplierPriceCsv, supplierComparison } from "@/domain/estimate/supplierPriceIntelligence";
 
@@ -47,4 +48,4 @@ export default function SupplierPriceIntelligence({ lines = [], books = [], onCh
   </section>;
 }
 function Input({ label, value, set, type = "text", placeholder = "" }) { return <label><span className="mb-1 block text-[11px] font-bold text-muted-foreground">{label}</span><input type={type} value={value} placeholder={placeholder} onChange={(e) => set(e.target.value)} className="w-full rounded-md border border-input bg-background px-2 py-2 text-sm" /></label>; }
-function money(value) { return "$" + Number(value || 0).toFixed(2); }
+function money(value) { return formatMoney(value); }

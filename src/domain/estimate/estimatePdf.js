@@ -1,3 +1,4 @@
+import { formatMoney } from "./formatMoney.js";
 import { jsPDF } from "jspdf";
 import { brandingLayout, normalizeBranding, resolveLogoBox } from "./branding.js";
 import { estimateGrandTotal } from "./projectDocuments.js";
@@ -76,7 +77,7 @@ function softFill(docBg, docText, mix = 0.03) {
 }
 
 function money(value) {
-  return `$${(Number(value) || 0).toFixed(2)}`;
+  return formatMoney(value);
 }
 
 function fmtDate(value) {

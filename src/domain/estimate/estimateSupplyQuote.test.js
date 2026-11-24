@@ -193,3 +193,11 @@ const purchasedQuote = buildEstimateSupplyQuote({ lines: [
 assert.deepEqual(purchasedQuote.rows.map(row => row.id), ["work-generator", "work-wire", "work-device", "unpriced"]);
 assert.equal(purchasedQuote.rows[1].quantity, 1000);
 assert.equal(purchasedQuote.rows[0].description, "standby generator set");
+
+const laborRegression = buildEstimateSupplyQuote({ library, lines: [
+  { ...trench, materialUnitCost: 25, isMaterial: true },
+  { ...sawcut, materialUnitCost: 10 },
+  { id: "generic-trench", itemType: "Equipment", description: "Trenching", quantity: 40, materialUnitCost: 12 },
+  { id: "actual-material", itemType: "Conduit", description: "Install PVC conduit", quantity: 40, materialUnitCost: 2 },
+] });
+assert.deepEqual(laborRegression.rows.map(row => row.id), ["actual-material"]);
